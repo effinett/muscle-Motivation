@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Muscle Motivation</title>
+
+<style>
+*{
+margin:0;
+padding:0;
+box-sizing:border-box;
+font-family:Arial, Helvetica, sans-serif;
+}
+
+body{
+background:#0b0b0b;
+color:white;
+}
+
+header{
+display:flex;
+justify-content:space-between;
+align-items:center;
+padding:20px 8%;
+background:#111;
+border-bottom:1px solid #222;
+position:sticky;
+top:0;
+z-index:1000;
+}
+
+.logo{
+font-size:28px;
+font-weight:bold;
+color:#00ff88;
+}
+
+nav a{
+color:white;
+text-decoration:none;
+margin-left:25px;
+font-size:15px;
+}
+
+.btn{
+padding:14px 24px;
+background:#00ff88;
+color:black;
+font-weight:bold;
+border-radius:8px;
+text-decoration:none;
+display:inline-block;
+}
+
+.hero{
+padding:90px 8%;
+text-align:center;
+}
+
+.hero h1{
+font-size:58px;
+margin-bottom:20px;
+}
+
+.hero span{
+color:#00ff88;
+}
+
+.hero p{
+max-width:700px;
+margin:auto;
+font-size:20px;
+color:#bbb;
+margin-bottom:30px;
+}
+
+section{
+padding:70px 8%;
+}
+
+.section-title{
+font-size:38px;
+text-align:center;
+margin-bottom:40px;
+}
+
+.grid{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+gap:25px;
+}
+
+.card{
+background:#161616;
+padding:25px;
+border-radius:12px;
+border:1px solid #222;
+}
+
+.card h3{
+color:#00ff88;
+margin-bottom:12px;
+}
+
+.portal{
+background:#111;
+padding:40px;
+border-radius:14px;
+max-width:800px;
+margin:auto;
+}
+
+.portal input{
+width:100%;
+padding:14px;
+margin-bottom:15px;
+border:none;
+border-radius:8px;
+background:#1c1c1c;
+color:white;
+}
+
+.store{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+gap:25px;
+}
+
+.product{
+background:#161616;
+padding:25px;
+border-radius:12px;
+text-align:center;
+border:1px solid #222;
+}
+
+.product h3{
+margin-bottom:10px;
+}
+
+.price{
+font-size:36px;
+color:#00ff88;
+margin:15px 0;
+}
+
+footer{
+text-align:center;
+padding:40px;
+color:#888;
+border-top:1px solid #222;
+margin-top:40px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+<div class="logo">Muscle Motivation</div>
+
+<nav>
+<a href="#plans">Plans</a>
+<a href="#portal">Login</a>
+<a href="#store">Shop</a>
+<a href="#contact">Contact</a>
+</nav>
+</header>
+
+<section class="hero">
+<h1>Transform Your <span>Body & Mind</span></h1>
+<p>Custom workout systems, progress tracking, nutrition coaching, and elite accountability to help you build the physique you deserve.</p>
+
+<a class="btn" href="#portal">Join Now</a>
+</section>
+
+<section id="plans">
+<h2 class="section-title">What Members Get</h2>
+
+<div class="grid">
+
+<div class="card">
+<h3>Workout Programs</h3>
+<p>Structured gym or home training programs built for results.</p>
+</div>
+
+<div class="card">
+<h3>Nutrition Guidance</h3>
+<p>Calories, macros, meal planning, and fat loss systems.</p>
+</div>
+
+<div class="card">
+<h3>Progress Tracking</h3>
+<p>Store weight, photos, lifts, and body measurements.</p>
+</div>
+
+<div class="card">
+<h3>Private Dashboard</h3>
+<p>Members log in to access plans, purchases, and progress.</p>
+</div>
+
+</div>
+</section>
+
+<section id="portal">
+<h2 class="section-title">Member Login</h2>
+
+<div class="portal">
+<input type="email" placeholder="Email Address">
+<input type="password" placeholder="Password">
+<a class="btn" href="#">Sign In</a>
+<br><br>
+<p style="color:#aaa;">New user? Create account</p>
+</div>
+</section>
+
+<section id="store">
+<h2 class="section-title">Workout Plan Store</h2>
+
+<div class="store">
+
+<div class="product">
+<h3>Lean Shred Program</h3>
+<div class="price">$49</div>
+<p>8 Week Fat Loss Blueprint</p>
+<a class="btn" href="#">Buy Now</a>
+</div>
+
+<div class="product">
+<h3>Mass Builder</h3>
+<div class="price">$59</div>
+<p>12 Week Muscle Gain Plan</p>
+<a class="btn" href="#">Buy Now</a>
+</div>
+
+<div class="product">
+<h3>Glute Builder</h3>
+<div class="price">$39</div>
+<p>Women's Lower Body Program</p>
+<a class="btn" href="#">Buy Now</a>
+</div>
+
+</div>
+</section>
+
+<section id="contact">
+<h2 class="section-title">Need Coaching?</h2>
+<div style="text-align:center;">
+<a class="btn" href="https://wa.me/YOURNUMBER">Message on WhatsApp</a>
+</div>
+</section>
+
+<footer>
+© 2026 Muscle Motivation. All rights reserved.
+</footer>
+
+</body>
+</html>
