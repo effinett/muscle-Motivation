@@ -18,17 +18,55 @@ background:#0b0b0b;
 color:white;
 }
 
-header{
-display:flex;
-justify-content:center;
-align-items:center;
-padding:20px 8%;
-background:#111;
-border-bottom:1px solid #222;
-position:sticky;
-top:0;
-z-index:1000;
-gap:40px;
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 8%;
+  background: #111;
+  border-bottom: 1px solid #222;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+/* Left + right nav groups */
+.nav-left,
+.nav-right {
+  display: flex;
+  gap: 25px;
+  align-items: center;
+}
+
+/* Links */
+.header a {
+  color: white;
+  text-decoration: none;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  opacity: 0.85;
+  transition: 0.2s;
+}
+
+.header a:hover {
+  opacity: 1;
+  color: #e60000;
+}
+
+/* Logo centered feel */
+.logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Small login button */
+.btn-small {
+  padding: 8px 14px;
+  background: #e60000;
+  border-radius: 6px;
+  color: white !important;
+  font-weight: bold;
 }
 
 .logo{
