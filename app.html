@@ -284,16 +284,38 @@
       let targetCalories;
       let note;
 
-      if (goal === "fatloss") {
-        targetCalories = tdee - 500;
-        note = "Goal: fat loss. Start here for steady progress. If weight does not move after 2 weeks, adjust by 100-200 calories or increase steps.";
-      } else if (goal === "recomp") {
-        targetCalories = tdee - 200;
-        note = "Goal: recomposition. This keeps calories close enough to maintenance to support muscle while slowly losing fat.";
-      } else {
-        targetCalories = tdee + 250;
-        note = "Goal: muscle gain. Start with a small surplus so you build muscle without gaining unnecessary fat.";
-      }
+      let targetCalories;
+let note;
+
+// Calorie floors
+let minCalories = gender === "female" ? 1350 : 1800;
+
+if (goal === "fatloss") {
+  targetCalories = tdee * 0.8; // 20% deficit
+
+  if (targetCalories < minCalories) {
+    targetCalories = minCalories;
+  }
+
+  note = "Goal: fat loss. Calories are set to create steady, sustainable progress while maintaining energy and muscle.";
+  
+} else if (goal === "recomp") {
+  targetCalories = tdee * 0.9; // 10% deficit
+
+  if (targetCalories < minCalories) {
+    targetCalories = minCalories;
+  }
+
+  note = "Goal: recomposition. Slight deficit to lose fat while still supporting muscle growth.";
+  
+} else {
+  targetCalories = tdee * 1.08; // small surplus
+
+  note = "Goal: muscle gain. Small calorie surplus to support lean muscle growth without excess fat gain.";
+}
+
+// Final rounding
+targetCalories = Math.round(targetCalories);
 
       const proteinLow = Math.round(weight * 0.8);
       const proteinHigh = Math.round(weight * 1.0);
