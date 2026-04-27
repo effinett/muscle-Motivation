@@ -1,74 +1,317 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Muscle Motivation</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Muscle Motivation App</title>
+
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
     body {
-      font-family: Arial;
-      background: black;
-      color: white;
       margin: 0;
+      font-family: Arial, sans-serif;
+      background: #050505;
+      color: white;
     }
+
     header {
-      padding: 20px;
+      background: linear-gradient(135deg, #000, #1a1a1a);
+      padding: 28px 18px;
       text-align: center;
-      font-size: 24px;
-      font-weight: bold;
-      color: red;
+      border-bottom: 2px solid #ff0000;
     }
+
+    header h1 {
+      margin: 0;
+      color: #ff0000;
+      font-size: 32px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    header p {
+      margin-top: 10px;
+      color: #ccc;
+      font-size: 15px;
+    }
+
+    .container {
+      max-width: 720px;
+      margin: auto;
+      padding: 18px;
+    }
+
     .card {
       background: #111;
-      margin: 15px;
+      border: 1px solid #222;
+      border-radius: 16px;
       padding: 20px;
+      margin-bottom: 18px;
+      box-shadow: 0 0 20px rgba(255, 0, 0, 0.08);
+    }
+
+    h2 {
+      margin-top: 0;
+      color: #ff0000;
+      text-transform: uppercase;
+      font-size: 20px;
+    }
+
+    label {
+      display: block;
+      margin-top: 14px;
+      font-size: 14px;
+      color: #ddd;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 13px;
+      margin-top: 6px;
       border-radius: 10px;
+      border: 1px solid #333;
+      background: #1b1b1b;
+      color: white;
+      font-size: 16px;
     }
+
     button {
-      background: red;
-      color: white;
-      padding: 10px;
-      border: none;
       width: 100%;
-      border-radius: 5px;
+      margin-top: 22px;
+      padding: 15px;
+      border: none;
+      border-radius: 12px;
+      background: #ff0000;
+      color: white;
+      font-size: 17px;
+      font-weight: bold;
+      text-transform: uppercase;
+      cursor: pointer;
     }
-    input {
-      width: 100%;
-      padding: 10px;
-      margin-top: 10px;
-      background: #222;
+
+    .result-box {
+      display: none;
+    }
+
+    .stat {
+      background: #1a1a1a;
+      padding: 14px;
+      border-radius: 12px;
+      margin-top: 12px;
+      border-left: 4px solid #ff0000;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 22px;
       color: white;
-      border: none;
+      margin-top: 4px;
+    }
+
+    .small {
+      color: #aaa;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .highlight {
+      color: #ff0000;
+      font-weight: bold;
+    }
+
+    .footer {
+      text-align: center;
+      color: #777;
+      font-size: 12px;
+      padding: 25px;
     }
   </style>
 </head>
 
 <body>
 
-<header>Muscle Motivation</header>
+  <header>
+    <h1>Muscle Motivation</h1>
+    <p>Your AI-powered fitness starting point</p>
+  </header>
 
-<div class="card">
-  <h2>Daily Targets</h2>
-  <p>Calories: 2,400</p>
-  <p>Protein: 180g</p>
-</div>
+  <div class="container">
 
-<div class="card">
-  <h2>Log Meal</h2>
-  <input placeholder="Enter food or upload soon...">
-  <button onclick="alert('Meal Logged!')">Log</button>
-</div>
+    <div class="card">
+      <h2>Start Your Plan</h2>
+      <p class="small">
+        Fill this out to generate your estimated calorie target, protein goal, and starting recommendation.
+      </p>
 
-<div class="card">
-  <h2>Workout</h2>
-  <p>Full Body Workout A</p>
-  <button>Start Workout</button>
-</div>
+      <label>Gender</label>
+      <select id="gender">
+        <option value="male">Male</option>
+        <option value="female">Female</option>
+      </select>
 
-<div class="card">
-  <h2>Habits</h2>
-  <p>Water: 3 / 8 cups</p>
-  <p>Steps: 4,200</p>
-</div>
+      <label>Age</label>
+      <input type="number" id="age" placeholder="Example: 45" />
+
+      <label>Height - Feet</label>
+      <input type="number" id="feet" placeholder="Example: 5" />
+
+      <label>Height - Inches</label>
+      <input type="number" id="inches" placeholder="Example: 10" />
+
+      <label>Current Weight (lbs)</label>
+      <input type="number" id="weight" placeholder="Example: 220" />
+
+      <label>Estimated Body Fat %</label>
+      <input type="number" id="bodyfat" placeholder="Example: 30" />
+
+      <label>Average Daily Steps</label>
+      <select id="steps">
+        <option value="1.25">Under 4,000 steps</option>
+        <option value="1.35">4,000 - 6,000 steps</option>
+        <option value="1.45">6,000 - 8,000 steps</option>
+        <option value="1.55">8,000 - 10,000 steps</option>
+        <option value="1.7">10,000+ steps</option>
+      </select>
+
+      <label>Training Days Per Week</label>
+      <select id="training">
+        <option value="0">0 days</option>
+        <option value="2">2 days</option>
+        <option value="3">3 days</option>
+        <option value="4">4 days</option>
+        <option value="5">5+ days</option>
+      </select>
+
+      <label>Main Goal</label>
+      <select id="goal">
+        <option value="fatloss">Lose Fat</option>
+        <option value="recomp">Build Muscle + Lose Fat</option>
+        <option value="muscle">Build Muscle</option>
+      </select>
+
+      <button onclick="calculatePlan()">Generate My Plan</button>
+    </div>
+
+    <div class="card result-box" id="results">
+      <h2>Your Starting Plan</h2>
+
+      <div class="stat">
+        Estimated Maintenance Calories
+        <strong id="maintenance">---</strong>
+      </div>
+
+      <div class="stat">
+        Recommended Daily Calories
+        <strong id="calories">---</strong>
+      </div>
+
+      <div class="stat">
+        Protein Target
+        <strong id="protein">---</strong>
+      </div>
+
+      <div class="stat">
+        Suggested Training Plan
+        <strong id="trainingPlan">---</strong>
+      </div>
+
+      <p class="small" id="coachNote"></p>
+    </div>
+
+    <div class="card">
+      <h2>Coming Next</h2>
+      <p class="small">
+        Next upgrades: meal photo scanning, barcode logging, workout videos, progress tracking, reminders, and client dashboard.
+      </p>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    Muscle Motivation © 2026
+  </div>
+
+  <script>
+    function calculatePlan() {
+      const gender = document.getElementById("gender").value;
+      const age = parseFloat(document.getElementById("age").value);
+      const feet = parseFloat(document.getElementById("feet").value);
+      const inches = parseFloat(document.getElementById("inches").value);
+      const weight = parseFloat(document.getElementById("weight").value);
+      const bodyfat = parseFloat(document.getElementById("bodyfat").value);
+      const activity = parseFloat(document.getElementById("steps").value);
+      const trainingDays = parseFloat(document.getElementById("training").value);
+      const goal = document.getElementById("goal").value;
+
+      if (!age || !feet || isNaN(inches) || !weight) {
+        alert("Please fill out age, height, and weight.");
+        return;
+      }
+
+      const totalInches = (feet * 12) + inches;
+      const heightCm = totalInches * 2.54;
+      const weightKg = weight * 0.453592;
+
+      let bmr;
+
+      if (bodyfat && bodyfat > 0 && bodyfat < 70) {
+        const leanMassKg = weightKg * (1 - bodyfat / 100);
+        bmr = 370 + (21.6 * leanMassKg);
+      } else {
+        if (gender === "male") {
+          bmr = (10 * weightKg) + (6.25 * heightCm) - (5 * age) + 5;
+        } else {
+          bmr = (10 * weightKg) + (6.25 * heightCm) - (5 * age) - 161;
+        }
+      }
+
+      let trainingMultiplier = 0;
+
+      if (trainingDays === 2) trainingMultiplier = 0.08;
+      if (trainingDays === 3) trainingMultiplier = 0.12;
+      if (trainingDays === 4) trainingMultiplier = 0.16;
+      if (trainingDays >= 5) trainingMultiplier = 0.2;
+
+      const tdee = Math.round(bmr * (activity + trainingMultiplier));
+
+      let targetCalories;
+      let note;
+
+      if (goal === "fatloss") {
+        targetCalories = tdee - 500;
+        note = "Goal: fat loss. Start here for steady progress. If weight does not move after 2 weeks, adjust by 100-200 calories or increase steps.";
+      } else if (goal === "recomp") {
+        targetCalories = tdee - 200;
+        note = "Goal: recomposition. This keeps calories close enough to maintenance to support muscle while slowly losing fat.";
+      } else {
+        targetCalories = tdee + 250;
+        note = "Goal: muscle gain. Start with a small surplus so you build muscle without gaining unnecessary fat.";
+      }
+
+      const proteinLow = Math.round(weight * 0.8);
+      const proteinHigh = Math.round(weight * 1.0);
+
+      let workoutPlan = "Full Body 2-3x/week";
+
+      if (trainingDays === 0) workoutPlan = "Start with 2 full-body workouts per week";
+      if (trainingDays === 2) workoutPlan = "Full Body A/B - 2x/week";
+      if (trainingDays === 3) workoutPlan = "Full Body A/B/C - 3x/week";
+      if (trainingDays === 4) workoutPlan = "Upper/Lower Split - 4x/week";
+      if (trainingDays >= 5) workoutPlan = "Push/Pull/Legs or Upper/Lower Hybrid";
+
+      document.getElementById("maintenance").innerText = tdee + " calories/day";
+      document.getElementById("calories").innerText = Math.max(targetCalories, 1200) + " calories/day";
+      document.getElementById("protein").innerText = proteinLow + " - " + proteinHigh + "g/day";
+      document.getElementById("trainingPlan").innerText = workoutPlan;
+      document.getElementById("coachNote").innerText = note;
+
+      document.getElementById("results").style.display = "block";
+      document.getElementById("results").scrollIntoView({ behavior: "smooth" });
+    }
+  </script>
 
 </body>
 </html>
