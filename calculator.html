@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Muscle Motivation – Build Your Plan</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    /* ─── CSS Variables ─── */
+    :root {
+      --red: #ff0000;
+      --red-dim: rgba(255,0,0,0.12);
+      --bg: #050505;
+      --surface: #0f0f0f;
+      --surface2: #161616;
+      --border: #222;
+      --text: #ffffff;
+      --muted: #888;
+      --light: #ccc;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Barlow', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ─── Noise texture overlay ─── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.4;
+    }
+
+    /* ─── Header ─── */
+    header {
+      position: relative;
+      background: linear-gradient(180deg, #0a0a0a 0%, var(--bg) 100%);
+      padding: 36px 20px 30px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    header::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 50%;
+      transform: translateX(-50%);
+      width: 200px; height: 2px;
+      background: var(--red);
+      box-shadow: 0 0 20px var(--red);
+    }
+
+    .logo-img {
+      width: 90px;
+      margin-bottom: 12px;
+      filter: drop-shadow(0 0 12px rgba(255,0,0,0.4));
+    }
+
+    header h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(22px, 6vw, 38px);
+      color: var(--red);
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      text-shadow: 0 0 30px rgba(255,0,0,0.3);
+    }
+
+    header p {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    /* ─── Layout ─── */
+    .container {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 28px 16px 60px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ─── Section label ─── */
+    .section-label {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 10px;
+      letter-spacing: 3px;
+      color: var(--red);
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ─── Card ─── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px 20px;
+      margin-bottom: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,0,0,0.3), transparent);
+    }
+
+    /* ─── Form elements ─── */
+    .field {
+      margin-top: 18px;
+    }
+
+    .field:first-child { margin-top: 0; }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--light);
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+
+    .optional-tag {
+      font-size: 10px;
+      color: var(--muted);
+      font-weight: 400;
+      letter-spacing: 0;
+      text-transform: none;
+      margin-left: 6px;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 13px 16px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      font-size: 15px;
+      font-family: 'Barlow', sans-serif;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+      padding-right: 40px;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+      line-height: 1.5;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--red);
+      box-shadow: 0 0 0 3px rgba(255,0,0,0.08);
+    }
+
+    input::placeholder, textarea::placeholder {
+      color: #444;
+    }
+
+    /* ─── Row layout for height fields ─── */
+    .row-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    /* ─── Segmented toggle ─── */
+    .toggle-group {
+      display: flex;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      background: var(--surface2);
+    }
+
+    .toggle-group input[type="radio"] { display: none; }
+
+    .toggle-group label {
+      flex: 1;
+      padding: 12px 8px;
+      text-align: center;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.3px;
+      border: none;
+      transition: all 0.2s;
+      margin: 0;
+      text-transform: uppercase;
+    }
+
+    .toggle-group input[type="radio"]:checked + label {
+      background: var(--red);
+      color: white;
+    }
+
+    /* ─── CTA Button ─── */
+    .btn-primary {
+      width: 100%;
+      margin-top: 24px;
+      padding: 16px;
+      border: none;
+      border-radius: 12px;
+      background: var(--red);
+      color: white;
+      font-size: 15px;
+      font-weight: 700;
+      font-family: 'Orbitron', sans-serif;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 30px rgba(255,0,0,0.35);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+      box-shadow: none;
+    }
+
+    /* ─── Results section ─── */
+    #results {
+      display: none;
+      animation: fadeUp 0.5s ease forwards;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ─── Macro grid ─── */
+    .macro-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .macro-grid .stat-full {
+      grid-column: 1 / -1;
+    }
+
+    /* ─── Stat card ─── */
+    .stat {
+      background: var(--surface2);
+      border-radius: 12px;
+      padding: 16px;
+      border-left: 3px solid var(--red);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,0,0,0.04), transparent);
+      pointer-events: none;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .stat-value {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 22px;
+      color: var(--text);
+      margin-top: 6px;
+      line-height: 1;
+    }
+
+    .stat-sub {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* ─── Explanation box ─── */
+    .explanation {
+      background: var(--surface2);
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid #1e1e1e;
+      margin-top: 12px;
+    }
+
+    .explanation h3 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: var(--red);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .explanation p {
+      font-size: 14px;
+      color: var(--light);
+      line-height: 1.7;
+    }
+
+    /* ─── Tips list ─── */
+    .tips-list {
+      list-style: none;
+      margin-top: 10px;
+    }
+
+    .tips-list li {
+      font-size: 14px;
+      color: var(--light);
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      line-height: 1.5;
+    }
+
+    .tips-list li:last-child { border-bottom: none; }
+
+    .tips-list li::before {
+      content: '→';
+      color: var(--red);
+      font-weight: bold;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    /* ─── Training plan badge ─── */
+    .training-badge {
+      display: inline-block;
+      background: var(--red-dim);
+      border: 1px solid rgba(255,0,0,0.25);
+      color: var(--red);
+      border-radius: 8px;
+      padding: 4px 10px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 6px;
+    }
+
+    /* ─── Start over button ─── */
+    .btn-secondary {
+      width: 100%;
+      margin-top: 14px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+      font-family: 'Barlow', sans-serif;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--red);
+      color: var(--red);
+    }
+
+    /* ─── Error state ─── */
+    .field.error input,
+    .field.error select {
+      border-color: var(--red);
+    }
+
+    .error-msg {
+      font-size: 12px;
+      color: var(--red);
+      margin-top: 5px;
+      display: none;
+    }
+
+    .field.error .error-msg { display: block; }
+
+    /* ─── Footer ─── */
+    footer {
+      text-align: center;
+      color: #333;
+      font-size: 12px;
+      padding: 20px;
+      border-top: 1px solid var(--border);
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ─── Responsive ─── */
+    @media (max-width: 400px) {
+      .macro-grid { grid-template-columns: 1fr; }
+      .macro-grid .stat-full { grid-column: 1; }
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- ═══════════════════════════════ HEADER ═══════════════════════════════ -->
+<header>
+  <img src="logow.png" alt="Muscle Motivation Logo" class="logo-img">
+  <h1>Muscle Motivation</h1>
+  <p>Your Personal Fitness Coach</p>
+</header>
+
+<div class="container">
+
+  <!-- ═══════════════════════════ FORM SECTION ═══════════════════════════ -->
+  <div id="formSection">
+
+    <!-- About You -->
+    <div class="section-label">About You</div>
+    <div class="card">
+
+      <div class="field" id="field-gender">
+        <label>Gender</label>
+        <div class="toggle-group">
+          <input type="radio" name="gender" id="gMale" value="male" checked>
+          <label for="gMale">Male</label>
+          <input type="radio" name="gender" id="gFemale" value="female">
+          <label for="gFemale">Female</label>
+        </div>
+      </div>
+
+      <div class="field" id="field-age">
+        <label>Age</label>
+        <input type="number" id="age" placeholder="e.g. 32" min="14" max="99" />
+        <div class="error-msg">Please enter a valid age (14–99).</div>
+      </div>
+
+      <div class="field" id="field-height">
+        <label>Height</label>
+        <div class="row-2">
+          <input type="number" id="feet" placeholder="Feet (e.g. 5)" min="3" max="8" />
+          <input type="number" id="inches" placeholder="Inches (e.g. 10)" min="0" max="11" />
+        </div>
+        <div class="error-msg">Please enter a valid height.</div>
+      </div>
+
+      <div class="field" id="field-weight">
+        <label>Current Weight (lbs)</label>
+        <input type="number" id="weight" placeholder="e.g. 185" min="80" max="600" />
+        <div class="error-msg">Please enter a valid weight.</div>
+      </div>
+
+      <div class="field">
+        <label>Body Fat % <span class="optional-tag">optional — improves accuracy</span></label>
+        <input type="number" id="bodyfat" placeholder="e.g. 22" min="4" max="60" />
+      </div>
+    </div>
+
+    <!-- Activity -->
+    <div class="section-label">Activity Level</div>
+    <div class="card">
+
+      <div class="field" id="field-steps">
+        <label>Average Daily Steps</label>
+        <select id="steps">
+          <option value="1.2">Under 4,000 steps – Sedentary</option>
+          <option value="1.35">4,000–6,000 steps – Lightly active</option>
+          <option value="1.45">6,000–8,000 steps – Moderately active</option>
+          <option value="1.55">8,000–10,000 steps – Active</option>
+          <option value="1.7">10,000+ steps – Very active</option>
+        </select>
+      </div>
+
+      <div class="field" id="field-training">
+        <label>Training Days Per Week</label>
+        <select id="training">
+          <option value="0">0 – Not training yet</option>
+          <option value="2">2 days</option>
+          <option value="3">3 days</option>
+          <option value="4">4 days</option>
+          <option value="5">5 days</option>
+          <option value="6">6+ days</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Avg Workout Duration</label>
+        <select id="duration">
+          <option value="30">30 minutes</option>
+          <option value="45" selected>45 minutes</option>
+          <option value="60">60 minutes</option>
+          <option value="75">75+ minutes</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Workout Intensity</label>
+        <div class="toggle-group">
+          <input type="radio" name="intensity" id="iLow" value="low">
+          <label for="iLow">Low</label>
+          <input type="radio" name="intensity" id="iMod" value="moderate" checked>
+          <label for="iMod">Moderate</label>
+          <input type="radio" name="intensity" id="iHigh" value="high">
+          <label for="iHigh">High</label>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Goal & Setup -->
+    <div class="section-label">Goal & Setup</div>
+    <div class="card">
+
+      <div class="field" id="field-goal">
+        <label>Main Goal</label>
+        <select id="goal">
+          <option value="fatloss">Lose Fat</option>
+          <option value="recomp">Build Muscle + Lose Fat (Recomp)</option>
+          <option value="muscle">Build Muscle</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Equipment Access</label>
+        <select id="equipment">
+          <option value="fullgym">Full Gym</option>
+          <option value="dumbbells">Dumbbells Only</option>
+          <option value="bodyweight">Bodyweight / Home</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Injuries or Limitations <span class="optional-tag">optional</span></label>
+        <textarea id="injuries" placeholder="e.g. Lower back pain, bad knees — we'll keep this in mind for your plan."></textarea>
+      </div>
+
+    </div>
+
+    <button class="btn-primary" onclick="generatePlan()">Generate My Plan</button>
+
+  </div><!-- /formSection -->
+
+  <!-- ═══════════════════════════ RESULTS SECTION ═══════════════════════ -->
+  <div id="results">
+
+    <div class="section-label">Your Numbers</div>
+    <div class="card">
+
+      <div class="macro-grid">
+        <div class="stat stat-full">
+          <div class="stat-label">Maintenance Calories</div>
+          <div class="stat-value" id="rMaintenance">—</div>
+          <div class="stat-sub">What your body burns daily at current activity</div>
+        </div>
+        <div class="stat stat-full">
+          <div class="stat-label">Target Daily Calories</div>
+          <div class="stat-value" id="rCalories">—</div>
+          <div class="stat-sub" id="rCaloriesSub">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Protein</div>
+          <div class="stat-value" id="rProtein">—</div>
+          <div class="stat-sub">grams / day</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Carbs</div>
+          <div class="stat-value" id="rCarbs">—</div>
+          <div class="stat-sub">grams / day</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Fats</div>
+          <div class="stat-value" id="rFats">—</div>
+          <div class="stat-sub">grams / day</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Suggested Split</div>
+          <div class="training-badge" id="rSplit">—</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Why these numbers -->
+    <div class="section-label">Why These Numbers</div>
+    <div class="card">
+      <div class="explanation">
+        <h3>Coach's Note</h3>
+        <p id="rExplanation">—</p>
+      </div>
+    </div>
+
+    <!-- Actionable Tips -->
+    <div class="section-label">Your Action Plan</div>
+    <div class="card">
+      <ul class="tips-list" id="rTips"></ul>
+      <div id="rInjuryNote" style="margin-top:12px; font-size:13px; color:var(--muted); display:none;"></div>
+    </div>
+
+    <button class="btn-secondary" onclick="startOver()">↩ Start Over</button>
+
+  </div><!-- /results -->
+
+</div><!-- /container -->
+
+<footer>Muscle Motivation © 2026 — Not medical advice. Consult a professional before major diet changes.</footer>
+
+<!-- ═══════════════════════════════ JAVASCRIPT ════════════════════════════ -->
+<script>
+
+  // ─────────────────────────────────────────────────────────────
+  // BMR FORMULAS
+  // ─────────────────────────────────────────────────────────────
+
+  // Katch-McArdle: more accurate when body fat % is known
+  // Uses lean body mass rather than total weight
+  function bmrKatchMcArdle(weightKg, bodyfatPct) {
+    const leanMassKg = weightKg * (1 - bodyfatPct / 100);
+    return 370 + (21.6 * leanMassKg);
+  }
+
+  // Mifflin-St Jeor: best general formula when no body fat data
+  function bmrMifflinStJeor(weightKg, heightCm, age, gender) {
+    const base = (10 * weightKg) + (6.25 * heightCm) - (5 * age);
+    return gender === 'male' ? base + 5 : base - 161;
+  }
+
+  // Auto-selector: use Katch-McArdle if valid body fat provided, else Mifflin
+  function calculateBMR(weightKg, heightCm, age, gender, bodyfat) {
+    if (bodyfat && bodyfat >= 5 && bodyfat <= 55) {
+      return bmrKatchMcArdle(weightKg, bodyfat);
+    }
+    return bmrMifflinStJeor(weightKg, heightCm, age, gender);
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // TDEE CALCULATION
+  // Combines step-based activity multiplier + training volume
+  // ─────────────────────────────────────────────────────────────
+
+  function calculateTDEE(bmr, stepMultiplier, trainingDays, duration, intensity) {
+    // Base TDEE from step activity
+    let tdee = bmr * stepMultiplier;
+
+    // Training contribution: days × duration × intensity factor
+    // MET-inspired — adds calories burned per training session
+    const intensityFactor = { low: 4, moderate: 6, high: 8 }[intensity];
+    const trainingCaloriesPerWeek = trainingDays * (duration / 60) * intensityFactor * (bmr / 24);
+    const trainingCaloriesPerDay = trainingCaloriesPerWeek / 7;
+
+    return tdee + trainingCaloriesPerDay;
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // MACRO BREAKDOWN
+  // Protein first, then fats (25% of target cals), carbs = rest
+  // ─────────────────────────────────────────────────────────────
+
+  function calculateMacros(targetCalories, weightLbs, goal) {
+    // Protein targets per goal:
+    // Fat loss:    0.9g/lb — high protein to preserve muscle in a deficit
+    // Recomp:      1.0g/lb — maximum protein to support simultaneous goals
+    // Muscle gain: 0.95g/lb — solid protein without over-allocating calories
+    const proteinPerLb = goal === 'recomp' ? 1.0 : goal === 'fatloss' ? 0.9 : 0.95;
+    const proteinG = Math.round(weightLbs * proteinPerLb);
+    const proteinCals = proteinG * 4;
+
+    // Fats: 25% of target calories
+    const fatCals = Math.round(targetCalories * 0.25);
+    const fatG = Math.round(fatCals / 9);
+
+    // Carbs: remainder
+    const carbCals = Math.max(0, targetCalories - proteinCals - fatCals);
+    const carbG = Math.round(carbCals / 4);
+
+    return { proteinG, fatG, carbG };
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // VALIDATION
+  // ─────────────────────────────────────────────────────────────
+
+  function validate(age, feet, inches, weight) {
+    let valid = true;
+
+    const checks = [
+      { id: 'field-age',    ok: age >= 14 && age <= 99 },
+      { id: 'field-height', ok: feet >= 3 && feet <= 8 && inches >= 0 && inches <= 11 },
+      { id: 'field-weight', ok: weight >= 80 && weight <= 600 },
+    ];
+
+    checks.forEach(({ id, ok }) => {
+      const field = document.getElementById(id);
+      field.classList.toggle('error', !ok);
+      if (!ok) valid = false;
+    });
+
+    return valid;
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // TRAINING SPLIT RECOMMENDER
+  // ─────────────────────────────────────────────────────────────
+
+  function getTrainingSplit(trainingDays, equipment) {
+    if (trainingDays === 0) return 'Start with 2x Full Body';
+    if (trainingDays <= 2)  return equipment === 'bodyweight' ? '2x Full Body (BW)' : 'Full Body A/B';
+    if (trainingDays === 3) return equipment === 'bodyweight' ? '3x Full Body (BW)' : 'Full Body A/B/C';
+    if (trainingDays === 4) return 'Upper / Lower Split';
+    return 'Push / Pull / Legs';
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // GENERATE EXPLANATION
+  // ─────────────────────────────────────────────────────────────
+
+  function getExplanation(goal, tdee, targetCalories, usedKatch, muscleGainScenario) {
+    const diff   = Math.abs(Math.round(tdee - targetCalories));
+    const method = usedKatch ? 'Katch-McArdle (body fat method)' : 'Mifflin-St Jeor';
+    const dir    = targetCalories < tdee ? `a ${diff} calorie deficit` : `a ${diff} calorie surplus`;
+
+    let goalText;
+    if (goal === 'fatloss') {
+      goalText = `Your goal is fat loss, so we've set ${dir} below your maintenance. This creates steady, sustainable fat loss of roughly 0.5–1 lb per week without sacrificing muscle. High protein protects your lean mass.`;
+    } else if (goal === 'recomp') {
+      goalText = `Your goal is recomposition — losing fat while building muscle simultaneously. We've used a modest deficit with very high protein. Progress will be slower than pure fat loss, but body composition improvements are real and sustainable.`;
+    } else {
+      // Muscle gain — explanation varies by scenario
+      const muscleTexts = {
+        noTraining:  `You selected muscle gain but aren't currently training — a surplus without training stimulus would add fat, not muscle. We've set you at near-maintenance (${diff} calorie deficit) until you build a consistent training habit. Start with 2–3 days per week.`,
+        highBF:      `Your body fat is above the threshold where a caloric surplus is productive for muscle gain. We've set a moderate deficit instead — your body can use stored fat as fuel while building muscle with the right training stimulus. This is body recomposition.`,
+        lowTraining: `With only 1–2 training days per week, the stimulus for muscle growth is limited. We've set a very small surplus (${diff} calories above maintenance) to avoid unnecessary fat gain. Add a third training day to unlock a fuller growth phase.`,
+        surplus:     `You're training consistently and your body fat is in a productive range. We've set a ${diff} calorie surplus above maintenance — enough to fuel muscle growth while minimizing fat gain. Carbohydrates are elevated to power your workouts.`,
+      };
+      goalText = muscleTexts[muscleGainScenario] || muscleTexts.surplus;
+    }
+
+    return `BMR calculated using ${method}. ${goalText}`;
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // GENERATE TIPS
+  // ─────────────────────────────────────────────────────────────
+
+  function getTips(goal, stepMultiplier, trainingDays, proteinG) {
+    const tips = [];
+
+    if (stepMultiplier <= 1.35)
+      tips.push('Aim to hit 7,000–8,000 steps daily — it\'s one of the highest-impact changes you can make for fat loss.');
+
+    if (trainingDays < 3)
+      tips.push('Try to train at least 3 days per week. Consistency beats intensity early on.');
+
+    tips.push(`Hit your protein target of ${proteinG}g daily first — it keeps you full, protects muscle, and drives results.`);
+
+    if (goal === 'fatloss')
+      tips.push('Track your food for 2 weeks minimum. Most people underestimate calories by 20–30%.');
+
+    if (goal === 'muscle')
+      tips.push('Prioritize progressive overload — add a rep or small amount of weight each week.');
+
+    if (goal === 'recomp')
+      tips.push('Recomposition takes patience. Trust the process for 8–12 weeks before judging results.');
+
+    tips.push('Sleep 7–9 hours per night. Recovery is where the real progress happens.');
+
+    return tips;
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // MAIN FUNCTION — Generate Plan
+  // ─────────────────────────────────────────────────────────────
+
+  function generatePlan() {
+    // Collect inputs
+    const gender    = document.querySelector('input[name="gender"]:checked').value;
+    const age       = parseFloat(document.getElementById('age').value);
+    const feet      = parseFloat(document.getElementById('feet').value);
+    const inchesVal = parseFloat(document.getElementById('inches').value) || 0;
+    const weight    = parseFloat(document.getElementById('weight').value);
+    const bodyfat   = parseFloat(document.getElementById('bodyfat').value) || null;
+    const stepMult  = parseFloat(document.getElementById('steps').value);
+    const training  = parseFloat(document.getElementById('training').value);
+    const duration  = parseFloat(document.getElementById('duration').value);
+    const intensity = document.querySelector('input[name="intensity"]:checked').value;
+    const goal      = document.getElementById('goal').value;
+    const equipment = document.getElementById('equipment').value;
+    const injuries  = document.getElementById('injuries').value.trim();
+
+    // Validate required fields
+    if (!validate(age, feet, inchesVal, weight)) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    // Unit conversions
+    const heightCm = ((feet * 12) + inchesVal) * 2.54;
+    const weightKg = weight * 0.453592;
+
+    // BMR — auto-selects formula
+    const usedKatch = !!(bodyfat && bodyfat >= 5 && bodyfat <= 55);
+    const bmr = calculateBMR(weightKg, heightCm, age, gender, bodyfat);
+
+    // TDEE
+    const tdee = Math.round(calculateTDEE(bmr, stepMult, training, duration, intensity));
+
+    // Calorie target by goal
+    const minCals = gender === 'female' ? 1350 : 1600;
+    let targetCalories;
+    let muscleGainScenario = '';
+
+    if (goal === 'fatloss') {
+      targetCalories = Math.max(minCals, Math.round(tdee * 0.8));
+    } else if (goal === 'recomp') {
+      targetCalories = Math.max(minCals, Math.round(tdee * 0.88));
+    } else {
+      // ── Muscle Gain: smart multi-condition logic ──
+      // Body fat thresholds: males >= 20%, females >= 28% = too high for surplus
+      const isHighBF = bodyfat
+        ? (gender === 'male' ? bodyfat >= 20 : bodyfat >= 28)
+        : false; // no BF entered = benefit of the doubt
+
+      if (training === 0) {
+        // Not training at all — surplus has no stimulus to work with
+        targetCalories = Math.round(tdee * 0.98);
+        muscleGainScenario = 'noTraining';
+      } else if (isHighBF) {
+        // Higher body fat — recomp approach: slight deficit (92% of maintenance)
+        targetCalories = Math.max(minCals, Math.round(tdee * 0.92));
+        muscleGainScenario = 'highBF';
+      } else if (training <= 2) {
+        // Only 1–2 training days — minimal stimulus, use near-maintenance only
+        targetCalories = Math.round(tdee * 1.02);
+        muscleGainScenario = 'lowTraining';
+      } else {
+        // Lean + training 3+ days — full surplus warranted
+        targetCalories = Math.round(tdee * 1.07);
+        muscleGainScenario = 'surplus';
+      }
+    }
+
+    // Macros
+    const { proteinG, fatG, carbG } = calculateMacros(targetCalories, weight, goal);
+
+    // Training split
+    const split = getTrainingSplit(training, equipment);
+
+    // Calorie sub-label
+    const diff = Math.abs(tdee - targetCalories);
+    const calsSubLabel = targetCalories === tdee
+      ? 'At maintenance calories'
+      : targetCalories < tdee
+        ? `${diff} calorie deficit from maintenance`
+        : `${diff} calorie surplus above maintenance`;
+
+    // ── Populate results ──
+    document.getElementById('rMaintenance').textContent = tdee.toLocaleString() + ' kcal';
+    document.getElementById('rCalories').textContent    = targetCalories.toLocaleString() + ' kcal';
+    document.getElementById('rCaloriesSub').textContent = calsSubLabel;
+    document.getElementById('rProtein').textContent     = proteinG + 'g';
+    document.getElementById('rCarbs').textContent       = carbG + 'g';
+    document.getElementById('rFats').textContent        = fatG + 'g';
+    document.getElementById('rSplit').textContent       = split;
+    document.getElementById('rExplanation').textContent = getExplanation(goal, tdee, targetCalories, usedKatch, muscleGainScenario);
+
+    // Tips
+    const tipsList = document.getElementById('rTips');
+    tipsList.innerHTML = '';
+    getTips(goal, stepMult, training, proteinG).forEach(tip => {
+      const li = document.createElement('li');
+      li.textContent = tip;
+      tipsList.appendChild(li);
+    });
+
+    // Injury note
+    const injuryNote = document.getElementById('rInjuryNote');
+    if (injuries) {
+      injuryNote.textContent = `⚠ Note on injuries/limitations: "${injuries}" — your trainer will factor this into your workout programming.`;
+      injuryNote.style.display = 'block';
+    } else {
+      injuryNote.style.display = 'none';
+    }
+
+    // Show results, hide form
+    document.getElementById('formSection').style.display = 'none';
+    document.getElementById('results').style.display = 'block';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // START OVER
+  // ─────────────────────────────────────────────────────────────
+
+  function startOver() {
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('formSection').style.display = 'block';
+    // Clear error states
+    document.querySelectorAll('.field.error').forEach(f => f.classList.remove('error'));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+</script>
+</body>
+</html>
