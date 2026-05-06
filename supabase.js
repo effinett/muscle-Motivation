@@ -3,10 +3,11 @@
 const SUPABASE_URL  = 'https://igzvphmhyrdjjvzbxnuh.supabase.co';
 const SUPABASE_ANON = 'sb_publishable_LzaTBAZzmu1EOO6MsTSiFA_2BdMq9j6';
 
-// The supabase-js v2 CDN bundle exposes createClient on window.supabase
+// The UMD bundle exposes window.supabase = { createClient, ... }
 const supabase = (function () {
   try {
-    return window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+    const { createClient } = window.supabase;
+    return createClient(SUPABASE_URL, SUPABASE_ANON);
   } catch (e) {
     console.error('Supabase failed to initialise. Is the CDN script loaded above supabase.js?', e);
     return null;
