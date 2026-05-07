@@ -566,6 +566,19 @@
       try {
         const session = await requireAuth();
         currentUser = session.user;
+
+        // Check if onboarding already completed
+const { data: profile, error: profileError } = await supabaseClient
+  .from('profiles')
+  .select('onboarding_complete')
+  .eq('id', currentUser.id)
+  .single();
+
+if (!profileError && profile && profile.onboarding_complete) {
+  window.location.replace('app.html');
+  return;
+}
+        
         document.getElementById('authGate').style.display = 'none';
         document.getElementById('onboardingContent').style.display = 'block';
       } catch (err) {
