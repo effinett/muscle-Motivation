@@ -112,6 +112,27 @@
   .social-btn:hover { border-color:var(--red); background:#222; }
   .social-btn svg { width:20px; height:20px; flex-shrink:0; }
 
+ .password-wrap {
+  position: relative;
+}
+
+.password-wrap input {
+  width: 100%;
+  padding-right: 70px;
+}
+
+.toggle-password {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: #ff2a00;
+  font-weight: 700;
+  cursor: pointer;
+}
+
   .divider {
     display:flex; align-items:center; gap:12px;
     margin:18px 0; color:var(--grey); font-size:12px;
@@ -249,10 +270,25 @@
           <input type="email" id="loginEmail" placeholder="you@example.com" autocomplete="email">
         </div>
         <div class="form-group">
-          <label>Password</label>
-          <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
-          <a href="#" class="forgot-link" onclick="return false;">Forgot password? (coming soon)</a>
-        </div>
+  <label>Password</label>
+
+  <div class="password-wrap">
+    <input type="password"
+           id="loginPassword"
+           placeholder="••••••••"
+           autocomplete="current-password">
+
+    <button type="button"
+            class="toggle-password"
+            onclick="togglePassword('loginPassword', this)">
+      Show
+    </button>
+  </div>
+
+  <a href="#" class="forgot-link" onclick="return false;">
+    Forgot password? (coming soon)
+  </a>
+</div>
         <button class="btn-primary" id="loginBtn" onclick="handleLogin()">Sign In</button>
         <p class="auth-footer">No account? <a href="#" onclick="switchTab('signup')">Create one free</a></p>
       </div>
@@ -268,9 +304,21 @@
           <input type="email" id="signupEmail" placeholder="you@example.com" autocomplete="email">
         </div>
         <div class="form-group">
-          <label>Password</label>
-          <input type="password" id="signupPassword" placeholder="Min. 8 characters" autocomplete="new-password">
-        </div>
+  <label>Password</label>
+
+  <div class="password-wrap">
+    <input type="password"
+           id="signupPassword"
+           placeholder="Min. 8 characters"
+           autocomplete="new-password">
+
+    <button type="button"
+            class="toggle-password"
+            onclick="togglePassword('signupPassword', this)">
+      Show
+    </button>
+  </div>
+</div>
         <button class="btn-primary" id="signupBtn" onclick="handleSignup()">Create My Account</button>
         <p class="auth-footer">Already a member? <a href="#" onclick="switchTab('login')">Sign in</a></p>
       </div>
@@ -374,6 +422,18 @@
       showMsg(e.message || 'Google sign-in failed.');
     }
   }
+
+ function togglePassword(inputId, button) {
+  const input = document.getElementById(inputId);
+
+  if (input.type === 'password') {
+    input.type = 'text';
+    button.textContent = 'Hide';
+  } else {
+    input.type = 'password';
+    button.textContent = 'Show';
+  }
+}
 
   // Enter key
   document.addEventListener('keydown', (e) => {
