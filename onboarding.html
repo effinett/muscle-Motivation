@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Muscle Motivation – Let's Build Your Plan</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --red: #ff0000;
+      --red-dim: rgba(255,0,0,0.12);
+      --bg: #050505;
+      --surface: #0f0f0f;
+      --surface2: #161616;
+      --border: #222;
+      --text: #ffffff;
+      --muted: #888;
+      --light: #ccc;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Barlow', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.4;
+    }
+
+    /* Auth gate */
+    #authGate {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: var(--bg);
+      position: relative;
+      z-index: 10;
+    }
+    #authGate img { width: 90px; margin-bottom: 20px; opacity: 0.8; filter: drop-shadow(0 0 12px rgba(255,0,0,0.4)); }
+    #authGate p { color: #555; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; }
+
+    /* Header */
+    header {
+      position: relative;
+      background: linear-gradient(180deg, #0a0a0a 0%, var(--bg) 100%);
+      padding: 30px 20px 24px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      overflow: hidden;
+      z-index: 1;
+    }
+    header::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 50%;
+      transform: translateX(-50%);
+      width: 200px; height: 2px;
+      background: var(--red);
+      box-shadow: 0 0 20px var(--red);
+    }
+    header img { width: 70px; margin-bottom: 10px; filter: drop-shadow(0 0 10px rgba(255,0,0,0.4)); }
+    header h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(18px, 5vw, 28px);
+      color: var(--red);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+    header p { margin-top: 6px; color: var(--muted); font-size: 13px; letter-spacing: 1px; text-transform: uppercase; }
+
+    /* Progress bar */
+    .progress-wrap {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 20px;
+      position: relative;
+      z-index: 1;
+    }
+    .progress-track {
+      background: var(--border);
+      border-radius: 4px;
+      height: 4px;
+      max-width: 680px;
+      margin: 0 auto;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--red);
+      border-radius: 4px;
+      transition: width 0.4s ease;
+      box-shadow: 0 0 8px rgba(255,0,0,0.5);
+    }
+    .progress-label {
+      text-align: center;
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-top: 8px;
+      max-width: 680px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    /* Container */
+    .container {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 28px 16px 80px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Steps */
+    .step { display: none; }
+    .step.active { display: block; animation: fadeUp 0.35s ease forwards; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Section label */
+    .section-label {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 10px;
+      letter-spacing: 3px;
+      color: var(--red);
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px 20px;
+      margin-bottom: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,0,0,0.3), transparent);
+    }
+
+    .step-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 16px;
+      color: var(--text);
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+    .step-desc { font-size: 14px; color: var(--muted); margin-bottom: 20px; line-height: 1.6; }
+
+    /* Fields */
+    .field { margin-top: 18px; }
+    .field:first-of-type { margin-top: 0; }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--light);
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+    .optional-tag {
+      font-size: 10px; color: var(--muted);
+      font-weight: 400; letter-spacing: 0;
+      text-transform: none; margin-left: 6px;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 13px 16px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      font-size: 15px;
+      font-family: 'Barlow', sans-serif;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+      padding-right: 40px;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--red);
+      box-shadow: 0 0 0 3px rgba(255,0,0,0.08);
+    }
+    input::placeholder { color: #444; }
+
+    .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    /* Toggle group */
+    .toggle-group {
+      display: flex;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      background: var(--surface2);
+    }
+    .toggle-group input[type="radio"] { display: none; }
+    .toggle-group label {
+      flex: 1; padding: 12px 8px;
+      text-align: center; cursor: pointer;
+      font-size: 13px; font-weight: 600;
+      color: var(--muted); letter-spacing: 0.3px;
+      border: none; transition: all 0.2s;
+      margin: 0; text-transform: uppercase;
+    }
+    .toggle-group input[type="radio"]:checked + label {
+      background: var(--red); color: white;
+    }
+
+    /* Error */
+    .field.error input, .field.error select { border-color: var(--red); }
+    .error-msg { font-size: 12px; color: var(--red); margin-top: 5px; display: none; }
+    .field.error .error-msg { display: block; }
+
+    /* Nav buttons */
+    .nav-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+    }
+    .btn-primary {
+      flex: 1;
+      padding: 16px;
+      border: none;
+      border-radius: 12px;
+      background: var(--red);
+      color: white;
+      font-size: 14px;
+      font-weight: 700;
+      font-family: 'Orbitron', sans-serif;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 30px rgba(255,0,0,0.35); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    .btn-back {
+      padding: 16px 20px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+      font-family: 'Barlow', sans-serif;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .btn-back:hover { border-color: var(--red); color: var(--red); }
+
+    /* Results */
+    .macro-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .macro-grid .stat-full { grid-column: 1 / -1; }
+
+    .stat {
+      background: var(--surface2);
+      border-radius: 12px;
+      padding: 16px;
+      border-left: 3px solid var(--red);
+    }
+    .stat-label { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; font-weight: 600; }
+    .stat-value { font-family: 'Orbitron', sans-serif; font-size: 22px; color: var(--text); margin-top: 6px; line-height: 1; }
+    .stat-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    .training-badge {
+      display: inline-block;
+      background: var(--red-dim);
+      border: 1px solid rgba(255,0,0,0.25);
+      color: var(--red);
+      border-radius: 8px;
+      padding: 4px 10px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 6px;
+    }
+
+    .save-msg {
+      text-align: center;
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 12px;
+      letter-spacing: 0.5px;
+    }
+
+    /* Spinner */
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 400px) {
+      .macro-grid { grid-template-columns: 1fr; }
+      .macro-grid .stat-full { grid-column: 1; }
+      .row-2 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Auth gate -->
+<div id="authGate">
+  <img src="logow.png" alt="Muscle Motivation">
+  <p>Checking your session...</p>
+</div>
+
+<!-- Onboarding content -->
+<div id="onboardingContent" style="display:none;">
+
+<header>
+  <img src="logow.png" alt="Muscle Motivation Logo">
+  <h1>Muscle Motivation</h1>
+  <p>Let's build your personalized plan</p>
+</header>
+
+<!-- Progress bar -->
+<div class="progress-wrap">
+  <div class="progress-track">
+    <div class="progress-fill" id="progressFill" style="width:20%"></div>
+  </div>
+  <div class="progress-label" id="progressLabel">Step 1 of 5</div>
+</div>
+
+<div class="container">
+
+  <!-- ── STEP 1: About You ── -->
+  <div class="step active" id="step1">
+    <div class="section-label">About You</div>
+    <div class="card">
+      <div class="step-title">Tell us about yourself</div>
+      <div class="step-desc">We use this to calculate your exact calorie and macro targets.</div>
+
+      <div class="field">
+        <label>Your Name</label>
+        <input type="text" id="ob-name" placeholder="e.g. Jordan" autocomplete="given-name" />
+      </div>
+
+      <div class="field" id="field-ob-gender">
+        <label>Gender</label>
+        <div class="toggle-group">
+          <input type="radio" name="ob-gender" id="obMale" value="male" checked>
+          <label for="obMale">Male</label>
+          <input type="radio" name="ob-gender" id="obFemale" value="female">
+          <label for="obFemale">Female</label>
+        </div>
+      </div>
+
+      <div class="field" id="field-ob-age">
+        <label>Age</label>
+        <input type="number" id="ob-age" placeholder="e.g. 32" min="14" max="99" />
+        <div class="error-msg">Please enter a valid age (14–99).</div>
+      </div>
+    </div>
+    <div class="nav-row">
+      <button class="btn-primary" onclick="goStep(2)">Continue →</button>
+    </div>
+  </div>
+
+  <!-- ── STEP 2: Body Stats ── -->
+  <div class="step" id="step2">
+    <div class="section-label">Body Stats</div>
+    <div class="card">
+      <div class="step-title">Your current measurements</div>
+      <div class="step-desc">Used to calculate your metabolic rate accurately.</div>
+
+      <div class="field" id="field-ob-height">
+        <label>Height</label>
+        <div class="row-2">
+          <input type="number" id="ob-feet" placeholder="Feet (e.g. 5)" min="3" max="8" />
+          <input type="number" id="ob-inches" placeholder="Inches (e.g. 10)" min="0" max="11" />
+        </div>
+        <div class="error-msg">Please enter a valid height.</div>
+      </div>
+
+      <div class="field" id="field-ob-weight">
+        <label>Current Weight (lbs)</label>
+        <input type="number" id="ob-weight" placeholder="e.g. 185" min="80" max="600" />
+        <div class="error-msg">Please enter a valid weight.</div>
+      </div>
+
+      <div class="field">
+        <label>Body Fat % <span class="optional-tag">optional — improves accuracy</span></label>
+        <input type="number" id="ob-bodyfat" placeholder="e.g. 22" min="4" max="60" />
+      </div>
+    </div>
+    <div class="nav-row">
+      <button class="btn-back" onclick="goStep(1)">← Back</button>
+      <button class="btn-primary" onclick="goStep(3)">Continue →</button>
+    </div>
+  </div>
+
+  <!-- ── STEP 3: Activity ── -->
+  <div class="step" id="step3">
+    <div class="section-label">Activity Level</div>
+    <div class="card">
+      <div class="step-title">How active are you?</div>
+      <div class="step-desc">Be honest — this directly affects your calorie target.</div>
+
+      <div class="field">
+        <label>Average Daily Steps</label>
+        <select id="ob-steps">
+          <option value="1.2">Under 4,000 – Sedentary</option>
+          <option value="1.35">4,000–6,000 – Lightly active</option>
+          <option value="1.45">6,000–8,000 – Moderately active</option>
+          <option value="1.55">8,000–10,000 – Active</option>
+          <option value="1.7">10,000+ – Very active</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Training Days Per Week</label>
+        <select id="ob-training">
+          <option value="0">0 – Not training yet</option>
+          <option value="2">2 days</option>
+          <option value="3">3 days</option>
+          <option value="4">4 days</option>
+          <option value="5">5 days</option>
+          <option value="6">6+ days</option>
+        </select>
+      </div>
+    </div>
+    <div class="nav-row">
+      <button class="btn-back" onclick="goStep(2)">← Back</button>
+      <button class="btn-primary" onclick="goStep(4)">Continue →</button>
+    </div>
+  </div>
+
+  <!-- ── STEP 4: Goal ── -->
+  <div class="step" id="step4">
+    <div class="section-label">Your Goal</div>
+    <div class="card">
+      <div class="step-title">What do you want to achieve?</div>
+      <div class="step-desc">We'll build your targets around this.</div>
+
+      <div class="field">
+        <label>Main Goal</label>
+        <select id="ob-goal">
+          <option value="fatloss">Lose Fat</option>
+          <option value="recomp">Build Muscle + Lose Fat (Recomp)</option>
+          <option value="muscle">Build Muscle</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Target Timeline</label>
+        <select id="ob-timeline">
+          <option value="aggressive">Aggressive — results ASAP</option>
+          <option value="steady" selected>Steady — consistent progress</option>
+          <option value="relaxed">Relaxed — long game, sustainable</option>
+        </select>
+      </div>
+    </div>
+    <div class="nav-row">
+      <button class="btn-back" onclick="goStep(3)">← Back</button>
+      <button class="btn-primary" onclick="calculateAndShow()">Generate My Plan →</button>
+    </div>
+  </div>
+
+  <!-- ── STEP 5: Results ── -->
+  <div class="step" id="step5">
+    <div class="section-label">Your Personalized Plan</div>
+    <div class="card">
+      <div class="step-title">Here are your targets</div>
+      <div class="step-desc">These are saved to your account and shown on your dashboard.</div>
+
+      <div class="macro-grid">
+        <div class="stat stat-full">
+          <div class="stat-label">Maintenance Calories</div>
+          <div class="stat-value" id="ob-rMaintenance">—</div>
+          <div class="stat-sub">What your body burns at current activity</div>
+        </div>
+        <div class="stat stat-full">
+          <div class="stat-label">Target Daily Calories</div>
+          <div class="stat-value" id="ob-rCalories">—</div>
+          <div class="stat-sub" id="ob-rCaloriesSub">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Protein</div>
+          <div class="stat-value" id="ob-rProtein">—</div>
+          <div class="stat-sub">grams / day</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Carbs</div>
+          <div class="stat-value" id="ob-rCarbs">—</div>
+          <div class="stat-sub">grams / day</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Fats</div>
+          <div class="stat-value" id="ob-rFats">—</div>
+          <div class="stat-sub">grams / day</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Training Split</div>
+          <div class="training-badge" id="ob-rSplit">—</div>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-primary" id="saveBtn" onclick="saveAndContinue()">
+      Save & Go to My Dashboard →
+    </button>
+    <p class="save-msg" id="saveMsg"></p>
+  </div>
+
+</div><!-- /container -->
+</div><!-- /onboardingContent -->
+
+<!-- Supabase -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase.js"></script>
+<script>
+
+  let currentUser = null;
+  let generatedPlan = {};
+  const TOTAL_STEPS = 5;
+
+  // ── Auth gate ──────────────────────────────────────────────
+  window.addEventListener('load', function() {
+    (async () => {
+      try {
+        const session = await requireAuth();
+        currentUser = session.user;
+        document.getElementById('authGate').style.display = 'none';
+        document.getElementById('onboardingContent').style.display = 'block';
+      } catch (err) {
+        window.location.href = 'auth.html';
+      }
+    })();
+  });
+
+  // ── Step navigation ────────────────────────────────────────
+  function goStep(n) {
+    if (n > 1 && !validateStep(currentStep())) return;
+    document.querySelectorAll('.step').forEach(function(s) { s.classList.remove('active'); });
+    document.getElementById('step' + n).classList.add('active');
+    var pct = Math.round((n / TOTAL_STEPS) * 100);
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressLabel').textContent = 'Step ' + n + ' of ' + TOTAL_STEPS;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function currentStep() {
+    var active = document.querySelector('.step.active');
+    return active ? parseInt(active.id.replace('step', '')) : 1;
+  }
+
+  // ── Validation ─────────────────────────────────────────────
+  function validateStep(n) {
+    if (n === 1) {
+      var age = parseFloat(document.getElementById('ob-age').value);
+      var ok = age >= 14 && age <= 99;
+      document.getElementById('field-ob-age').classList.toggle('error', !ok);
+      return ok;
+    }
+    if (n === 2) {
+      var feet    = parseFloat(document.getElementById('ob-feet').value);
+      var inches  = parseFloat(document.getElementById('ob-inches').value) || 0;
+      var weight  = parseFloat(document.getElementById('ob-weight').value);
+      var hOk     = feet >= 3 && feet <= 8 && inches >= 0 && inches <= 11;
+      var wOk     = weight >= 80 && weight <= 600;
+      document.getElementById('field-ob-height').classList.toggle('error', !hOk);
+      document.getElementById('field-ob-weight').classList.toggle('error', !wOk);
+      return hOk && wOk;
+    }
+    return true;
+  }
+
+  // ── Calculator logic (mirrors calculator.html, no duplication) ──
+  function calcBMR(weightKg, heightCm, age, gender, bodyfat) {
+    if (bodyfat && bodyfat >= 5 && bodyfat <= 55) {
+      var lean = weightKg * (1 - bodyfat / 100);
+      return 370 + (21.6 * lean);
+    }
+    var base = (10 * weightKg) + (6.25 * heightCm) - (5 * age);
+    return gender === 'male' ? base + 5 : base - 161;
+  }
+
+  function calcTDEE(bmr, stepMult, trainingDays) {
+    var tdee = bmr * stepMult;
+    var trainingAdd = trainingDays * 0.75 * 6 * (bmr / 24);
+    return tdee + (trainingAdd / 7);
+  }
+
+  function calcMacros(targetCals, weightLbs, goal) {
+    var proteinPerLb = goal === 'recomp' ? 1.0 : goal === 'fatloss' ? 0.9 : 0.95;
+    var proteinG = Math.round(weightLbs * proteinPerLb);
+    var fatCals  = Math.round(targetCals * 0.25);
+    var fatG     = Math.round(fatCals / 9);
+    var carbG    = Math.round(Math.max(0, targetCals - (proteinG * 4) - fatCals) / 4);
+    return { proteinG: proteinG, fatG: fatG, carbG: carbG };
+  }
+
+  function getSplit(trainingDays) {
+    if (trainingDays === 0) return 'Start with 2x Full Body';
+    if (trainingDays <= 2)  return 'Full Body A/B';
+    if (trainingDays === 3) return 'Full Body A/B/C';
+    if (trainingDays === 4) return 'Upper / Lower Split';
+    return 'Push / Pull / Legs';
+  }
+
+  function getGoalSummary(goal, timeline) {
+    var g = { fatloss: 'Fat Loss', recomp: 'Recomposition', muscle: 'Muscle Gain' }[goal] || goal;
+    var t = { aggressive: 'aggressive pace', steady: 'steady progress', relaxed: 'relaxed long game' }[timeline] || timeline;
+    return g + ' — ' + t;
+  }
+
+  // ── Generate plan from inputs ──────────────────────────────
+  function calculateAndShow() {
+    if (!validateStep(4)) return;
+
+    var gender    = document.querySelector('input[name="ob-gender"]:checked').value;
+    var age       = parseFloat(document.getElementById('ob-age').value);
+    var feet      = parseFloat(document.getElementById('ob-feet').value);
+    var inchesVal = parseFloat(document.getElementById('ob-inches').value) || 0;
+    var weight    = parseFloat(document.getElementById('ob-weight').value);
+    var bodyfat   = parseFloat(document.getElementById('ob-bodyfat').value) || null;
+    var stepMult  = parseFloat(document.getElementById('ob-steps').value);
+    var training  = parseFloat(document.getElementById('ob-training').value);
+    var goal      = document.getElementById('ob-goal').value;
+    var timeline  = document.getElementById('ob-timeline').value;
+    var name      = document.getElementById('ob-name').value.trim();
+
+    // Users input height as feet/inches; convert to cm for internal storage and BMR calculations.
+    var heightCm = ((feet * 12) + inchesVal) * 2.54;
+    var weightKg = weight * 0.453592;
+    var bmr      = calcBMR(weightKg, heightCm, age, gender, bodyfat);
+    var tdee     = Math.round(calcTDEE(bmr, stepMult, training));
+
+    var minCals = gender === 'female' ? 1350 : 1600;
+    var targetCals;
+
+    if (goal === 'fatloss') {
+      targetCals = Math.max(minCals, Math.round(tdee * 0.8));
+    } else if (goal === 'recomp') {
+      targetCals = Math.max(minCals, Math.round(tdee * 0.88));
+    } else {
+      var isHighBF = bodyfat ? (gender === 'male' ? bodyfat >= 20 : bodyfat >= 28) : false;
+      if (training === 0)      { targetCals = Math.round(tdee * 0.98); }
+      else if (isHighBF)       { targetCals = Math.max(minCals, Math.round(tdee * 0.92)); }
+      else if (training <= 2)  { targetCals = Math.round(tdee * 1.02); }
+      else                     { targetCals = Math.round(tdee * 1.07); }
+    }
+
+    var macros  = calcMacros(targetCals, weight, goal);
+    var split   = getSplit(training);
+    var diff    = Math.abs(tdee - targetCals);
+    var subLabel = targetCals < tdee
+      ? diff + ' calorie deficit from maintenance'
+      : targetCals > tdee
+        ? diff + ' calorie surplus above maintenance'
+        : 'At maintenance';
+
+    // Store for saving
+    generatedPlan = {
+      full_name:            name || null,
+      gender:               gender,
+      age:                  age,
+      height_cm:            Math.round(heightCm * 10) / 10,
+      weight_lbs:           weight,
+      body_fat_pct:         bodyfat || null,
+      goal:                 goal,
+      activity_level:       stepMult,
+      training_days:        training,
+      timeline:             timeline,
+      maintenance_calories: tdee,
+      target_calories:      targetCals,
+      protein_target:       macros.proteinG,
+      fat_target:           macros.fatG,
+      carb_target:          macros.carbG,
+      training_split:       split,
+      goal_summary:         getGoalSummary(goal, timeline),
+      onboarding_complete:  true
+    };
+
+    // Populate results
+    document.getElementById('ob-rMaintenance').textContent = tdee.toLocaleString() + ' kcal';
+    document.getElementById('ob-rCalories').textContent    = targetCals.toLocaleString() + ' kcal';
+    document.getElementById('ob-rCaloriesSub').textContent = subLabel;
+    document.getElementById('ob-rProtein').textContent     = macros.proteinG + 'g';
+    document.getElementById('ob-rCarbs').textContent       = macros.carbG + 'g';
+    document.getElementById('ob-rFats').textContent        = macros.fatG + 'g';
+    document.getElementById('ob-rSplit').textContent       = split;
+
+    goStep(5);
+  }
+
+  // ── Save to Supabase and redirect ─────────────────────────
+  async function saveAndContinue() {
+    var btn = document.getElementById('saveBtn');
+    var msg = document.getElementById('saveMsg');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Saving...';
+    msg.textContent = '';
+
+    try {
+      var ok = await upsertProfile(currentUser.id, generatedPlan);
+      if (!ok) throw new Error('Save failed');
+      msg.textContent = 'Saved! Redirecting to your dashboard...';
+      // Use replace() so onboarding is removed from history — prevents Back button re-submission.
+      setTimeout(function() { window.location.replace('app.html'); }, 1000);
+    } catch (e) {
+      msg.textContent = 'Something went wrong. Please try again.';
+      btn.disabled = false;
+      btn.innerHTML = 'Save & Go to My Dashboard →';
+    }
+  }
+
+</script>
+</body>
+</html>
