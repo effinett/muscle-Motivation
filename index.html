@@ -350,10 +350,20 @@
   .feature-card:hover::before { transform: scaleX(1); }
 
   .feature-icon {
-    font-size: 28px;
+    color: var(--red);
     margin-bottom: 16px;
-    display: block;
-  }
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.feature-icon svg {
+    width: 34px;
+    height: 34px;
+    stroke: currentColor;
+    stroke-width: 2.3;
+}
+    
   .feature-card h3 {
     font-family: var(--font-display);
     font-size: 22px;
