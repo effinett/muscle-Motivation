@@ -1,25 +1,26 @@
-// ── Muscle Motivation | Supabase Config ──────────────────────────────────────
+// Muscle Motivation | Supabase Config
 
-const SUPABASE_URL  = 'https://igzvphmhyrdjjvzbxnuh.supabase.co';
+const SUPABASE_URL = 'https://igzvphmhyrdjjvzbxnuh.supabase.co';
 const SUPABASE_ANON = 'sb_publishable_LzaTBAZzmu1EOO6MsTSiFA_2BdMq9j6';
 
-// The UMD bundle exposes window.supabase = { createClient, ... }
-const supabase = (function () {
-  try {
-    const { createClient } = window.supabase;
-    return createClient(SUPABASE_URL, SUPABASE_ANON);
-  } catch (e) {
-    console.error('Supabase failed to initialise. Is the CDN script loaded above supabase.js?', e);
-    return null;
-  }
-})();
+let supabaseClient = null;
 
-// ── Auth helpers ─────────────────────────────────────────────────────────────
+try {
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+} catch (e) {
+  console.error('Supabase failed to initialise. Make sure the CDN script loads before supabase.js:', e);
+}
 
 async function getSession() {
-  if (!supabase) return null;
-  const { data } = await supabase.auth.getSession();
-  return data.session;
+  try {
+    if (!supabaseClient) return null;
+    const { data, error } = await supabaseClient.auth.getSession();
+    if (error) throw error;
+    return data.session;
+  } catch (e) {
+    console.error('getSession error:', e);
+    return null;
+  }
 }
 
 async function getUser() {
@@ -28,35 +29,55 @@ async function getUser() {
 }
 
 async function signOut() {
-  if (supabase) await supabase.auth.signOut();
+  try {
+    if (supabaseClient) await supabaseClient.auth.signOut();
+  } catch (e) {
+    console.error('signOut error:', e);
+  }
   window.location.href = 'auth.html';
 }
 
 async function requireAuth() {
   const session = await getSession();
+
   if (!session) {
     window.location.href = 'auth.html';
     throw new Error('Not authenticated');
   }
+
   return session;
 }
 
 async function getProfile(userId) {
-  if (!supabase) return null;
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .single();
-  if (error) console.error('Profile fetch error:', error);
-  return data;
+  try {
+    if (!supabaseClient) return null;
+
+    const { data, error } = await supabaseClient
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (e) {
+    console.error('getProfile error:', e);
+    return null;
+  }
 }
 
 async function upsertProfile(userId, updates) {
-  if (!supabase) return false;
-  const { error } = await supabase
-    .from('profiles')
-    .upsert({ id: userId, ...updates, updated_at: new Date().toISOString() });
-  if (error) console.error('Profile upsert error:', error);
-  return !error;
+  try {
+    if (!supabaseClient) return false;
+
+    const { error } = await supabaseClient
+      .from('profiles')
+      .upsert({ id: userId, ...updates, updated_at: new Date().toISOString() });
+
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.error('upsertProfile error:', e);
+    return false;
+  }
 }
