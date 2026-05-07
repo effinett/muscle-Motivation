@@ -291,8 +291,10 @@
 
   // Redirect if already logged in — runs after all scripts are guaranteed loaded
   window.addEventListener('load', function() {
-    getSession().then(function(session) {
-      if (session) window.location.href = 'app.html';
+    getSession().then(async function(session) {
+      if (!session) return;
+      var profile = await getProfile(session.user.id);
+      window.location.href = (profile && profile.onboarding_complete) ? 'app.html' : 'onboarding.html';
     });
   });
 
@@ -330,7 +332,9 @@
     try {
       const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      window.location.href = 'app.html';
+      var session = await getSession();
+      var profile = await getProfile(session.user.id);
+      window.location.href = (profile && profile.onboarding_complete) ? 'app.html' : 'onboarding.html';
     } catch (e) {
       showMsg(e.message || 'Login failed. Please try again.');
     }
@@ -363,7 +367,7 @@
     try {
       const { error } = await supabaseClient.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: 'https://musclemotivation.fit/app.html' }
+        options: { redirectTo: 'https://musclemotivation.fit/onboarding.html' }
       });
       if (error) throw error;
     } catch (e) {
