@@ -132,7 +132,7 @@
       padding: 25px;
     }
 
-    /* ── Auth loading screen — hidden once session confirmed ── */
+    /* ── Auth gate ── */
     #authGate {
       display: flex;
       flex-direction: column;
@@ -144,7 +144,7 @@
     #authGate img { width: 100px; margin-bottom: 20px; opacity: 0.8; }
     #authGate p { color: #555; font-size: 14px; letter-spacing: 1px; }
 
-    /* Sign-out button in header */
+    /* ── Sign out button ── */
     #signOutBtn {
       width: auto;
       margin: 10px auto 0;
@@ -163,13 +163,13 @@
 
 <body>
 
-<!-- ── Auth gate: shown while checking session, hidden if logged in ── -->
+<!-- Auth gate: visible while session is being checked -->
 <div id="authGate">
   <img src="logow.png" alt="Muscle Motivation">
   <p>Checking your session...</p>
 </div>
 
-<!-- ── App content: hidden until session confirmed ── -->
+<!-- App content: hidden until session is confirmed -->
 <div id="appContent" style="display:none;">
 
 <header>
@@ -275,107 +275,105 @@
     Muscle Motivation © 2026
   </div>
 
-</div><!-- end #appContent -->
+</div><!-- end appContent -->
 
-<!-- Supabase: CDN must load before supabase.js -->
+<!-- Supabase UMD CDN must load before supabase.js -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="supabase.js"></script>
 
 <script>
-  // Auth gate — runs after all scripts are guaranteed loaded
+  // Auth check — runs after all scripts are fully loaded
   window.addEventListener('load', function() {
     (async () => {
       try {
-        const session = await requireAuth();
-        document.getElementById('authGate').style.display  = 'none';
+        await requireAuth();
+        document.getElementById('authGate').style.display = 'none';
         document.getElementById('appContent').style.display = 'block';
       } catch (err) {
-        console.error('Auth error:', err);
         window.location.href = 'auth.html';
       }
     })();
   });
 
-  // ── Calculator (unchanged) ───────────────────────────────────────────────────
-  function calculatePlan() {
-    const gender = document.getElementById("gender").value;
-    const age = parseFloat(document.getElementById("age").value);
-    const feet = parseFloat(document.getElementById("feet").value);
-    const inches = parseFloat(document.getElementById("inches").value);
-    const weight = parseFloat(document.getElementById("weight").value);
-    const bodyfat = parseFloat(document.getElementById("bodyfat").value);
-    const activity = parseFloat(document.getElementById("steps").value);
-    const trainingDays = parseFloat(document.getElementById("training").value);
-    const goal = document.getElementById("goal").value;
+function calculatePlan() {
+  const gender = document.getElementById("gender").value;
+  const age = parseFloat(document.getElementById("age").value);
+  const feet = parseFloat(document.getElementById("feet").value);
+  const inches = parseFloat(document.getElementById("inches").value);
+  const weight = parseFloat(document.getElementById("weight").value);
+  const bodyfat = parseFloat(document.getElementById("bodyfat").value);
+  const activity = parseFloat(document.getElementById("steps").value);
+  const trainingDays = parseFloat(document.getElementById("training").value);
+  const goal = document.getElementById("goal").value;
 
-    if (!age || !feet || isNaN(inches) || !weight) {
-      alert("Please fill out age, height, and weight.");
-      return;
-    }
-
-    const totalInches = (feet * 12) + inches;
-    const heightCm = totalInches * 2.54;
-    const weightKg = weight * 0.453592;
-
-    let bmr;
-
-    if (bodyfat && bodyfat >= 10 && bodyfat <= 50) {
-      const leanMassKg = weightKg * (1 - bodyfat / 100);
-      bmr = 370 + (21.6 * leanMassKg);
-    } else {
-      if (gender === "male") {
-        bmr = (10 * weightKg) + (6.25 * heightCm) - (5 * age) + 5;
-      } else {
-        bmr = (10 * weightKg) + (6.25 * heightCm) - (5 * age) - 161;
-      }
-    }
-
-    let trainingMultiplier = 0;
-    if (trainingDays === 2) trainingMultiplier = 0.08;
-    if (trainingDays === 3) trainingMultiplier = 0.12;
-    if (trainingDays === 4) trainingMultiplier = 0.16;
-    if (trainingDays >= 5) trainingMultiplier = 0.2;
-
-    const tdee = Math.round(bmr * (activity + trainingMultiplier));
-
-    let targetCalories;
-    let note;
-    const minCalories = gender === "female" ? 1350 : 1800;
-
-    if (goal === "fatloss") {
-      targetCalories = tdee * 0.8;
-      if (targetCalories < minCalories) targetCalories = minCalories;
-      note = "Goal: fat loss. Sustainable deficit for steady progress.";
-    } else if (goal === "recomp") {
-      targetCalories = tdee * 0.9;
-      if (targetCalories < minCalories) targetCalories = minCalories;
-      note = "Goal: recomposition. Slight deficit to lose fat and build muscle.";
-    } else {
-      targetCalories = tdee * 1.08;
-      note = "Goal: muscle gain. Small surplus for lean growth.";
-    }
-
-    targetCalories = Math.round(targetCalories);
-
-    const proteinLow  = Math.round(weight * 0.8);
-    const proteinHigh = Math.round(weight * 1.0);
-
-    let workoutPlan = "Full Body 2–3x/week";
-    if (trainingDays === 0) workoutPlan = "Start with 2 full-body workouts per week";
-    if (trainingDays === 2) workoutPlan = "Full Body A/B - 2x/week";
-    if (trainingDays === 3) workoutPlan = "Full Body A/B/C - 3x/week";
-    if (trainingDays === 4) workoutPlan = "Upper/Lower Split - 4x/week";
-    if (trainingDays >= 5) workoutPlan = "Push/Pull/Legs";
-
-    document.getElementById("maintenance").innerText   = tdee + " calories/day";
-    document.getElementById("calories").innerText      = targetCalories + " calories/day";
-    document.getElementById("protein").innerText       = proteinLow + " - " + proteinHigh + "g/day";
-    document.getElementById("trainingPlan").innerText  = workoutPlan;
-    document.getElementById("coachNote").innerText     = note;
-
-    document.getElementById("results").style.display = "block";
-    document.getElementById("results").scrollIntoView({ behavior: "smooth" });
+  if (!age || !feet || isNaN(inches) || !weight) {
+    alert("Please fill out age, height, and weight.");
+    return;
   }
+
+  const totalInches = (feet * 12) + inches;
+  const heightCm = totalInches * 2.54;
+  const weightKg = weight * 0.453592;
+
+  let bmr;
+
+  if (bodyfat && bodyfat >= 10 && bodyfat <= 50) {
+    const leanMassKg = weightKg * (1 - bodyfat / 100);
+    bmr = 370 + (21.6 * leanMassKg);
+  } else {
+    if (gender === "male") {
+      bmr = (10 * weightKg) + (6.25 * heightCm) - (5 * age) + 5;
+    } else {
+      bmr = (10 * weightKg) + (6.25 * heightCm) - (5 * age) - 161;
+    }
+  }
+
+  let trainingMultiplier = 0;
+  if (trainingDays === 2) trainingMultiplier = 0.08;
+  if (trainingDays === 3) trainingMultiplier = 0.12;
+  if (trainingDays === 4) trainingMultiplier = 0.16;
+  if (trainingDays >= 5) trainingMultiplier = 0.2;
+
+  const tdee = Math.round(bmr * (activity + trainingMultiplier));
+
+  let targetCalories;
+  let note;
+  const minCalories = gender === "female" ? 1350 : 1800;
+
+  if (goal === "fatloss") {
+    targetCalories = tdee * 0.8;
+    if (targetCalories < minCalories) targetCalories = minCalories;
+    note = "Goal: fat loss. Sustainable deficit for steady progress.";
+  } else if (goal === "recomp") {
+    targetCalories = tdee * 0.9;
+    if (targetCalories < minCalories) targetCalories = minCalories;
+    note = "Goal: recomposition. Slight deficit to lose fat and build muscle.";
+  } else {
+    targetCalories = tdee * 1.08;
+    note = "Goal: muscle gain. Small surplus for lean growth.";
+  }
+
+  targetCalories = Math.round(targetCalories);
+
+  const proteinLow = Math.round(weight * 0.8);
+  const proteinHigh = Math.round(weight * 1.0);
+
+  let workoutPlan = "Full Body 2–3x/week";
+  if (trainingDays === 0) workoutPlan = "Start with 2 full-body workouts per week";
+  if (trainingDays === 2) workoutPlan = "Full Body A/B - 2x/week";
+  if (trainingDays === 3) workoutPlan = "Full Body A/B/C - 3x/week";
+  if (trainingDays === 4) workoutPlan = "Upper/Lower Split - 4x/week";
+  if (trainingDays >= 5) workoutPlan = "Push/Pull/Legs";
+
+  document.getElementById("maintenance").innerText = tdee + " calories/day";
+  document.getElementById("calories").innerText = targetCalories + " calories/day";
+  document.getElementById("protein").innerText = proteinLow + " - " + proteinHigh + "g/day";
+  document.getElementById("trainingPlan").innerText = workoutPlan;
+  document.getElementById("coachNote").innerText = note;
+
+  document.getElementById("results").style.display = "block";
+  document.getElementById("results").scrollIntoView({ behavior: "smooth" });
+}
 </script>
 
 </body>
