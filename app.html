@@ -189,7 +189,17 @@
       text-decoration: none;
     }
     .action-btn:hover { border-color: var(--red); background: #1a1a1a; }
-    .action-icon { font-size: 22px; }
+    .action-icon {
+  color: var(--red);
+  margin-bottom: 10px;
+}
+
+.action-icon svg {
+  width: 28px;
+  height: 28px;
+  stroke: currentColor;
+  stroke-width: 2.4;
+}
     .action-label {
       font-size: 13px; font-weight: 600;
       color: var(--light); letter-spacing: 0.3px;
