@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Muscle Motivation – Dashboard</title>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
   <style>
     :root {
       --red: #ff0000;
@@ -339,22 +340,30 @@
     <div class="section-label">Quick Actions</div>
     <div class="actions-grid">
       <button class="action-btn" onclick="showToast('Weight logging coming in Phase 2!')">
-        <span class="action-icon">⚖️</span>
+        <span class="action-icon">
+          <i data-lucide="scale"></i>
+        </span>
         <span class="action-label">Log Weight</span>
         <span class="action-sub">Track your progress</span>
       </button>
       <button class="action-btn" onclick="showToast('Meal logging coming in Phase 2!')">
-        <span class="action-icon">🍽️</span>
+        <span class="action-icon">
+          <i data-lucide="utensils"></i>
+        </span>
         <span class="action-label">Log Meal</span>
         <span class="action-sub">Track calories & macros</span>
       </button>
       <button class="action-btn" onclick="showToast('Workout logging coming in Phase 2!')">
-        <span class="action-icon">🏋️</span>
+        <span class="action-icon">
+          <i data-lucide="dumbbell"></i>
+        </span>
         <span class="action-label">Log Workout</span>
         <span class="action-sub">Record your session</span>
       </button>
       <a class="action-btn" href="calculator.html">
-        <span class="action-icon">🔢</span>
+        <span class="action-icon">
+          <i data-lucide="calculator"></i>
+        </span>
         <span class="action-label">Recalculate Goals</span>
         <span class="action-sub">Open calculator tool</span>
       </a>
@@ -476,6 +485,8 @@
     setTimeout(function() { t.classList.remove('show'); }, 3000);
   }
 
+  lucide.createIcons();
+  
 </script>
 </body>
 </html>
