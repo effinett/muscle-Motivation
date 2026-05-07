@@ -143,7 +143,7 @@
     display: flex;
     align-items: center;
   }
-  .logo img { height: 75px; }
+  .logo img { height: 58px; }
 
   .header a.nav-link {
     color: rgba(255,255,255,0.78);
@@ -253,7 +253,7 @@
 
   .hero p {
     max-width: 620px;
-    margin: 0 auto 25px;
+    margin: 0 auto 40px;
     font-size: clamp(16px, 2.2vw, 19px);
     color: var(--grey);
     line-height: 1.65;
@@ -261,45 +261,13 @@
 
   .hero-buttons {
     display: flex;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     gap: 14px;
     justify-content: center;
     align-items: center;
   }
 
-  .hero-stats {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 80px;
-  margin-top: 70px;
-  flex-wrap: nowrap;
-  }
-  .stat-item { 
-    text-align: center;
-    min-width: 160px;
-    transition: translateY(-5px);
-  }
-  .stat-num {
-    font-family: var(--font-display);
-    font-size: 48px;
-    color: var(--red);
-    line-height: 1;
-    letter-spacing: 1px
-  }
-  .stat-label {
-    font-size: 12px;
-    color: var(--grey);
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    margin-top: 6px;
-  }
-  .stat-divider {
-    width: 1px;
-    background: rgba(255,255,255,0.08);
-    height: 50px
-    align-self: center;
-  }
+
 
   /* ── CTA Banner ── */
   .cta-banner {
@@ -578,21 +546,7 @@
     .logo img { height: 46px; }
     .menu-toggle { display: flex; justify-self: end; }
 
-    .hero { padding: 70px 5% 60px; 
-    }
-
-    .hero p {
-      margin-bottom: 25px;
-    }
-    .hero-stats {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 45px;
-      margin-top: 60px !important;
-    }
-    .stat-divider { display: none; }
-
+    .hero { padding: 70px 5% 60px; }
     .cta-banner { padding: 52px 5%; }
 
     section { padding: 60px 5%; }
@@ -641,7 +595,7 @@
 
   <div class="nav-right">
     <a href="#contact" class="nav-link">Contact</a>
-    <a href="#portal" class="btn btn-small">Login</a>
+    <a href="auth.html" class="btn btn-small">Login</a>
   </div>
 
   <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
@@ -655,7 +609,7 @@
   <a href="#plans">Plans</a>
   <a href="#store">Shop</a>
   <a href="#contact">Contact</a>
-  <a href="#portal">Login</a>
+  <a href="auth.html">Login</a>
 </nav>
 
 <!-- ══ HERO ══ -->
@@ -669,29 +623,10 @@
 
     <div class="hero-buttons">
       <a class="btn btn-hero" href="calculator.html">Build My Free Fitness Plan</a>
-      <a class="btn btn-outline btn-hero" href="#portal">Member Login</a>
+      <a class="btn btn-outline btn-hero" href="auth.html">Member Login</a>
     </div>
 
-<div class="hero-stats">
 
-    <div class="stat-item">
-  <div class="stat-num">Custom</div>
-  <div class="stat-label">Training Programs</div>
-</div>
-
-<div class="stat-divider"></div>
-
-<div class="stat-item">
-  <div class="stat-num">1-on-1</div>
-  <div class="stat-label">Coaching Support</div>
-</div>
-
-<div class="stat-divider"></div>
-
-<div class="stat-item">
-  <div class="stat-num">Results</div>
-  <div class="stat-label">Guaranteed Focus</div>
-</div>
   </div>
 </section>
 
@@ -736,18 +671,11 @@
   <h2 class="section-title fade-up">Member <span class="accent">Login</span></h2>
   <p class="section-sub fade-up">Access your plans, track progress, and manage your account.</p>
 
-  <div class="portal-wrap fade-up">
-    <h3>Sign In</h3>
-    <div class="form-group">
-      <label for="email">Email Address</label>
-      <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
-    </div>
-    <div class="form-group">
-      <label for="password">Password</label>
-      <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
-    </div>
-    <a class="btn" href="#" style="width:100%; display:block; text-align:center; margin-top:8px;">Sign In</a>
-    <p class="portal-footer">New here? <a href="#">Create a free account</a></p>
+  <div class="portal-wrap fade-up" style="text-align:center;">
+    <h3 style="margin-bottom:16px;">Ready to get started?</h3>
+    <p style="color:var(--grey);font-size:15px;margin-bottom:24px;">Sign in to your account or create one free — takes less than a minute.</p>
+    <a class="btn" href="auth.html" style="width:100%;display:block;text-align:center;margin-bottom:12px;">Sign In</a>
+    <a class="btn btn-outline" href="auth.html" style="width:100%;display:block;text-align:center;">Create Free Account</a>
   </div>
 </section>
 
@@ -788,7 +716,7 @@
   <h2 class="section-title fade-up">Need <span class="accent">Coaching?</span></h2>
   <div class="contact-inner fade-up">
     <p>Ready for a fully custom programme with 1-on-1 support? Reach out directly and let's talk about your goals.</p>
-    <a class="btn btn-hero" href="https://wa.me/18455389705">💬 Message on WhatsApp</a>
+    <a class="btn btn-hero" href="https://wa.me/YOURNUMBER">💬 Message on WhatsApp</a>
   </div>
 </section>
 
@@ -802,7 +730,7 @@
     <a href="#store">Shop</a>
     <a href="calculator.html">Free Calculator</a>
     <a href="#contact">Contact</a>
-    <a href="#portal">Login</a>
+    <a href="auth.html">Login</a>
   </nav>
   <p>© 2026 Muscle Motivation. All rights reserved.</p>
 </footer>
