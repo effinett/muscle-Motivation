@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Muscle Motivation | Programs & Coaching</title>
+  <meta name="description" content="Browse all Muscle Motivation programs — fat loss, muscle building, home workouts, and coaching. Find the right plan for your goal.">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Orbitron:wght@700;900&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --red: #ff0000;
+      --red-dim: #cc0000;
+      --red-glow: rgba(255,0,0,0.18);
+      --red-subtle: rgba(255,0,0,0.08);
+      --bg: #080808;
+      --surface: #101010;
+      --surface2: #161616;
+      --surface3: #1c1c1c;
+      --border: #222;
+      --border-light: #2a2a2a;
+      --text: #ffffff;
+      --muted: #777;
+      --light: #bbb;
+      --font-display: 'Bebas Neue', Impact, sans-serif;
+      --font-sub: 'Orbitron', sans-serif;
+      --font-body: 'Barlow', sans-serif;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Noise texture */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 0; opacity: 0.5;
+    }
+
+    /* ── Header ── */
+    header {
+      position: sticky; top: 0; z-index: 200;
+      background: rgba(8,8,8,0.97);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 6%;
+      display: flex; align-items: center;
+      justify-content: space-between;
+      height: 68px;
+    }
+
+    .header-logo {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .header-logo img {
+      height: 52px;
+      filter: drop-shadow(0 0 8px rgba(255,0,0,0.3));
+    }
+    .header-logo span {
+      font-family: var(--font-display);
+      font-size: 20px; letter-spacing: 3px;
+      color: var(--text); text-transform: uppercase;
+    }
+
+    .header-nav {
+      display: flex; align-items: center; gap: 28px;
+    }
+    .header-nav a {
+      color: var(--muted); font-size: 13px;
+      font-weight: 600; letter-spacing: 0.8px;
+      text-transform: uppercase; text-decoration: none;
+      transition: color 0.2s;
+    }
+    .header-nav a:hover { color: var(--red); }
+
+    .btn-login {
+      padding: 8px 18px;
+      background: transparent;
+      border: 1px solid var(--border-light);
+      border-radius: 8px;
+      color: var(--light);
+      font-size: 12px; font-weight: 700;
+      font-family: var(--font-body);
+      letter-spacing: 0.8px; text-transform: uppercase;
+      text-decoration: none;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .btn-login:hover { border-color: var(--red); color: var(--red); }
+
+    /* Mobile toggle */
+    .menu-toggle {
+      display: none; background: none; border: none;
+      cursor: pointer; flex-direction: column; gap: 5px; padding: 6px;
+    }
+    .menu-toggle span {
+      display: block; width: 22px; height: 2px;
+      background: var(--text); border-radius: 2px;
+    }
+    .mobile-nav {
+      display: none; flex-direction: column;
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      position: relative; z-index: 199;
+    }
+    .mobile-nav a {
+      padding: 15px 6%; color: var(--light);
+      font-weight: 600; font-size: 14px;
+      border-bottom: 1px solid var(--border);
+      text-decoration: none; transition: color 0.2s;
+    }
+    .mobile-nav a:hover { color: var(--red); }
+    .mobile-nav.open { display: flex; }
+
+    /* ── Hero strip ── */
+    .store-hero {
+      position: relative;
+      padding: 64px 6% 52px;
+      text-align: center;
+      overflow: hidden;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .store-hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(255,0,0,0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,0,0,0.035) 1px, transparent 1px);
+      background-size: 44px 44px;
+      pointer-events: none;
+    }
+
+    .store-hero::after {
+      content: '';
+      position: absolute; top: -80px; left: 50%;
+      transform: translateX(-50%);
+      width: 600px; height: 360px;
+      background: radial-gradient(ellipse, rgba(255,0,0,0.1) 0%, transparent 68%);
+      pointer-events: none;
+    }
+
+    .store-hero-inner { position: relative; z-index: 1; }
+
+    .hero-eyebrow {
+      display: inline-block;
+      background: rgba(255,0,0,0.1);
+      border: 1px solid rgba(255,0,0,0.3);
+      color: var(--red);
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 3px; text-transform: uppercase;
+      padding: 6px 14px; border-radius: 40px;
+      margin-bottom: 22px;
+    }
+
+    .store-hero h1 {
+      font-family: var(--font-display);
+      font-size: clamp(48px, 8vw, 82px);
+      line-height: 0.95;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 18px;
+    }
+
+    .store-hero h1 span { color: var(--red); }
+
+    .store-hero p {
+      color: var(--muted);
+      font-size: 16px; line-height: 1.65;
+      max-width: 520px; margin: 0 auto;
+    }
+
+    /* ── Container ── */
+    .container {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 0 6%;
+      position: relative; z-index: 1;
+    }
+
+    /* ── Filter bar ── */
+    .filter-bar {
+      padding: 32px 0 0;
+      position: sticky;
+      top: 68px;
+      z-index: 100;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 40px;
+    }
+
+    .filter-inner {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 0 6% 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .filter-label {
+      font-family: var(--font-sub);
+      font-size: 9px; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--muted);
+      margin-right: 4px; white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .filter-pill {
+      padding: 8px 16px;
+      border-radius: 40px;
+      border: 1px solid var(--border-light);
+      background: var(--surface2);
+      color: var(--muted);
+      font-family: var(--font-body);
+      font-size: 12px; font-weight: 700;
+      letter-spacing: 0.5px; text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.18s;
+      white-space: nowrap;
+    }
+    .filter-pill:hover {
+      border-color: rgba(255,0,0,0.4);
+      color: var(--light);
+    }
+    .filter-pill.active {
+      background: var(--red);
+      border-color: var(--red);
+      color: white;
+    }
+
+    /* Result count */
+    .result-meta {
+      max-width: 1160px;
+      margin: 0 auto 24px;
+      padding: 0 6%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .result-count {
+      font-family: var(--font-sub);
+      font-size: 10px; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--muted);
+    }
+    .result-count span { color: var(--red); }
+
+    /* ── Product Grid ── */
+    .products-grid {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 0 6% 80px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+    }
+
+    /* ── Product Card ── */
+    .product-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      overflow: hidden;
+      display: flex; flex-direction: column;
+      transition: border-color 0.22s, transform 0.22s, box-shadow 0.22s;
+      position: relative;
+      animation: cardIn 0.4s ease both;
+    }
+
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .product-card:hover {
+      border-color: rgba(255,0,0,0.35);
+      transform: translateY(-3px);
+      box-shadow: 0 16px 48px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,0,0,0.08);
+    }
+
+    .product-card.featured {
+      border-color: rgba(255,0,0,0.4);
+    }
+    .product-card.featured::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--red), transparent);
+    }
+
+    /* Card colour bar by category */
+    .card-colorbar {
+      height: 3px;
+      width: 100%;
+    }
+    .bar-fatloss   { background: linear-gradient(90deg, #ff4400, #ff0000); }
+    .bar-muscle    { background: linear-gradient(90deg, #ff0000, #cc0000); }
+    .bar-home      { background: linear-gradient(90deg, #ff6600, #ff3300); }
+    .bar-coaching  { background: linear-gradient(90deg, #ff0044, #ff0000); }
+    .bar-free      { background: linear-gradient(90deg, #ff8800, #ff4400); }
+
+    .card-body {
+      padding: 22px 22px 0;
+      flex: 1;
+      display: flex; flex-direction: column;
+    }
+
+    .card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .goal-badge {
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      padding: 4px 10px; border-radius: 20px;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .badge-fatloss  { background: rgba(255,68,0,0.15);  color: #ff6633; border: 1px solid rgba(255,68,0,0.25); }
+    .badge-muscle   { background: rgba(255,0,0,0.12);   color: #ff3333; border: 1px solid rgba(255,0,0,0.22); }
+    .badge-home     { background: rgba(255,102,0,0.12); color: #ff8833; border: 1px solid rgba(255,102,0,0.22); }
+    .badge-coaching { background: rgba(255,0,68,0.12);  color: #ff3366; border: 1px solid rgba(255,0,68,0.22); }
+    .badge-free     { background: rgba(255,136,0,0.12); color: #ffaa44; border: 1px solid rgba(255,136,0,0.22); }
+
+    .featured-tag {
+      font-size: 9px; font-weight: 700;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      padding: 4px 8px; border-radius: 4px;
+      background: var(--red); color: white;
+      flex-shrink: 0;
+    }
+
+    .card-title {
+      font-family: var(--font-display);
+      font-size: 26px; letter-spacing: 0.5px;
+      text-transform: uppercase; line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .card-tagline {
+      font-size: 14px; color: var(--muted);
+      line-height: 1.55; margin-bottom: 18px;
+      flex: 1;
+    }
+
+    /* Specs row */
+    .card-specs {
+      display: flex;
+      gap: 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      margin: 0 -22px;
+    }
+
+    .spec-item {
+      flex: 1;
+      padding: 12px 8px;
+      text-align: center;
+      border-right: 1px solid var(--border);
+    }
+    .spec-item:last-child { border-right: none; }
+
+    .spec-val {
+      font-family: var(--font-sub);
+      font-size: 11px; font-weight: 700;
+      color: var(--text); letter-spacing: 0.5px;
+      display: block; line-height: 1;
+      margin-bottom: 4px;
+    }
+    .spec-key {
+      font-size: 9px; color: var(--muted);
+      letter-spacing: 1px; text-transform: uppercase;
+    }
+
+    /* Card footer */
+    .card-footer {
+      padding: 18px 22px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .card-price {
+      font-family: var(--font-display);
+      font-size: 38px; line-height: 1;
+      color: var(--red);
+    }
+    .card-price .currency {
+      font-size: 18px; vertical-align: super;
+    }
+    .card-price.free-price {
+      font-size: 22px; color: #ffaa44;
+      font-family: var(--font-sub);
+      letter-spacing: 1px;
+    }
+    .card-price .per {
+      font-size: 12px; color: var(--muted);
+      font-family: var(--font-body);
+      font-weight: 600; letter-spacing: 0;
+      display: block; margin-top: 2px;
+    }
+
+    .btn-card {
+      padding: 11px 20px;
+      border-radius: 10px;
+      font-family: var(--font-body);
+      font-size: 13px; font-weight: 700;
+      letter-spacing: 0.5px; text-transform: uppercase;
+      cursor: pointer; text-decoration: none;
+      transition: all 0.18s; white-space: nowrap;
+      display: inline-block; text-align: center;
+      border: none;
+    }
+
+    .btn-card-primary {
+      background: var(--red); color: white;
+    }
+    .btn-card-primary:hover {
+      background: var(--red-dim);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(255,0,0,0.3);
+    }
+
+    .btn-card-free {
+      background: rgba(255,136,0,0.15);
+      border: 1px solid rgba(255,136,0,0.3) !important;
+      color: #ffaa44;
+    }
+    .btn-card-free:hover {
+      background: rgba(255,136,0,0.25);
+      transform: translateY(-1px);
+    }
+
+    .btn-card-coaching {
+      background: transparent;
+      border: 1px solid rgba(255,0,68,0.35) !important;
+      color: #ff3366;
+    }
+    .btn-card-coaching:hover {
+      background: rgba(255,0,68,0.1);
+      transform: translateY(-1px);
+    }
+
+    /* Level indicator */
+    .level-dots {
+      display: flex; gap: 4px; margin-top: 6px;
+    }
+    .level-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--border-light);
+    }
+    .level-dot.filled { background: var(--red); }
+
+    /* No results */
+    .no-results {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 80px 20px;
+      color: var(--muted);
+    }
+    .no-results h3 {
+      font-family: var(--font-sub);
+      font-size: 14px; letter-spacing: 2px;
+      text-transform: uppercase; margin-bottom: 8px;
+      color: var(--light);
+    }
+    .no-results p { font-size: 14px; }
+
+    /* ── Free Guide Modal ── */
+    .modal-overlay {
+      position: fixed; inset: 0; z-index: 500;
+      background: rgba(0,0,0,0.88);
+      backdrop-filter: blur(8px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.25s;
+    }
+    .modal-overlay.open {
+      opacity: 1; pointer-events: all;
+    }
+
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border-light);
+      border-radius: 20px;
+      padding: 36px 32px;
+      max-width: 440px; width: 100%;
+      position: relative;
+      transform: translateY(20px);
+      transition: transform 0.25s;
+    }
+    .modal-overlay.open .modal { transform: translateY(0); }
+
+    .modal::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #ff8800, transparent);
+      border-radius: 20px 20px 0 0;
+    }
+
+    .modal-close {
+      position: absolute; top: 16px; right: 16px;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--muted); width: 30px; height: 30px;
+      border-radius: 50%; cursor: pointer; font-size: 16px;
+      display: flex; align-items: center; justify-content: center;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .modal-close:hover { color: var(--red); border-color: var(--red); }
+
+    .modal-eyebrow {
+      font-family: var(--font-sub);
+      font-size: 9px; letter-spacing: 3px;
+      text-transform: uppercase; color: #ffaa44;
+      margin-bottom: 10px;
+    }
+    .modal h2 {
+      font-family: var(--font-display);
+      font-size: 32px; letter-spacing: 0.5px;
+      text-transform: uppercase; line-height: 1;
+      margin-bottom: 10px;
+    }
+    .modal p {
+      font-size: 14px; color: var(--muted);
+      line-height: 1.6; margin-bottom: 24px;
+    }
+
+    .modal-field {
+      margin-bottom: 14px;
+    }
+    .modal-field label {
+      display: block; font-size: 11px; font-weight: 700;
+      letter-spacing: 1px; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 6px;
+    }
+    .modal-field input {
+      width: 100%; padding: 13px 16px;
+      border-radius: 10px; border: 1px solid var(--border);
+      background: var(--surface2); color: var(--text);
+      font-size: 15px; font-family: var(--font-body);
+      outline: none; transition: border-color 0.2s;
+      -webkit-appearance: none;
+    }
+    .modal-field input:focus { border-color: #ff8800; }
+    .modal-field input::placeholder { color: #444; }
+
+    .btn-modal-submit {
+      width: 100%; padding: 15px;
+      background: #ff7700;
+      border: none; border-radius: 10px;
+      color: white; font-size: 14px; font-weight: 700;
+      font-family: var(--font-body);
+      letter-spacing: 0.5px; text-transform: uppercase;
+      cursor: pointer; margin-top: 4px;
+      transition: background 0.18s, transform 0.15s;
+    }
+    .btn-modal-submit:hover {
+      background: #e06600;
+      transform: translateY(-1px);
+    }
+    .btn-modal-submit:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+
+    .modal-msg {
+      font-size: 13px; margin-top: 12px;
+      text-align: center; display: none;
+    }
+    .modal-msg.error   { color: #ff6666; display: block; }
+    .modal-msg.success { color: #4dff9e; display: block; }
+
+    .modal-disclaimer {
+      font-size: 11px; color: #444;
+      text-align: center; margin-top: 12px;
+      line-height: 1.5;
+    }
+
+    /* Download revealed after submit */
+    .download-step {
+      display: none;
+      text-align: center;
+    }
+    .download-step.show { display: block; }
+    .download-icon { font-size: 48px; margin-bottom: 16px; }
+    .download-step h3 {
+      font-family: var(--font-display);
+      font-size: 28px; letter-spacing: 0.5px;
+      text-transform: uppercase; margin-bottom: 8px;
+    }
+    .download-step p {
+      font-size: 14px; color: var(--muted); margin-bottom: 20px;
+    }
+    .btn-download {
+      display: inline-block;
+      padding: 14px 28px;
+      background: #ff7700; border: none;
+      border-radius: 10px; color: white;
+      font-size: 14px; font-weight: 700;
+      font-family: var(--font-body);
+      letter-spacing: 0.5px; text-transform: uppercase;
+      text-decoration: none;
+      transition: background 0.18s;
+    }
+    .btn-download:hover { background: #e06600; }
+
+    /* Spinner */
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white; border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: inline-block; vertical-align: middle; margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Footer ── */
+    footer {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 40px 6%;
+      text-align: center;
+      position: relative; z-index: 1;
+    }
+    .footer-logo img { height: 38px; margin: 0 auto 18px; }
+    .footer-links {
+      display: flex; justify-content: center;
+      flex-wrap: wrap; gap: 22px; margin-bottom: 18px;
+    }
+    .footer-links a {
+      color: var(--muted); font-size: 12px;
+      font-weight: 600; letter-spacing: 0.5px;
+      text-transform: uppercase; text-decoration: none;
+      transition: color 0.2s;
+    }
+    .footer-links a:hover { color: var(--red); }
+    footer p { color: #333; font-size: 12px; }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      header { padding: 0 16px; }
+      .header-nav { display: none; }
+      .menu-toggle { display: flex; }
+      .filter-inner { padding: 0 16px 16px; }
+      .products-grid { padding: 0 16px 60px; grid-template-columns: 1fr; }
+      .result-meta { padding: 0 16px; }
+    }
+
+    @media (max-width: 480px) {
+      .store-hero { padding: 48px 5% 40px; }
+      .modal { padding: 28px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header>
+  <div class="header-logo">
+    <img src="logow.png" alt="Muscle Motivation">
+    <span>Muscle Motivation</span>
+  </div>
+  <nav class="header-nav">
+    <a href="index.html">Home</a>
+    <a href="calculator.html">Calculator</a>
+    <a href="#contact-section">Contact</a>
+    <a href="auth.html" class="btn-login">Login</a>
+  </nav>
+  <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+    <span></span><span></span><span></span>
+  </button>
+</header>
+
+<nav class="mobile-nav" id="mobileNav">
+  <a href="index.html">Home</a>
+  <a href="calculator.html">Free Calculator</a>
+  <a href="auth.html">Login / Sign Up</a>
+</nav>
+
+<!-- ── Hero ── -->
+<div class="store-hero">
+  <div class="store-hero-inner">
+    <div class="hero-eyebrow">Programs & Coaching</div>
+    <h1>Find Your<br><span>Perfect Plan</span></h1>
+    <p>From beginner fat loss to elite coaching — every program built around real results, not guesswork.</p>
+  </div>
+</div>
+
+<!-- ── Filter Bar ── -->
+<div class="filter-bar">
+  <div class="filter-inner">
+    <span class="filter-label">Filter</span>
+    <button class="filter-pill active" data-filter="all">All Programs</button>
+    <button class="filter-pill" data-filter="free">Free</button>
+    <button class="filter-pill" data-filter="fatloss">Fat Loss</button>
+    <button class="filter-pill" data-filter="muscle">Muscle Building</button>
+    <button class="filter-pill" data-filter="home">Home Training</button>
+    <button class="filter-pill" data-filter="coaching">Coaching</button>
+  </div>
+</div>
+
+<!-- ── Result meta ── -->
+<div class="result-meta">
+  <span class="result-count"><span id="resultCount">5</span> programs found</span>
+</div>
+
+<!-- ── Products Grid ── -->
+<div class="products-grid" id="productsGrid">
+
+  <!-- 1. Free Getting Fit Guide -->
+  <div class="product-card" data-category="free">
+    <div class="card-colorbar bar-free"></div>
+    <div class="card-body">
+      <div class="card-top">
+        <span class="goal-badge badge-free">Free Guide</span>
+      </div>
+      <div class="card-title">Getting Fit Guide</div>
+      <div class="card-tagline">The no-BS starter guide to training, nutrition, and building habits that actually stick. Download in seconds.</div>
+      <div class="level-dots" title="All levels">
+        <div class="level-dot filled"></div>
+        <div class="level-dot filled"></div>
+        <div class="level-dot filled"></div>
+        <span style="font-size:10px;color:var(--muted);margin-left:6px;letter-spacing:1px;text-transform:uppercase;">All Levels</span>
+      </div>
+    </div>
+    <div class="card-specs">
+      <div class="spec-item">
+        <span class="spec-val">PDF</span>
+        <span class="spec-key">Format</span>
+      </div>
+      <div class="spec-item">
+        <span class="spec-val">Any</span>
+        <span class="spec-key">Equipment</span>
+      </div>
+      <div class="spec-item">
+        <span class="spec-val">Instant</span>
+        <span class="spec-key">Access</span>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-price free-price">FREE</div>
+      <button class="btn-card btn-card-free" onclick="openFreeGuide()">Get Free Guide</button>
+    </div>
+  </div>
+
+  <!-- 2. 90-Day Fat Loss Blueprint -->
+  <div class="product-card featured" data-category="fatloss">
+    <div class="card-colorbar bar-fatloss"></div>
+    <div class="card-body">
+      <div class="card-top">
+        <span class="goal-badge badge-fatloss">Fat Loss</span>
+        <span class="featured-tag">Best Seller</span>
+      </div>
+      <div class="card-title">90-Day Fat Loss Blueprint</div>
+      <div class="card-tagline">A complete 12-week system covering training, nutrition, and weekly check-ins designed to strip fat and keep it off.</div>
+      <div class="level-dots" title="Beginner to Intermediate">
+        <div class="level-dot filled"></div>
+        <div class="level-dot filled"></div>
+        <div class="level-dot"></div>
+        <span style="font-size:10px;color:var(--muted);margin-left:6px;letter-spacing:1px;text-transform:uppercase;">Beginner – Intermediate</span>
+      </div>
+    </div>
+    <div class="card-specs">
+      <div class="spec-item">
+        <span class="spec-val">12 Wks</span>
+        <span class="spec-key">Duration</span>
+      </div>
+      <div class="spec-item">
+        <span class="spec-val">4x / Wk</span>
+        <span class="spec-key">Training</span>
+      </div>
+      <div class="spec-item">
+        <span class="spec-val">Full Gym</span>
+        <span class="spec-key">Equipment</span>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-price"><span class="currency">$</span>59</div>
+      <a class="btn-card btn-card-primary" href="https://buy.stripe.com/PLACEHOLDER_90DAY" target="_blank" rel="noopener">Buy Now</a>
+    </div>
+  </div>
+
+  <!-- 3. Beginner Muscle Gain Program -->
+  <div class="product-card" data-category="muscle">
+    <div class="card-colorbar bar-muscle"></div>
+    <div class="card-body">
+      <div class="card-top">
+        <span class="goal-badge badge-muscle">Muscle Building</span>
+      </div>
+      <div class="card-title">Beginner Muscle Gain Program</div>
+      <div class="card-tagline">Build your foundation the right way. An 8-week full-body hypertrophy program with progressive overload built in from day one.</div>
+      <div class="level-dots" title="Beginner">
+        <div class="level-dot filled"></div>
+        <div class="level-dot"></div>
+        <div class="level-dot"></div>
+        <span style="font-size:10px;color:var(--muted);margin-left:6px;letter-spacing:1px;text-transform:uppercase;">Beginner</span>
+      </div>
+    </div>
+    <div class="card-specs">
+      <div class="spec-item">
+        <span class="spec-val">8 Wks</span>
+        <span class="spec-key">Duration</span>
+      </div>
+      <div class="spec-item">
+        <span class="spec-val">3x / Wk</span>
+        <span class="spec-key">Training</span>
+      </div>
+      <div class="spec-item">
+        <span class="spec-val">Full Gym</span>
+        <span class="spec-key">Equipment</span>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-price"><span class="currency">$</span>49</div>
+      <a class="btn-card btn-card-primary" href="https://buy.stripe.com/PLACEHOLDER_BEGINNER_MUSCLE" target="_blank" rel="noopener">Buy Now</a>
+    </div>
+  </div>
+
+  <!-- 4. Home Workout Program -->
+  <div class="product-card" data-category="home">
+    <div class="card-colorbar bar-home"></div>
+    <div class="card-body">
+      <div class="card-top">
+        <span class="goal-badge badge-home">Home Training</span>
+      </div>
+      <div class="card-title">Home Workout Program</div>
+      <div class="card-tagline">No gym? No problem. A 6-week bodyweight and dumbbell-only program you can run from your living room, any time.</div>
+      <div class="level-dots" title="All Levels">
+        <div class="level-dot filled"></div>
+        <div class="level-dot filled"></div>
+        <div class="level-dot filled"></div>
+        <span style="font-size:10px;color:var(--muted);margin-left:6px;letter-spacing:1px;text-transform:uppercase;">All Levels</span>
+      </div>
+    </div>
+    <div class="card-specs">
+      <div class="spec-item">
+        <span class="spec-val">6 Wks</span>
+        <span class="spec-key">Duration</span>
+      </div>
+      <div class="spec-item">
+        <span class="spec-val">4x / Wk</span>
+        <span class="spec-key">Training</span>
+      </div>
+      <div class="spec-item">
+        <span class="spec-val">BW / DB</span>
+        <span class="spec-key">Equipment</span>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-price"><span class="currency">$</span>39</div>
+      <a class="btn-card btn-card-primary" href="https://buy.stripe.com/PLACEHOLDER_HOME" target="_blank" rel="noopener">Buy Now</a>
+    </div>
+  </div>
+
+  <!-- 5. AI Coaching Membership -->
+  <div class="product-card featured" data-category="coaching">
+    <div class="card-colorbar bar-coaching"></div>
+    <div class="card-body">
+      <div class="card-top">
+        <span class="goal-badge badge-coaching">Coaching</span>
+        <span class="featured-tag">New</span>
+      </div>
+      <div class="card-title">AI Coaching Membership</div>
+      <div class="card-tagline">Your own AI fitness coach — personalised plans, weekly adjustments, macro tracking, and check-ins. Cancel anytime.</div>
+      <div class="level-dots" title="All Levels">
+        <div class="level-dot filled"></div>
+        <div class="level-dot filled"></div>
+        <div class="level-dot filled"></div>
+        <span style="font-size:10px;color:var(--muted);margin-left:6px;letter-spacing:1px;text-transform:uppercase;">All Levels</span>
+      </div>
+    </div>
+    <div class="card-specs">
+      <div class="spec-item">
+        <span class="spec-val">Monthly</span>
+        <span class="spec-key">Billing</span>
+      </div>
+      <div class="spec-item">
+        <span class="spec-val">Any</span>
+        <span class="spec-key">Equipment</span>
+      </div>
+      <div class="spec-item">
+        <span class="spec-val">Cancel</span>
+        <span class="spec-key">Anytime</span>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-price">
+        <span class="currency">$</span>29
+        <span class="per">/ month</span>
+      </div>
+      <a class="btn-card btn-card-coaching" href="https://buy.stripe.com/PLACEHOLDER_AI_COACHING" target="_blank" rel="noopener">Join Now</a>
+    </div>
+  </div>
+
+</div><!-- /products-grid -->
+
+<!-- ── 1-on-1 Coaching CTA ── -->
+<div id="contact-section" style="background:var(--surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:64px 6%;text-align:center;position:relative;z-index:1;">
+  <div style="max-width:600px;margin:0 auto;">
+    <div style="font-family:var(--font-sub);font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--red);margin-bottom:14px;">Premium Coaching</div>
+    <h2 style="font-family:var(--font-display);font-size:clamp(36px,6vw,58px);text-transform:uppercase;letter-spacing:1px;line-height:0.95;margin-bottom:14px;">Want 1-on-1<br><span style="color:var(--red);">Personal Coaching?</span></h2>
+    <p style="color:var(--muted);font-size:16px;line-height:1.65;margin-bottom:28px;">Fully custom programming, direct WhatsApp access, weekly check-ins, and elite accountability. Limited spots available.</p>
+    <a href="https://wa.me/18455389705" class="btn-card btn-card-primary" style="padding:16px 32px;font-size:14px;letter-spacing:1px;">💬 Message on WhatsApp</a>
+  </div>
+</div>
+
+<!-- ── Footer ── -->
+<footer>
+  <div class="footer-logo">
+    <img src="logow.png" alt="Muscle Motivation">
+  </div>
+  <nav class="footer-links">
+    <a href="index.html">Home</a>
+    <a href="calculator.html">Free Calculator</a>
+    <a href="auth.html">Member Login</a>
+    <a href="https://wa.me/18455389705">Contact</a>
+  </nav>
+  <p>© 2026 Muscle Motivation. All rights reserved. Not medical advice.</p>
+</footer>
+
+<!-- ── Free Guide Modal ── -->
+<div class="modal-overlay" id="freeGuideModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeFreeGuide()">✕</button>
+
+    <!-- Form step -->
+    <div id="modalFormStep">
+      <div class="modal-eyebrow">Free Download</div>
+      <h2>Getting Fit Guide</h2>
+      <p>Enter your name and email and we'll send it straight to your inbox. No spam, ever.</p>
+
+      <div class="modal-field">
+        <label>First Name</label>
+        <input type="text" id="leadName" placeholder="Your first name" autocomplete="given-name">
+      </div>
+      <div class="modal-field">
+        <label>Email Address</label>
+        <input type="email" id="leadEmail" placeholder="you@example.com" autocomplete="email">
+      </div>
+
+      <button class="btn-modal-submit" id="leadSubmitBtn" onclick="submitLead()">
+        Send Me the Guide →
+      </button>
+
+      <div class="modal-msg" id="leadMsg"></div>
+      <p class="modal-disclaimer">By submitting you agree to receive fitness tips from Muscle Motivation. Unsubscribe anytime.</p>
+    </div>
+
+    <!-- Download step (shown after submit) -->
+    <div class="download-step" id="modalDownloadStep">
+      <div class="download-icon">🎉</div>
+      <h3>You're all set!</h3>
+      <p>Your guide is ready. Check your inbox too — we'll send a copy there.</p>
+      <a class="btn-download" href="getting-fit-guide.pdf" download>Download Guide (PDF)</a>
+    </div>
+  </div>
+</div>
+
+<!-- Supabase -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase.js"></script>
+
+<script>
+  // ── Mobile nav ──────────────────────────────────────────────
+  const menuToggle = document.getElementById('menuToggle');
+  const mobileNav  = document.getElementById('mobileNav');
+  menuToggle.addEventListener('click', () => mobileNav.classList.toggle('open'));
+  mobileNav.querySelectorAll('a').forEach(a => a.addEventListener('click', () => mobileNav.classList.remove('open')));
+
+  // ── Filter logic ────────────────────────────────────────────
+  const pills    = document.querySelectorAll('.filter-pill');
+  const cards    = document.querySelectorAll('.product-card');
+  const countEl  = document.getElementById('resultCount');
+
+  pills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      pills.forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+
+      const filter = pill.dataset.filter;
+      let visible = 0;
+
+      cards.forEach((card, i) => {
+        const match = filter === 'all' || card.dataset.category === filter;
+        if (match) {
+          card.style.display = '';
+          card.style.animationDelay = (visible * 0.06) + 's';
+          card.style.animation = 'none';
+          // Force reflow then re-apply animation
+          void card.offsetWidth;
+          card.style.animation = '';
+          visible++;
+        } else {
+          card.style.display = 'none';
+        }
+      });
+
+      countEl.textContent = visible;
+
+      // Show/hide no-results
+      const noRes = document.getElementById('noResults');
+      if (noRes) noRes.style.display = visible === 0 ? 'block' : 'none';
+    });
+  });
+
+  // ── Free Guide Modal ────────────────────────────────────────
+  function openFreeGuide() {
+    document.getElementById('freeGuideModal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeFreeGuide() {
+    document.getElementById('freeGuideModal').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  // Close on overlay click
+  document.getElementById('freeGuideModal').addEventListener('click', function(e) {
+    if (e.target === this) closeFreeGuide();
+  });
+
+  // Close on Escape
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeFreeGuide();
+  });
+
+  // ── Lead submission ─────────────────────────────────────────
+  async function submitLead() {
+    const name  = document.getElementById('leadName').value.trim();
+    const email = document.getElementById('leadEmail').value.trim();
+    const msg   = document.getElementById('leadMsg');
+    const btn   = document.getElementById('leadSubmitBtn');
+
+    // Basic validation
+    if (!name) { showLeadMsg('Please enter your name.', 'error'); return; }
+    if (!email || !email.includes('@')) { showLeadMsg('Please enter a valid email.', 'error'); return; }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Sending...';
+    msg.className = 'modal-msg';
+
+    try {
+      // Upsert into leads table (conflict on email → update name + updated_at)
+      const { error } = await supabaseClient
+        .from('leads')
+        .upsert(
+          { name: name, email: email, source: 'free_guide', created_at: new Date().toISOString() },
+          { onConflict: 'email' }
+        );
+
+      if (error) throw error;
+
+      // Show download step
+      document.getElementById('modalFormStep').style.display = 'none';
+      document.getElementById('modalDownloadStep').classList.add('show');
+
+    } catch (err) {
+      console.error('Lead submit error:', err);
+      // Still show download even if Supabase fails — don't gate on DB error
+      document.getElementById('modalFormStep').style.display = 'none';
+      document.getElementById('modalDownloadStep').classList.add('show');
+    }
+  }
+
+  function showLeadMsg(text, type) {
+    const el = document.getElementById('leadMsg');
+    el.textContent = text;
+    el.className = 'modal-msg ' + type;
+  }
+</script>
+</body>
+</html>
