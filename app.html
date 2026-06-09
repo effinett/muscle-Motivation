@@ -229,6 +229,12 @@
     }
     .btn-buy:hover { opacity: 0.85; }
 
+    .owned-badge {
+      font-size: 12px; font-weight: 700;
+      letter-spacing: 1px; text-transform: uppercase;
+      color: #4dff9e; white-space: nowrap;
+    }
+
     /* Toast */
     .toast {
       position: fixed; bottom: 24px; left: 50%;
@@ -383,32 +389,32 @@
     <div class="section-label">Workout Plans</div>
     <div class="card">
       <div class="card-title">Available Programs</div>
-      <div class="plan-item">
+      <div class="plan-item" data-product="fat_loss_blueprint">
         <div class="plan-info">
           <div class="plan-name">90 Day Fat Loss Blueprint</div>
           <div class="plan-desc">12-week fat loss system</div>
         </div>
-        <div style="display:flex;align-items:center;gap:12px;">
+        <div class="plan-action" style="display:flex;align-items:center;gap:12px;">
           <span class="plan-price">$49</span>
           <a class="btn-buy" href="store.html">Buy</a>
         </div>
       </div>
-      <div class="plan-item">
+      <div class="plan-item" data-product="muscle_gain">
         <div class="plan-info">
           <div class="plan-name">Muscle Gain</div>
           <div class="plan-desc">8-week hypertrophy program</div>
         </div>
-        <div style="display:flex;align-items:center;gap:12px;">
+        <div class="plan-action" style="display:flex;align-items:center;gap:12px;">
           <span class="plan-price">$59</span>
           <a class="btn-buy" href="store.html">Buy</a>
         </div>
       </div>
-      <div class="plan-item">
+      <div class="plan-item" data-product="glute_builder">
         <div class="plan-info">
           <div class="plan-name">Glute Builder</div>
           <div class="plan-desc">Women's lower-body program</div>
         </div>
-        <div style="display:flex;align-items:center;gap:12px;">
+        <div class="plan-action" style="display:flex;align-items:center;gap:12px;">
           <span class="plan-price">$39</span>
           <a class="btn-buy" href="store.html">Buy</a>
         </div>
@@ -481,6 +487,13 @@
         document.getElementById('authGate').style.display  = 'none';
         document.getElementById('appContent').style.display = 'block';
 
+        // Unlock owned programs and show success toast if returning from Stripe.
+        await loadPurchases(user.id);
+        if (new URLSearchParams(window.location.search).get('purchase') === 'success') {
+          showToast('Purchase successful — your program is now unlocked!');
+          history.replaceState(null, '', window.location.pathname);
+        }
+
       } catch (err) {
         console.error('Dashboard error:', err);
         window.location.href = 'auth.html';
@@ -496,7 +509,28 @@
   }
 
   lucide.createIcons();
-  
+
+  // Fetch the user's active purchases and swap Buy buttons for "✓ Owned".
+  async function loadPurchases(userId) {
+    try {
+      const { data, error } = await supabaseClient
+        .from('purchases')
+        .select('product, status')
+        .eq('user_id', userId)
+        .eq('status', 'active');
+      if (error) throw error;
+      const owned = new Set((data || []).map(p => p.product));
+      document.querySelectorAll('.plan-item[data-product]').forEach(item => {
+        if (owned.has(item.dataset.product)) {
+          item.querySelector('.plan-action').innerHTML =
+            '<span class="owned-badge">✓ Owned</span>';
+        }
+      });
+    } catch (err) {
+      console.error('loadPurchases error:', err);
+    }
+  }
+
 </script>
 </body>
 </html>

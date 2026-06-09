@@ -423,6 +423,10 @@
       display: inline-block; text-align: center;
       border: none;
     }
+    .btn-card:disabled {
+      opacity: 0.55; cursor: not-allowed;
+      transform: none !important; box-shadow: none !important;
+    }
 
     .btn-card-primary {
       background: var(--red); color: white;
@@ -786,7 +790,7 @@
     </div>
     <div class="card-footer">
       <div class="card-price"><span class="currency">$</span>49</div>
-      <a class="btn-card btn-card-primary" href="https://buy.stripe.com/test_dRmdRa6Jy5BH6Kq6ZAe7m03" target="_blank" rel="noopener">Buy Now</a>
+      <button class="btn-card btn-card-primary" onclick="buyProduct('fat_loss_blueprint', this)">Buy Now</button>
     </div>
   </div>
 
@@ -826,7 +830,7 @@
         <span class="currency">$</span>29
         <span class="per">/ month</span>
       </div>
-      <a class="btn-card btn-card-coaching" href="https://buy.stripe.com/test_8x2aEYd7WaW15Gm6ZAe7m00" target="_blank" rel="noopener">Join Now</a>
+      <button class="btn-card btn-card-coaching" onclick="buyProduct('ai_membership', this)">Join Now</button>
     </div>
   </div>
 
@@ -862,7 +866,7 @@
     </div>
     <div class="card-footer">
       <div class="card-price"><span class="currency">$</span>59</div>
-      <a class="btn-card btn-card-primary" href="https://buy.stripe.com/test_7sY5kEaZOaW13ye1Fge7m02" target="_blank" rel="noopener">Buy Now</a>
+      <button class="btn-card btn-card-primary" onclick="buyProduct('muscle_gain', this)">Buy Now</button>
     </div>
   </div>
 
@@ -898,7 +902,7 @@
     </div>
     <div class="card-footer">
       <div class="card-price"><span class="currency">$</span>39</div>
-      <a class="btn-card btn-card-primary" href="https://buy.stripe.com/test_8x2aEY3xmaW19WC1Fge7m01" target="_blank" rel="noopener">Buy Now</a>
+      <button class="btn-card btn-card-primary" onclick="buyProduct('glute_builder', this)">Buy Now</button>
     </div>
   </div>
 
@@ -1078,6 +1082,55 @@
     el.textContent = text;
     el.className = 'modal-msg ' + type;
   }
+
+  // ── Checkout ────────────────────────────────────────────────────────────
+  async function buyProduct(slug, btn) {
+    const orig = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Loading…';
+    try {
+      const session = await getSession();
+      if (!session) { window.location.href = 'auth.html'; return; }
+      const res = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ product: slug }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Checkout failed');
+      }
+      const { url } = await res.json();
+      window.location.href = url;
+    } catch (err) {
+      console.error('buyProduct:', err);
+      showStoreToast(err.message || 'Could not start checkout. Please try again.');
+      btn.disabled = false;
+      btn.textContent = orig;
+    }
+  }
+
+  function showStoreToast(msg) {
+    const t = document.getElementById('storeToast');
+    t.textContent = msg;
+    t.style.opacity = '1';
+    t.style.transform = 'translateX(-50%) translateY(0)';
+    setTimeout(() => {
+      t.style.opacity = '0';
+      t.style.transform = 'translateX(-50%) translateY(80px)';
+    }, 4000);
+  }
+
+  // Toast if returning from an abandoned Stripe checkout.
+  if (new URLSearchParams(window.location.search).get('purchase') === 'cancelled') {
+    showStoreToast('Checkout cancelled — no charge was made.');
+    history.replaceState(null, '', window.location.pathname);
+  }
 </script>
+
+<div id="storeToast" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:#1c1c1c;border:1px solid var(--red);color:#fff;padding:12px 24px;border-radius:10px;font-size:14px;font-weight:600;transition:transform 0.35s ease,opacity 0.35s ease;opacity:0;z-index:999;white-space:nowrap;pointer-events:none;"></div>
 </body>
 </html>
