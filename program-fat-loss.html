@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Muscle Motivation – 90 Day Fat Loss Blueprint</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    :root {
+      --red: #ff0000;
+      --red-dim: rgba(255,0,0,0.12);
+      --bg: #050505;
+      --surface: #0f0f0f;
+      --surface2: #161616;
+      --border: #222;
+      --text: #ffffff;
+      --muted: #888;
+      --light: #ccc;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Barlow', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 0; opacity: 0.4;
+    }
+
+    /* Auth / loading gate */
+    #authGate {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      min-height: 100vh; background: var(--bg);
+      position: relative; z-index: 10;
+    }
+    #authGate img { width: 90px; margin-bottom: 20px; opacity: 0.8; filter: drop-shadow(0 0 12px rgba(255,0,0,0.4)); }
+    #authGate p { color: #555; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; }
+
+    /* Header */
+    header {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(5,5,5,0.97);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      display: flex; align-items: center;
+      justify-content: space-between;
+      height: 64px;
+    }
+    .header-logo { display: flex; align-items: center; gap: 12px; }
+    .header-logo img { height: 44px; filter: drop-shadow(0 0 8px rgba(255,0,0,0.35)); }
+    .header-logo span {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 13px; letter-spacing: 2px;
+      color: var(--red); text-transform: uppercase;
+    }
+    .header-right { display: flex; align-items: center; gap: 14px; }
+    .back-link {
+      font-size: 12px; color: var(--muted); text-decoration: none;
+      letter-spacing: 1px; text-transform: uppercase; font-weight: 600;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: var(--red); }
+
+    /* Locked state */
+    #lockedState {
+      display: none; flex-direction: column;
+      align-items: center; justify-content: center;
+      min-height: 80vh; text-align: center;
+      padding: 40px 20px; position: relative; z-index: 1;
+    }
+    #lockedState .lock-icon { color: var(--red); margin-bottom: 20px; }
+    #lockedState .lock-icon svg { width: 48px; height: 48px; }
+    #lockedState h2 {
+      font-family: 'Orbitron', sans-serif; font-size: 20px;
+      letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px;
+    }
+    #lockedState p { color: var(--muted); max-width: 420px; line-height: 1.6; margin-bottom: 28px; }
+    .btn-primary {
+      display: inline-block; padding: 14px 28px;
+      background: var(--red); border: none; border-radius: 10px;
+      color: white; font-size: 13px; font-weight: 700;
+      font-family: 'Orbitron', sans-serif; letter-spacing: 2px;
+      text-transform: uppercase; cursor: pointer; text-decoration: none;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 30px rgba(255,0,0,0.35); }
+
+    /* Container */
+    .container {
+      max-width: 760px; margin: 0 auto;
+      padding: 28px 16px 90px;
+      position: relative; z-index: 1;
+    }
+
+    /* Hero */
+    .hero {
+      text-align: center; padding: 24px 0 8px;
+    }
+    .hero .eyebrow {
+      font-family: 'Orbitron', sans-serif; font-size: 10px;
+      letter-spacing: 4px; color: var(--red); text-transform: uppercase;
+    }
+    .hero h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(26px, 7vw, 40px);
+      letter-spacing: 2px; text-transform: uppercase;
+      margin: 12px 0 8px; line-height: 1.1;
+    }
+    .hero p { color: var(--muted); font-size: 15px; max-width: 520px; margin: 0 auto; line-height: 1.6; }
+
+    /* Section label */
+    .section-label {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 10px; letter-spacing: 3px;
+      color: var(--red); text-transform: uppercase;
+      margin: 36px 0 14px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 22px 20px;
+      margin-bottom: 14px;
+      position: relative; overflow: hidden;
+    }
+    .card::before {
+      content: ''; position: absolute;
+      top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,0,0,0.25), transparent);
+    }
+    .card h3 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 13px; letter-spacing: 1px;
+      color: var(--text); margin-bottom: 10px;
+    }
+    .card p { color: var(--light); font-size: 14px; line-height: 1.7; margin-bottom: 10px; }
+    .card p:last-child { margin-bottom: 0; }
+    .card ul { list-style: none; }
+    .card li {
+      font-size: 14px; color: var(--light); line-height: 1.6;
+      padding: 7px 0 7px 22px; position: relative;
+      border-bottom: 1px solid var(--border);
+    }
+    .card li:last-child { border-bottom: none; }
+    .card li::before {
+      content: '→'; color: var(--red); position: absolute; left: 0; font-weight: bold;
+    }
+    .lead { color: var(--red); font-weight: 600; }
+
+    /* Phase row */
+    .phase {
+      border-left: 3px solid var(--red);
+      background: var(--surface2);
+      border-radius: 10px; padding: 14px 16px; margin-bottom: 10px;
+    }
+    .phase .ph-name { font-family: 'Orbitron', sans-serif; font-size: 12px; letter-spacing: 1px; }
+    .phase .ph-weeks { color: var(--red); font-size: 12px; font-weight: 600; }
+    .phase .ph-desc { color: var(--muted); font-size: 13px; margin-top: 5px; line-height: 1.5; }
+
+    /* Tables */
+    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 4px; }
+    table.workout {
+      width: 100%; border-collapse: collapse; font-size: 13px; min-width: 460px;
+    }
+    table.workout th {
+      text-align: left; font-family: 'Orbitron', sans-serif;
+      font-size: 9px; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--border);
+      font-weight: 700;
+    }
+    table.workout td {
+      padding: 10px; border-bottom: 1px solid var(--border); color: var(--light);
+      vertical-align: top;
+    }
+    table.workout tr:last-child td { border-bottom: none; }
+    table.workout td.ex { color: var(--text); font-weight: 600; }
+    .cue {
+      margin-top: 12px; font-size: 13px; color: var(--muted);
+      border-top: 1px dashed var(--border); padding-top: 10px;
+    }
+    .cue strong { color: var(--red); font-weight: 600; letter-spacing: 0.5px; }
+
+    /* Schedule grid */
+    .sched-grid { display: grid; gap: 8px; }
+    .sched-row {
+      display: flex; justify-content: space-between; gap: 12px;
+      background: var(--surface2); border-radius: 8px; padding: 11px 14px;
+    }
+    .sched-row .day { font-weight: 600; color: var(--muted); font-size: 13px; min-width: 90px; }
+    .sched-row .sess { color: var(--text); font-size: 13px; text-align: right; }
+
+    /* Tabs for schedule choice */
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    .tab {
+      padding: 9px 16px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface2); color: var(--muted); cursor: pointer;
+      font-size: 12px; font-weight: 600; letter-spacing: 0.5px; font-family: 'Barlow', sans-serif;
+      transition: all 0.2s;
+    }
+    .tab.active { background: var(--red); color: white; border-color: var(--red); }
+    .sched-panel { display: none; }
+    .sched-panel.active { display: block; }
+
+    /* Two-column info */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .mini { background: var(--surface2); border-radius: 10px; padding: 14px; }
+    .mini h4 { font-family: 'Orbitron', sans-serif; font-size: 10px; letter-spacing: 1px; color: var(--red); text-transform: uppercase; margin-bottom: 8px; }
+    .mini ul { list-style: none; }
+    .mini li { font-size: 13px; color: var(--light); padding: 4px 0; }
+
+    .callout {
+      background: var(--red-dim); border: 1px solid rgba(255,0,0,0.25);
+      border-radius: 10px; padding: 14px 16px; margin-top: 12px;
+      font-size: 13px; color: var(--light); line-height: 1.6;
+    }
+    .disclaimer { font-size: 12px; color: var(--muted); line-height: 1.6; }
+
+    .promise {
+      text-align: center; padding: 8px;
+    }
+    .promise p { font-size: 15px; line-height: 1.8; color: var(--light); }
+    .promise .kicker { font-family: 'Orbitron', sans-serif; color: var(--red); font-size: 14px; letter-spacing: 1px; margin-top: 14px; display: block; }
+
+    @media (max-width: 480px) {
+      .grid-2 { grid-template-columns: 1fr; }
+      .header-logo span { display: none; }
+      .sched-row .sess { font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Loading / auth gate -->
+<div id="authGate">
+  <img src="logow.png" alt="Muscle Motivation">
+  <p>Loading your program...</p>
+</div>
+
+<!-- Locked state (not owned) -->
+<div id="lockedState">
+  <span class="lock-icon"><i data-lucide="lock"></i></span>
+  <h2>You don't own this program yet</h2>
+  <p>The 90 Day Fat Loss Blueprint is a one-time purchase. Unlock it from your dashboard to get full access to the training, nutrition, and progression plan.</p>
+  <a class="btn-primary" href="app.html">Back to dashboard</a>
+</div>
+
+<!-- Program content (owner only) -->
+<div id="programContent" style="display:none;">
+
+  <header>
+    <div class="header-logo">
+      <img src="logow.png" alt="Muscle Motivation">
+      <span>Muscle Motivation</span>
+    </div>
+    <div class="header-right">
+      <a class="back-link" href="app.html">← Dashboard</a>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Hero -->
+    <div class="hero">
+      <div class="eyebrow">Your Program</div>
+      <h1>90 Day Fat Loss Blueprint</h1>
+      <p>Build the body while you lose the fat. Train hard, eat with intention, walk daily, and stay consistent for 90 days.</p>
+    </div>
+
+    <!-- Philosophy -->
+    <div class="section-label">Philosophy</div>
+    <div class="card">
+      <h3>The principles this is built on</h3>
+      <ul>
+        <li><span class="lead">Sustainable deficit, not a crash.</span> Fat loss comes from a moderate calorie deficit held consistently — not from eating as little as possible.</li>
+        <li><span class="lead">Protein is the priority macro.</span> High protein preserves muscle, improves recovery, and controls hunger.</li>
+        <li><span class="lead">Progressive overload still matters in a cut.</span> The body keeps the muscle it's forced to use.</li>
+        <li><span class="lead">Adherence beats perfection.</span> A plan followed 85% of the time for 90 days beats a perfect plan abandoned after 3 weeks.</li>
+        <li><span class="lead">The deficit is temporary; the habits are permanent.</span> The goal isn't just losing weight — it's learning how to keep it off.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>The Muscle Motivation approach</h3>
+      <p><span class="lead">Build the body while you lose the fat.</span> Most people watch only the scale. We focus on body composition — carrying less fat and more muscle, not just weighing less.</p>
+      <p><span class="lead">Walking is the most underrated fat-loss tool there is.</span> It burns calories, improves recovery, lowers stress, and you can sustain it forever. Most people gain more from an extra 3,000 daily steps than another hour of hard cardio.</p>
+      <p><span class="lead">Consistency compounds.</span> No magic workouts, supplements, or detoxes. Small actions repeated daily for 90 days create dramatic results.</p>
+      <p><span class="lead">Strength is the foundation.</span> Muscle is metabolically active tissue — building and keeping it improves how you look, your health, and long-term weight management.</p>
+    </div>
+
+    <!-- 90-Day Arc -->
+    <div class="section-label">The 90-Day Arc</div>
+    <div class="card">
+      <div class="phase">
+        <div><span class="ph-name">Phase 1 — Foundation</span> · <span class="ph-weeks">Weeks 1–4</span></div>
+        <div class="ph-desc">Learn technique, lock in calorie consistency, build daily activity and tracking habits, increase steps. Focus: skill, consistency, momentum.</div>
+      </div>
+      <div class="phase">
+        <div><span class="ph-name">Phase 2 — Intensification</span> · <span class="ph-weeks">Weeks 5–8</span></div>
+        <div class="ph-desc">Increase strength and training quality while fat loss continues. Focus: progressive overload, strength retention.</div>
+      </div>
+      <div class="phase">
+        <div><span class="ph-name">Phase 3 — Refinement</span> · <span class="ph-weeks">Weeks 9–12</span></div>
+        <div class="ph-desc">Maximize fat loss, maintain strength, tighten nutrition. Focus: recovery management, execution, consistency.</div>
+      </div>
+      <div class="phase">
+        <div><span class="ph-name">Transition</span> · <span class="ph-weeks">Week 13</span></div>
+        <div class="ph-desc">Gradually raise calories toward maintenance. Don't celebrate with a binge — the goal is to hold your results while eating more. This is where long-term success is built.</div>
+      </div>
+      <div class="callout"><strong>Deload weeks (4, 8, 12):</strong> cut working sets by ~50% and drop intensity to RPE 6–7. Keep the same exercises and movement quality. Purpose: recover, shed fatigue, prepare for the next phase.</div>
+    </div>
+
+    <!-- Steps -->
+    <div class="section-label">Daily Steps</div>
+    <div class="card">
+      <h3>Step progression</h3>
+      <p>Walking is your primary cardio. Build it gradually from your current average:</p>
+      <ul>
+        <li>Week 1: current average + 1,000 steps</li>
+        <li>Week 2: current average + 2,000 steps</li>
+        <li>Week 3: current average + 3,000 steps</li>
+        <li>Continue until you reach <span class="lead">8,000–12,000 steps daily</span>, then hold.</li>
+      </ul>
+    </div>
+
+    <!-- Schedule -->
+    <div class="section-label">Choose Your Schedule</div>
+    <div class="card">
+      <p>Pick the number of training days that fits your week. Each links to the templates below.</p>
+      <div class="tabs">
+        <button class="tab active" data-sched="2">2 Days</button>
+        <button class="tab" data-sched="3">3 Days</button>
+        <button class="tab" data-sched="4">4 Days</button>
+        <button class="tab" data-sched="5">5 Days</button>
+      </div>
+
+      <div class="sched-panel active" data-panel="2">
+        <div class="sched-grid">
+          <div class="sched-row"><span class="day">Monday</span><span class="sess">Full Body A</span></div>
+          <div class="sched-row"><span class="day">Thursday</span><span class="sess">Full Body B</span></div>
+          <div class="sched-row"><span class="day">Other days</span><span class="sess">Walking + recovery</span></div>
+        </div>
+      </div>
+      <div class="sched-panel" data-panel="3">
+        <div class="sched-grid">
+          <div class="sched-row"><span class="day">Monday</span><span class="sess">Full Body A</span></div>
+          <div class="sched-row"><span class="day">Wednesday</span><span class="sess">Full Body B</span></div>
+          <div class="sched-row"><span class="day">Friday</span><span class="sess">Full Body C</span></div>
+          <div class="sched-row"><span class="day">Other days</span><span class="sess">Walking</span></div>
+        </div>
+      </div>
+      <div class="sched-panel" data-panel="4">
+        <div class="sched-grid">
+          <div class="sched-row"><span class="day">Monday</span><span class="sess">Upper A</span></div>
+          <div class="sched-row"><span class="day">Tuesday</span><span class="sess">Lower A</span></div>
+          <div class="sched-row"><span class="day">Wednesday</span><span class="sess">Recovery + steps</span></div>
+          <div class="sched-row"><span class="day">Thursday</span><span class="sess">Upper B</span></div>
+          <div class="sched-row"><span class="day">Friday</span><span class="sess">Lower B</span></div>
+          <div class="sched-row"><span class="day">Weekend</span><span class="sess">Steps + optional conditioning</span></div>
+        </div>
+      </div>
+      <div class="sched-panel" data-panel="5">
+        <div class="sched-grid">
+          <div class="sched-row"><span class="day">Monday</span><span class="sess">Push</span></div>
+          <div class="sched-row"><span class="day">Tuesday</span><span class="sess">Pull</span></div>
+          <div class="sched-row"><span class="day">Wednesday</span><span class="sess">Legs</span></div>
+          <div class="sched-row"><span class="day">Thursday</span><span class="sess">Upper A</span></div>
+          <div class="sched-row"><span class="day">Friday</span><span class="sess">Lower A</span></div>
+          <div class="sched-row"><span class="day">Weekend</span><span class="sess">Recovery + walking</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Templates -->
+    <div class="section-label">Training Templates</div>
+
+    <div class="card">
+      <h3>Upper A</h3>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Movement</th><th>Exercise</th><th>Sets × Reps</th><th>Rest</th></tr>
+        <tr><td>Horizontal push</td><td class="ex">DB Bench Press</td><td>3 × 6–10</td><td>90s</td></tr>
+        <tr><td>Horizontal pull</td><td class="ex">Chest Supported Row</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Vertical push</td><td class="ex">Seated DB Shoulder Press</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Vertical pull</td><td class="ex">Lat Pulldown</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Arms</td><td class="ex">Rope Pushdown + DB Curl</td><td>2–3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Core</td><td class="ex">Plank</td><td>3 × 30–60s</td><td>60s</td></tr>
+      </table></div>
+      <div class="cue"><strong>Cue:</strong> Push hard. Control the lowering phase. Leave 1–2 reps in reserve.</div>
+    </div>
+
+    <div class="card">
+      <h3>Lower A</h3>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Movement</th><th>Exercise</th><th>Sets × Reps</th><th>Rest</th></tr>
+        <tr><td>Squat</td><td class="ex">Goblet / Back Squat</td><td>3 × 6–10</td><td>90s</td></tr>
+        <tr><td>Hinge</td><td class="ex">Romanian Deadlift</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Single leg</td><td class="ex">Reverse Lunge</td><td>3 × 8–12 / leg</td><td>90s</td></tr>
+        <tr><td>Posterior chain</td><td class="ex">Leg Curl</td><td>3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Calves</td><td class="ex">Standing Calf Raise</td><td>3 × 12–20</td><td>60s</td></tr>
+        <tr><td>Core</td><td class="ex">Dead Bug</td><td>2–3 × 10–15</td><td>60s</td></tr>
+      </table></div>
+      <div class="cue"><strong>Cue:</strong> Control every rep. Don't rush.</div>
+    </div>
+
+    <div class="card">
+      <h3>Upper B</h3>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Movement</th><th>Exercise</th><th>Sets × Reps</th><th>Rest</th></tr>
+        <tr><td>Incline push</td><td class="ex">Incline Press</td><td>3 × 6–10</td><td>90s</td></tr>
+        <tr><td>Horizontal pull</td><td class="ex">Seated Cable Row</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Vertical pull</td><td class="ex">Assisted Pull-Up / Pulldown</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Delts</td><td class="ex">Lateral Raise</td><td>2–3 × 12–20</td><td>60s</td></tr>
+        <tr><td>Biceps</td><td class="ex">Hammer Curl</td><td>2–3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Triceps</td><td class="ex">Overhead Tricep Extension</td><td>2–3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Core</td><td class="ex">Pallof Press</td><td>2–3 × 10–15 / side</td><td>60s</td></tr>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <h3>Lower B</h3>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Movement</th><th>Exercise</th><th>Sets × Reps</th><th>Rest</th></tr>
+        <tr><td>Squat / press</td><td class="ex">Leg Press</td><td>3 × 6–10</td><td>90s</td></tr>
+        <tr><td>Hinge</td><td class="ex">Hip Hinge Variation</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Single leg</td><td class="ex">Walking Lunge</td><td>3 × 8–12 / leg</td><td>90s</td></tr>
+        <tr><td>Glutes</td><td class="ex">Glute Bridge</td><td>3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Calves</td><td class="ex">Seated Calf Raise</td><td>3 × 12–20</td><td>60s</td></tr>
+        <tr><td>Core</td><td class="ex">Hanging Knee Raise</td><td>2–3 × 10–15</td><td>60s</td></tr>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <h3>Push</h3>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Movement</th><th>Exercise</th><th>Sets × Reps</th><th>Rest</th></tr>
+        <tr><td>Lead press</td><td class="ex">DB Bench Press</td><td>3 × 6–10</td><td>90s</td></tr>
+        <tr><td>Shoulder press</td><td class="ex">Seated DB Shoulder Press</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Delts</td><td class="ex">Lateral Raise</td><td>2–3 × 12–20</td><td>60s</td></tr>
+        <tr><td>Triceps</td><td class="ex">Rope Pushdown</td><td>2–3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Triceps</td><td class="ex">Overhead Tricep Extension</td><td>2–3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Core</td><td class="ex">Plank</td><td>3 × 30–60s</td><td>60s</td></tr>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <h3>Pull</h3>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Movement</th><th>Exercise</th><th>Sets × Reps</th><th>Rest</th></tr>
+        <tr><td>Vertical pull</td><td class="ex">Lat Pulldown</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Horizontal pull</td><td class="ex">Chest Supported Row</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Biceps</td><td class="ex">DB Curl</td><td>2–3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Biceps</td><td class="ex">Hammer Curl</td><td>2–3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Core</td><td class="ex">Hanging Knee Raise</td><td>2–3 × 10–15</td><td>60s</td></tr>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <h3>Legs</h3>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Movement</th><th>Exercise</th><th>Sets × Reps</th><th>Rest</th></tr>
+        <tr><td>Squat</td><td class="ex">Goblet / Back Squat</td><td>3 × 6–10</td><td>90s</td></tr>
+        <tr><td>Hinge</td><td class="ex">Romanian Deadlift</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Single leg</td><td class="ex">Reverse Lunge</td><td>3 × 8–12 / leg</td><td>90s</td></tr>
+        <tr><td>Hamstrings</td><td class="ex">Leg Curl</td><td>3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Calves</td><td class="ex">Standing Calf Raise</td><td>3 × 12–20</td><td>60s</td></tr>
+        <tr><td>Core</td><td class="ex">Dead Bug</td><td>2–3 × 10–15</td><td>60s</td></tr>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <h3>Full Body A</h3>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Movement</th><th>Exercise</th><th>Sets × Reps</th><th>Rest</th></tr>
+        <tr><td>Squat</td><td class="ex">Goblet Squat</td><td>3 × 6–10</td><td>90s</td></tr>
+        <tr><td>Push</td><td class="ex">DB Bench Press</td><td>3 × 6–10</td><td>90s</td></tr>
+        <tr><td>Pull</td><td class="ex">Chest Supported Row</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Hinge</td><td class="ex">Romanian Deadlift</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Arms</td><td class="ex">DB Curl</td><td>2–3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Core</td><td class="ex">Plank</td><td>3 × 30–60s</td><td>60s</td></tr>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <h3>Full Body B</h3>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Movement</th><th>Exercise</th><th>Sets × Reps</th><th>Rest</th></tr>
+        <tr><td>Single leg</td><td class="ex">Reverse Lunge</td><td>3 × 8–12 / leg</td><td>90s</td></tr>
+        <tr><td>Push</td><td class="ex">Incline DB Press</td><td>3 × 6–10</td><td>90s</td></tr>
+        <tr><td>Pull</td><td class="ex">Lat Pulldown</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Hinge</td><td class="ex">Hip Hinge</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Arms</td><td class="ex">Pushdown</td><td>2–3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Core</td><td class="ex">Dead Bug</td><td>2–3 × 10–15</td><td>60s</td></tr>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <h3>Full Body C</h3>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Movement</th><th>Exercise</th><th>Sets × Reps</th><th>Rest</th></tr>
+        <tr><td>Squat / press</td><td class="ex">Leg Press</td><td>3 × 6–10</td><td>90s</td></tr>
+        <tr><td>Push</td><td class="ex">Shoulder Press</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Pull</td><td class="ex">Cable Row</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Hamstrings</td><td class="ex">Leg Curl</td><td>3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Delts</td><td class="ex">Lateral Raise</td><td>2–3 × 12–20</td><td>60s</td></tr>
+        <tr><td>Core / carry</td><td class="ex">Farmer Carry</td><td>2–3 × 30–40s</td><td>60s</td></tr>
+      </table></div>
+    </div>
+
+    <!-- Substitutions -->
+    <div class="section-label">Home / Dumbbell Swaps</div>
+    <div class="card">
+      <p>No full gym? Swap any movement for its home equivalent — same pattern, same job.</p>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Gym exercise</th><th>Home alternative</th></tr>
+        <tr><td class="ex">Bench Press</td><td>Push-ups</td></tr>
+        <tr><td class="ex">Lat Pulldown</td><td>Band Pulldown</td></tr>
+        <tr><td class="ex">Cable Row</td><td>One-Arm DB Row</td></tr>
+        <tr><td class="ex">Leg Press</td><td>Goblet Squat</td></tr>
+        <tr><td class="ex">Leg Curl</td><td>Stability Ball Curl</td></tr>
+        <tr><td class="ex">Calf Raise Machine</td><td>Single-Leg Calf Raise</td></tr>
+        <tr><td class="ex">Pallof Press</td><td>Plank Variation</td></tr>
+      </table></div>
+    </div>
+
+    <!-- Progression -->
+    <div class="section-label">Progression Model</div>
+    <div class="card">
+      <h3>Hybrid double progression</h3>
+      <p>Within a rep range, add reps each week until you hit the top of the range on all sets — then add a small amount of weight and drop back to the bottom of the range.</p>
+      <div class="grid-2" style="margin-top:12px;">
+        <div class="mini">
+          <h4>Main compounds · 6–10</h4>
+          <ul><li>Squat, Press, Row, Pulldown</li><li>Add reps → then add weight</li></ul>
+        </div>
+        <div class="mini">
+          <h4>Secondary · 8–12</h4>
+          <ul><li>RDL, Lunges, Shoulder Press</li><li>Progress reps first</li></ul>
+        </div>
+        <div class="mini">
+          <h4>Isolation · 10–20</h4>
+          <ul><li>Curls, Pushdowns, Laterals, Calves</li><li>Reps + execution quality</li></ul>
+        </div>
+        <div class="mini">
+          <h4>Intensity</h4>
+          <ul><li>Most sets at RPE 7–9</li><li>Leave 1–3 reps in reserve</li><li>No failure on compounds</li></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nutrition -->
+    <div class="section-label">Nutrition</div>
+    <div class="card">
+      <h3>Use your dashboard targets</h3>
+      <p>Your calorie and macro numbers are personalized — they're on your dashboard from the calculator. This plan tells you <em>how</em> to hit them.</p>
+      <p><span class="lead">Protein first.</span> Hit your protein number every day before worrying about the rest.</p>
+      <p><span class="lead">Meal structure:</span> aim for 3–5 meals a day, each with lean protein, fruit or vegetables, a fiber source, and a smart carb.</p>
+      <div class="grid-2" style="margin-top:12px;">
+        <div class="mini">
+          <h4>Protein</h4>
+          <ul><li>Chicken, turkey, lean beef</li><li>Fish, eggs</li><li>Greek yogurt, cottage cheese</li><li>Protein shakes</li></ul>
+        </div>
+        <div class="mini">
+          <h4>Carbs</h4>
+          <ul><li>Rice, potatoes, oats</li><li>Fruit, beans</li><li>Whole-grain breads</li></ul>
+        </div>
+        <div class="mini">
+          <h4>Fats</h4>
+          <ul><li>Avocado, olive oil</li><li>Nuts, nut butter</li><li>Fatty fish</li></ul>
+        </div>
+        <div class="mini">
+          <h4>Do / Don't</h4>
+          <ul><li>Do: whole foods, water, track honestly</li><li>Don't: skip meals, drink calories, chase perfection</li></ul>
+        </div>
+      </div>
+      <div class="callout"><strong>Diet break (optional, after Week 8):</strong> 5–7 days at maintenance calories — use it only if hunger is excessive, adherence is slipping, progress has stalled, or energy is low. Keep protein high. The best diet is the one you can actually follow.</div>
+    </div>
+
+    <!-- Tracking -->
+    <div class="section-label">Tracking & Check-ins</div>
+    <div class="card">
+      <div class="grid-2">
+        <div class="mini"><h4>Daily</h4><ul><li>Body weight</li><li>Steps</li><li>Calories</li><li>Protein</li></ul></div>
+        <div class="mini"><h4>Every workout</h4><ul><li>Weight used</li><li>Reps completed</li><li>How it felt</li></ul></div>
+        <div class="mini"><h4>Every 4 weeks</h4><ul><li>Front / side / back photos</li><li>Waist measurement</li><li>Weekly weight average</li></ul></div>
+        <div class="mini"><h4>Reading a stall</h4><ul><li>2+ weeks, no change</li><li>Check adherence first</li><li>Then tracking accuracy</li><li>Then steps — only then adjust</li></ul></div>
+      </div>
+    </div>
+
+    <!-- Safety -->
+    <div class="section-label">Safety & Expectations</div>
+    <div class="card">
+      <h3>Realistic fat-loss rate</h3>
+      <p>Target <span class="lead">0.5–1.0% of bodyweight per week</span>. Faster isn't better. Example: at 200 lb that's about 1–2 lb/week.</p>
+      <h3 style="margin-top:16px;">Stop and seek professional guidance if you experience:</h3>
+      <ul>
+        <li>Chest pain or dizziness</li>
+        <li>Severe or unusual fatigue</li>
+        <li>Unexplained swelling</li>
+        <li>Joint pain that worsens over time, or persistent injury</li>
+        <li>Signs of extreme under-eating</li>
+      </ul>
+    </div>
+    <div class="card">
+      <p class="disclaimer">This program is for educational purposes only and is not medical advice. Consult a qualified physician before beginning any exercise or nutrition program — especially if you have a medical condition, take medication, are pregnant, or have a history of disordered eating. Individual results vary based on adherence, genetics, lifestyle, and starting point.</p>
+    </div>
+
+    <!-- Promise -->
+    <div class="section-label">The Promise</div>
+    <div class="card">
+      <div class="promise">
+        <p>This program won't do the work for you — but the principles behind it are proven. If you hit your calories, prioritize protein, strength train, walk daily, and stay patient across the full 90 days, you give yourself the best possible foundation to get stronger, leaner, healthier, and more confident.</p>
+        <p>No gimmicks. No detoxes. No shortcuts. Just the fundamentals, applied consistently.</p>
+        <span class="kicker">Your results will reflect your consistency.</span>
+      </div>
+    </div>
+
+  </div><!-- /container -->
+</div><!-- /programContent -->
+
+<!-- Supabase -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase.js"></script>
+<script>
+  window.addEventListener('load', function () {
+    (async () => {
+      try {
+        const session = await requireAuth();        // redirects to auth.html if not logged in
+        const user = session.user;
+
+        // Ownership check — RLS already restricts to the user's own rows.
+        const { data, error } = await supabaseClient
+          .from('purchases')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('product', 'fat_loss_blueprint')
+          .eq('status', 'active')
+          .limit(1);
+
+        document.getElementById('authGate').style.display = 'none';
+
+        if (!error && data && data.length > 0) {
+          document.getElementById('programContent').style.display = 'block';
+        } else {
+          document.getElementById('lockedState').style.display = 'flex';
+        }
+        lucide.createIcons();
+      } catch (err) {
+        window.location.href = 'auth.html';
+      }
+    })();
+  });
+
+  // Schedule tab switching
+  document.addEventListener('click', function (e) {
+    if (!e.target.classList.contains('tab')) return;
+    const sched = e.target.getAttribute('data-sched');
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    e.target.classList.add('active');
+    document.querySelectorAll('.sched-panel').forEach(p => {
+      p.classList.toggle('active', p.getAttribute('data-panel') === sched);
+    });
+  });
+</script>
+</body>
+</html>
