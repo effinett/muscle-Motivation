@@ -233,7 +233,9 @@
       font-size: 12px; font-weight: 700;
       letter-spacing: 1px; text-transform: uppercase;
       color: #4dff9e; white-space: nowrap;
+      text-decoration: none;
     }
+    a.owned-badge:hover { text-decoration: underline; }
 
     /* Toast */
     .toast {
@@ -510,7 +512,12 @@
 
   lucide.createIcons();
 
-  // Fetch the user's active purchases and swap Buy buttons for "✓ Owned".
+  // Slug → program page. Only add an entry here when the page exists.
+  const PROGRAM_URLS = {
+    fat_loss_blueprint: 'program-fat-loss.html',
+  };
+
+  // Fetch the user's active purchases and swap Buy buttons for "✓ Owned" (or a link).
   async function loadPurchases(userId) {
     try {
       const { data, error } = await supabaseClient
@@ -522,8 +529,10 @@
       const owned = new Set((data || []).map(p => p.product));
       document.querySelectorAll('.plan-item[data-product]').forEach(item => {
         if (owned.has(item.dataset.product)) {
-          item.querySelector('.plan-action').innerHTML =
-            '<span class="owned-badge">✓ Owned</span>';
+          const url = PROGRAM_URLS[item.dataset.product];
+          item.querySelector('.plan-action').innerHTML = url
+            ? `<a class="owned-badge" href="${url}">✓ Open Program →</a>`
+            : '<span class="owned-badge">✓ Owned</span>';
         }
       });
     } catch (err) {
