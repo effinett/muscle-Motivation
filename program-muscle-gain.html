@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Muscle Motivation – 12 Week Muscle Gain Program</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    :root {
+      --red: #ff0000;
+      --red-dim: rgba(255,0,0,0.12);
+      --bg: #050505;
+      --surface: #0f0f0f;
+      --surface2: #161616;
+      --border: #222;
+      --text: #ffffff;
+      --muted: #888;
+      --light: #ccc;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Barlow', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 0; opacity: 0.4;
+    }
+
+    /* Auth / loading gate */
+    #authGate {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      min-height: 100vh; background: var(--bg);
+      position: relative; z-index: 10;
+    }
+    #authGate img { width: 90px; margin-bottom: 20px; opacity: 0.8; filter: drop-shadow(0 0 12px rgba(255,0,0,0.4)); }
+    #authGate p { color: #555; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; }
+
+    /* Header */
+    header {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(5,5,5,0.97);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      display: flex; align-items: center;
+      justify-content: space-between;
+      height: 64px;
+    }
+    .header-logo { display: flex; align-items: center; gap: 12px; }
+    .header-logo img { height: 44px; filter: drop-shadow(0 0 8px rgba(255,0,0,0.35)); }
+    .header-logo span {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 13px; letter-spacing: 2px;
+      color: var(--red); text-transform: uppercase;
+    }
+    .header-right { display: flex; align-items: center; gap: 14px; }
+    .back-link {
+      font-size: 12px; color: var(--muted); text-decoration: none;
+      letter-spacing: 1px; text-transform: uppercase; font-weight: 600;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: var(--red); }
+
+    /* Locked state */
+    #lockedState {
+      display: none; flex-direction: column;
+      align-items: center; justify-content: center;
+      min-height: 80vh; text-align: center;
+      padding: 40px 20px; position: relative; z-index: 1;
+    }
+    #lockedState .lock-icon { color: var(--red); margin-bottom: 20px; }
+    #lockedState .lock-icon svg { width: 48px; height: 48px; }
+    #lockedState h2 {
+      font-family: 'Orbitron', sans-serif; font-size: 20px;
+      letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px;
+    }
+    #lockedState p { color: var(--muted); max-width: 420px; line-height: 1.6; margin-bottom: 28px; }
+    .btn-primary {
+      display: inline-block; padding: 14px 28px;
+      background: var(--red); border: none; border-radius: 10px;
+      color: white; font-size: 13px; font-weight: 700;
+      font-family: 'Orbitron', sans-serif; letter-spacing: 2px;
+      text-transform: uppercase; cursor: pointer; text-decoration: none;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 30px rgba(255,0,0,0.35); }
+
+    /* Container */
+    .container {
+      max-width: 760px; margin: 0 auto;
+      padding: 28px 16px 90px;
+      position: relative; z-index: 1;
+    }
+
+    /* Hero */
+    .hero { text-align: center; padding: 24px 0 8px; }
+    .hero .eyebrow {
+      font-family: 'Orbitron', sans-serif; font-size: 10px;
+      letter-spacing: 4px; color: var(--red); text-transform: uppercase;
+    }
+    .hero h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(26px, 7vw, 40px);
+      letter-spacing: 2px; text-transform: uppercase;
+      margin: 12px 0 8px; line-height: 1.1;
+    }
+    .hero p { color: var(--muted); font-size: 15px; max-width: 520px; margin: 0 auto; line-height: 1.6; }
+
+    /* Section label */
+    .section-label {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 10px; letter-spacing: 3px;
+      color: var(--red); text-transform: uppercase;
+      margin: 36px 0 14px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 22px 20px;
+      margin-bottom: 14px;
+      position: relative; overflow: hidden;
+    }
+    .card::before {
+      content: ''; position: absolute;
+      top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,0,0,0.25), transparent);
+    }
+    .card h3 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 13px; letter-spacing: 1px;
+      color: var(--text); margin-bottom: 10px;
+    }
+    .card p { color: var(--light); font-size: 14px; line-height: 1.7; margin-bottom: 10px; }
+    .card p:last-child { margin-bottom: 0; }
+    .card ul { list-style: none; }
+    .card li {
+      font-size: 14px; color: var(--light); line-height: 1.6;
+      padding: 7px 0 7px 22px; position: relative;
+      border-bottom: 1px solid var(--border);
+    }
+    .card li:last-child { border-bottom: none; }
+    .card li::before {
+      content: '→'; color: var(--red); position: absolute; left: 0; font-weight: bold;
+    }
+    .lead { color: var(--red); font-weight: 600; }
+
+    /* Phase row */
+    .phase {
+      border-left: 3px solid var(--red);
+      background: var(--surface2);
+      border-radius: 10px; padding: 14px 16px; margin-bottom: 10px;
+    }
+    .phase:last-child { margin-bottom: 0; }
+    .phase .ph-name { font-family: 'Orbitron', sans-serif; font-size: 12px; letter-spacing: 1px; }
+    .phase .ph-weeks { color: var(--red); font-size: 12px; font-weight: 600; }
+    .phase .ph-desc { color: var(--muted); font-size: 13px; margin-top: 5px; line-height: 1.5; }
+
+    /* Tables */
+    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 4px; }
+    table.workout {
+      width: 100%; border-collapse: collapse; font-size: 13px; min-width: 460px;
+    }
+    table.workout th {
+      text-align: left; font-family: 'Orbitron', sans-serif;
+      font-size: 9px; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--border);
+      font-weight: 700;
+    }
+    table.workout td {
+      padding: 10px; border-bottom: 1px solid var(--border); color: var(--light);
+      vertical-align: top;
+    }
+    table.workout tr:last-child td { border-bottom: none; }
+    table.workout td.ex { color: var(--text); font-weight: 600; }
+    .cue {
+      margin-top: 12px; font-size: 13px; color: var(--muted);
+      border-top: 1px dashed var(--border); padding-top: 10px;
+    }
+    .cue strong { color: var(--red); font-weight: 600; letter-spacing: 0.5px; }
+
+    /* Schedule */
+    .sched-grid { display: grid; gap: 8px; }
+    .sched-row {
+      display: flex; justify-content: space-between; gap: 12px;
+      background: var(--surface2); border-radius: 8px; padding: 11px 14px;
+    }
+    .sched-row .day { font-weight: 600; color: var(--muted); font-size: 13px; min-width: 90px; }
+    .sched-row .sess { color: var(--text); font-size: 13px; text-align: right; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    .tab {
+      padding: 9px 16px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface2); color: var(--muted); cursor: pointer;
+      font-size: 12px; font-weight: 600; letter-spacing: 0.5px; font-family: 'Barlow', sans-serif;
+      transition: all 0.2s;
+    }
+    .tab.active { background: var(--red); color: white; border-color: var(--red); }
+    .sched-panel { display: none; }
+    .sched-panel.active { display: block; }
+
+    /* Grid 2 */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .mini { background: var(--surface2); border-radius: 10px; padding: 14px; }
+    .mini h4 { font-family: 'Orbitron', sans-serif; font-size: 10px; letter-spacing: 1px; color: var(--red); text-transform: uppercase; margin-bottom: 8px; }
+    .mini ul { list-style: none; }
+    .mini li { font-size: 13px; color: var(--light); padding: 4px 0; }
+
+    .callout {
+      background: var(--red-dim); border: 1px solid rgba(255,0,0,0.25);
+      border-radius: 10px; padding: 14px 16px; margin-top: 12px;
+      font-size: 13px; color: var(--light); line-height: 1.6;
+    }
+    .disclaimer { font-size: 12px; color: var(--muted); line-height: 1.6; }
+
+    .promise { text-align: center; padding: 8px; }
+    .promise p { font-size: 15px; line-height: 1.8; color: var(--light); }
+    .promise .kicker { font-family: 'Orbitron', sans-serif; color: var(--red); font-size: 14px; letter-spacing: 1px; margin-top: 14px; display: block; }
+
+    /* Checklist */
+    .checklist { list-style: none; }
+    .checklist li {
+      font-size: 14px; color: var(--light); line-height: 1.6;
+      padding: 9px 0 9px 30px; position: relative;
+      border-bottom: 1px solid var(--border);
+    }
+    .checklist li:last-child { border-bottom: none; }
+    .checklist li::before {
+      content: '☐'; color: var(--red); position: absolute; left: 0;
+      font-size: 16px; line-height: 1.4;
+    }
+
+    /* Demo placeholder */
+    .demo-soon {
+      display: inline-block;
+      font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--muted); border: 1px dashed var(--border);
+      border-radius: 6px; padding: 2px 8px; margin-left: 8px;
+      font-family: 'Barlow', sans-serif; font-weight: 600;
+      vertical-align: middle;
+    }
+
+    /* Bulk option cards */
+    .bulk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+    .bulk-card {
+      background: var(--surface2); border-radius: 12px; padding: 16px;
+      border: 1px solid var(--border);
+    }
+    .bulk-card h4 {
+      font-family: 'Orbitron', sans-serif; font-size: 11px;
+      letter-spacing: 1px; color: var(--red); text-transform: uppercase; margin-bottom: 8px;
+    }
+    .bulk-card ul { list-style: none; }
+    .bulk-card li { font-size: 13px; color: var(--light); padding: 3px 0; }
+    .bulk-card .verdict { font-size: 12px; color: var(--muted); margin-top: 10px; font-style: italic; line-height: 1.5; }
+
+    @media (max-width: 480px) {
+      .grid-2, .bulk-grid { grid-template-columns: 1fr; }
+      .header-logo span { display: none; }
+      .sched-row .sess { font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Loading / auth gate -->
+<div id="authGate">
+  <img src="logow.png" alt="Muscle Motivation">
+  <p>Loading your program...</p>
+</div>
+
+<!-- Locked state -->
+<div id="lockedState">
+  <span class="lock-icon"><i data-lucide="lock"></i></span>
+  <h2>You don't own this program yet</h2>
+  <p>The 12-Week Muscle Gain Program is a one-time purchase. Unlock it from your dashboard to get full access to the training, nutrition, and progression plan.</p>
+  <a class="btn-primary" href="app.html">Back to dashboard</a>
+</div>
+
+<!-- Program content (owner only) -->
+<div id="programContent" style="display:none;">
+
+  <header>
+    <div class="header-logo">
+      <img src="logow.png" alt="Muscle Motivation">
+      <span>Muscle Motivation</span>
+    </div>
+    <div class="header-right">
+      <a class="back-link" href="app.html">← Dashboard</a>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Hero -->
+    <div class="hero">
+      <div class="eyebrow">Your Program</div>
+      <h1>12-Week Muscle Gain Program</h1>
+      <p>Build real, lasting muscle. Lift heavier, eat more, recover harder, and show up for 12 weeks straight.</p>
+    </div>
+
+    <!-- Start Here -->
+    <div class="section-label">Start Here — Week 1</div>
+    <div class="card">
+      <h3>Your first-week checklist</h3>
+      <p>Muscle gain is a long game. Start slow, nail the movements, and let the program build from there.</p>
+      <ul class="checklist">
+        <li>Read the <span class="lead">Philosophy</span> and <span class="lead">12-Week Arc</span> sections — understand what each phase is asking of you before you start.</li>
+        <li>Check your dashboard for your calorie and macro targets — these are your numbers for this program.</li>
+        <li>Decide on your bulk approach (lean or aggressive) using the Nutrition section — and commit to it for at least 4 weeks before reassessing.</li>
+        <li>Pick your training schedule based on your dashboard-recommended split and find your first session's template.</li>
+        <li>Log your starting weight, a set of photos, and your opening lifts on the key compounds — these are your Week 1 baseline.</li>
+        <li>In Week 1, use lighter weights than you think you need. Learn every movement before you load it.</li>
+        <li>Set up a simple lift-tracking log — a notes app, a spreadsheet, anything. You'll need it to apply progressive overload week to week.</li>
+      </ul>
+    </div>
+
+    <!-- Philosophy -->
+    <div class="section-label">Philosophy</div>
+    <div class="card">
+      <h3>The principles this is built on</h3>
+      <ul>
+        <li><span class="lead">Progressive overload is the mechanism.</span> Muscle grows when it's forced to do more over time. Every other variable — nutrition, sleep, consistency — exists to support that.</li>
+        <li><span class="lead">Strength and size are linked.</span> Getting stronger on the big compound lifts is the most reliable path to looking bigger. This program builds both.</li>
+        <li><span class="lead">Volume is the driver; intensity is the tool.</span> Doing enough quality sets per muscle group per week matters more than any single heavy set.</li>
+        <li><span class="lead">Recovery is where the growth happens.</span> The training session is the stimulus. Sleep, food, and rest days are where your body actually builds the muscle.</li>
+        <li><span class="lead">Patience is non-negotiable.</span> Natural muscle gain is slow — roughly 1–2 lbs per month for a beginner under ideal conditions. Trust the process across all 12 weeks.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>The Muscle Motivation approach</h3>
+      <p><span class="lead">Strength first, then shape.</span> Phase 1 builds the habit and the base. Phase 2 (Strength) teaches your nervous system to recruit muscle efficiently — that's what makes Phase 3 (Hypertrophy) so productive. Don't skip ahead.</p>
+      <p><span class="lead">Compound lifts are the backbone.</span> Squat, hinge, press, row, pull — these movements train the most muscle mass in the least time and drive the most systemic growth. Isolation work builds on that foundation, not instead of it.</p>
+      <p><span class="lead">Mind-muscle connection matters in the accessory work.</span> On isolation movements — curls, lateral raises, extensions — slow down, feel the muscle working, and leave ego at the door. These sets are where the detail gets built.</p>
+      <p><span class="lead">Eating enough is where most people fail.</span> Training hard on insufficient calories produces fatigue, not muscle. You need to eat for the body you're building, not the one you have.</p>
+    </div>
+
+    <!-- 12-Week Arc -->
+    <div class="section-label">The 12-Week Arc</div>
+    <div class="card">
+      <div class="phase">
+        <div><span class="ph-name">Phase 1 — Foundation</span> · <span class="ph-weeks">Weeks 1–4</span></div>
+        <div class="ph-desc">Learn every movement pattern. Build the habit of training and eating consistently. Establish your starting lifts and baseline nutrition. Moderate volume, moderate intensity — build confidence and technique. Deload Week 4.</div>
+      </div>
+      <div class="phase">
+        <div><span class="ph-name">Phase 2 — Strength</span> · <span class="ph-weeks">Weeks 5–8</span></div>
+        <div class="ph-desc">Heavier loads on the compound lifts. Lower rep ranges (5–8) on main movements, still 8–12 on accessories. The goal is to build a stronger nervous system and set new strength benchmarks. Deload Week 8.</div>
+      </div>
+      <div class="phase">
+        <div><span class="ph-name">Phase 3 — Hypertrophy</span> · <span class="ph-weeks">Weeks 9–12</span></div>
+        <div class="ph-desc">Classic 6–12 rep hypertrophy work. Volume peaks here — more sets, more accessories, more metabolic stress. Your strength from Phase 2 means you can now handle more load in the hypertrophy range than when you started. Deload Week 12.</div>
+      </div>
+      <div class="callout"><strong>Deload weeks (4, 8, 12):</strong> Keep the same exercises and weights — cut volume by ~40% (drop one or two sets per exercise). Intensity stays up; this is not an easy week, it's a recovery week. Purpose: clear accumulated fatigue so you enter the next phase fresh and ready to push harder.</div>
+    </div>
+
+    <!-- Schedule -->
+    <div class="section-label">Choose Your Schedule</div>
+    <div class="card">
+      <p>Your dashboard already recommends a split based on the number of days you train. Start with that recommendation, then pick the matching schedule below.</p>
+      <div class="tabs">
+        <button class="tab active" data-sched="2">2 Days</button>
+        <button class="tab" data-sched="3">3 Days</button>
+        <button class="tab" data-sched="4">4 Days</button>
+        <button class="tab" data-sched="5">5 Days</button>
+      </div>
+
+      <div class="sched-panel active" data-panel="2">
+        <div class="sched-grid">
+          <div class="sched-row"><span class="day">Monday</span><span class="sess">Full Body A</span></div>
+          <div class="sched-row"><span class="day">Thursday</span><span class="sess">Full Body B</span></div>
+          <div class="sched-row"><span class="day">Other days</span><span class="sess">Rest + recovery walks</span></div>
+        </div>
+      </div>
+      <div class="sched-panel" data-panel="3">
+        <div class="sched-grid">
+          <div class="sched-row"><span class="day">Monday</span><span class="sess">Full Body A</span></div>
+          <div class="sched-row"><span class="day">Wednesday</span><span class="sess">Full Body B</span></div>
+          <div class="sched-row"><span class="day">Friday</span><span class="sess">Full Body C</span></div>
+          <div class="sched-row"><span class="day">Other days</span><span class="sess">Rest</span></div>
+        </div>
+      </div>
+      <div class="sched-panel" data-panel="4">
+        <div class="sched-grid">
+          <div class="sched-row"><span class="day">Monday</span><span class="sess">Upper A</span></div>
+          <div class="sched-row"><span class="day">Tuesday</span><span class="sess">Lower A</span></div>
+          <div class="sched-row"><span class="day">Wednesday</span><span class="sess">Rest</span></div>
+          <div class="sched-row"><span class="day">Thursday</span><span class="sess">Upper B</span></div>
+          <div class="sched-row"><span class="day">Friday</span><span class="sess">Lower B</span></div>
+          <div class="sched-row"><span class="day">Weekend</span><span class="sess">Rest + light activity</span></div>
+        </div>
+      </div>
+      <div class="sched-panel" data-panel="5">
+        <div class="sched-grid">
+          <div class="sched-row"><span class="day">Monday</span><span class="sess">Push</span></div>
+          <div class="sched-row"><span class="day">Tuesday</span><span class="sess">Pull</span></div>
+          <div class="sched-row"><span class="day">Wednesday</span><span class="sess">Legs</span></div>
+          <div class="sched-row"><span class="day">Thursday</span><span class="sess">Upper A</span></div>
+          <div class="sched-row"><span class="day">Friday</span><span class="sess">Lower A</span></div>
+          <div class="sched-row"><span class="day">Weekend</span><span class="sess">Rest</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Templates -->
+    <div class="section-label">Training Templates</div>
+
+    <div class="card">
+      <h3>Before You Start: Warm-Up</h3>
+      <p>Spend 5–10 minutes before each session on light cardio (bike, row, or brisk walk) followed by 2–3 ramp-up sets on your first compound lift — start at 50% of your working weight and build up. Never go straight to your top set cold.</p>
+    </div>
+
+    <div class="card">
+      <h3>Upper A</h3>
+      <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">Phase 1: 3×8–12 all movements &nbsp;|&nbsp; Phase 2: 4×5–7 compounds, 3×8–12 accessories &nbsp;|&nbsp; Phase 3: 4×6–10 compounds, 3×10–15 accessories</p>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Movement</th><th>Exercise</th><th>Sets × Reps</th><th>Rest</th></tr>
+        <tr><td>Horizontal push</td><td class="ex">Barbell / DB Bench Press</td><td>3–4 × 5–12</td><td>2–3 min</td></tr>
+        <tr><td>Horizontal pull</td><td class="ex">Barbell / DB Row</td><td>3–4 × 5–12</td><td>2–3 min</td></tr>
+        <tr><td>Vertical push</td><td class="ex">Seated DB Shoulder Press</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Vertical pull</td><td class="ex">Lat Pulldown / Assisted Pull-Up</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Rear delts</td><td class="ex">Face Pull <span class="demo-soon">Demo video coming soon</span></td><td>3 × 12–20</td><td>60s</td></tr>
+        <tr><td>Biceps</td><td class="ex">DB Curl</td><td>2–3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Triceps</td><td class="ex">Rope Pushdown</td><td>2–3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Core</td><td class="ex">Plank</td><td>3 × 30–60s</td><td>60s</td></tr>
+      </table></div>
+      <div class="cue"><strong>Cue:</strong> Control the eccentric (lowering) on every rep. Squeeze the target muscle at the top of isolation movements.</div>
+    </div>
+
+    <div class="card">
+      <h3>Upper B</h3>
+      <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">Phase 1: 3×8–12 &nbsp;|&nbsp; Phase 2: 4×5–7 compounds &nbsp;|&nbsp; Phase 3: 4×6–10 compounds, added accessories</p>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Movement</th><th>Exercise</th><th>Sets × Reps</th><th>Rest</th></tr>
+        <tr><td>Incline push</td><td class="ex">Incline Barbell / DB Press</td><td>3–4 × 5–12</td><td>2–3 min</td></tr>
+        <tr><td>Horizontal pull</td><td class="ex">Seated Cable Row</td><td>3–4 × 8–12</td><td>90s</td></tr>
+        <tr><td>Vertical pull</td><td class="ex">Pull-Up / Weighted Pulldown</td><td>3 × 6–10</td><td>90s</td></tr>
+        <tr><td>Delts</td><td class="ex">Lateral Raise</td><td>3 × 12–20</td><td>60s</td></tr>
+        <tr><td>Biceps</td><td class="ex">Hammer Curl</td><td>2–3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Triceps</td><td class="ex">Overhead Tricep Extension</td><td>2–3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Core</td><td class="ex">Pallof Press <span class="demo-soon">Demo video coming soon</span></td><td>2–3 × 10–15 / side</td><td>60s</td></tr>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <h3>Lower A</h3>
+      <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">Phase 2 goes heavier on Squat and RDL — build to a top set of 5.</p>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Movement</th><th>Exercise</th><th>Sets × Reps</th><th>Rest</th></tr>
+        <tr><td>Squat</td><td class="ex">Back Squat / Goblet Squat</td><td>3–4 × 5–10</td><td>2–3 min</td></tr>
+        <tr><td>Hinge</td><td class="ex">Romanian Deadlift</td><td>3–4 × 6–10</td><td>2 min</td></tr>
+        <tr><td>Single leg</td><td class="ex">Reverse Lunge</td><td>3 × 8–12 / leg</td><td>90s</td></tr>
+        <tr><td>Posterior chain</td><td class="ex">Leg Curl</td><td>3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Quads</td><td class="ex">Leg Extension</td><td>3 × 12–15</td><td>60s</td></tr>
+        <tr><td>Calves</td><td class="ex">Standing Calf Raise</td><td>4 × 12–20</td><td>60s</td></tr>
+        <tr><td>Core</td><td class="ex">Dead Bug <span class="demo-soon">Demo video coming soon</span></td><td>2–3 × 10–15</td><td>60s</td></tr>
+      </table></div>
+      <div class="cue"><strong>Cue:</strong> Squat to depth. RDL: hinge at the hips, soft knee, feel the hamstrings load before you pull back up.</div>
+    </div>
+
+    <div class="card">
+      <h3>Lower B</h3>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Movement</th><th>Exercise</th><th>Sets × Reps</th><th>Rest</th></tr>
+        <tr><td>Squat / press</td><td class="ex">Leg Press</td><td>3–4 × 6–10</td><td>2 min</td></tr>
+        <tr><td>Hinge</td><td class="ex">DB Romanian Deadlift</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Single leg</td><td class="ex">Bulgarian Split Squat</td><td>3 × 8–10 / leg</td><td>2 min</td></tr>
+        <tr><td>Glutes</td><td class="ex">Hip Thrust / Glute Bridge</td><td>3 × 10–15</td><td>90s</td></tr>
+        <tr><td>Hamstrings</td><td class="ex">Leg Curl</td><td>3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Calves</td><td class="ex">Seated Calf Raise</td><td>4 × 12–20</td><td>60s</td></tr>
+        <tr><td>Core</td><td class="ex">Hanging Knee Raise</td><td>2–3 × 10–15</td><td>60s</td></tr>
+      </table></div>
+      <div class="cue"><strong>Cue:</strong> Bulgarian Split Squat — front foot flat, back foot elevated, drop straight down. This is the hardest movement in the program; start light.</div>
+    </div>
+
+    <div class="card">
+      <h3>Push</h3>
+      <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">Phase 2: go heavier on Bench and OHP. Phase 3: add a fourth set and a cable fly.</p>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Movement</th><th>Exercise</th><th>Sets × Reps</th><th>Rest</th></tr>
+        <tr><td>Lead press</td><td class="ex">Barbell / DB Bench Press</td><td>3–4 × 5–10</td><td>2–3 min</td></tr>
+        <tr><td>Overhead</td><td class="ex">Overhead Press (BB or DB)</td><td>3 × 6–10</td><td>2 min</td></tr>
+        <tr><td>Delts</td><td class="ex">Lateral Raise</td><td>3 × 12–20</td><td>60s</td></tr>
+        <tr><td>Chest (Phase 3)</td><td class="ex">Cable Fly</td><td>3 × 12–15</td><td>60s</td></tr>
+        <tr><td>Triceps</td><td class="ex">Rope Pushdown</td><td>3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Triceps</td><td class="ex">Overhead Tricep Extension</td><td>2 × 10–15</td><td>60s</td></tr>
+        <tr><td>Core</td><td class="ex">Plank</td><td>3 × 30–60s</td><td>60s</td></tr>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <h3>Pull</h3>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Movement</th><th>Exercise</th><th>Sets × Reps</th><th>Rest</th></tr>
+        <tr><td>Vertical pull</td><td class="ex">Weighted Pull-Up / Lat Pulldown</td><td>3–4 × 5–10</td><td>2 min</td></tr>
+        <tr><td>Horizontal pull</td><td class="ex">Barbell / DB Row</td><td>3–4 × 6–10</td><td>2 min</td></tr>
+        <tr><td>Rear delts / upper back</td><td class="ex">Face Pull <span class="demo-soon">Demo video coming soon</span></td><td>3 × 15–20</td><td>60s</td></tr>
+        <tr><td>Back detail (Phase 3)</td><td class="ex">Straight-Arm Pulldown</td><td>3 × 12–15</td><td>60s</td></tr>
+        <tr><td>Biceps</td><td class="ex">Barbell / DB Curl</td><td>3 × 8–12</td><td>60s</td></tr>
+        <tr><td>Biceps</td><td class="ex">Hammer Curl</td><td>2 × 10–15</td><td>60s</td></tr>
+        <tr><td>Core</td><td class="ex">Hanging Knee Raise</td><td>2–3 × 10–15</td><td>60s</td></tr>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <h3>Legs</h3>
+      <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">Phase 2: Squat goes heavy (5×5 or 4×5). Phase 3: volume peaks — full accessory list.</p>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Movement</th><th>Exercise</th><th>Sets × Reps</th><th>Rest</th></tr>
+        <tr><td>Squat</td><td class="ex">Back Squat</td><td>3–5 × 5–10</td><td>2–3 min</td></tr>
+        <tr><td>Hinge</td><td class="ex">Romanian Deadlift</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Single leg</td><td class="ex">Bulgarian Split Squat</td><td>3 × 8–10 / leg</td><td>2 min</td></tr>
+        <tr><td>Hamstrings</td><td class="ex">Leg Curl</td><td>3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Quads</td><td class="ex">Leg Extension</td><td>3 × 12–15</td><td>60s</td></tr>
+        <tr><td>Calves</td><td class="ex">Standing Calf Raise</td><td>4 × 12–20</td><td>60s</td></tr>
+        <tr><td>Core</td><td class="ex">Dead Bug <span class="demo-soon">Demo video coming soon</span></td><td>2–3 × 10–15</td><td>60s</td></tr>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <h3>Full Body A</h3>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Movement</th><th>Exercise</th><th>Sets × Reps</th><th>Rest</th></tr>
+        <tr><td>Squat</td><td class="ex">Back Squat / Goblet Squat</td><td>3–4 × 5–10</td><td>2 min</td></tr>
+        <tr><td>Push</td><td class="ex">Bench Press</td><td>3–4 × 5–10</td><td>2 min</td></tr>
+        <tr><td>Pull</td><td class="ex">Barbell / DB Row</td><td>3–4 × 6–10</td><td>2 min</td></tr>
+        <tr><td>Hinge</td><td class="ex">Romanian Deadlift</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Biceps</td><td class="ex">DB Curl</td><td>2–3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Triceps</td><td class="ex">Rope Pushdown</td><td>2–3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Core</td><td class="ex">Plank</td><td>3 × 30–60s</td><td>60s</td></tr>
+      </table></div>
+      <div class="cue"><strong>Cue:</strong> Four big compound sets take priority. Arms and core are finishers — don't skip them, but don't grind on them either.</div>
+    </div>
+
+    <div class="card">
+      <h3>Full Body B</h3>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Movement</th><th>Exercise</th><th>Sets × Reps</th><th>Rest</th></tr>
+        <tr><td>Single leg</td><td class="ex">Bulgarian Split Squat</td><td>3 × 8–10 / leg</td><td>2 min</td></tr>
+        <tr><td>Push</td><td class="ex">Overhead Press</td><td>3 × 6–10</td><td>2 min</td></tr>
+        <tr><td>Pull</td><td class="ex">Weighted Pull-Up / Lat Pulldown</td><td>3 × 6–10</td><td>90s</td></tr>
+        <tr><td>Hinge</td><td class="ex">DB Romanian Deadlift</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Delts</td><td class="ex">Lateral Raise</td><td>2–3 × 12–20</td><td>60s</td></tr>
+        <tr><td>Core</td><td class="ex">Dead Bug <span class="demo-soon">Demo video coming soon</span></td><td>2–3 × 10–15</td><td>60s</td></tr>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <h3>Full Body C</h3>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Movement</th><th>Exercise</th><th>Sets × Reps</th><th>Rest</th></tr>
+        <tr><td>Squat / press</td><td class="ex">Leg Press</td><td>3 × 8–12</td><td>2 min</td></tr>
+        <tr><td>Push</td><td class="ex">Incline DB Press</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Pull</td><td class="ex">Seated Cable Row</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Rear delts</td><td class="ex">Face Pull <span class="demo-soon">Demo video coming soon</span></td><td>3 × 15–20</td><td>60s</td></tr>
+        <tr><td>Hamstrings</td><td class="ex">Leg Curl</td><td>3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Core / carry</td><td class="ex">Farmer Carry</td><td>2–3 × 30–40s</td><td>60s</td></tr>
+      </table></div>
+    </div>
+
+    <!-- Substitutions -->
+    <div class="section-label">Home / Dumbbell Swaps</div>
+    <div class="card">
+      <p>No barbell access? Use these swaps — same movement pattern, same stimulus.</p>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Gym exercise</th><th>Home / DB alternative</th></tr>
+        <tr><td class="ex">Barbell Bench Press</td><td>DB Bench Press or Push-ups (weighted)</td></tr>
+        <tr><td class="ex">Barbell Row</td><td>One-Arm DB Row</td></tr>
+        <tr><td class="ex">Overhead Press (BB)</td><td>Seated DB Shoulder Press</td></tr>
+        <tr><td class="ex">Back Squat</td><td>Goblet Squat (heavier DB)</td></tr>
+        <tr><td class="ex">Weighted Pull-Up</td><td>Resistance Band Pulldown</td></tr>
+        <tr><td class="ex">Bulgarian Split Squat</td><td>Reverse Lunge (use a chair for elevation)</td></tr>
+        <tr><td class="ex">Cable Fly</td><td>DB Fly</td></tr>
+        <tr><td class="ex">Straight-Arm Pulldown</td><td>Band Straight-Arm Pulldown</td></tr>
+      </table></div>
+    </div>
+
+    <!-- Progression -->
+    <div class="section-label">Progression Model</div>
+    <div class="card">
+      <h3>Phase-based double progression</h3>
+      <p>The progression approach shifts between phases to match the training goal.</p>
+      <div class="grid-2" style="margin-top:12px;">
+        <div class="mini">
+          <h4>Phase 1 · Foundation</h4>
+          <ul>
+            <li>Rep range: 8–12 all movements</li>
+            <li>Add reps → then add weight</li>
+            <li>Focus on technique over load</li>
+          </ul>
+        </div>
+        <div class="mini">
+          <h4>Phase 2 · Strength</h4>
+          <ul>
+            <li>Compounds: 5–8 reps, heavier</li>
+            <li>Add weight when you hit top of range on all sets</li>
+            <li>Accessories stay 8–12</li>
+          </ul>
+        </div>
+        <div class="mini">
+          <h4>Phase 3 · Hypertrophy</h4>
+          <ul>
+            <li>Compounds: 6–10 reps</li>
+            <li>Accessories: 10–15 reps</li>
+            <li>Volume peaks — add a set if recovering well</li>
+          </ul>
+        </div>
+        <div class="mini">
+          <h4>Intensity (all phases)</h4>
+          <ul>
+            <li>RPE 7–9 on most sets</li>
+            <li>Leave 1–3 reps in reserve</li>
+            <li>No failure on compound lifts</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout"><strong>Tracking your lifts is not optional.</strong> Write down what you lift and how many reps each session. Progressive overload only works if you know what you did last week.</div>
+    </div>
+
+    <!-- Nutrition -->
+    <div class="section-label">Nutrition</div>
+    <div class="card">
+      <h3>Use your dashboard targets</h3>
+      <p>Your calorie and macro numbers are on your dashboard — built around your goal, bodyweight, and activity. This section tells you how to apply them for muscle gain.</p>
+      <p><span class="lead">Protein: 1.0–1.2g per lb of bodyweight.</span> This is higher than the fat loss program — muscle synthesis demands it. Hit this number every day before you think about anything else.</p>
+      <p><span class="lead">Carbohydrates fuel your training.</span> Don't be afraid of them. Time your largest carb meals around your workouts — before for energy, after for recovery.</p>
+    </div>
+
+    <div class="card">
+      <h3>Choose your bulk approach</h3>
+      <p>Both work. Read both, pick one, and stick to it for at least 4 weeks before you reassess.</p>
+      <div class="bulk-grid">
+        <div class="bulk-card">
+          <h4>Lean Bulk</h4>
+          <ul>
+            <li>250–350 kcal above maintenance</li>
+            <li>Slower weight gain (0.5–1 lb/month)</li>
+            <li>Less fat gained alongside muscle</li>
+            <li>Requires more patience</li>
+            <li>Best if you're already relatively lean</li>
+          </ul>
+          <p class="verdict">Good for: people who don't want to gain much fat, or who have gained easily in the past.</p>
+        </div>
+        <div class="bulk-card">
+          <h4>Aggressive Bulk</h4>
+          <ul>
+            <li>500+ kcal above maintenance</li>
+            <li>Faster weight gain (1–2 lbs/month)</li>
+            <li>More fat gained alongside muscle</li>
+            <li>Easier to hit calorie targets</li>
+            <li>May require a cut phase afterward</li>
+          </ul>
+          <p class="verdict">Good for: people who struggle to eat enough, or who are very lean and want to maximize growth.</p>
+        </div>
+      </div>
+      <div class="callout"><strong>Either way:</strong> if the scale isn't moving up over 2–3 weeks, you're not eating enough. Eat more. The muscle will not come without the surplus.</div>
+    </div>
+
+    <div class="card">
+      <div class="grid-2">
+        <div class="mini">
+          <h4>Protein sources</h4>
+          <ul><li>Chicken, turkey, lean beef</li><li>Fish and eggs</li><li>Greek yogurt, cottage cheese</li><li>Protein shakes (as needed)</li></ul>
+        </div>
+        <div class="mini">
+          <h4>Carb sources</h4>
+          <ul><li>Rice, potatoes, oats</li><li>Pasta, bread, fruit</li><li>Beans and legumes</li></ul>
+        </div>
+        <div class="mini">
+          <h4>Fats</h4>
+          <ul><li>Whole eggs, fatty fish</li><li>Nuts, nut butter</li><li>Olive oil, avocado</li></ul>
+        </div>
+        <div class="mini">
+          <h4>Do / Don't</h4>
+          <ul><li>Do: eat consistently, time carbs around training</li><li>Don't: use bulk as an excuse to eat junk</li></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tracking -->
+    <div class="section-label">Tracking & Check-ins</div>
+    <div class="card">
+      <div class="grid-2">
+        <div class="mini"><h4>Daily</h4><ul><li>Body weight (morning)</li><li>Calories and protein</li></ul></div>
+        <div class="mini"><h4>Every workout</h4><ul><li>Weight used per exercise</li><li>Reps completed per set</li><li>Notes on how it felt</li></ul></div>
+        <div class="mini"><h4>Every 4 weeks</h4><ul><li>Front / side / back photos</li><li>Waist and arm measurements</li><li>4-week weight average</li><li>Strength benchmarks on key lifts</li></ul></div>
+        <div class="mini"><h4>Reading a stall</h4><ul><li>Weight flat 2+ weeks? Eat more.</li><li>Strength not moving? Check sleep and volume.</li><li>Both flat? Check overall adherence before changing the program.</li></ul></div>
+      </div>
+    </div>
+
+    <!-- Safety -->
+    <div class="section-label">Safety & Expectations</div>
+    <div class="card">
+      <h3>Realistic muscle gain rate</h3>
+      <p>Beginners can gain roughly <span class="lead">1–2 lbs of muscle per month</span> under good conditions — and that's on the optimistic end. Total weight gain will be faster (fat comes along for the ride). Don't chase the scale; chase the lifts and the photos.</p>
+      <h3 style="margin-top:16px;">Stop and seek professional guidance if you experience:</h3>
+      <ul>
+        <li>Sharp or shooting joint pain (distinct from normal muscle soreness)</li>
+        <li>Chest pain or shortness of breath during training</li>
+        <li>Persistent swelling or inflammation in a joint</li>
+        <li>Pain that worsens over multiple sessions despite reducing load</li>
+      </ul>
+    </div>
+    <div class="card">
+      <p class="disclaimer">This program is for educational purposes only and is not medical advice. Consult a qualified physician before beginning any exercise or nutrition program — especially if you have a medical condition, take medication, are pregnant, or have a history of injury. Individual results vary based on adherence, genetics, training history, nutrition, and recovery.</p>
+    </div>
+
+    <!-- Promise -->
+    <div class="section-label">The Promise</div>
+    <div class="card">
+      <div class="promise">
+        <p>Building muscle takes longer than losing fat, and it requires more patience than most people expect. But the results — real, lasting strength and size — compound in a way that almost nothing else does. Do the work across all 12 weeks, eat to support it, sleep to recover from it, and track to prove it's working.</p>
+        <p>No shortcuts. No secret movements. Just consistent hard work, applied intelligently for 12 weeks.</p>
+        <span class="kicker">Show up. Add weight. Repeat.</span>
+      </div>
+    </div>
+
+  </div><!-- /container -->
+</div><!-- /programContent -->
+
+<!-- Supabase -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase.js"></script>
+<script>
+  window.addEventListener('load', function () {
+    (async () => {
+      try {
+        const session = await requireAuth();
+        const user = session.user;
+
+        const { data, error } = await supabaseClient
+          .from('purchases')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('product', 'muscle_gain')
+          .eq('status', 'active')
+          .limit(1);
+
+        document.getElementById('authGate').style.display = 'none';
+
+        if (!error && data && data.length > 0) {
+          document.getElementById('programContent').style.display = 'block';
+        } else {
+          document.getElementById('lockedState').style.display = 'flex';
+        }
+        lucide.createIcons();
+      } catch (err) {
+        window.location.href = 'auth.html';
+      }
+    })();
+  });
+
+  // Schedule tab switching
+  document.addEventListener('click', function (e) {
+    if (!e.target.classList.contains('tab')) return;
+    const sched = e.target.getAttribute('data-sched');
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    e.target.classList.add('active');
+    document.querySelectorAll('.sched-panel').forEach(p => {
+      p.classList.toggle('active', p.getAttribute('data-panel') === sched);
+    });
+  });
+</script>
+</body>
+</html>
