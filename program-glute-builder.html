@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Muscle Motivation – 12 Week Glute Builder</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    :root {
+      --red: #ff0000;
+      --red-dim: rgba(255,0,0,0.12);
+      --bg: #050505;
+      --surface: #0f0f0f;
+      --surface2: #161616;
+      --border: #222;
+      --text: #ffffff;
+      --muted: #888;
+      --light: #ccc;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Barlow', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 0; opacity: 0.4;
+    }
+
+    /* Auth gate */
+    #authGate {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      min-height: 100vh; background: var(--bg);
+      position: relative; z-index: 10;
+    }
+    #authGate img { width: 90px; margin-bottom: 20px; opacity: 0.8; filter: drop-shadow(0 0 12px rgba(255,0,0,0.4)); }
+    #authGate p { color: #555; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; }
+
+    /* Header */
+    header {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(5,5,5,0.97);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      display: flex; align-items: center;
+      justify-content: space-between;
+      height: 64px;
+    }
+    .header-logo { display: flex; align-items: center; gap: 12px; }
+    .header-logo img { height: 44px; filter: drop-shadow(0 0 8px rgba(255,0,0,0.35)); }
+    .header-logo span {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 13px; letter-spacing: 2px;
+      color: var(--red); text-transform: uppercase;
+    }
+    .header-right { display: flex; align-items: center; gap: 14px; }
+    .back-link {
+      font-size: 12px; color: var(--muted); text-decoration: none;
+      letter-spacing: 1px; text-transform: uppercase; font-weight: 600;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: var(--red); }
+
+    /* Locked state */
+    #lockedState {
+      display: none; flex-direction: column;
+      align-items: center; justify-content: center;
+      min-height: 80vh; text-align: center;
+      padding: 40px 20px; position: relative; z-index: 1;
+    }
+    #lockedState .lock-icon { color: var(--red); margin-bottom: 20px; }
+    #lockedState .lock-icon svg { width: 48px; height: 48px; }
+    #lockedState h2 {
+      font-family: 'Orbitron', sans-serif; font-size: 20px;
+      letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px;
+    }
+    #lockedState p { color: var(--muted); max-width: 420px; line-height: 1.6; margin-bottom: 28px; }
+    .btn-primary {
+      display: inline-block; padding: 14px 28px;
+      background: var(--red); border: none; border-radius: 10px;
+      color: white; font-size: 13px; font-weight: 700;
+      font-family: 'Orbitron', sans-serif; letter-spacing: 2px;
+      text-transform: uppercase; cursor: pointer; text-decoration: none;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 30px rgba(255,0,0,0.35); }
+
+    /* Container */
+    .container {
+      max-width: 760px; margin: 0 auto;
+      padding: 28px 16px 90px;
+      position: relative; z-index: 1;
+    }
+
+    /* Hero */
+    .hero { text-align: center; padding: 24px 0 8px; }
+    .hero .eyebrow {
+      font-family: 'Orbitron', sans-serif; font-size: 10px;
+      letter-spacing: 4px; color: var(--red); text-transform: uppercase;
+    }
+    .hero h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(26px, 7vw, 40px);
+      letter-spacing: 2px; text-transform: uppercase;
+      margin: 12px 0 8px; line-height: 1.1;
+    }
+    .hero p { color: var(--muted); font-size: 15px; max-width: 520px; margin: 0 auto; line-height: 1.6; }
+
+    /* Section label */
+    .section-label {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 10px; letter-spacing: 3px;
+      color: var(--red); text-transform: uppercase;
+      margin: 36px 0 14px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 22px 20px;
+      margin-bottom: 14px;
+      position: relative; overflow: hidden;
+    }
+    .card::before {
+      content: ''; position: absolute;
+      top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,0,0,0.25), transparent);
+    }
+    .card h3 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 13px; letter-spacing: 1px;
+      color: var(--text); margin-bottom: 10px;
+    }
+    .card p { color: var(--light); font-size: 14px; line-height: 1.7; margin-bottom: 10px; }
+    .card p:last-child { margin-bottom: 0; }
+    .card ul { list-style: none; }
+    .card li {
+      font-size: 14px; color: var(--light); line-height: 1.6;
+      padding: 7px 0 7px 22px; position: relative;
+      border-bottom: 1px solid var(--border);
+    }
+    .card li:last-child { border-bottom: none; }
+    .card li::before {
+      content: '→'; color: var(--red); position: absolute; left: 0; font-weight: bold;
+    }
+    .lead { color: var(--red); font-weight: 600; }
+
+    /* Phase row */
+    .phase {
+      border-left: 3px solid var(--red);
+      background: var(--surface2);
+      border-radius: 10px; padding: 14px 16px; margin-bottom: 10px;
+    }
+    .phase:last-child { margin-bottom: 0; }
+    .phase .ph-name { font-family: 'Orbitron', sans-serif; font-size: 12px; letter-spacing: 1px; }
+    .phase .ph-weeks { color: var(--red); font-size: 12px; font-weight: 600; }
+    .phase .ph-desc { color: var(--muted); font-size: 13px; margin-top: 5px; line-height: 1.5; }
+
+    /* Tables */
+    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 4px; }
+    table.workout {
+      width: 100%; border-collapse: collapse; font-size: 13px; min-width: 460px;
+    }
+    table.workout th {
+      text-align: left; font-family: 'Orbitron', sans-serif;
+      font-size: 9px; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--border);
+      font-weight: 700;
+    }
+    table.workout td {
+      padding: 10px; border-bottom: 1px solid var(--border); color: var(--light);
+      vertical-align: top;
+    }
+    table.workout tr:last-child td { border-bottom: none; }
+    table.workout td.ex { color: var(--text); font-weight: 600; }
+    .cue {
+      margin-top: 12px; font-size: 13px; color: var(--muted);
+      border-top: 1px dashed var(--border); padding-top: 10px;
+    }
+    .cue strong { color: var(--red); font-weight: 600; letter-spacing: 0.5px; }
+
+    /* Lead lift badge */
+    .lead-lift {
+      display: inline-block;
+      background: var(--red-dim); border: 1px solid rgba(255,0,0,0.3);
+      color: var(--red); border-radius: 6px;
+      padding: 3px 10px; font-size: 11px; font-weight: 700;
+      letter-spacing: 0.5px; margin-bottom: 10px;
+      font-family: 'Barlow', sans-serif; text-transform: uppercase;
+    }
+
+    /* Schedule */
+    .sched-grid { display: grid; gap: 8px; }
+    .sched-row {
+      display: flex; justify-content: space-between; gap: 12px;
+      background: var(--surface2); border-radius: 8px; padding: 11px 14px;
+    }
+    .sched-row .day { font-weight: 600; color: var(--muted); font-size: 13px; min-width: 90px; }
+    .sched-row .sess { color: var(--text); font-size: 13px; text-align: right; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    .tab {
+      padding: 9px 16px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface2); color: var(--muted); cursor: pointer;
+      font-size: 12px; font-weight: 600; letter-spacing: 0.5px; font-family: 'Barlow', sans-serif;
+      transition: all 0.2s;
+    }
+    .tab.active { background: var(--red); color: white; border-color: var(--red); }
+    .sched-panel { display: none; }
+    .sched-panel.active { display: block; }
+
+    /* Grid 2 */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .mini { background: var(--surface2); border-radius: 10px; padding: 14px; }
+    .mini h4 { font-family: 'Orbitron', sans-serif; font-size: 10px; letter-spacing: 1px; color: var(--red); text-transform: uppercase; margin-bottom: 8px; }
+    .mini ul { list-style: none; }
+    .mini li { font-size: 13px; color: var(--light); padding: 4px 0; }
+
+    .callout {
+      background: var(--red-dim); border: 1px solid rgba(255,0,0,0.25);
+      border-radius: 10px; padding: 14px 16px; margin-top: 12px;
+      font-size: 13px; color: var(--light); line-height: 1.6;
+    }
+    .disclaimer { font-size: 12px; color: var(--muted); line-height: 1.6; }
+
+    .promise { text-align: center; padding: 8px; }
+    .promise p { font-size: 15px; line-height: 1.8; color: var(--light); }
+    .promise .kicker { font-family: 'Orbitron', sans-serif; color: var(--red); font-size: 14px; letter-spacing: 1px; margin-top: 14px; display: block; }
+
+    /* Checklist */
+    .checklist { list-style: none; }
+    .checklist li {
+      font-size: 14px; color: var(--light); line-height: 1.6;
+      padding: 9px 0 9px 30px; position: relative;
+      border-bottom: 1px solid var(--border);
+    }
+    .checklist li:last-child { border-bottom: none; }
+    .checklist li::before {
+      content: '☐'; color: var(--red); position: absolute; left: 0;
+      font-size: 16px; line-height: 1.4;
+    }
+
+    /* Demo placeholder */
+    .demo-soon {
+      display: inline-block;
+      font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--muted); border: 1px dashed var(--border);
+      border-radius: 6px; padding: 2px 8px; margin-left: 8px;
+      font-family: 'Barlow', sans-serif; font-weight: 600;
+      vertical-align: middle;
+    }
+
+    /* Nutrition option cards */
+    .nutrition-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+    .nutrition-card {
+      background: var(--surface2); border-radius: 12px; padding: 16px;
+      border: 1px solid var(--border);
+    }
+    .nutrition-card h4 {
+      font-family: 'Orbitron', sans-serif; font-size: 11px;
+      letter-spacing: 1px; color: var(--red); text-transform: uppercase; margin-bottom: 8px;
+    }
+    .nutrition-card ul { list-style: none; }
+    .nutrition-card li { font-size: 13px; color: var(--light); padding: 3px 0; }
+    .nutrition-card .verdict { font-size: 12px; color: var(--muted); margin-top: 10px; font-style: italic; line-height: 1.5; }
+
+    @media (max-width: 480px) {
+      .grid-2, .nutrition-grid { grid-template-columns: 1fr; }
+      .header-logo span { display: none; }
+      .sched-row .sess { font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Auth gate -->
+<div id="authGate">
+  <img src="logow.png" alt="Muscle Motivation">
+  <p>Loading your program...</p>
+</div>
+
+<!-- Locked state -->
+<div id="lockedState">
+  <span class="lock-icon"><i data-lucide="lock"></i></span>
+  <h2>You don't own this program yet</h2>
+  <p>The 12-Week Glute Builder is a one-time purchase. Unlock it from your dashboard to get full access to the training, nutrition, and progression plan.</p>
+  <a class="btn-primary" href="app.html">Back to dashboard</a>
+</div>
+
+<!-- Program content (owner only) -->
+<div id="programContent" style="display:none;">
+
+  <header>
+    <div class="header-logo">
+      <img src="logow.png" alt="Muscle Motivation">
+      <span>Muscle Motivation</span>
+    </div>
+    <div class="header-right">
+      <a class="back-link" href="app.html">← Dashboard</a>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Hero -->
+    <div class="hero">
+      <div class="eyebrow">Your Program</div>
+      <h1>12-Week Glute Builder</h1>
+      <p>Build a stronger, more sculpted lower body. Every session hits the glutes directly — through heavy compounds, targeted isolation, and smart progression across 12 weeks.</p>
+    </div>
+
+    <!-- Start Here -->
+    <div class="section-label">Start Here — Week 1</div>
+    <div class="card">
+      <h3>Your first-week checklist</h3>
+      <p>Glute development takes consistency and patience. Get these foundations in place before anything else.</p>
+      <ul class="checklist">
+        <li>Read the <span class="lead">Philosophy</span> and <span class="lead">12-Week Arc</span> so you understand what each phase demands.</li>
+        <li>Check your dashboard for your calorie and macro targets — decide whether you're in a deficit or surplus using the Nutrition section.</li>
+        <li>Pick your schedule (3 or 4 days) based on your dashboard-recommended split.</li>
+        <li>Take your Day 1 baseline: weight, front/side/back photos, and hip and glute measurements.</li>
+        <li>In Week 1, use lighter weights than you think you need — especially on Hip Thrust and RDL. Learn the movement first, load it second.</li>
+        <li>Set up a lift log for your three lead lifts (Hip Thrust, Romanian Deadlift, Squat). You'll track these week to week as your primary progress markers.</li>
+        <li>Focus on feeling the glutes work. If you can't feel a movement in the target muscle, reduce the weight and fix the technique before adding load.</li>
+      </ul>
+    </div>
+
+    <!-- Philosophy -->
+    <div class="section-label">Philosophy</div>
+    <div class="card">
+      <h3>The principles this is built on</h3>
+      <ul>
+        <li><span class="lead">Glutes respond to consistent direct work.</span> Unlike most muscle groups, the glutes are undertrained in most people's everyday movement. They need to be deliberately targeted every session to grow.</li>
+        <li><span class="lead">Heavy compounds build the foundation.</span> Hip Thrust, Romanian Deadlift, and Squat create the size and strength base. Isolation work refines and sculpts on top of that.</li>
+        <li><span class="lead">Mind-muscle connection is the difference-maker.</span> A glute exercise done without feeling the glutes work is just cardio. Slow down, squeeze, and own every rep.</li>
+        <li><span class="lead">Progressive overload applies here too.</span> Add load or reps over time. Glutes won't grow from the same weight done the same way indefinitely.</li>
+        <li><span class="lead">Consistency beats intensity.</span> Three solid sessions per week for 12 weeks outperforms six brutal sessions that leave you too sore to train again.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>The Muscle Motivation approach</h3>
+      <p><span class="lead">Rotate the lead lift, keep the direct work constant.</span> Each session opens with a different primary compound — Hip Thrust, RDL, or Squat — so all three movement patterns get heavy attention across the week. Every session then finishes with direct glute isolation work regardless of which compound led.</p>
+      <p><span class="lead">Isolation finishers are not optional.</span> Cable kickbacks, abductor work, and glute bridges at the end of each session are where the detail gets built. Don't skip them because you're tired from the compounds.</p>
+      <p><span class="lead">Volume peaks in Phase 2, quality peaks in Phase 3.</span> Foundation builds the habit and technique. Volume floods the muscle with work. Peak refines the stimulus and maximizes the response from everything you've built.</p>
+    </div>
+
+    <!-- 12-Week Arc -->
+    <div class="section-label">The 12-Week Arc</div>
+    <div class="card">
+      <div class="phase">
+        <div><span class="ph-name">Phase 1 — Foundation</span> · <span class="ph-weeks">Weeks 1–4</span></div>
+        <div class="ph-desc">Learn the three lead lifts. Build the glute activation habit. Moderate volume, moderate load — focus entirely on technique and feeling the target muscle. Deload Week 4.</div>
+      </div>
+      <div class="phase">
+        <div><span class="ph-name">Phase 2 — Volume</span> · <span class="ph-weeks">Weeks 5–8</span></div>
+        <div class="ph-desc">Volume increases — more sets, more isolation work. Load increases on the compounds. This is where most of the muscle stimulus happens. Push harder, recover carefully. Deload Week 8.</div>
+      </div>
+      <div class="phase">
+        <div><span class="ph-name">Phase 3 — Peak</span> · <span class="ph-weeks">Weeks 9–12</span></div>
+        <div class="ph-desc">Highest quality work. Load and technique are both dialed in. Isolation finishers get extra attention — these are the sessions that produce visible definition. Deload Week 12.</div>
+      </div>
+      <div class="callout"><strong>Deload weeks (4, 8, 12):</strong> True recovery — reduce load by 30–40% AND cut sets by ~40%. This is lighter than the other programs. Glute tissue is trained every session in this program; it needs genuine recovery to continue growing. Keep the movements, dial back everything else.</div>
+    </div>
+
+    <!-- Schedule -->
+    <div class="section-label">Choose Your Schedule</div>
+    <div class="card">
+      <p>Your dashboard already recommends a split based on your training days. Start with that recommendation and pick the matching schedule below.</p>
+      <div class="tabs">
+        <button class="tab active" data-sched="3">3 Days</button>
+        <button class="tab" data-sched="4">4 Days</button>
+      </div>
+
+      <div class="sched-panel active" data-panel="3">
+        <div class="sched-grid">
+          <div class="sched-row"><span class="day">Monday</span><span class="sess">Session A — Hip Thrust Lead</span></div>
+          <div class="sched-row"><span class="day">Wednesday</span><span class="sess">Session B — RDL Lead</span></div>
+          <div class="sched-row"><span class="day">Friday</span><span class="sess">Session C — Squat Lead</span></div>
+          <div class="sched-row"><span class="day">Other days</span><span class="sess">Walking + rest</span></div>
+        </div>
+      </div>
+      <div class="sched-panel" data-panel="4">
+        <div class="sched-grid">
+          <div class="sched-row"><span class="day">Monday</span><span class="sess">Session A — Hip Thrust Lead</span></div>
+          <div class="sched-row"><span class="day">Tuesday</span><span class="sess">Upper Body</span></div>
+          <div class="sched-row"><span class="day">Thursday</span><span class="sess">Session B — RDL Lead</span></div>
+          <div class="sched-row"><span class="day">Friday</span><span class="sess">Session C — Squat Lead</span></div>
+          <div class="sched-row"><span class="day">Other days</span><span class="sess">Rest + walking</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Templates -->
+    <div class="section-label">Training Templates</div>
+
+    <div class="card">
+      <h3>Before You Start: Warm-Up</h3>
+      <p>Spend 5–10 minutes activating the glutes before each session. A light resistance band walk, clamshells, or bodyweight glute bridges are ideal — they prime the glutes to actually fire during your working sets. Then do 2 ramp-up sets on your lead lift before your working weight.</p>
+    </div>
+
+    <div class="card">
+      <div class="lead-lift">Lead Lift: Hip Thrust</div>
+      <h3>Session A — Hip Thrust Lead</h3>
+      <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">Phase 1: 3×10–12 &nbsp;|&nbsp; Phase 2: 4×8–12, add isolation set &nbsp;|&nbsp; Phase 3: 4×6–10, peak load</p>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Category</th><th>Exercise</th><th>Sets × Reps</th><th>Rest</th></tr>
+        <tr><td>Lead compound</td><td class="ex">Barbell / DB Hip Thrust</td><td>3–4 × 6–12</td><td>2 min</td></tr>
+        <tr><td>Hinge</td><td class="ex">Romanian Deadlift</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Single leg</td><td class="ex">Reverse Lunge</td><td>3 × 8–12 / leg</td><td>90s</td></tr>
+        <tr><td>Hamstrings</td><td class="ex">Leg Curl</td><td>3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Glute isolation</td><td class="ex">Cable Kickback <span class="demo-soon">Demo video coming soon</span></td><td>3 × 12–15 / leg</td><td>60s</td></tr>
+        <tr><td>Abductors</td><td class="ex">Seated Hip Abduction</td><td>3 × 15–20</td><td>60s</td></tr>
+        <tr><td>Core</td><td class="ex">Dead Bug <span class="demo-soon">Demo video coming soon</span></td><td>2–3 × 10–15</td><td>60s</td></tr>
+      </table></div>
+      <div class="cue"><strong>Cue — Hip Thrust:</strong> Drive through the heels. At the top, squeeze the glutes hard and hold for 1 second before lowering. Don't hyperextend the lower back — the hips do the work.</div>
+    </div>
+
+    <div class="card">
+      <div class="lead-lift">Lead Lift: Romanian Deadlift</div>
+      <h3>Session B — RDL Lead</h3>
+      <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">Phase 2: go heavier on RDL — build to a challenging set of 8. Phase 3: add a cable pull-through.</p>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Category</th><th>Exercise</th><th>Sets × Reps</th><th>Rest</th></tr>
+        <tr><td>Lead compound</td><td class="ex">Romanian Deadlift (BB or DB)</td><td>3–4 × 6–10</td><td>2 min</td></tr>
+        <tr><td>Glute press</td><td class="ex">Leg Press (feet high)</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Single leg</td><td class="ex">Bulgarian Split Squat</td><td>3 × 8–10 / leg</td><td>2 min</td></tr>
+        <tr><td>Glute isolation</td><td class="ex">Cable Pull-Through <span class="demo-soon">Demo video coming soon</span></td><td>3 × 12–15</td><td>60s</td></tr>
+        <tr><td>Hamstrings</td><td class="ex">Leg Curl</td><td>3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Abductors</td><td class="ex">Standing Band Abduction</td><td>3 × 15–20 / leg</td><td>60s</td></tr>
+        <tr><td>Core</td><td class="ex">Plank</td><td>3 × 30–60s</td><td>60s</td></tr>
+      </table></div>
+      <div class="cue"><strong>Cue — RDL:</strong> Hinge at the hips, soft knee, bar stays close to the legs. Feel the hamstrings and glutes load on the way down — that tension is the stimulus. Pull back up by driving the hips forward.</div>
+    </div>
+
+    <div class="card">
+      <div class="lead-lift">Lead Lift: Squat</div>
+      <h3>Session C — Squat Lead</h3>
+      <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">Phase 2: Squat volume increases to 4 sets. Phase 3: add glute bridge finisher for peak contraction work.</p>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Category</th><th>Exercise</th><th>Sets × Reps</th><th>Rest</th></tr>
+        <tr><td>Lead compound</td><td class="ex">Back Squat / Goblet Squat</td><td>3–4 × 6–10</td><td>2 min</td></tr>
+        <tr><td>Hip thrust variation</td><td class="ex">Single-Leg Hip Thrust</td><td>3 × 10–12 / leg</td><td>90s</td></tr>
+        <tr><td>Single leg</td><td class="ex">Step-Up (with DB)</td><td>3 × 10–12 / leg</td><td>90s</td></tr>
+        <tr><td>Glute isolation</td><td class="ex">Cable Kickback <span class="demo-soon">Demo video coming soon</span></td><td>3 × 12–15 / leg</td><td>60s</td></tr>
+        <tr><td>Calves</td><td class="ex">Standing Calf Raise</td><td>3 × 15–20</td><td>60s</td></tr>
+        <tr><td>Abductors</td><td class="ex">Seated Hip Abduction</td><td>3 × 15–20</td><td>60s</td></tr>
+        <tr><td>Core</td><td class="ex">Pallof Press <span class="demo-soon">Demo video coming soon</span></td><td>2–3 × 10–15 / side</td><td>60s</td></tr>
+      </table></div>
+      <div class="cue"><strong>Cue — Squat:</strong> Sit back and down, knees track over toes. Drive through the full foot on the way up. Squeeze the glutes at lockout — don't just stand up, finish the movement.</div>
+    </div>
+
+    <div class="card">
+      <h3>Upper Body (4-Day Schedule)</h3>
+      <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">For members on the 4-day schedule. Keeps upper body balanced while lower body is the priority.</p>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Movement</th><th>Exercise</th><th>Sets × Reps</th><th>Rest</th></tr>
+        <tr><td>Horizontal push</td><td class="ex">DB Bench Press</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Horizontal pull</td><td class="ex">Seated Cable Row</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Vertical push</td><td class="ex">Seated DB Shoulder Press</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Vertical pull</td><td class="ex">Lat Pulldown</td><td>3 × 8–12</td><td>90s</td></tr>
+        <tr><td>Rear delts</td><td class="ex">Face Pull</td><td>3 × 12–20</td><td>60s</td></tr>
+        <tr><td>Biceps</td><td class="ex">DB Curl</td><td>2–3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Triceps</td><td class="ex">Rope Pushdown</td><td>2–3 × 10–15</td><td>60s</td></tr>
+        <tr><td>Core</td><td class="ex">Plank</td><td>3 × 30–60s</td><td>60s</td></tr>
+      </table></div>
+    </div>
+
+    <!-- Home Swaps -->
+    <div class="section-label">Home / Band Swaps</div>
+    <div class="card">
+      <p>No gym access? These swaps replicate the same stimulus with dumbbells and resistance bands.</p>
+      <div class="table-wrap"><table class="workout">
+        <tr><th>Gym exercise</th><th>Home / Band alternative</th></tr>
+        <tr><td class="ex">Barbell Hip Thrust</td><td>DB Hip Thrust or Banded Glute Bridge</td></tr>
+        <tr><td class="ex">Barbell RDL</td><td>DB Romanian Deadlift</td></tr>
+        <tr><td class="ex">Back Squat</td><td>Goblet Squat (heavy DB)</td></tr>
+        <tr><td class="ex">Cable Kickback</td><td>Resistance Band Kickback</td></tr>
+        <tr><td class="ex">Cable Pull-Through</td><td>Resistance Band Pull-Through</td></tr>
+        <tr><td class="ex">Seated Hip Abduction</td><td>Banded Clamshell or Lateral Band Walk</td></tr>
+        <tr><td class="ex">Leg Press (feet high)</td><td>Sumo Goblet Squat</td></tr>
+        <tr><td class="ex">Leg Curl</td><td>Stability Ball Leg Curl</td></tr>
+      </table></div>
+    </div>
+
+    <!-- Progression -->
+    <div class="section-label">Progression Model</div>
+    <div class="card">
+      <h3>Double progression — phase adjusted</h3>
+      <p>Same core model as the other programs, adapted for the phase focus.</p>
+      <div class="grid-2" style="margin-top:12px;">
+        <div class="mini">
+          <h4>Phase 1 · Foundation</h4>
+          <ul>
+            <li>All movements 10–12 reps</li>
+            <li>Add reps → then add weight</li>
+            <li>Technique is the priority</li>
+          </ul>
+        </div>
+        <div class="mini">
+          <h4>Phase 2 · Volume</h4>
+          <ul>
+            <li>Lead lifts: 8–12 reps</li>
+            <li>Add a set to lead lift</li>
+            <li>Isolation work: 12–15 reps</li>
+          </ul>
+        </div>
+        <div class="mini">
+          <h4>Phase 3 · Peak</h4>
+          <ul>
+            <li>Lead lifts: 6–10 reps, heavier</li>
+            <li>Isolation: slow tempo, 12–20 reps</li>
+            <li>Hold the squeeze at peak contraction</li>
+          </ul>
+        </div>
+        <div class="mini">
+          <h4>Intensity (all phases)</h4>
+          <ul>
+            <li>RPE 7–9 on working sets</li>
+            <li>Leave 1–2 reps in reserve</li>
+            <li>Never rush isolation finishers</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout"><strong>The squeeze matters as much as the load.</strong> On isolation movements, a slow, controlled rep with a 1-second hold at peak contraction beats a heavier sloppy rep every time. Control is the stimulus.</div>
+    </div>
+
+    <!-- Nutrition -->
+    <div class="section-label">Nutrition</div>
+    <div class="card">
+      <h3>Use your dashboard targets</h3>
+      <p>Your calorie and macro numbers are personalized on your dashboard. What matters here is choosing the right approach for your goal — building or leaning — and sticking to it consistently.</p>
+      <p><span class="lead">Protein: 0.9–1.0g per lb of bodyweight.</span> Hit this number daily. It protects muscle while in a deficit and drives growth in a surplus.</p>
+    </div>
+    <div class="card">
+      <h3>Choose your nutrition approach</h3>
+      <p>This program works in either direction. Decide based on your current priority and commit for at least 4 weeks before reassessing.</p>
+      <div class="nutrition-grid">
+        <div class="nutrition-card">
+          <h4>Lean Out + Build</h4>
+          <ul>
+            <li>Modest calorie deficit (10–20% below maintenance)</li>
+            <li>Lose fat while building and firming the glutes</li>
+            <li>Scale weight drops gradually</li>
+            <li>Progress shows more in photos and measurements than the scale</li>
+          </ul>
+          <p class="verdict">Best for: members who want to look leaner while building shape. Results are visible but slower.</p>
+        </div>
+        <div class="nutrition-card">
+          <h4>Build + Grow</h4>
+          <ul>
+            <li>Small calorie surplus (200–350 above maintenance)</li>
+            <li>Maximize muscle and strength gains</li>
+            <li>Scale weight rises slowly</li>
+            <li>Fastest route to visible glute development</li>
+          </ul>
+          <p class="verdict">Best for: members who are already comfortable at their current weight and want to prioritize size and shape.</p>
+        </div>
+      </div>
+      <div class="callout"><strong>Whichever you choose:</strong> don't under-eat. Glutes are a large, demanding muscle group. Severe restriction slows growth and kills training performance. Eat enough to train hard.</div>
+    </div>
+
+    <div class="card">
+      <div class="grid-2">
+        <div class="mini">
+          <h4>Protein</h4>
+          <ul><li>Chicken, turkey, lean beef</li><li>Fish and eggs</li><li>Greek yogurt, cottage cheese</li><li>Protein shakes</li></ul>
+        </div>
+        <div class="mini">
+          <h4>Carbs</h4>
+          <ul><li>Rice, potatoes, oats</li><li>Fruit, beans</li><li>Time larger carb meals around training</li></ul>
+        </div>
+        <div class="mini">
+          <h4>Fats</h4>
+          <ul><li>Avocado, olive oil</li><li>Nuts, nut butter</li><li>Fatty fish, whole eggs</li></ul>
+        </div>
+        <div class="mini">
+          <h4>Do / Don't</h4>
+          <ul><li>Do: hit protein daily, eat around sessions</li><li>Don't: under-eat and expect glute growth</li></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tracking -->
+    <div class="section-label">Tracking & Check-ins</div>
+    <div class="card">
+      <div class="grid-2">
+        <div class="mini"><h4>Daily</h4><ul><li>Body weight (morning)</li><li>Calories and protein</li></ul></div>
+        <div class="mini"><h4>Every workout</h4><ul><li>Lead lift: weight and reps</li><li>How the glutes felt during the session</li></ul></div>
+        <div class="mini"><h4>Every 4 weeks</h4><ul><li>Front / side / back photos</li><li>Hip circumference measurement</li><li>Glute circumference measurement</li><li>Waist measurement</li><li>4-week weight average</li></ul></div>
+        <div class="mini"><h4>Reading progress</h4><ul><li>Photos and measurements tell the real story</li><li>Scale staying flat but shape changing = good</li><li>Strength on lead lifts trending up = growing</li></ul></div>
+      </div>
+      <div class="callout"><strong>The scale is not the best measure for this program.</strong> Building glute muscle while losing fat can keep the scale flat for weeks while your body is dramatically changing shape. Trust the photos, the measurements, and the lift numbers.</div>
+    </div>
+
+    <!-- Safety -->
+    <div class="section-label">Safety & Expectations</div>
+    <div class="card">
+      <h3>What realistic progress looks like</h3>
+      <p>Visible glute development takes time. Expect <span class="lead">noticeable shape changes by Week 8</span> if training and nutrition are consistent — not Week 2. Photos every 4 weeks will show what the mirror can't.</p>
+      <h3 style="margin-top:16px;">Stop and seek professional guidance if you experience:</h3>
+      <ul>
+        <li>Sharp pain in the hip, lower back, or knee during Hip Thrust or Squat</li>
+        <li>Numbness or tingling down the legs</li>
+        <li>Pain that worsens across multiple sessions</li>
+        <li>Any joint swelling that doesn't resolve with rest</li>
+      </ul>
+    </div>
+    <div class="card">
+      <p class="disclaimer">This program is for educational purposes only and is not medical advice. Consult a qualified physician before beginning any exercise or nutrition program — especially if you have a medical condition, injury history, or are pregnant. Individual results vary based on adherence, genetics, starting point, and nutrition.</p>
+    </div>
+
+    <!-- Promise -->
+    <div class="section-label">The Promise</div>
+    <div class="card">
+      <div class="promise">
+        <p>The glutes are one of the most responsive muscle groups in the body — when they're trained consistently, directly, and progressively. This program gives them all three. Show up for 12 weeks, load the movements, feel the squeeze, and let the process work.</p>
+        <p>No shortcuts. No spot reduction. Just disciplined, direct work repeated consistently until the results are undeniable.</p>
+        <span class="kicker">Train it. Feel it. Build it.</span>
+      </div>
+    </div>
+
+  </div><!-- /container -->
+</div><!-- /programContent -->
+
+<!-- Supabase -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase.js"></script>
+<script>
+  window.addEventListener('load', function () {
+    (async () => {
+      try {
+        const session = await requireAuth();
+        const user = session.user;
+
+        const { data, error } = await supabaseClient
+          .from('purchases')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('product', 'glute_builder')
+          .eq('status', 'active')
+          .limit(1);
+
+        document.getElementById('authGate').style.display = 'none';
+
+        if (!error && data && data.length > 0) {
+          document.getElementById('programContent').style.display = 'block';
+        } else {
+          document.getElementById('lockedState').style.display = 'flex';
+        }
+        lucide.createIcons();
+      } catch (err) {
+        window.location.href = 'auth.html';
+      }
+    })();
+  });
+
+  // Schedule tab switching
+  document.addEventListener('click', function (e) {
+    if (!e.target.classList.contains('tab')) return;
+    const sched = e.target.getAttribute('data-sched');
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    e.target.classList.add('active');
+    document.querySelectorAll('.sched-panel').forEach(p => {
+      p.classList.toggle('active', p.getAttribute('data-panel') === sched);
+    });
+  });
+</script>
+</body>
+</html>
