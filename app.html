@@ -54,7 +54,7 @@
       justify-content: space-between;
       height: 64px;
     }
-    .header-logo { display: flex; align-items: center; gap: 12px; }
+    .header-logo { display: flex; align-items: center; gap: 12px; text-decoration: none; }
     .header-logo img { height: 48px; filter: drop-shadow(0 0 8px rgba(255,0,0,0.35)); }
     .header-logo span {
       font-family: 'Orbitron', sans-serif;
@@ -237,6 +237,18 @@
     }
     a.owned-badge:hover { text-decoration: underline; }
 
+    .browse-programs-link {
+      padding-top: 14px;
+      text-align: right;
+    }
+    .browse-programs-link a {
+      font-size: 12px; font-weight: 600;
+      color: var(--muted); text-decoration: none;
+      letter-spacing: 0.5px;
+      transition: color 0.2s;
+    }
+    .browse-programs-link a:hover { color: var(--red); }
+
     /* Toast */
     .toast {
       position: fixed; bottom: 24px; left: 50%;
@@ -270,10 +282,10 @@
 <div id="appContent" style="display:none;">
 
   <header>
-    <div class="header-logo">
+    <a class="header-logo" href="app.html">
       <img src="logow.png" alt="Muscle Motivation">
       <span>Muscle Motivation</span>
-    </div>
+    </a>
     <div class="header-right">
       <span class="user-name" id="headerName"></span>
       <button id="signOutBtn" onclick="signOut()">Sign Out</button>
@@ -420,6 +432,9 @@
           <span class="plan-price">$39</span>
           <a class="btn-buy" href="store.html">Buy</a>
         </div>
+      </div>
+      <div class="browse-programs-link">
+        <a href="store.html">Browse all programs & upgrades →</a>
       </div>
     </div>
 

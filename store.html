@@ -59,7 +59,7 @@
     }
 
     .header-logo {
-      display: flex; align-items: center; gap: 12px;
+      display: flex; align-items: center; gap: 12px; text-decoration: none;
     }
     .header-logo img {
       height: 52px;
@@ -671,15 +671,15 @@
 
 <!-- ── Header ── -->
 <header>
-  <div class="header-logo">
+  <a id="headerLogoLink" class="header-logo" href="index.html">
     <img src="logow.png" alt="Muscle Motivation">
     <span>Muscle Motivation</span>
-  </div>
+  </a>
   <nav class="header-nav">
     <a href="index.html">Home</a>
     <a href="calculator.html">Calculator</a>
     <a href="#contact-section">Contact</a>
-    <a href="auth.html" class="btn-login">Login</a>
+    <a id="headerLoginBtn" href="auth.html" class="btn-login">Login</a>
   </nav>
   <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
     <span></span><span></span><span></span>
@@ -689,7 +689,7 @@
 <nav class="mobile-nav" id="mobileNav">
   <a href="index.html">Home</a>
   <a href="calculator.html">Free Calculator</a>
-  <a href="auth.html">Login / Sign Up</a>
+  <a id="mobileLoginLink" href="auth.html">Login / Sign Up</a>
 </nav>
 
 <!-- ── Hero ── -->
@@ -1129,6 +1129,19 @@
     showStoreToast('Checkout cancelled — no charge was made.');
     history.replaceState(null, '', window.location.pathname);
   }
+
+  // Update nav for logged-in users: logo links to dashboard, Login → My Dashboard.
+  window.addEventListener('load', async function() {
+    const session = await getSession();
+    if (!session) return;
+    document.getElementById('headerLogoLink').href = 'app.html';
+    const loginBtn = document.getElementById('headerLoginBtn');
+    loginBtn.textContent = 'My Dashboard';
+    loginBtn.href = 'app.html';
+    const mobileLogin = document.getElementById('mobileLoginLink');
+    mobileLogin.textContent = 'My Dashboard';
+    mobileLogin.href = 'app.html';
+  });
 </script>
 
 <div id="storeToast" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:#1c1c1c;border:1px solid var(--red);color:#fff;padding:12px 24px;border-radius:10px;font-size:14px;font-weight:600;transition:transform 0.35s ease,opacity 0.35s ease;opacity:0;z-index:999;white-space:nowrap;pointer-events:none;"></div>
