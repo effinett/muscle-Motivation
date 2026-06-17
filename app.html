@@ -360,6 +360,10 @@
         <span class="pr-value" id="dashStartWeight">—</span>
       </div>
       <div class="progress-row">
+        <span class="pr-label">Goal Weight</span>
+        <span class="pr-value" id="dashGoalWeight">—</span>
+      </div>
+      <div class="progress-row">
         <span class="pr-label">Current Weight</span>
         <span class="pr-value muted">Log below to track</span>
       </div>
@@ -502,7 +506,8 @@
         }
 
         // Progress snapshot
-        document.getElementById('dashStartWeight').textContent = profile.weight_lbs ? profile.weight_lbs + ' lbs' : '—';
+        document.getElementById('dashStartWeight').textContent  = profile.weight_lbs      ? profile.weight_lbs + ' lbs'      : '—';
+        document.getElementById('dashGoalWeight').textContent   = profile.goal_weight_lbs ? profile.goal_weight_lbs + ' lbs' : 'Not set';
         document.getElementById('dashSince').textContent = profile.created_at
           ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
           : '—';

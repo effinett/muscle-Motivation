@@ -495,6 +495,11 @@
           <option value="relaxed">Relaxed — long game, sustainable</option>
         </select>
       </div>
+
+      <div class="field">
+        <label>Goal Weight (lbs) <span class="optional-tag">optional</span></label>
+        <input type="number" id="ob-goal-weight" placeholder="e.g. 165" min="80" max="600" />
+      </div>
     </div>
     <div class="nav-row">
       <button class="btn-back" onclick="goStep(3)">← Back</button>
@@ -538,6 +543,11 @@
         <div class="stat">
           <div class="stat-label">Training Split</div>
           <div class="training-badge" id="ob-rSplit">—</div>
+        </div>
+        <div class="stat stat-full" id="ob-rGoalWeightCard" style="display:none;">
+          <div class="stat-label">Goal Weight</div>
+          <div class="stat-value" id="ob-rGoalWeight">—</div>
+          <div class="stat-sub">Your target body weight</div>
         </div>
       </div>
     </div>
@@ -675,9 +685,10 @@ if (!profileError && profile && profile.onboarding_complete) {
     var bodyfat   = parseFloat(document.getElementById('ob-bodyfat').value) || null;
     var stepMult  = parseFloat(document.getElementById('ob-steps').value);
     var training  = parseFloat(document.getElementById('ob-training').value);
-    var goal      = document.getElementById('ob-goal').value;
-    var timeline  = document.getElementById('ob-timeline').value;
-    var name      = document.getElementById('ob-name').value.trim();
+    var goal       = document.getElementById('ob-goal').value;
+    var timeline   = document.getElementById('ob-timeline').value;
+    var goalWeight = parseFloat(document.getElementById('ob-goal-weight').value) || null;
+    var name       = document.getElementById('ob-name').value.trim();
 
     // Users input height as feet/inches; convert to cm for internal storage and BMR calculations.
     var heightCm = ((feet * 12) + inchesVal) * 2.54;
@@ -727,6 +738,7 @@ if (!profileError && profile && profile.onboarding_complete) {
       fat_target:           macros.fatG,
       carb_target:          macros.carbG,
       training_split:       split,
+      goal_weight_lbs:      goalWeight,
       goal_summary:         getGoalSummary(goal, timeline),
       onboarding_complete:  true
     };
@@ -739,6 +751,13 @@ if (!profileError && profile && profile.onboarding_complete) {
     document.getElementById('ob-rCarbs').textContent       = macros.carbG + 'g';
     document.getElementById('ob-rFats').textContent        = macros.fatG + 'g';
     document.getElementById('ob-rSplit').textContent       = split;
+
+    if (goalWeight) {
+      document.getElementById('ob-rGoalWeight').textContent      = goalWeight + ' lbs';
+      document.getElementById('ob-rGoalWeightCard').style.display = 'block';
+    } else {
+      document.getElementById('ob-rGoalWeightCard').style.display = 'none';
+    }
 
     goStep(5);
   }
