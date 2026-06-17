@@ -452,4 +452,115 @@ Free Lead Gen → Digital Programs (one-time) → Membership (recurring) → Pre
 
 ---
 
+## 15. SPRINT BACKLOG (v1.0 — Source of Truth)
+
+### MUST HAVE (MVP — required before public launch)
+
+**Authentication & User Accounts**
+- User registration, login/logout, password reset, protected routes, user profile creation, basic account settings
+
+**Onboarding System**
+- Personal info: age, gender, height, weight, body fat %
+- Goal selection: fat loss, muscle gain, recomposition
+- Activity level, training days/week, timeline selection
+
+**Calorie & Macro Calculator**
+- Calculate maintenance calories, target calories, protein/fat/carb targets
+- Save results to profile, recalculate goals button
+
+**Dashboard**
+- Overview cards: current weight, goal weight, calories target, protein target, workout streak
+- Today's summary: workout status, calories consumed, protein consumed, steps, water
+- Quick actions: log workout, log weight, log food, open AI coach
+
+**Workout Logging**
+- Exercise tracking: name, weight, sets, reps, notes
+- Workout history, personal records, exercise history
+- Progressive overload: show previous performance, suggest next weight/reps, track volume
+
+**Weight & Progress Tracking**
+- Body metrics: weight logging, body fat logging, waist measurement, progress notes
+- Charts: weight trend graph, body fat graph, goal progress graph
+
+**Nutrition Tracking**
+- Food search: USDA database, save favorites, recent foods
+- Food logging: breakfast, lunch, dinner, snacks
+- Daily tracking: calories, protein, carbs, fat
+- Voice logging: natural language food entry
+- Photo logging: AI meal recognition, portion estimation, user confirmation before saving
+
+**Membership & Program Access**
+- Free tier: calculator, limited dashboard, free guide
+- Program ownership: purchased programs, program library, access management
+
+**Payments**
+- Stripe: one-time purchases, monthly subscriptions, checkout pages, customer portal
+
+**Mobile Optimization**
+- Fully responsive, mobile dashboard/food logging/workout logging, touch-friendly nav
+
+---
+
+### SHOULD HAVE (important for retention — build after MVP)
+
+**AI Coach**
+- Fitness: workout recommendations, exercise substitutions, progressive overload guidance
+- Nutrition: macro guidance, meal suggestions, restaurant recommendations
+- Goal: weekly check-ins, accountability reminders, motivation support
+
+**Habit Tracking**
+- Daily steps, water intake, sleep tracking, habit streaks
+
+**Workout Programs**
+- Built-in: Fat Loss Blueprint, Muscle Gain Blueprint, Home Strength, Beginner Program
+- Delivery: week-by-week structure, exercise videos, progress tracking
+
+**Notifications**
+- Workout reminders, weigh-in reminders, nutrition reminders, goal milestone notifications
+
+**User Profile Enhancements**
+- Profile picture, fitness level, injuries/limitations, training preferences
+
+**Progress Photos**
+- Upload, side-by-side comparison, timeline view
+
+---
+
+### NICE TO HAVE (enhance engagement — not required for launch)
+
+- Apple Health integration (steps, weight, activity syncing)
+- Smart recommendations (exercise, meal, recovery)
+- Exercise library (instructions, images, videos, coaching cues; filter by muscle group/equipment/difficulty)
+- Community features (member feed, success stories, challenges, leaderboards)
+- Referral program (invite friends, rewards, affiliate tracking)
+- Trainer notes (client notes, internal coaching comments, session summaries)
+
+---
+
+### FUTURE VISION
+
+**Advanced AI Coach**
+- Personalized programming: AI builds complete programs based on equipment/goals/experience/schedule
+- Adaptive nutrition: AI adjusts calories/macros based on progress/weight changes/compliance
+- Weekly AI reviews: analyze workouts, nutrition, weight trends, habit adherence → generate reports + recommendations
+- Voice AI coach: conversational responses to natural language queries
+
+**Computer Vision Progress Analysis**
+- Front/side/back photo upload → AI estimates body fat trends, muscle gain, visual progress
+
+**Wearable Integrations**
+- Apple Watch, Fitbit, Garmin, Oura Ring, Whoop
+
+**Trainer Portal**
+- Client management, progress monitoring, messaging, program assignment
+- Business analytics: revenue, retention, churn, client progress metrics
+
+**Marketplace**
+- Buy programs (individual + bundles), premium coaching (1-on-1 + group), digital products (guides, meal plans, challenges)
+
+**Ultimate Vision**
+One app and website where users can: track workouts, track nutrition, track body metrics, purchase programs, receive AI coaching, receive human coaching, monitor progress, and build lifelong fitness habits.
+
+---
+
 *End of CLAUDE.md — All sections are source of truth. Do not override without explicit instruction from Effi.*
