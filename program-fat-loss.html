@@ -233,10 +233,40 @@
     .promise p { font-size: 15px; line-height: 1.8; color: var(--light); }
     .promise .kicker { font-family: 'Bebas Neue', sans-serif; color: var(--red); font-size: 22px; letter-spacing: 1px; margin-top: 14px; display: block; }
 
+    /* Sticky workout CTA */
+    .sticky-cta {
+      display: none;
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+      background: rgba(5,5,5,0.97); backdrop-filter: blur(12px);
+      border-top: 1px solid var(--border);
+      padding: 14px 20px 18px;
+    }
+    .sticky-cta-inner {
+      max-width: 760px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    }
+    .sticky-cta-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 2px;
+      color: var(--muted); text-transform: uppercase; margin-bottom: 3px;
+    }
+    .sticky-cta-name {
+      font-family: 'Bebas Neue', sans-serif; font-size: 22px;
+      letter-spacing: 1.5px; color: var(--text); line-height: 1;
+    }
+    .sticky-cta-btn {
+      padding: 12px 24px; background: var(--red); border: none; border-radius: 8px;
+      color: white; font-family: 'Bebas Neue', sans-serif;
+      font-size: 18px; letter-spacing: 2px; text-decoration: none;
+      white-space: nowrap; transition: opacity 0.2s; flex-shrink: 0;
+      display: inline-block;
+    }
+    .sticky-cta-btn:hover { opacity: 0.85; }
+
     @media (max-width: 480px) {
       .grid-2 { grid-template-columns: 1fr; }
       .header-logo span { display: none; }
       .sched-row .sess { font-size: 12px; }
+      .sticky-cta-name { font-size: 18px; }
     }
   </style>
 </head>
@@ -627,29 +657,53 @@
   </div><!-- /container -->
 </div><!-- /programContent -->
 
+<div class="sticky-cta" id="stickyCta">
+  <div class="sticky-cta-inner">
+    <div>
+      <div class="sticky-cta-label">Today's Session</div>
+      <div class="sticky-cta-name" id="todaySessionName">—</div>
+    </div>
+    <a class="sticky-cta-btn" id="startTodayBtn" href="workout.html">Start Workout</a>
+  </div>
+</div>
+
 <!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="supabase.js"></script>
 <script>
-  window.addEventListener('load', function () {
+  var currentUser  = null;
+  var userProgram  = null;
+
+  var SCHEDULES = {
+    '2': ['full_a', 'full_b'],
+    '3': ['full_a', 'full_b', 'full_c'],
+    '4': ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
+    '5': ['push', 'pull', 'legs', 'upper_a', 'lower_a']
+  };
+  var SESSION_NAMES = {
+    upper_a: 'Upper A',    lower_a: 'Lower A',
+    upper_b: 'Upper B',    lower_b: 'Lower B',
+    push: 'Push',          pull: 'Pull',
+    legs: 'Legs',          full_a: 'Full Body A',
+    full_b: 'Full Body B', full_c: 'Full Body C'
+  };
+
+  window.addEventListener('load', function() {
     (async () => {
       try {
-        const session = await requireAuth();        // redirects to auth.html if not logged in
-        const user = session.user;
+        const session = await requireAuth();
+        currentUser = session.user;
 
-        // Ownership check — RLS already restricts to the user's own rows.
         const { data, error } = await supabaseClient
-          .from('purchases')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('product', 'fat_loss_blueprint')
-          .eq('status', 'active')
-          .limit(1);
+          .from('purchases').select('id')
+          .eq('user_id', currentUser.id).eq('product', 'fat_loss_blueprint')
+          .eq('status', 'active').limit(1);
 
         document.getElementById('authGate').style.display = 'none';
 
         if (!error && data && data.length > 0) {
           document.getElementById('programContent').style.display = 'block';
+          await loadUserProgram();
         } else {
           document.getElementById('lockedState').style.display = 'flex';
         }
@@ -660,15 +714,58 @@
     })();
   });
 
+  async function loadUserProgram() {
+    const { data } = await supabaseClient
+      .from('user_programs').select('*')
+      .eq('user_id', currentUser.id).eq('program_slug', 'fat_loss_blueprint')
+      .maybeSingle();
+
+    userProgram = data;
+    const days  = data ? String(data.training_days) : '3';
+    const keys  = data ? data.schedule_keys : SCHEDULES['3'];
+    const idx   = data ? data.current_index : 0;
+
+    // Restore schedule tab
+    document.querySelectorAll('.tab').forEach(t =>
+      t.classList.toggle('active', t.getAttribute('data-sched') === days));
+    document.querySelectorAll('.sched-panel').forEach(p =>
+      p.classList.toggle('active', p.getAttribute('data-panel') === days));
+
+    updateTodaySession(keys, idx);
+    document.getElementById('stickyCta').style.display = 'block';
+  }
+
+  function updateTodaySession(keys, idx) {
+    var key  = keys[idx % keys.length];
+    var name = SESSION_NAMES[key] || key;
+    document.getElementById('todaySessionName').textContent = name;
+    document.getElementById('startTodayBtn').href =
+      'workout.html?program=fat_loss_blueprint&session=' + key;
+  }
+
+  async function saveSchedule(days) {
+    var keys = SCHEDULES[days] || SCHEDULES['3'];
+    var idx  = userProgram ? userProgram.current_index : 0;
+    var { data } = await supabaseClient
+      .from('user_programs')
+      .upsert({
+        user_id: currentUser.id, program_slug: 'fat_loss_blueprint',
+        training_days: parseInt(days), schedule_keys: keys,
+        current_index: idx, updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id,program_slug' })
+      .select().single();
+    if (data) { userProgram = data; updateTodaySession(keys, idx); }
+  }
+
   // Schedule tab switching
-  document.addEventListener('click', function (e) {
+  document.addEventListener('click', function(e) {
     if (!e.target.classList.contains('tab')) return;
-    const sched = e.target.getAttribute('data-sched');
+    var sched = e.target.getAttribute('data-sched');
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     e.target.classList.add('active');
-    document.querySelectorAll('.sched-panel').forEach(p => {
-      p.classList.toggle('active', p.getAttribute('data-panel') === sched);
-    });
+    document.querySelectorAll('.sched-panel').forEach(p =>
+      p.classList.toggle('active', p.getAttribute('data-panel') === sched));
+    saveSchedule(sched);
   });
 </script>
 </body>

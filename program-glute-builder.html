@@ -277,6 +277,14 @@
     .nutrition-card li { font-size: 13px; color: var(--light); padding: 3px 0; }
     .nutrition-card .verdict { font-size: 12px; color: var(--muted); margin-top: 10px; font-style: italic; line-height: 1.5; }
 
+    /* Sticky CTA */
+    .sticky-cta { display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; background: rgba(5,5,5,0.97); backdrop-filter: blur(12px); border-top: 1px solid var(--border); padding: 14px 20px 18px; }
+    .sticky-cta-inner { max-width: 760px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .sticky-cta-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); font-weight: 700; margin-bottom: 4px; }
+    .sticky-cta-name { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 1px; color: var(--text); line-height: 1.1; }
+    .sticky-cta-btn { background: var(--red); color: white; border: none; border-radius: 10px; padding: 12px 22px; font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 2px; cursor: pointer; text-decoration: none; white-space: nowrap; transition: background 0.15s; flex-shrink: 0; }
+    .sticky-cta-btn:hover { background: #D11D27; }
+
     @media (max-width: 480px) {
       .grid-2, .nutrition-grid { grid-template-columns: 1fr; }
       .header-logo span { display: none; }
@@ -633,23 +641,100 @@
     </div>
 
   </div><!-- /container -->
+
+  <!-- Sticky Today's Session CTA -->
+  <div class="sticky-cta" id="stickyCta">
+    <div class="sticky-cta-inner">
+      <div>
+        <div class="sticky-cta-label">Today's Session</div>
+        <div class="sticky-cta-name" id="todaySessionName">—</div>
+      </div>
+      <a class="sticky-cta-btn" id="startTodayBtn" href="workout.html">Start Workout</a>
+    </div>
+  </div>
+
 </div><!-- /programContent -->
 
 <!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="supabase.js"></script>
 <script>
+  var PRODUCT_SLUG = 'glute_builder';
+  var PROGRAM_SLUG = 'glute_builder';
+  var SCHEDULES = {
+    '3': ['session_a', 'session_b', 'session_c'],
+    '4': ['session_a', 'upper', 'session_b', 'session_c']
+  };
+  var SESSION_NAMES = {
+    session_a: 'Session A — Hip Thrust Lead',
+    session_b: 'Session B — RDL Lead',
+    session_c: 'Session C — Squat Lead',
+    upper: 'Upper Body'
+  };
+
+  function updateTodaySession(scheduleKeys, currentIndex) {
+    var key = scheduleKeys[currentIndex % scheduleKeys.length];
+    var name = SESSION_NAMES[key] || key;
+    document.getElementById('todaySessionName').textContent = name;
+    document.getElementById('startTodayBtn').href =
+      'workout.html?program=' + PROGRAM_SLUG + '&session=' + key;
+    document.getElementById('stickyCta').style.display = 'block';
+  }
+
+  async function saveSchedule(days) {
+    var keys = SCHEDULES[String(days)];
+    if (!keys) return;
+    try {
+      var session = await requireAuth();
+      var { data: existing } = await supabaseClient
+        .from('user_programs')
+        .select('current_index')
+        .eq('user_id', session.user.id)
+        .eq('program_slug', PROGRAM_SLUG)
+        .maybeSingle();
+      var idx = (existing && existing.current_index) ? existing.current_index : 0;
+      await supabaseClient.from('user_programs').upsert({
+        user_id: session.user.id,
+        program_slug: PROGRAM_SLUG,
+        schedule_keys: keys,
+        current_index: idx
+      }, { onConflict: 'user_id,program_slug' });
+      updateTodaySession(keys, idx);
+    } catch (e) { /* non-fatal */ }
+  }
+
+  async function loadUserProgram(userId) {
+    try {
+      var { data: up } = await supabaseClient
+        .from('user_programs')
+        .select('schedule_keys, current_index')
+        .eq('user_id', userId)
+        .eq('program_slug', PROGRAM_SLUG)
+        .maybeSingle();
+      if (up && up.schedule_keys && up.schedule_keys.length) {
+        var days = String(up.schedule_keys.length);
+        document.querySelectorAll('.tab').forEach(function(t) {
+          t.classList.toggle('active', t.getAttribute('data-sched') === days);
+        });
+        document.querySelectorAll('.sched-panel').forEach(function(p) {
+          p.classList.toggle('active', p.getAttribute('data-panel') === days);
+        });
+        updateTodaySession(up.schedule_keys, up.current_index || 0);
+      }
+    } catch (e) { /* non-fatal */ }
+  }
+
   window.addEventListener('load', function () {
     (async () => {
       try {
-        const session = await requireAuth();
-        const user = session.user;
+        var session = await requireAuth();
+        var user = session.user;
 
-        const { data, error } = await supabaseClient
+        var { data, error } = await supabaseClient
           .from('purchases')
           .select('id')
           .eq('user_id', user.id)
-          .eq('product', 'glute_builder')
+          .eq('product', PRODUCT_SLUG)
           .eq('status', 'active')
           .limit(1);
 
@@ -657,6 +742,7 @@
 
         if (!error && data && data.length > 0) {
           document.getElementById('programContent').style.display = 'block';
+          await loadUserProgram(user.id);
         } else {
           document.getElementById('lockedState').style.display = 'flex';
         }
@@ -667,15 +753,15 @@
     })();
   });
 
-  // Schedule tab switching
   document.addEventListener('click', function (e) {
     if (!e.target.classList.contains('tab')) return;
-    const sched = e.target.getAttribute('data-sched');
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    var sched = e.target.getAttribute('data-sched');
+    document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
     e.target.classList.add('active');
-    document.querySelectorAll('.sched-panel').forEach(p => {
+    document.querySelectorAll('.sched-panel').forEach(function(p) {
       p.classList.toggle('active', p.getAttribute('data-panel') === sched);
     });
+    saveSchedule(sched);
   });
 </script>
 </body>
