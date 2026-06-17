@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Muscle Motivation – Today</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    :root {
+      --red: #ff0000;
+      --red-dim: rgba(255,0,0,0.12);
+      --bg: #050505;
+      --surface: #0f0f0f;
+      --surface2: #161616;
+      --border: #222;
+      --text: #ffffff;
+      --muted: #888;
+      --light: #ccc;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Barlow', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 0; opacity: 0.4;
+    }
+
+    /* Auth gate */
+    #authGate {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      min-height: 100vh; background: var(--bg);
+      position: relative; z-index: 10;
+    }
+    #authGate img { width: 90px; margin-bottom: 20px; opacity: 0.8; filter: drop-shadow(0 0 12px rgba(255,0,0,0.4)); }
+    #authGate p { color: #555; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; }
+
+    /* Header */
+    header {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(5,5,5,0.97);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      display: flex; align-items: center;
+      justify-content: space-between;
+      height: 64px;
+    }
+    .header-logo { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+    .header-logo img { height: 48px; filter: drop-shadow(0 0 8px rgba(255,0,0,0.35)); }
+    .header-logo span {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 14px; letter-spacing: 2px;
+      color: var(--red); text-transform: uppercase;
+    }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .nav-link {
+      font-size: 12px; font-weight: 600; letter-spacing: 1px;
+      text-transform: uppercase; color: var(--muted);
+      text-decoration: none; transition: color 0.2s;
+    }
+    .nav-link:hover { color: var(--red); }
+
+    #signOutBtn {
+      padding: 7px 16px;
+      font-size: 12px; font-family: 'Barlow', sans-serif;
+      font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
+      background: transparent; border: 1px solid rgba(255,0,0,0.35);
+      color: var(--muted); border-radius: 8px; cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    #signOutBtn:hover { border-color: var(--red); color: var(--red); }
+
+    /* Container */
+    .container {
+      max-width: 720px; margin: 0 auto;
+      padding: 24px 16px 80px;
+      position: relative; z-index: 1;
+    }
+
+    /* Welcome */
+    .welcome { margin-bottom: 24px; }
+    .welcome-greeting {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(20px, 5vw, 28px);
+      letter-spacing: 2px; text-transform: uppercase;
+      line-height: 1.2;
+    }
+    .welcome-greeting span { color: var(--red); }
+    .welcome-sub { font-size: 13px; color: var(--muted); margin-top: 6px; letter-spacing: 0.5px; }
+
+    /* Section label */
+    .section-label {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 10px; letter-spacing: 3px;
+      color: var(--red); text-transform: uppercase;
+      margin-bottom: 12px; margin-top: 28px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+    .section-label:first-of-type { margin-top: 0; }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 14px;
+      position: relative; overflow: hidden;
+    }
+    .card::before {
+      content: ''; position: absolute;
+      top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,0,0,0.25), transparent);
+    }
+    .card-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 11px; letter-spacing: 2px;
+      color: var(--muted); text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    /* Focus card */
+    .focus-text { font-size: 15px; line-height: 1.65; color: var(--light); }
+    .focus-text strong { color: var(--text); font-weight: 600; }
+
+    /* Targets grid */
+    .targets-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .target-stat {
+      background: var(--surface2);
+      border-radius: 12px; padding: 16px;
+      border-left: 3px solid var(--red);
+    }
+    .target-stat.full { grid-column: 1 / -1; }
+    .ts-label { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; font-weight: 600; }
+    .ts-value { font-family: 'Orbitron', sans-serif; font-size: 24px; color: var(--text); margin-top: 6px; line-height: 1; }
+    .ts-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    /* Coming-soon slots */
+    .soon-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+    }
+    .soon-stat {
+      background: var(--surface2);
+      border: 1px dashed var(--border);
+      border-radius: 12px; padding: 16px;
+      text-align: center;
+    }
+    .soon-stat .ss-label {
+      font-size: 11px; color: var(--muted); letter-spacing: 1px;
+      text-transform: uppercase; font-weight: 600;
+    }
+    .soon-stat .ss-value {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 22px; color: #333; margin: 8px 0 6px; line-height: 1;
+    }
+    .soon-stat .ss-coming {
+      font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase;
+      color: #444;
+    }
+
+    /* Quick actions grid */
+    .actions-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .action-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px 14px;
+      cursor: pointer; text-align: left;
+      transition: border-color 0.2s, background 0.2s;
+      display: flex; flex-direction: column; gap: 6px;
+      text-decoration: none;
+    }
+    .action-btn:hover { border-color: var(--red); background: #1a1a1a; }
+    .action-icon { color: var(--red); margin-bottom: 10px; }
+    .action-icon svg { width: 24px; height: 24px; stroke: currentColor; stroke-width: 2; }
+    .action-label { font-size: 13px; font-weight: 600; color: var(--light); letter-spacing: 0.3px; }
+    .action-sub { font-size: 11px; color: var(--muted); }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--surface2); border: 1px solid var(--red);
+      color: var(--text); padding: 12px 24px;
+      border-radius: 10px; font-size: 14px; font-weight: 600;
+      transition: transform 0.35s ease, opacity 0.35s ease;
+      opacity: 0; z-index: 999; white-space: nowrap;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+    @media (max-width: 480px) {
+      .targets-grid { grid-template-columns: 1fr; }
+      .target-stat.full { grid-column: 1; }
+      .actions-grid { grid-template-columns: 1fr 1fr; }
+      header { padding: 0 14px; }
+      .header-logo span { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Auth gate -->
+<div id="authGate">
+  <img src="logow.png" alt="Muscle Motivation">
+  <p>Loading your day...</p>
+</div>
+
+<!-- Today -->
+<div id="appContent" style="display:none;">
+
+  <header>
+    <a class="header-logo" href="app.html">
+      <img src="logow.png" alt="Muscle Motivation">
+      <span>Muscle Motivation</span>
+    </a>
+    <div class="header-right">
+      <a class="nav-link" href="app.html">Dashboard</a>
+      <button id="signOutBtn" onclick="signOut()">Sign Out</button>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Welcome -->
+    <div class="welcome">
+      <div class="welcome-greeting"><span id="dashGreeting">Good morning</span>, <span id="dashName">Champ</span></div>
+      <div class="welcome-sub" id="dashDate"></div>
+    </div>
+
+    <!-- Today's Focus -->
+    <div class="section-label">Today's Focus</div>
+    <div class="card">
+      <div class="card-title">Your Game Plan</div>
+      <div class="focus-text" id="focusText">—</div>
+    </div>
+
+    <!-- Today's Targets -->
+    <div class="section-label">Today's Targets</div>
+    <div class="card">
+      <div class="targets-grid">
+        <div class="target-stat full">
+          <div class="ts-label">Calories</div>
+          <div class="ts-value" id="tgtCalories">—</div>
+          <div class="ts-sub" id="tgtCalSub">—</div>
+        </div>
+        <div class="target-stat">
+          <div class="ts-label">Protein</div>
+          <div class="ts-value" id="tgtProtein">—</div>
+          <div class="ts-sub">grams / day</div>
+        </div>
+        <div class="target-stat">
+          <div class="ts-label">Carbs</div>
+          <div class="ts-value" id="tgtCarbs">—</div>
+          <div class="ts-sub">grams / day</div>
+        </div>
+        <div class="target-stat">
+          <div class="ts-label">Fats</div>
+          <div class="ts-value" id="tgtFats">—</div>
+          <div class="ts-sub">grams / day</div>
+        </div>
+        <div class="target-stat">
+          <div class="ts-label">Training Split</div>
+          <div class="ts-value" style="font-size:18px;" id="tgtSplit">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Daily Snapshot (coming soon) -->
+    <div class="section-label">Daily Snapshot</div>
+    <div class="card">
+      <div class="soon-grid">
+        <div class="soon-stat">
+          <div class="ss-label">Daily Score</div>
+          <div class="ss-value">—</div>
+          <div class="ss-coming">Phase 7</div>
+        </div>
+        <div class="soon-stat">
+          <div class="ss-label">Streak</div>
+          <div class="ss-value">—</div>
+          <div class="ss-coming">Phase 7</div>
+        </div>
+        <div class="soon-stat">
+          <div class="ss-label">Weight Trend</div>
+          <div class="ss-value">—</div>
+          <div class="ss-coming">Phase 4</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Action Center -->
+    <div class="section-label">Quick Actions</div>
+    <div class="actions-grid">
+      <button class="action-btn" onclick="showToast('Workout tracking coming in Phase 3!')">
+        <span class="action-icon"><i data-lucide="dumbbell"></i></span>
+        <span class="action-label">Start Workout</span>
+        <span class="action-sub">Begin today's session</span>
+      </button>
+      <button class="action-btn" onclick="showToast('Nutrition tracking coming in Phase 5!')">
+        <span class="action-icon"><i data-lucide="utensils"></i></span>
+        <span class="action-label">Log Meal</span>
+        <span class="action-sub">Track calories & macros</span>
+      </button>
+      <button class="action-btn" onclick="showToast('Weight tracking coming in Phase 4!')">
+        <span class="action-icon"><i data-lucide="scale"></i></span>
+        <span class="action-label">Log Weight</span>
+        <span class="action-sub">Record today's weigh-in</span>
+      </button>
+      <button class="action-btn" onclick="showToast('AI Coach coming in Phase 6!')">
+        <span class="action-icon"><i data-lucide="message-circle"></i></span>
+        <span class="action-label">Chat With Coach</span>
+        <span class="action-sub">Ask your AI coach</span>
+      </button>
+      <a class="action-btn" href="store.html">
+        <span class="action-icon"><i data-lucide="layout-grid"></i></span>
+        <span class="action-label">View Programs</span>
+        <span class="action-sub">Browse & unlock plans</span>
+      </a>
+      <a class="action-btn" href="calculator.html">
+        <span class="action-icon"><i data-lucide="calculator"></i></span>
+        <span class="action-label">Recalculate Goals</span>
+        <span class="action-sub">Open calculator tool</span>
+      </a>
+    </div>
+
+  </div><!-- /container -->
+</div><!-- /appContent -->
+
+<div class="toast" id="toast"></div>
+
+<!-- Supabase -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase.js"></script>
+<script>
+
+  window.addEventListener('load', function() {
+    (async () => {
+      try {
+        var session = await requireAuth();
+        var user    = session.user;
+        var profile = await getProfile(user.id);
+
+        // Safety net: if onboarding not complete, send them back
+        if (!profile || !profile.onboarding_complete) {
+          window.location.href = 'onboarding.html';
+          return;
+        }
+
+        var firstName = (profile.full_name || user.email).split(' ')[0];
+        document.getElementById('dashName').textContent = firstName;
+
+        // Time-of-day greeting
+        var hour = new Date().getHours();
+        var greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+        document.getElementById('dashGreeting').textContent = greeting;
+
+        // Date
+        document.getElementById('dashDate').textContent = new Date().toLocaleDateString('en-US', {
+          weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
+        });
+
+        // Targets
+        document.getElementById('tgtCalories').textContent = profile.target_calories ? profile.target_calories.toLocaleString() + ' kcal' : '—';
+        document.getElementById('tgtProtein').textContent  = profile.protein_target ? profile.protein_target + 'g' : '—';
+        document.getElementById('tgtCarbs').textContent    = profile.carb_target   ? profile.carb_target + 'g'   : '—';
+        document.getElementById('tgtFats').textContent     = profile.fat_target    ? profile.fat_target + 'g'    : '—';
+        document.getElementById('tgtSplit').textContent    = profile.training_split || '—';
+
+        // Calorie sub-label (deficit / surplus vs maintenance)
+        if (profile.target_calories && profile.maintenance_calories) {
+          var diff = Math.abs(profile.target_calories - profile.maintenance_calories);
+          document.getElementById('tgtCalSub').textContent = profile.target_calories < profile.maintenance_calories
+            ? diff + ' calorie deficit from maintenance'
+            : profile.target_calories > profile.maintenance_calories
+              ? diff + ' calorie surplus above maintenance'
+              : 'At maintenance';
+        }
+
+        // Today's focus — deterministic, built from the user's own plan
+        document.getElementById('focusText').innerHTML = buildFocus(profile, firstName);
+
+        // Reveal
+        document.getElementById('authGate').style.display   = 'none';
+        document.getElementById('appContent').style.display = 'block';
+        lucide.createIcons();
+
+      } catch (err) {
+        console.error('Today error:', err);
+        window.location.href = 'auth.html';
+      }
+    })();
+  });
+
+  // Build a focused, goal-aware game plan from the profile.
+  // Deterministic for now — the personalized AI coach arrives in Phase 6.
+  function buildFocus(profile, name) {
+    var cals    = profile.target_calories ? profile.target_calories.toLocaleString() : null;
+    var protein = profile.protein_target || null;
+    var lead = {
+      fatloss: 'You\'re in a calorie deficit today — fat loss is the mission.',
+      recomp:  'Recomp mode: eat near maintenance and let training drive the change.',
+      muscle:  'You\'re in a building surplus — fuel up and push your lifts.'
+    }[profile.goal] || 'Stay consistent and hit your targets today.';
+
+    var parts = ['<strong>' + lead + '</strong>'];
+    if (cals && protein) {
+      parts.push('Aim for <strong>' + cals + ' kcal</strong> and lock in <strong>' + protein + 'g of protein</strong> — protein first, everything else follows.');
+    } else if (protein) {
+      parts.push('Lock in <strong>' + protein + 'g of protein</strong> today — protein first, everything else follows.');
+    }
+    parts.push('Move your body, drink your water, and check back in tonight.');
+    return parts.join(' ');
+  }
+
+  function showToast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(function() { t.classList.remove('show'); }, 3000);
+  }
+
+</script>
+</body>
+</html>

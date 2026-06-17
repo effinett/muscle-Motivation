@@ -63,6 +63,12 @@
     }
     .header-right { display: flex; align-items: center; gap: 12px; }
     .user-name { font-size: 13px; color: var(--muted); }
+    .nav-link {
+      font-size: 12px; font-weight: 600; letter-spacing: 1px;
+      text-transform: uppercase; color: var(--muted);
+      text-decoration: none; transition: color 0.2s;
+    }
+    .nav-link:hover { color: var(--red); }
 
     #signOutBtn {
       padding: 7px 16px;
@@ -287,6 +293,7 @@
       <span>Muscle Motivation</span>
     </a>
     <div class="header-right">
+      <a class="nav-link" href="today.html">Today</a>
       <span class="user-name" id="headerName"></span>
       <button id="signOutBtn" onclick="signOut()">Sign Out</button>
     </div>
