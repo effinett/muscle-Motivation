@@ -116,8 +116,10 @@ Premium · Athletic · Clean · Masculine · Minimal · Motivating
 ### Typography
 | Font | Usage |
 |---|---|
-| **Bebas Neue** | Hero headlines, section titles, program titles, big numbers, CTAs |
-| **Inter** | Paragraphs, forms, dashboard labels, body copy, small text |
+| **Bebas Neue** | Hero headlines, section titles, program titles, big numbers, CTAs (20px+) |
+| **Barlow** | Paragraphs, forms, body copy, small labels/eyebrows/section tags (under 14px use Barlow 700 uppercase + letter-spacing, not Bebas Neue) |
+
+**Do NOT use Orbitron** — it reads sci-fi/gaming and contradicts the brand feel.
 
 ### Buttons
 - **Primary:** Deep red background · white text · bold uppercase · slight hover effect
