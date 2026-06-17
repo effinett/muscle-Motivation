@@ -216,6 +216,44 @@
     }
     .browse-link a:hover { color: var(--red); }
 
+    /* Start Workout button */
+    .btn-start {
+      display: block; width: 100%; margin-top: 18px;
+      padding: 13px 20px;
+      background: var(--red); border: none; border-radius: 8px;
+      color: white; text-align: center;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 18px; letter-spacing: 2px;
+      text-decoration: none; text-transform: uppercase;
+      transition: opacity 0.2s;
+    }
+    .btn-start:hover { opacity: 0.85; }
+
+    /* Quick Actions */
+    .quick-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .quick-btn {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 8px;
+      background: var(--surface-1);
+      border: 1px solid var(--border-2);
+      border-radius: 10px; padding: 18px 12px;
+      text-decoration: none; color: var(--text);
+      transition: border-color 0.2s, background 0.2s;
+      cursor: pointer;
+    }
+    .quick-btn:hover { border-color: var(--red); background: var(--surface-2); }
+    .quick-btn-icon { color: var(--red); }
+    .quick-btn-label {
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      color: var(--text-2);
+    }
+
     /* Toast */
     .toast {
       position: fixed; bottom: 24px; left: 50%;
@@ -278,6 +316,28 @@
       </div>
       <div class="today-divider"></div>
       <div class="focus-body" id="dashFocusText">—</div>
+      <a class="btn-start" href="#">Start Workout</a>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="section-label">Quick Actions</div>
+    <div class="quick-grid">
+      <a class="quick-btn" href="#">
+        <span class="quick-btn-icon"><i data-lucide="dumbbell"></i></span>
+        <span class="quick-btn-label">Log Workout</span>
+      </a>
+      <a class="quick-btn" href="#">
+        <span class="quick-btn-icon"><i data-lucide="scale"></i></span>
+        <span class="quick-btn-label">Log Weight</span>
+      </a>
+      <a class="quick-btn" href="#">
+        <span class="quick-btn-icon"><i data-lucide="utensils"></i></span>
+        <span class="quick-btn-label">Log Food</span>
+      </a>
+      <a class="quick-btn" href="#">
+        <span class="quick-btn-icon"><i data-lucide="bot"></i></span>
+        <span class="quick-btn-label">AI Coach</span>
+      </a>
     </div>
 
     <!-- Your Numbers -->
