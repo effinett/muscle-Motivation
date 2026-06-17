@@ -157,15 +157,50 @@
       font-weight: 600; margin-top: 6px;
     }
 
-    /* Today card */
-    .today-placeholder {
-      background: var(--surface2);
-      border-radius: 12px; padding: 20px;
-      border: 1px dashed var(--border);
-      text-align: center;
+    /* Today's Workout card */
+    .workout-top {
+      display: flex; align-items: flex-start;
+      justify-content: space-between; margin-bottom: 18px;
     }
-    .today-placeholder p { color: var(--muted); font-size: 14px; line-height: 1.6; }
-    .today-placeholder .coming { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #444; margin-top: 8px; }
+    .workout-est {
+      font-size: 11px; color: var(--muted);
+      letter-spacing: 1px; text-transform: uppercase;
+      white-space: nowrap; padding-top: 2px;
+    }
+    .skeleton-rows { margin-bottom: 20px; }
+    .skeleton-row {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      padding: 12px 0; border-bottom: 1px solid var(--border);
+    }
+    .skeleton-row:last-child { border-bottom: none; }
+    .skeleton-dot {
+      height: 9px; border-radius: 5px;
+      background: var(--border); display: block;
+    }
+    .skeleton-sets {
+      font-size: 12px; color: #333;
+      font-family: 'Orbitron', sans-serif; letter-spacing: 1px;
+    }
+    .btn-start-workout {
+      width: 100%; padding: 16px;
+      background: var(--red); border: none;
+      border-radius: 12px; color: white;
+      font-size: 13px; font-weight: 700;
+      font-family: 'Orbitron', sans-serif;
+      letter-spacing: 2px; text-transform: uppercase;
+      cursor: pointer; margin-bottom: 10px;
+      transition: opacity 0.2s, transform 0.15s;
+    }
+    .btn-start-workout:hover { opacity: 0.85; transform: translateY(-1px); }
+    .workout-phase-note {
+      font-size: 10px; color: #444;
+      text-align: center; letter-spacing: 1.5px; text-transform: uppercase;
+    }
+
+    /* Daily Focus card */
+    .focus-body { font-size: 15px; line-height: 1.7; color: var(--light); }
+    .focus-body strong { color: var(--text); font-weight: 600; }
 
     /* Progress snapshot */
     .progress-row {
@@ -293,7 +328,6 @@
       <span>Muscle Motivation</span>
     </a>
     <div class="header-right">
-      <a class="nav-link" href="today.html">Today</a>
       <span class="user-name" id="headerName"></span>
       <button id="signOutBtn" onclick="signOut()">Sign Out</button>
     </div>
@@ -305,6 +339,46 @@
     <div class="welcome">
       <div class="welcome-greeting">Welcome back, <span id="dashName">Champ</span> 💪</div>
       <div class="welcome-sub" id="dashDate"></div>
+    </div>
+
+    <!-- Today's Workout -->
+    <div class="section-label">Today's Workout</div>
+    <div class="card">
+      <div class="workout-top">
+        <div>
+          <div class="card-title">Your training split</div>
+          <div class="split-badge" id="dashSplit">—</div>
+        </div>
+        <div class="workout-est">Est. 45–60 min</div>
+      </div>
+      <div class="skeleton-rows">
+        <div class="skeleton-row">
+          <div class="skeleton-dot" style="width:120px;"></div>
+          <div class="skeleton-sets">— × — × —</div>
+        </div>
+        <div class="skeleton-row">
+          <div class="skeleton-dot" style="width:90px;"></div>
+          <div class="skeleton-sets">— × — × —</div>
+        </div>
+        <div class="skeleton-row">
+          <div class="skeleton-dot" style="width:140px;"></div>
+          <div class="skeleton-sets">— × — × —</div>
+        </div>
+        <div class="skeleton-row">
+          <div class="skeleton-dot" style="width:75px;"></div>
+          <div class="skeleton-sets">— × — × —</div>
+        </div>
+      </div>
+      <button class="btn-start-workout" onclick="showToast('Workout tracking coming in Phase 3!')">
+        ▶  Start Workout
+      </button>
+      <div class="workout-phase-note">Full workout logging unlocks in Phase 3</div>
+    </div>
+
+    <!-- Daily Focus -->
+    <div class="section-label">Daily Focus</div>
+    <div class="card">
+      <div class="focus-body" id="dashFocusText">—</div>
     </div>
 
     <!-- Current Targets -->
@@ -336,19 +410,6 @@
           <div class="ts-value" id="dashFats">—</div>
           <div class="ts-sub">grams / day</div>
         </div>
-        <div class="target-stat">
-          <div class="ts-label">Training Split</div>
-          <div class="split-badge" id="dashSplit">—</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Today's Workout -->
-    <div class="section-label">Today's Workout</div>
-    <div class="card">
-      <div class="today-placeholder">
-        <p>Your personalized workout plans are coming soon.</p>
-        <div class="coming">Phase 2 Feature</div>
       </div>
     </div>
 
@@ -380,31 +441,23 @@
     <!-- Quick Actions -->
     <div class="section-label">Quick Actions</div>
     <div class="actions-grid">
-      <button class="action-btn" onclick="showToast('Weight logging coming in Phase 2!')">
-        <span class="action-icon">
-          <i data-lucide="scale"></i>
-        </span>
-        <span class="action-label">Log Weight</span>
-        <span class="action-sub">Track your progress</span>
-      </button>
-      <button class="action-btn" onclick="showToast('Meal logging coming in Phase 2!')">
-        <span class="action-icon">
-          <i data-lucide="utensils"></i>
-        </span>
-        <span class="action-label">Log Meal</span>
-        <span class="action-sub">Track calories & macros</span>
-      </button>
-      <button class="action-btn" onclick="showToast('Workout logging coming in Phase 2!')">
-        <span class="action-icon">
-          <i data-lucide="dumbbell"></i>
-        </span>
+      <button class="action-btn" onclick="showToast('Workout logging coming in Phase 3!')">
+        <span class="action-icon"><i data-lucide="dumbbell"></i></span>
         <span class="action-label">Log Workout</span>
         <span class="action-sub">Record your session</span>
       </button>
+      <button class="action-btn" onclick="showToast('Weight logging coming in Phase 4!')">
+        <span class="action-icon"><i data-lucide="scale"></i></span>
+        <span class="action-label">Log Weight</span>
+        <span class="action-sub">Track your progress</span>
+      </button>
+      <button class="action-btn" onclick="showToast('Meal logging coming in Phase 5!')">
+        <span class="action-icon"><i data-lucide="utensils"></i></span>
+        <span class="action-label">Log Meal</span>
+        <span class="action-sub">Track calories & macros</span>
+      </button>
       <a class="action-btn" href="calculator.html">
-        <span class="action-icon">
-          <i data-lucide="calculator"></i>
-        </span>
+        <span class="action-icon"><i data-lucide="calculator"></i></span>
         <span class="action-label">Recalculate Goals</span>
         <span class="action-sub">Open calculator tool</span>
       </a>
@@ -505,6 +558,9 @@
             : diff + ' calorie surplus above maintenance';
         }
 
+        // Daily Focus
+        document.getElementById('dashFocusText').innerHTML = buildFocus(profile);
+
         // Progress snapshot
         document.getElementById('dashStartWeight').textContent  = profile.weight_lbs      ? profile.weight_lbs + ' lbs'      : '—';
         document.getElementById('dashGoalWeight').textContent   = profile.goal_weight_lbs ? profile.goal_weight_lbs + ' lbs' : 'Not set';
@@ -529,6 +585,24 @@
       }
     })();
   });
+
+  function buildFocus(profile) {
+    var cals    = profile.target_calories ? profile.target_calories.toLocaleString() : null;
+    var protein = profile.protein_target || null;
+    var lead = {
+      fatloss: "You're in a calorie deficit today — fat loss is the mission.",
+      recomp:  'Recomp mode: eat near maintenance and let training drive the change.',
+      muscle:  "You're in a building surplus — fuel up and push your lifts."
+    }[profile.goal] || 'Stay consistent and hit your targets today.';
+    var parts = ['<strong>' + lead + '</strong>'];
+    if (cals && protein) {
+      parts.push('Aim for <strong>' + cals + ' kcal</strong> and lock in <strong>' + protein + 'g of protein</strong> — protein first, everything else follows.');
+    } else if (protein) {
+      parts.push('Lock in <strong>' + protein + 'g of protein</strong> today — protein first, everything else follows.');
+    }
+    parts.push('Move your body, drink your water, and check back in tonight.');
+    return parts.join(' ');
+  }
 
   function showToast(msg) {
     var t = document.getElementById('toast');
