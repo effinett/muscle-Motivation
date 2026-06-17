@@ -4,19 +4,26 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Muscle Motivation – Dashboard</title>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
     :root {
-      --red: #ff0000;
-      --red-dim: rgba(255,0,0,0.12);
-      --bg: #050505;
-      --surface: #0f0f0f;
-      --surface2: #161616;
-      --border: #222;
-      --text: #ffffff;
-      --muted: #888;
-      --light: #ccc;
+      --red:          #d91a1a;
+      --red-muted:    rgba(217,26,26,0.12);
+      --red-border:   rgba(217,26,26,0.28);
+      --bg:           #080808;
+      --surface-1:    #0d0d0d;
+      --surface-2:    #131313;
+      --surface-3:    #1a1a1a;
+      --border-1:     #1c1c1c;
+      --border-2:     #252525;
+      --border-3:     #2f2f2f;
+      --text:         #ffffff;
+      --text-2:       #a0a0a0;
+      --text-muted:   #555555;
+      --green:        #22c55e;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -26,288 +33,206 @@
       min-height: 100vh;
       overflow-x: hidden;
     }
-    body::before {
-      content: '';
-      position: fixed; inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
-      pointer-events: none; z-index: 0; opacity: 0.4;
-    }
 
     /* Auth gate */
     #authGate {
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
-      min-height: 100vh; background: var(--bg);
-      position: relative; z-index: 10;
+      min-height: 100vh;
     }
-    #authGate img { width: 90px; margin-bottom: 20px; opacity: 0.8; filter: drop-shadow(0 0 12px rgba(255,0,0,0.4)); }
-    #authGate p { color: #555; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; }
+    #authGate img { width: 72px; margin-bottom: 16px; opacity: 0.6; }
+    #authGate p {
+      color: var(--text-muted); font-size: 11px;
+      letter-spacing: 2.5px; text-transform: uppercase;
+    }
 
     /* Header */
     header {
       position: sticky; top: 0; z-index: 100;
-      background: rgba(5,5,5,0.97);
+      background: rgba(8,8,8,0.97);
       backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid var(--border-1);
       padding: 0 20px;
       display: flex; align-items: center;
       justify-content: space-between;
-      height: 64px;
+      height: 60px;
     }
-    .header-logo { display: flex; align-items: center; gap: 12px; text-decoration: none; }
-    .header-logo img { height: 48px; filter: drop-shadow(0 0 8px rgba(255,0,0,0.35)); }
+    .header-logo {
+      display: flex; align-items: center; gap: 10px;
+      text-decoration: none;
+    }
+    .header-logo img { height: 42px; }
     .header-logo span {
-      font-family: 'Orbitron', sans-serif;
-      font-size: 14px; letter-spacing: 2px;
-      color: var(--red); text-transform: uppercase;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 18px; letter-spacing: 2.5px;
+      color: var(--text); text-transform: uppercase;
     }
-    .header-right { display: flex; align-items: center; gap: 12px; }
-    .user-name { font-size: 13px; color: var(--muted); }
-    .nav-link {
-      font-size: 12px; font-weight: 600; letter-spacing: 1px;
-      text-transform: uppercase; color: var(--muted);
-      text-decoration: none; transition: color 0.2s;
-    }
-    .nav-link:hover { color: var(--red); }
-
+    .header-right { display: flex; align-items: center; gap: 14px; }
+    .user-name { font-size: 13px; color: var(--text-muted); }
     #signOutBtn {
-      padding: 7px 16px;
-      font-size: 12px; font-family: 'Barlow', sans-serif;
-      font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
-      background: transparent; border: 1px solid rgba(255,0,0,0.35);
-      color: var(--muted); border-radius: 8px; cursor: pointer;
+      padding: 6px 14px;
+      font-size: 11px; font-family: 'Barlow', sans-serif;
+      font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+      background: transparent; border: 1px solid var(--border-2);
+      color: var(--text-muted); border-radius: 6px; cursor: pointer;
       transition: border-color 0.2s, color 0.2s;
     }
-    #signOutBtn:hover { border-color: var(--red); color: var(--red); }
+    #signOutBtn:hover { border-color: var(--border-3); color: var(--text-2); }
 
     /* Container */
     .container {
-      max-width: 720px; margin: 0 auto;
-      padding: 24px 16px 80px;
-      position: relative; z-index: 1;
+      max-width: 680px; margin: 0 auto;
+      padding: 28px 16px 80px;
     }
 
     /* Welcome */
-    .welcome {
-      margin-bottom: 24px;
-    }
+    .welcome { margin-bottom: 36px; }
     .welcome-greeting {
-      font-family: 'Orbitron', sans-serif;
-      font-size: clamp(20px, 5vw, 28px);
-      letter-spacing: 2px; text-transform: uppercase;
-      line-height: 1.2;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(34px, 7vw, 46px);
+      letter-spacing: 1.5px; text-transform: uppercase;
+      line-height: 1.1;
     }
     .welcome-greeting span { color: var(--red); }
-    .welcome-sub { font-size: 13px; color: var(--muted); margin-top: 6px; letter-spacing: 0.5px; }
+    .welcome-sub {
+      font-size: 13px; color: var(--text-muted);
+      margin-top: 5px;
+    }
 
     /* Section label */
     .section-label {
-      font-family: 'Orbitron', sans-serif;
-      font-size: 10px; letter-spacing: 3px;
+      font-family: 'Barlow', sans-serif;
+      font-size: 11px; font-weight: 700; letter-spacing: 2px;
       color: var(--red); text-transform: uppercase;
-      margin-bottom: 12px; margin-top: 28px;
+      margin-bottom: 12px; margin-top: 32px;
       display: flex; align-items: center; gap: 10px;
     }
-    .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
-    .section-label:first-of-type { margin-top: 0; }
+    .section-label::after {
+      content: ''; flex: 1; height: 1px; background: var(--border-1);
+    }
 
     /* Card */
     .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 20px;
-      margin-bottom: 14px;
-      position: relative; overflow: hidden;
+      background: var(--surface-1);
+      border: 1px solid var(--border-2);
+      border-radius: 10px;
+      padding: 20px 22px;
+      margin-bottom: 12px;
     }
-    .card::before {
-      content: ''; position: absolute;
-      top: 0; left: 0; right: 0; height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(255,0,0,0.25), transparent);
-    }
-    .card-title {
-      font-family: 'Orbitron', sans-serif;
-      font-size: 11px; letter-spacing: 2px;
-      color: var(--muted); text-transform: uppercase;
-      margin-bottom: 14px;
-    }
+    .card-featured { border-top: 2px solid var(--red); }
 
-    /* Targets grid */
-    .targets-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
+    /* Today card */
+    .today-header {
+      display: flex; align-items: flex-start;
+      justify-content: space-between; gap: 16px;
+      margin-bottom: 16px;
     }
-    .target-stat {
-      background: var(--surface2);
-      border-radius: 12px; padding: 16px;
-      border-left: 3px solid var(--red);
+    .today-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+      text-transform: uppercase; color: var(--text-muted);
+      margin-bottom: 6px;
     }
-    .target-stat.full { grid-column: 1 / -1; }
-    .ts-label { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; font-weight: 600; }
-    .ts-value { font-family: 'Orbitron', sans-serif; font-size: 24px; color: var(--text); margin-top: 6px; line-height: 1; }
-    .ts-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
-
     .split-badge {
       display: inline-block;
-      background: var(--red-dim);
-      border: 1px solid rgba(255,0,0,0.25);
-      color: var(--red); border-radius: 8px;
-      padding: 4px 12px; font-size: 13px;
-      font-weight: 600; margin-top: 6px;
+      background: var(--red-muted);
+      border: 1px solid var(--red-border);
+      color: var(--red); border-radius: 6px;
+      padding: 4px 10px; font-size: 13px;
+      font-weight: 700;
     }
-
-    /* Today's Workout card */
-    .workout-top {
-      display: flex; align-items: flex-start;
-      justify-content: space-between; margin-bottom: 18px;
+    .goal-tag {
+      font-size: 12px; color: var(--text-muted);
+      font-weight: 600; text-align: right;
+      white-space: nowrap; line-height: 1.5;
+      padding-top: 2px;
     }
-    .workout-est {
-      font-size: 11px; color: var(--muted);
-      letter-spacing: 1px; text-transform: uppercase;
-      white-space: nowrap; padding-top: 2px;
-    }
-    .skeleton-rows { margin-bottom: 20px; }
-    .skeleton-row {
-      display: flex; align-items: center;
-      justify-content: space-between;
-      padding: 12px 0; border-bottom: 1px solid var(--border);
-    }
-    .skeleton-row:last-child { border-bottom: none; }
-    .skeleton-dot {
-      height: 9px; border-radius: 5px;
-      background: var(--border); display: block;
-    }
-    .skeleton-sets {
-      font-size: 12px; color: #333;
-      font-family: 'Orbitron', sans-serif; letter-spacing: 1px;
-    }
-    .btn-start-workout {
-      width: 100%; padding: 16px;
-      background: var(--red); border: none;
-      border-radius: 12px; color: white;
-      font-size: 13px; font-weight: 700;
-      font-family: 'Orbitron', sans-serif;
-      letter-spacing: 2px; text-transform: uppercase;
-      cursor: pointer; margin-bottom: 10px;
-      transition: opacity 0.2s, transform 0.15s;
-    }
-    .btn-start-workout:hover { opacity: 0.85; transform: translateY(-1px); }
-    .workout-phase-note {
-      font-size: 10px; color: #444;
-      text-align: center; letter-spacing: 1.5px; text-transform: uppercase;
-    }
-
-    /* Daily Focus card */
-    .focus-body { font-size: 15px; line-height: 1.7; color: var(--light); }
+    .today-divider { height: 1px; background: var(--border-1); margin: 16px 0; }
+    .focus-body { font-size: 15px; line-height: 1.75; color: var(--text-2); }
     .focus-body strong { color: var(--text); font-weight: 600; }
 
-    /* Progress snapshot */
-    .progress-row {
-      display: flex; align-items: center;
-      justify-content: space-between;
-      padding: 12px 0;
-      border-bottom: 1px solid var(--border);
-    }
-    .progress-row:last-child { border-bottom: none; }
-    .pr-label { font-size: 14px; color: var(--light); }
-    .pr-value { font-size: 14px; font-weight: 600; color: var(--text); }
-    .pr-value.muted { color: var(--muted); }
-
-    /* Quick actions grid */
-    .actions-grid {
+    /* Numbers card */
+    .numbers-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 10px;
     }
-    .action-btn {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 12px; padding: 16px 14px;
-      cursor: pointer; text-align: left;
-      transition: border-color 0.2s, background 0.2s;
-      display: flex; flex-direction: column; gap: 6px;
-      text-decoration: none;
+    .stat-cell {
+      background: var(--surface-2);
+      border-radius: 8px; padding: 14px 16px;
+      border-left: 2px solid var(--red);
     }
-    .action-btn:hover { border-color: var(--red); background: #1a1a1a; }
-    .action-icon {
-  color: var(--red);
-  margin-bottom: 10px;
-}
-
-.action-icon svg {
-  width: 24px;
-  height: 24px;
-  stroke: currentColor;
-  stroke-width: 2;
-}
-    .action-label {
-      font-size: 13px; font-weight: 600;
-      color: var(--light); letter-spacing: 0.3px;
+    .stat-cell.full { grid-column: 1 / -1; }
+    .stat-label {
+      font-size: 11px; font-weight: 700;
+      color: var(--text-muted); letter-spacing: 1.5px;
+      text-transform: uppercase;
     }
-    .action-sub { font-size: 11px; color: var(--muted); }
+    .stat-value {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 28px; color: var(--text);
+      margin-top: 4px; line-height: 1;
+      letter-spacing: 0.5px;
+    }
+    .stat-sub { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
 
-    /* Plans card */
+    /* Programs card */
     .plan-item {
       display: flex; align-items: center;
       justify-content: space-between; gap: 16px;
-      padding: 14px 0; border-bottom: 1px solid var(--border);
+      padding: 14px 0; border-bottom: 1px solid var(--border-1);
     }
     .plan-item:last-child { border-bottom: none; }
-    .plan-info .plan-name { font-size: 14px; font-weight: 600; }
-    .plan-info .plan-desc { font-size: 12px; color: var(--muted); margin-top: 3px; }
+    .plan-name { font-size: 14px; font-weight: 600; }
+    .plan-desc { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
     .plan-price {
-      font-family: 'Orbitron', sans-serif;
-      font-size: 18px; color: var(--red); white-space: nowrap;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 22px; color: var(--red);
+      white-space: nowrap; letter-spacing: 0.5px;
     }
+    .plan-action { display: flex; align-items: center; gap: 12px; }
     .btn-buy {
       padding: 8px 16px; background: var(--red);
-      border: none; border-radius: 8px; color: white;
-      font-size: 12px; font-weight: 700; font-family: 'Barlow', sans-serif;
+      border: none; border-radius: 6px; color: white;
+      font-size: 12px; font-weight: 700;
+      font-family: 'Barlow', sans-serif;
       letter-spacing: 1px; text-transform: uppercase;
       cursor: pointer; transition: opacity 0.2s;
-      white-space: nowrap;
+      white-space: nowrap; text-decoration: none;
+      display: inline-block;
     }
     .btn-buy:hover { opacity: 0.85; }
-
     .owned-badge {
       font-size: 12px; font-weight: 700;
       letter-spacing: 1px; text-transform: uppercase;
-      color: #4dff9e; white-space: nowrap;
+      color: var(--green); white-space: nowrap;
       text-decoration: none;
     }
     a.owned-badge:hover { text-decoration: underline; }
-
-    .browse-programs-link {
-      padding-top: 14px;
-      text-align: right;
-    }
-    .browse-programs-link a {
+    .browse-link { padding-top: 14px; text-align: right; }
+    .browse-link a {
       font-size: 12px; font-weight: 600;
-      color: var(--muted); text-decoration: none;
-      letter-spacing: 0.5px;
+      color: var(--text-muted); text-decoration: none;
       transition: color 0.2s;
     }
-    .browse-programs-link a:hover { color: var(--red); }
+    .browse-link a:hover { color: var(--red); }
 
     /* Toast */
     .toast {
       position: fixed; bottom: 24px; left: 50%;
       transform: translateX(-50%) translateY(80px);
-      background: var(--surface2); border: 1px solid var(--red);
+      background: var(--surface-2); border: 1px solid var(--border-3);
       color: var(--text); padding: 12px 24px;
-      border-radius: 10px; font-size: 14px; font-weight: 600;
+      border-radius: 8px; font-size: 14px; font-weight: 600;
       transition: transform 0.35s ease, opacity 0.35s ease;
       opacity: 0; z-index: 999; white-space: nowrap;
     }
     .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 
     @media (max-width: 480px) {
-      .targets-grid { grid-template-columns: 1fr; }
-      .target-stat.full { grid-column: 1; }
-      .actions-grid { grid-template-columns: 1fr 1fr; }
       header { padding: 0 14px; }
       .header-logo span { display: none; }
+      .container { padding: 20px 12px 80px; }
+      .numbers-grid { grid-template-columns: 1fr 1fr; }
     }
   </style>
 </head>
@@ -316,7 +241,7 @@
 <!-- Auth gate -->
 <div id="authGate">
   <img src="logow.png" alt="Muscle Motivation">
-  <p>Loading your dashboard...</p>
+  <p>Loading...</p>
 </div>
 
 <!-- Dashboard -->
@@ -337,168 +262,94 @@
 
     <!-- Welcome -->
     <div class="welcome">
-      <div class="welcome-greeting">Welcome back, <span id="dashName">Champ</span> 💪</div>
+      <div class="welcome-greeting">Good to see you, <span id="dashName">—</span></div>
       <div class="welcome-sub" id="dashDate"></div>
     </div>
 
-    <!-- Today's Workout -->
-    <div class="section-label">Today's Workout</div>
-    <div class="card">
-      <div class="workout-top">
+    <!-- Today -->
+    <div class="section-label">Today</div>
+    <div class="card card-featured">
+      <div class="today-header">
         <div>
-          <div class="card-title">Your training split</div>
+          <div class="today-label">Training Split</div>
           <div class="split-badge" id="dashSplit">—</div>
         </div>
-        <div class="workout-est">Est. 45–60 min</div>
+        <div class="goal-tag" id="dashGoalTag">—</div>
       </div>
-      <div class="skeleton-rows">
-        <div class="skeleton-row">
-          <div class="skeleton-dot" style="width:120px;"></div>
-          <div class="skeleton-sets">— × — × —</div>
-        </div>
-        <div class="skeleton-row">
-          <div class="skeleton-dot" style="width:90px;"></div>
-          <div class="skeleton-sets">— × — × —</div>
-        </div>
-        <div class="skeleton-row">
-          <div class="skeleton-dot" style="width:140px;"></div>
-          <div class="skeleton-sets">— × — × —</div>
-        </div>
-        <div class="skeleton-row">
-          <div class="skeleton-dot" style="width:75px;"></div>
-          <div class="skeleton-sets">— × — × —</div>
-        </div>
-      </div>
-      <button class="btn-start-workout" onclick="showToast('Workout tracking coming in Phase 3!')">
-        ▶  Start Workout
-      </button>
-      <div class="workout-phase-note">Full workout logging unlocks in Phase 3</div>
-    </div>
-
-    <!-- Daily Focus -->
-    <div class="section-label">Daily Focus</div>
-    <div class="card">
+      <div class="today-divider"></div>
       <div class="focus-body" id="dashFocusText">—</div>
     </div>
 
-    <!-- Current Targets -->
-    <div class="section-label">Your Targets</div>
+    <!-- Your Numbers -->
+    <div class="section-label">Your Numbers</div>
     <div class="card">
-      <div class="card-title">Daily Goals</div>
-      <div class="targets-grid">
-        <div class="target-stat full">
-          <div class="ts-label">Goal</div>
-          <div class="ts-value" style="font-size:18px;" id="dashGoal">—</div>
+      <div class="numbers-grid">
+        <div class="stat-cell full">
+          <div class="stat-label">Target Calories</div>
+          <div class="stat-value" id="dashCalories">—</div>
+          <div class="stat-sub" id="dashCalSub"></div>
         </div>
-        <div class="target-stat full">
-          <div class="ts-label">Target Calories</div>
-          <div class="ts-value" id="dashCalories">—</div>
-          <div class="ts-sub" id="dashCalSub">—</div>
+        <div class="stat-cell">
+          <div class="stat-label">Protein</div>
+          <div class="stat-value" id="dashProtein">—</div>
+          <div class="stat-sub">grams / day</div>
         </div>
-        <div class="target-stat">
-          <div class="ts-label">Protein</div>
-          <div class="ts-value" id="dashProtein">—</div>
-          <div class="ts-sub">grams / day</div>
+        <div class="stat-cell">
+          <div class="stat-label">Carbs</div>
+          <div class="stat-value" id="dashCarbs">—</div>
+          <div class="stat-sub">grams / day</div>
         </div>
-        <div class="target-stat">
-          <div class="ts-label">Carbs</div>
-          <div class="ts-value" id="dashCarbs">—</div>
-          <div class="ts-sub">grams / day</div>
+        <div class="stat-cell">
+          <div class="stat-label">Fats</div>
+          <div class="stat-value" id="dashFats">—</div>
+          <div class="stat-sub">grams / day</div>
         </div>
-        <div class="target-stat">
-          <div class="ts-label">Fats</div>
-          <div class="ts-value" id="dashFats">—</div>
-          <div class="ts-sub">grams / day</div>
+        <div class="stat-cell">
+          <div class="stat-label">Starting Weight</div>
+          <div class="stat-value" id="dashStartWeight">—</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">Goal Weight</div>
+          <div class="stat-value" id="dashGoalWeight">—</div>
         </div>
       </div>
     </div>
 
-    <!-- Progress Snapshot -->
-    <div class="section-label">Progress Snapshot</div>
+    <!-- Programs -->
+    <div class="section-label">Programs</div>
     <div class="card">
-      <div class="progress-row">
-        <span class="pr-label">Starting Weight</span>
-        <span class="pr-value" id="dashStartWeight">—</span>
-      </div>
-      <div class="progress-row">
-        <span class="pr-label">Goal Weight</span>
-        <span class="pr-value" id="dashGoalWeight">—</span>
-      </div>
-      <div class="progress-row">
-        <span class="pr-label">Current Weight</span>
-        <span class="pr-value muted">Log below to track</span>
-      </div>
-      <div class="progress-row">
-        <span class="pr-label">Maintenance Calories</span>
-        <span class="pr-value" id="dashMaintenance">—</span>
-      </div>
-      <div class="progress-row">
-        <span class="pr-label">Member Since</span>
-        <span class="pr-value" id="dashSince">—</span>
-      </div>
-    </div>
-
-    <!-- Quick Actions -->
-    <div class="section-label">Quick Actions</div>
-    <div class="actions-grid">
-      <button class="action-btn" onclick="showToast('Workout logging coming in Phase 3!')">
-        <span class="action-icon"><i data-lucide="dumbbell"></i></span>
-        <span class="action-label">Log Workout</span>
-        <span class="action-sub">Record your session</span>
-      </button>
-      <button class="action-btn" onclick="showToast('Weight logging coming in Phase 4!')">
-        <span class="action-icon"><i data-lucide="scale"></i></span>
-        <span class="action-label">Log Weight</span>
-        <span class="action-sub">Track your progress</span>
-      </button>
-      <button class="action-btn" onclick="showToast('Meal logging coming in Phase 5!')">
-        <span class="action-icon"><i data-lucide="utensils"></i></span>
-        <span class="action-label">Log Meal</span>
-        <span class="action-sub">Track calories & macros</span>
-      </button>
-      <a class="action-btn" href="calculator.html">
-        <span class="action-icon"><i data-lucide="calculator"></i></span>
-        <span class="action-label">Recalculate Goals</span>
-        <span class="action-sub">Open calculator tool</span>
-      </a>
-    </div>
-
-    <!-- Plans / Upgrade -->
-    <div class="section-label">Workout Plans</div>
-    <div class="card">
-      <div class="card-title">Available Programs</div>
       <div class="plan-item" data-product="fat_loss_blueprint">
-        <div class="plan-info">
+        <div>
           <div class="plan-name">90 Day Fat Loss Blueprint</div>
           <div class="plan-desc">12-week fat loss system</div>
         </div>
-        <div class="plan-action" style="display:flex;align-items:center;gap:12px;">
+        <div class="plan-action">
           <span class="plan-price">$49</span>
           <a class="btn-buy" href="store.html">Buy</a>
         </div>
       </div>
       <div class="plan-item" data-product="muscle_gain">
-        <div class="plan-info">
+        <div>
           <div class="plan-name">Muscle Gain</div>
           <div class="plan-desc">8-week hypertrophy program</div>
         </div>
-        <div class="plan-action" style="display:flex;align-items:center;gap:12px;">
+        <div class="plan-action">
           <span class="plan-price">$59</span>
           <a class="btn-buy" href="store.html">Buy</a>
         </div>
       </div>
       <div class="plan-item" data-product="glute_builder">
-        <div class="plan-info">
+        <div>
           <div class="plan-name">Glute Builder</div>
           <div class="plan-desc">Women's lower-body program</div>
         </div>
-        <div class="plan-action" style="display:flex;align-items:center;gap:12px;">
+        <div class="plan-action">
           <span class="plan-price">$39</span>
           <a class="btn-buy" href="store.html">Buy</a>
         </div>
       </div>
-      <div class="browse-programs-link">
-        <a href="store.html">Browse all programs & upgrades →</a>
+      <div class="browse-link">
+        <a href="store.html">Browse all programs →</a>
       </div>
     </div>
 
@@ -507,7 +358,6 @@
 
 <div class="toast" id="toast"></div>
 
-<!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="supabase.js"></script>
 <script>
@@ -519,63 +369,51 @@
         var user    = session.user;
         var profile = await getProfile(user.id);
 
-        // Safety net: if onboarding not complete, send them back
         if (!profile || !profile.onboarding_complete) {
           window.location.href = 'onboarding.html';
           return;
         }
 
-        // Populate header
         var firstName = (profile.full_name || user.email).split(' ')[0];
-        document.getElementById('headerName').textContent  = firstName;
-        document.getElementById('dashName').textContent    = firstName;
+        document.getElementById('headerName').textContent = firstName;
+        document.getElementById('dashName').textContent   = firstName;
 
-        // Date
         document.getElementById('dashDate').textContent = new Date().toLocaleDateString('en-US', {
           weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
         });
 
-        // Goal label
-        var goalLabels = { fatloss: 'Fat Loss', recomp: 'Recomposition', muscle: 'Muscle Gain' };
-        var timelineLabels = { aggressive: 'Aggressive Pace', steady: 'Steady Progress', relaxed: 'Relaxed Long Game' };
-        var goalStr = (goalLabels[profile.goal] || profile.goal || '—');
-        if (profile.timeline) goalStr += ' — ' + (timelineLabels[profile.timeline] || profile.timeline);
-        document.getElementById('dashGoal').textContent = goalStr;
+        var goalLabels     = { fatloss: 'Fat Loss', recomp: 'Recomposition', muscle: 'Muscle Gain' };
+        var timelineLabels = { aggressive: 'Aggressive', steady: 'Steady', relaxed: 'Long Game' };
+        var goalTag = (goalLabels[profile.goal] || profile.goal || '—');
+        if (profile.timeline) goalTag += ' · ' + (timelineLabels[profile.timeline] || profile.timeline);
+        document.getElementById('dashGoalTag').textContent = goalTag;
 
-        // Targets
-        document.getElementById('dashCalories').textContent   = profile.target_calories ? profile.target_calories.toLocaleString() + ' kcal' : '—';
-        document.getElementById('dashMaintenance').textContent = profile.maintenance_calories ? profile.maintenance_calories.toLocaleString() + ' kcal' : '—';
-        document.getElementById('dashProtein').textContent    = profile.protein_target ? profile.protein_target + 'g' : '—';
-        document.getElementById('dashCarbs').textContent      = profile.carb_target   ? profile.carb_target + 'g'   : '—';
-        document.getElementById('dashFats').textContent       = profile.fat_target    ? profile.fat_target + 'g'    : '—';
-        document.getElementById('dashSplit').textContent      = profile.training_split || '—';
+        document.getElementById('dashSplit').textContent = profile.training_split || '—';
 
-        // Cal sub label
+        document.getElementById('dashCalories').textContent = profile.target_calories
+          ? profile.target_calories.toLocaleString() + ' kcal' : '—';
+
         if (profile.target_calories && profile.maintenance_calories) {
           var diff = Math.abs(profile.target_calories - profile.maintenance_calories);
           document.getElementById('dashCalSub').textContent = profile.target_calories < profile.maintenance_calories
-            ? diff + ' calorie deficit from maintenance'
-            : diff + ' calorie surplus above maintenance';
+            ? diff + ' cal deficit from maintenance'
+            : diff + ' cal surplus above maintenance';
         }
 
-        // Daily Focus
+        document.getElementById('dashProtein').textContent    = profile.protein_target ? profile.protein_target + 'g' : '—';
+        document.getElementById('dashCarbs').textContent      = profile.carb_target    ? profile.carb_target + 'g'    : '—';
+        document.getElementById('dashFats').textContent       = profile.fat_target     ? profile.fat_target + 'g'     : '—';
+        document.getElementById('dashStartWeight').textContent = profile.weight_lbs      ? profile.weight_lbs + ' lbs'      : '—';
+        document.getElementById('dashGoalWeight').textContent  = profile.goal_weight_lbs ? profile.goal_weight_lbs + ' lbs' : '—';
+
         document.getElementById('dashFocusText').innerHTML = buildFocus(profile);
 
-        // Progress snapshot
-        document.getElementById('dashStartWeight').textContent  = profile.weight_lbs      ? profile.weight_lbs + ' lbs'      : '—';
-        document.getElementById('dashGoalWeight').textContent   = profile.goal_weight_lbs ? profile.goal_weight_lbs + ' lbs' : 'Not set';
-        document.getElementById('dashSince').textContent = profile.created_at
-          ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-          : '—';
-
-        // Show dashboard
-        document.getElementById('authGate').style.display  = 'none';
+        document.getElementById('authGate').style.display   = 'none';
         document.getElementById('appContent').style.display = 'block';
 
-        // Unlock owned programs and show success toast if returning from Stripe.
         await loadPurchases(user.id);
         if (new URLSearchParams(window.location.search).get('purchase') === 'success') {
-          showToast('Purchase successful — your program is now unlocked!');
+          showToast('Purchase successful — your program is now unlocked.');
           history.replaceState(null, '', window.location.pathname);
         }
 
@@ -598,9 +436,9 @@
     if (cals && protein) {
       parts.push('Aim for <strong>' + cals + ' kcal</strong> and lock in <strong>' + protein + 'g of protein</strong> — protein first, everything else follows.');
     } else if (protein) {
-      parts.push('Lock in <strong>' + protein + 'g of protein</strong> today — protein first, everything else follows.');
+      parts.push('Lock in <strong>' + protein + 'g of protein</strong> — protein first, everything else follows.');
     }
-    parts.push('Move your body, drink your water, and check back in tonight.');
+    parts.push('Move your body, drink your water, and check in tomorrow.');
     return parts.join(' ');
   }
 
@@ -613,14 +451,12 @@
 
   lucide.createIcons();
 
-  // Slug → program page. Only add an entry here when the page exists.
   const PROGRAM_URLS = {
     fat_loss_blueprint: 'program-fat-loss.html',
-    muscle_gain: 'program-muscle-gain.html',
-    glute_builder: 'program-glute-builder.html',
+    muscle_gain:        'program-muscle-gain.html',
+    glute_builder:      'program-glute-builder.html',
   };
 
-  // Fetch the user's active purchases and swap Buy buttons for "✓ Owned" (or a link).
   async function loadPurchases(userId) {
     try {
       const { data, error } = await supabaseClient

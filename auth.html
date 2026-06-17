@@ -10,9 +10,9 @@
 <style>
   *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
   :root {
-    --red:#FF0000; --red-dim:#cc0000; --black:#0a0a0a;
-    --surface:#111; --card:#161616; --border:#242424;
-    --white:#fff; --grey:#aaa;
+    --red:#d91a1a; --red-dim:#a81414; --black:#080808;
+    --surface:#0d0d0d; --card:#131313; --border:#252525;
+    --white:#fff; --grey:#a0a0a0;
     --font-display:'Bebas Neue',Impact,sans-serif;
     --font-body:'Barlow',Arial,sans-serif;
     --radius:10px; --transition:0.22s ease;
@@ -33,15 +33,15 @@
   main::before {
     content:''; position:absolute; inset:0;
     background-image:
-      linear-gradient(rgba(255,0,0,0.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255,0,0,0.04) 1px, transparent 1px);
+      linear-gradient(rgba(217,26,26,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(217,26,26,0.04) 1px, transparent 1px);
     background-size:50px 50px; pointer-events:none;
   }
   main::after {
     content:''; position:absolute; top:-100px; left:50%;
     transform:translateX(-50%);
     width:600px; height:400px;
-    background:radial-gradient(ellipse, rgba(255,0,0,0.1) 0%, transparent 70%);
+    background:radial-gradient(ellipse, rgba(217,26,26,0.1) 0%, transparent 70%);
     pointer-events:none;
   }
 
@@ -128,7 +128,7 @@
   transform: translateY(-50%);
   background: transparent;
   border: none;
-  color: #ff2a00;
+  color: var(--red);
   font-weight: 700;
   cursor: pointer;
 }
@@ -171,7 +171,7 @@
   }
   .btn-primary:hover {
     background:var(--red-dim); border-color:var(--red-dim);
-    transform:translateY(-2px); box-shadow:0 8px 24px rgba(255,0,0,0.35);
+    transform:translateY(-2px); box-shadow:0 8px 24px rgba(217,26,26,0.35);
   }
   .btn-primary:disabled { opacity:0.6; cursor:not-allowed; transform:none; }
 
@@ -180,7 +180,7 @@
     padding:12px 16px; border-radius:8px;
     font-size:14px; margin-bottom:16px; display:none;
   }
-  .msg.error  { background:rgba(255,0,0,0.12); border:1px solid rgba(255,0,0,0.3); color:#ff6666; }
+  .msg.error  { background:rgba(217,26,26,0.12); border:1px solid rgba(217,26,26,0.3); color:#ff6666; }
   .msg.success{ background:rgba(0,200,100,0.1); border:1px solid rgba(0,200,100,0.3); color:#4dff9e; }
   .msg.show   { display:block; }
 
@@ -285,9 +285,7 @@
     </button>
   </div>
 
-  <a href="#" class="forgot-link" onclick="return false;">
-    Forgot password? (coming soon)
-  </a>
+  <a href="#" class="forgot-link" onclick="return false;">Forgot password?</a>
 </div>
         <button class="btn-primary" id="loginBtn" onclick="handleLogin()">Sign In</button>
         <p class="auth-footer">No account? <a href="#" onclick="switchTab('signup')">Create one free</a></p>

@@ -21,12 +21,12 @@
   }
 
   :root {
-    --red:     #FF0000;
-    --red-dim: #cc0000;
-    --black:   #0a0a0a;
-    --surface: #111111;
-    --card:    #161616;
-    --border:  #242424;
+    --red:     #d91a1a;
+    --red-dim: #a81414;
+    --black:   #080808;
+    --surface: #0d0d0d;
+    --card:    #131313;
+    --border:  #252525;
     --white:   #ffffff;
     --grey:    #aaaaaa;
     --font-display: 'Bebas Neue', Impact, sans-serif;
@@ -72,7 +72,7 @@
     background: var(--red-dim);
     border-color: var(--red-dim);
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(255,0,0,0.35);
+    box-shadow: 0 8px 24px rgba(217,26,26,0.35);
   }
 
   .btn-outline {
@@ -105,8 +105,8 @@
   }
 
   @keyframes pulse-glow {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(255,0,0,0); }
-    50%       { box-shadow: 0 0 28px 6px rgba(255,0,0,0.38); }
+    0%, 100% { box-shadow: 0 0 0 0 rgba(217,26,26,0); }
+    50%       { box-shadow: 0 0 28px 6px rgba(217,26,26,0.38); }
   }
 
   .btn-small {
@@ -209,8 +209,8 @@
     position: absolute;
     inset: 0;
     background-image:
-      linear-gradient(rgba(255,0,0,0.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255,0,0,0.04) 1px, transparent 1px);
+      linear-gradient(rgba(217,26,26,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(217,26,26,0.04) 1px, transparent 1px);
     background-size: 50px 50px;
     pointer-events: none;
   }
@@ -224,7 +224,7 @@
     transform: translateX(-50%);
     width: 700px;
     height: 500px;
-    background: radial-gradient(ellipse, rgba(255,0,0,0.12) 0%, transparent 70%);
+    background: radial-gradient(ellipse, rgba(217,26,26,0.12) 0%, transparent 70%);
     pointer-events: none;
   }
 
@@ -232,8 +232,8 @@
 
   .hero-eyebrow {
     display: inline-block;
-    background: rgba(255,0,0,0.12);
-    border: 1px solid rgba(255,0,0,0.35);
+    background: rgba(217,26,26,0.12);
+    border: 1px solid rgba(217,26,26,0.35);
     color: var(--red);
     font-size: 12px;
     font-weight: 700;
@@ -274,8 +274,8 @@
   /* ── CTA Banner ── */
   .cta-banner {
     background: linear-gradient(135deg, #1a0000 0%, #110000 50%, #0a0a0a 100%);
-    border-top: 1px solid rgba(255,0,0,0.2);
-    border-bottom: 1px solid rgba(255,0,0,0.2);
+    border-top: 1px solid rgba(217,26,26,0.2);
+    border-bottom: 1px solid rgba(217,26,26,0.2);
     padding: 70px 6%;
     text-align: center;
   }
@@ -344,7 +344,7 @@
     transition: transform var(--transition);
   }
   .feature-card:hover {
-    border-color: rgba(255,0,0,0.4);
+    border-color: rgba(217,26,26,0.4);
     transform: translateY(-4px);
   }
   .feature-card:hover::before { transform: scaleX(1); }
@@ -458,7 +458,7 @@
     overflow: hidden;
   }
   .product-card:hover {
-    border-color: rgba(255,0,0,0.4);
+    border-color: rgba(217,26,26,0.4);
     transform: translateY(-5px);
   }
   .product-card.featured {
