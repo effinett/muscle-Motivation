@@ -8,10 +8,10 @@
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --red: #ff0000;
-      --red-dim: #cc0000;
-      --red-glow: rgba(255,0,0,0.18);
-      --red-subtle: rgba(255,0,0,0.08);
+      --red: #B1121B;
+      --red-dim: #D11D27;
+      --red-glow: rgba(177,18,27,0.18);
+      --red-subtle: rgba(177,18,27,0.08);
       --bg: #080808;
       --surface: #101010;
       --surface2: #161616;
@@ -63,7 +63,7 @@
     }
     .header-logo img {
       height: 52px;
-      filter: drop-shadow(0 0 8px rgba(255,0,0,0.3));
+      filter: drop-shadow(0 0 8px rgba(177,18,27,0.3));
     }
     .header-logo span {
       font-family: var(--font-display);
@@ -132,8 +132,8 @@
       content: '';
       position: absolute; inset: 0;
       background-image:
-        linear-gradient(rgba(255,0,0,0.035) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,0,0,0.035) 1px, transparent 1px);
+        linear-gradient(rgba(177,18,27,0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(177,18,27,0.035) 1px, transparent 1px);
       background-size: 44px 44px;
       pointer-events: none;
     }
@@ -143,7 +143,7 @@
       position: absolute; top: -80px; left: 50%;
       transform: translateX(-50%);
       width: 600px; height: 360px;
-      background: radial-gradient(ellipse, rgba(255,0,0,0.1) 0%, transparent 68%);
+      background: radial-gradient(ellipse, rgba(177,18,27,0.1) 0%, transparent 68%);
       pointer-events: none;
     }
 
@@ -151,8 +151,8 @@
 
     .hero-eyebrow {
       display: inline-block;
-      background: rgba(255,0,0,0.1);
-      border: 1px solid rgba(255,0,0,0.3);
+      background: rgba(177,18,27,0.1);
+      border: 1px solid rgba(177,18,27,0.3);
       color: var(--red);
       font-size: 11px; font-weight: 700;
       letter-spacing: 3px; text-transform: uppercase;
@@ -228,7 +228,7 @@
       white-space: nowrap;
     }
     .filter-pill:hover {
-      border-color: rgba(255,0,0,0.4);
+      border-color: rgba(177,18,27,0.4);
       color: var(--light);
     }
     .filter-pill.active {
@@ -281,13 +281,13 @@
     }
 
     .product-card:hover {
-      border-color: rgba(255,0,0,0.35);
+      border-color: rgba(177,18,27,0.35);
       transform: translateY(-3px);
-      box-shadow: 0 16px 48px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,0,0,0.08);
+      box-shadow: 0 16px 48px rgba(0,0,0,0.5), 0 0 0 1px rgba(177,18,27,0.08);
     }
 
     .product-card.featured {
-      border-color: rgba(255,0,0,0.4);
+      border-color: rgba(177,18,27,0.4);
     }
     .product-card.featured::before {
       content: '';
@@ -301,11 +301,11 @@
       height: 3px;
       width: 100%;
     }
-    .bar-fatloss   { background: linear-gradient(90deg, #ff4400, #ff0000); }
-    .bar-muscle    { background: linear-gradient(90deg, #ff0000, #cc0000); }
+    .bar-fatloss   { background: linear-gradient(90deg, #c94214, #B1121B); }
+    .bar-muscle    { background: linear-gradient(90deg, #B1121B, #8e0e15); }
     .bar-home      { background: linear-gradient(90deg, #ff6600, #ff3300); }
-    .bar-coaching  { background: linear-gradient(90deg, #ff0044, #ff0000); }
-    .bar-free      { background: linear-gradient(90deg, #ff8800, #ff4400); }
+    .bar-coaching  { background: linear-gradient(90deg, #D11D27, #B1121B); }
+    .bar-free      { background: linear-gradient(90deg, #ff8800, #c94214); }
 
     .card-body {
       padding: 22px 22px 0;
@@ -328,7 +328,7 @@
       white-space: nowrap; flex-shrink: 0;
     }
     .badge-fatloss  { background: rgba(255,68,0,0.15);  color: #ff6633; border: 1px solid rgba(255,68,0,0.25); }
-    .badge-muscle   { background: rgba(255,0,0,0.12);   color: #ff3333; border: 1px solid rgba(255,0,0,0.22); }
+    .badge-muscle   { background: rgba(177,18,27,0.12);   color: #e85555; border: 1px solid rgba(177,18,27,0.22); }
     .badge-home     { background: rgba(255,102,0,0.12); color: #ff8833; border: 1px solid rgba(255,102,0,0.22); }
     .badge-coaching { background: rgba(255,0,68,0.12);  color: #ff3366; border: 1px solid rgba(255,0,68,0.22); }
     .badge-free     { background: rgba(255,136,0,0.12); color: #ffaa44; border: 1px solid rgba(255,136,0,0.22); }
@@ -434,7 +434,7 @@
     .btn-card-primary:hover {
       background: var(--red-dim);
       transform: translateY(-1px);
-      box-shadow: 0 6px 20px rgba(255,0,0,0.3);
+      box-shadow: 0 6px 20px rgba(177,18,27,0.3);
     }
 
     .btn-card-free {
