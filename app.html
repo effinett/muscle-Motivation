@@ -363,6 +363,11 @@
       cursor: pointer; transition: border-color 0.2s;
     }
     .program-picker-btn:hover { border-color: var(--red); }
+    .discard-session-link {
+      font-size: 12px; color: var(--text-muted); text-decoration: none;
+      transition: color .2s;
+    }
+    .discard-session-link:hover { color: var(--red); }
     .mismatch-hint {
       margin-top: 12px;
       background: rgba(177,18,27,0.08); border: 1px solid rgba(177,18,27,0.2);
@@ -485,6 +490,10 @@
       <!-- CTA buttons (mutually exclusive) -->
       <a class="btn-start" id="btnStartWorkout" href="#" style="display:none;">Start Workout</a>
       <a class="btn-start" id="btnBrowsePrograms" href="store.html" style="display:none;">Browse Programs</a>
+      <!-- Discard in-progress session (shown alongside Resume Workout) -->
+      <div id="discardSessionRow" style="display:none; text-align:center; margin-top:10px;">
+        <a href="#" class="discard-session-link" onclick="discardDashboardSession(); return false;">Discard unfinished session</a>
+      </div>
 
       <!-- Goal / program mismatch hint -->
       <div id="mismatchHint" style="display:none;" class="mismatch-hint"></div>
@@ -1067,6 +1076,8 @@
     showProgramPickerState(ownedProgramsList);
   }
 
+  var inProgressId = null;
+
   async function checkDashboardInProgress(userId) {
     var since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     var { data } = await supabaseClient
@@ -1075,11 +1086,30 @@
       .gte('created_at', since)
       .order('created_at', { ascending: false }).limit(1).maybeSingle();
     if (!data) return;
+    inProgressId = data.id;
     var btn = document.getElementById('btnStartWorkout');
     btn.textContent = 'Resume Workout';
     btn.href        = 'workout.html';
     btn.style.display = '';
     document.getElementById('btnBrowsePrograms').style.display = 'none';
+    document.getElementById('discardSessionRow').style.display = '';
+  }
+
+  async function discardDashboardSession() {
+    if (!inProgressId) return;
+    if (!confirm('Discard this unfinished session? This cannot be undone.')) return;
+    var { error } = await supabaseClient.from('workouts').delete().eq('id', inProgressId);
+    if (error) { showToast('Error discarding — try again.'); return; }
+    inProgressId = null;
+    document.getElementById('discardSessionRow').style.display = 'none';
+    var btn = document.getElementById('btnStartWorkout');
+    btn.textContent = 'Start Workout';
+    btn.href = 'workout.html';
+    showToast('Session discarded.');
+    await resolveActiveProgram(
+      (await supabaseClient.auth.getSession()).data.session.user.id,
+      ownedProgramsList
+    );
   }
 
 </script>
