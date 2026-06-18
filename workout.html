@@ -288,6 +288,14 @@
       cursor: pointer; transition: border-color 0.2s, color 0.2s; margin-bottom: 12px;
     }
     .btn-add-exercise:hover { border-color: var(--red); color: var(--red); }
+    .btn-finish-bottom {
+      display: block; width: 100%; padding: 16px;
+      background: var(--green); border: none; border-radius: 10px;
+      color: #050505; font-family: 'Bebas Neue', sans-serif; font-size: 22px;
+      letter-spacing: 2px; cursor: pointer; transition: opacity 0.2s;
+      margin-top: 8px; margin-bottom: 32px;
+    }
+    .btn-finish-bottom:hover { opacity: 0.85; }
 
     /* Rest timer strip */
     .rest-strip {
@@ -459,6 +467,8 @@
         <i data-lucide="plus-circle"></i>
         Add Exercise
       </button>
+
+      <button class="btn-finish-bottom" onclick="openFinishModal()">Finish Workout</button>
     </div>
 
   </div>
