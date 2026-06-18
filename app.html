@@ -688,8 +688,8 @@
 
   var GOAL_PROGRAM_MAP = { fatloss: 'fat_loss_blueprint', muscle: 'muscle_gain' };
 
-  // Session labels + PROGRAM_SCHEDULES + getScheduleForDays come from schedules.js
-  var SESSION_NAMES_DASH = SESSION_LABELS;
+  // Session labels (SESSION_LABELS) + PROGRAM_SCHEDULES + getScheduleForDays
+  // all come from schedules.js (single source of truth).
 
   var PROGRAM_META = {
     fat_loss_blueprint: { name: '90 Day Fat Loss Blueprint' },
@@ -946,8 +946,9 @@
       var newIdx = newKeys.indexOf(curKey);
       if (newIdx < 0) newIdx = (up.current_index || 0) % newKeys.length;
 
+      // user_programs holds progression only — training_days lives on profiles
       await supabaseClient.from('user_programs')
-        .update({ schedule_keys: newKeys, current_index: newIdx, training_days: days })
+        .update({ schedule_keys: newKeys, current_index: newIdx })
         .eq('id', up.id);
     }));
 
@@ -1024,7 +1025,7 @@
     var correctKeys = getScheduleForDays(activeSlug, currentProfile.training_days);
 
     var { data: up } = await supabaseClient
-      .from('user_programs').select('id, schedule_keys, current_index, training_days')
+      .from('user_programs').select('id, schedule_keys, current_index')
       .eq('user_id', userId).eq('program_slug', activeSlug).maybeSingle();
 
     var keys, idx;
@@ -1040,7 +1041,7 @@
         var newIdx = correctKeys.indexOf(curKey);
         if (newIdx < 0) newIdx = idx % correctKeys.length;
         supabaseClient.from('user_programs')
-          .update({ schedule_keys: correctKeys, current_index: newIdx, training_days: parseInt(currentProfile.training_days, 10) || 3 })
+          .update({ schedule_keys: correctKeys, current_index: newIdx })
           .eq('id', up.id).then(function(){});
         keys = correctKeys;
         idx  = newIdx;
@@ -1050,7 +1051,7 @@
     var sessionKey = keys[idx % keys.length];
 
     document.getElementById('activeProgramName').textContent    = meta.name;
-    document.getElementById('todaySessionNameDash').textContent  = SESSION_NAMES_DASH[sessionKey] || sessionKey;
+    document.getElementById('todaySessionNameDash').textContent  = SESSION_LABELS[sessionKey] || sessionKey;
     document.getElementById('changeProgramBtn').style.display   = canChange ? '' : 'none';
     document.getElementById('activeProgramSection').style.display = '';
     document.getElementById('noProgramSection').style.display    = 'none';

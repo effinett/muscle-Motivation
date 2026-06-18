@@ -1151,12 +1151,12 @@
           .from('profiles').select('training_days').eq('id', currentUser.id).maybeSingle();
         var days = parseInt((prof && prof.training_days) || 3, 10);
         var keys = getScheduleForDays(programSlug, days);
+        // user_programs stores progression only; training_days lives on profiles
         await supabaseClient.from('user_programs').insert({
           user_id:       currentUser.id,
           program_slug:  programSlug,
           schedule_keys: keys,
           current_index: 1,
-          training_days: days,
         });
         return;
       }
