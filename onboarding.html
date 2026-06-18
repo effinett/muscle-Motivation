@@ -684,16 +684,15 @@ if (!profileError && profile && profile.onboarding_complete) {
     var targetCals;
 
     if (goal === 'fatloss') {
-      targetCals = Math.max(minCals, Math.round(tdee * 0.8));
+      targetCals = Math.max(minCals, tdee - 500);
     } else if (goal === 'recomp') {
-      targetCals = Math.max(minCals, Math.round(tdee * 0.88));
+      targetCals = Math.max(minCals, tdee - 200);
     } else {
-      var isHighBF = bodyfat ? (gender === 'male' ? bodyfat >= 20 : bodyfat >= 28) : false;
-      if (training === 0)      { targetCals = Math.round(tdee * 0.98); }
-      else if (isHighBF)       { targetCals = Math.max(minCals, Math.round(tdee * 0.92)); }
-      else if (training <= 2)  { targetCals = Math.round(tdee * 1.02); }
-      else                     { targetCals = Math.round(tdee * 1.07); }
+      // muscle gain — always a surplus above maintenance
+      targetCals = tdee + 250;
     }
+
+    console.log('[Onboarding] Goal:', goal, '| Maintenance:', tdee, '| Target:', targetCals);
 
     var macros  = calcMacros(targetCals, weight, goal);
     var split   = getSplit(training);
