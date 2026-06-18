@@ -396,11 +396,20 @@
     if (password.length < 8) return showMsg('Password must be at least 8 characters.');
     setLoading('signupBtn', true, 'Create My Account');
     try {
-      const { error } = await supabaseClient.auth.signUp({
+      const { data, error } = await supabaseClient.auth.signUp({
         email, password,
         options: { data: { full_name: name } }
       });
       if (error) throw error;
+      // "Confirm email" is OFF in Supabase, so signUp returns an active session and the
+      // user is already authenticated. Send them straight into onboarding instead of
+      // telling them to check an email that is never sent.
+      if (data && data.session) {
+        window.location.href = 'onboarding.html';
+        return;
+      }
+      // Fallback path: only reached if email confirmation gets turned on later
+      // (signUp then returns no session until the user confirms).
       showMsg('Account created! Check your email to confirm, then sign in.', 'success');
     } catch (e) {
       showMsg(e.message || 'Signup failed. Please try again.');

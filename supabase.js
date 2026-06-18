@@ -68,16 +68,17 @@ async function getProfile(userId) {
 
 async function upsertProfile(userId, updates) {
   try {
-    if (!supabaseClient) return false;
+    if (!supabaseClient) return { ok: false, error: new Error('Supabase client not initialised') };
 
     const { error } = await supabaseClient
       .from('profiles')
       .upsert({ id: userId, ...updates, updated_at: new Date().toISOString() });
 
     if (error) throw error;
-    return true;
+    return { ok: true, error: null };
   } catch (e) {
+    // Log the full Supabase error (code + message) so schema/RLS issues are diagnosable.
     console.error('upsertProfile error:', e);
-    return false;
+    return { ok: false, error: e };
   }
 }

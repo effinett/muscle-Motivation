@@ -754,13 +754,14 @@ if (!profileError && profile && profile.onboarding_complete) {
     msg.textContent = '';
 
     try {
-      var ok = await upsertProfile(currentUser.id, generatedPlan);
-      if (!ok) throw new Error('Save failed');
+      var res = await upsertProfile(currentUser.id, generatedPlan);
+      if (!res.ok) throw (res.error || new Error('Save failed'));
       msg.textContent = 'Saved! Redirecting to your dashboard...';
       // Use replace() so onboarding is removed from history — prevents Back button re-submission.
       setTimeout(function() { window.location.replace('app.html'); }, 1000);
     } catch (e) {
-      msg.textContent = 'Something went wrong. Please try again.';
+      console.error('saveAndContinue failed:', e);
+      msg.textContent = 'Something went wrong: ' + (e.message || 'please try again.');
       btn.disabled = false;
       btn.innerHTML = 'Save & Go to My Dashboard →';
     }
