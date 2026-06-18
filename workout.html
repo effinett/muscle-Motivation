@@ -929,7 +929,7 @@
     var workoutName = sessData.session_name + ' — ' + day;
     var { data: workout, error } = await supabaseClient
       .from('workouts')
-      .insert({ user_id: currentUser.id, name: workoutName, date: new Date().toISOString().slice(0, 10) })
+      .insert({ user_id: currentUser.id, name: workoutName, date: new Date().toISOString().slice(0, 10), program_slug: programSlug })
       .select().single();
     if (error) { showToast('Error starting workout.'); return; }
 

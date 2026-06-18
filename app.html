@@ -314,7 +314,7 @@
     }
     .btn-save:hover { opacity: 0.85; }
 
-    /* Start Workout button */
+    /* Start Workout / Browse Programs button */
     .btn-start {
       display: block; width: 100%; margin-top: 18px;
       padding: 13px 20px;
@@ -326,6 +326,50 @@
       transition: opacity 0.2s;
     }
     .btn-start:hover { opacity: 0.85; }
+
+    /* Active program section */
+    .active-prog-row {
+      display: flex; align-items: flex-start;
+      justify-content: space-between; gap: 12px;
+      margin-top: 16px; padding-top: 16px;
+      border-top: 1px solid var(--border-1);
+    }
+    .active-prog-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+      text-transform: uppercase; color: var(--text-muted);
+    }
+    .active-prog-name { font-size: 15px; font-weight: 600; margin-top: 3px; }
+    .active-prog-session { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+    .btn-change-prog {
+      flex-shrink: 0; padding: 6px 12px; background: transparent;
+      border: 1px solid var(--border-2); border-radius: 6px;
+      color: var(--text-muted); font-size: 11px; font-weight: 700;
+      letter-spacing: 1px; text-transform: uppercase;
+      cursor: pointer; font-family: 'Barlow', sans-serif;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .btn-change-prog:hover { border-color: var(--red); color: var(--red); }
+    .no-program-msg {
+      font-size: 14px; color: var(--text-2); line-height: 1.5;
+      margin-top: 16px; padding-top: 16px;
+      border-top: 1px solid var(--border-1);
+    }
+    .program-picker-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+    .program-picker-btn {
+      display: block; width: 100%; padding: 12px 16px;
+      background: var(--surface-2); border: 1px solid var(--border-2);
+      border-radius: 8px; color: var(--text); font-size: 14px; font-weight: 600;
+      font-family: 'Barlow', sans-serif; text-align: left;
+      cursor: pointer; transition: border-color 0.2s;
+    }
+    .program-picker-btn:hover { border-color: var(--red); }
+    .mismatch-hint {
+      margin-top: 12px;
+      background: rgba(177,18,27,0.08); border: 1px solid rgba(177,18,27,0.2);
+      border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--text-2);
+    }
+    .mismatch-hint a { color: var(--red); text-decoration: none; font-weight: 600; }
+    .mismatch-hint a:hover { text-decoration: underline; }
 
     /* Quick Actions */
     .quick-grid {
@@ -414,7 +458,36 @@
       </div>
       <div class="today-divider"></div>
       <div class="focus-body" id="dashFocusText">—</div>
-      <a class="btn-start" href="workout.html">Start Workout</a>
+
+      <!-- Active program (shown when a program is active) -->
+      <div id="activeProgramSection" style="display:none;">
+        <div class="active-prog-row">
+          <div>
+            <div class="active-prog-label">Active Program</div>
+            <div class="active-prog-name" id="activeProgramName">—</div>
+            <div class="active-prog-session">Today: <span id="todaySessionNameDash">—</span></div>
+          </div>
+          <button class="btn-change-prog" id="changeProgramBtn" style="display:none;" onclick="openProgramPicker()">Change</button>
+        </div>
+      </div>
+
+      <!-- No programs owned -->
+      <div id="noProgramSection" style="display:none;">
+        <div class="no-program-msg">You don't have an active workout program yet.</div>
+      </div>
+
+      <!-- Multiple programs owned, none active — picker -->
+      <div id="programPickerSection" style="display:none;">
+        <div class="no-program-msg">You own multiple programs — choose one to activate:</div>
+        <div id="programPickerList" class="program-picker-list"></div>
+      </div>
+
+      <!-- CTA buttons (mutually exclusive) -->
+      <a class="btn-start" id="btnStartWorkout" href="#" style="display:none;">Start Workout</a>
+      <a class="btn-start" id="btnBrowsePrograms" href="store.html" style="display:none;">Browse Programs</a>
+
+      <!-- Goal / program mismatch hint -->
+      <div id="mismatchHint" style="display:none;" class="mismatch-hint"></div>
     </div>
 
     <!-- Quick Actions -->
@@ -598,7 +671,38 @@
 <script src="supabase.js"></script>
 <script>
 
-  var currentProfile = null;
+  var currentProfile    = null;
+  var ownedProgramsList = [];
+
+  var GOAL_LABELS = { fatloss: 'Fat Loss', recomp: 'Recomposition', muscle: 'Muscle Gain' };
+
+  var GOAL_PROGRAM_MAP = { fatloss: 'fat_loss_blueprint', muscle: 'muscle_gain' };
+
+  var SESSION_NAMES_DASH = {
+    full_a: 'Full Body A',  full_b: 'Full Body B',  full_c: 'Full Body C',
+    upper_a: 'Upper A',     upper_b: 'Upper B',
+    lower_a: 'Lower A',     lower_b: 'Lower B',
+    push: 'Push',           pull: 'Pull',           legs: 'Legs',
+    session_a: 'Session A — Hip Thrust Lead',
+    session_b: 'Session B — RDL Lead',
+    session_c: 'Session C — Squat Lead',
+    upper: 'Upper Body',
+  };
+
+  var PROGRAM_META = {
+    fat_loss_blueprint: {
+      name: '90 Day Fat Loss Blueprint',
+      defaultSchedule: ['full_a', 'full_b', 'full_c'],
+    },
+    muscle_gain: {
+      name: 'Muscle Gain',
+      defaultSchedule: ['full_a', 'full_b', 'full_c'],
+    },
+    glute_builder: {
+      name: 'Glute Builder',
+      defaultSchedule: ['session_a', 'session_b', 'session_c'],
+    },
+  };
 
   window.addEventListener('load', function() {
     (async () => {
@@ -621,9 +725,8 @@
           weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
         });
 
-        var goalLabels     = { fatloss: 'Fat Loss', recomp: 'Recomposition', muscle: 'Muscle Gain' };
         var timelineLabels = { aggressive: 'Aggressive', steady: 'Steady', relaxed: 'Long Game' };
-        var goalTag = (goalLabels[profile.goal] || profile.goal || '—');
+        var goalTag = (GOAL_LABELS[profile.goal] || profile.goal || '—');
         if (profile.timeline) goalTag += ' · ' + (timelineLabels[profile.timeline] || profile.timeline);
         document.getElementById('dashGoalTag').textContent = goalTag;
 
@@ -819,12 +922,12 @@
   async function loadPurchases(userId) {
     try {
       const { data, error } = await supabaseClient
-        .from('purchases')
-        .select('product, status')
-        .eq('user_id', userId)
-        .eq('status', 'active');
+        .from('purchases').select('product, status')
+        .eq('user_id', userId).eq('status', 'active');
       if (error) throw error;
       const owned = new Set((data || []).map(p => p.product));
+
+      // Update Open Program / Buy badges in Programs section
       document.querySelectorAll('.plan-item[data-product]').forEach(item => {
         if (owned.has(item.dataset.product)) {
           const url = PROGRAM_URLS[item.dataset.product];
@@ -833,9 +936,134 @@
             : '<span class="owned-badge">✓ Owned</span>';
         }
       });
+
+      // Resolve which program to show in Today card
+      ownedProgramsList = [...owned].filter(p => PROGRAM_META[p]);
+      await resolveActiveProgram(userId, ownedProgramsList);
     } catch (err) {
       console.error('loadPurchases error:', err);
     }
+  }
+
+  // ── Active program logic ──────────────────────────────────────────
+
+  async function resolveActiveProgram(userId, programs) {
+    var activeSlug = currentProfile.active_program || null;
+
+    // If stored active program is no longer owned, clear it
+    if (activeSlug && !programs.includes(activeSlug)) {
+      activeSlug = null;
+      await supabaseClient.from('profiles').update({ active_program: null }).eq('id', userId);
+      currentProfile.active_program = null;
+    }
+
+    if (programs.length === 0) {
+      showNoProgramState();
+      return;
+    }
+
+    if (programs.length === 1 && !activeSlug) {
+      // Auto-set the single owned program
+      activeSlug = programs[0];
+      await supabaseClient.from('profiles').update({ active_program: activeSlug }).eq('id', userId);
+      currentProfile.active_program = activeSlug;
+    }
+
+    if (!activeSlug) {
+      // Multiple programs, none chosen yet
+      showProgramPickerState(programs);
+      return;
+    }
+
+    await showActiveProgramState(userId, activeSlug, programs.length > 1);
+  }
+
+  async function showActiveProgramState(userId, activeSlug, canChange) {
+    var meta = PROGRAM_META[activeSlug];
+    if (!meta) return;
+
+    var { data: up } = await supabaseClient
+      .from('user_programs').select('schedule_keys, current_index')
+      .eq('user_id', userId).eq('program_slug', activeSlug).maybeSingle();
+
+    var keys       = (up && up.schedule_keys && up.schedule_keys.length) ? up.schedule_keys : meta.defaultSchedule;
+    var idx        = up ? (up.current_index || 0) : 0;
+    var sessionKey = keys[idx % keys.length];
+
+    document.getElementById('activeProgramName').textContent    = meta.name;
+    document.getElementById('todaySessionNameDash').textContent  = SESSION_NAMES_DASH[sessionKey] || sessionKey;
+    document.getElementById('changeProgramBtn').style.display   = canChange ? '' : 'none';
+    document.getElementById('activeProgramSection').style.display = '';
+    document.getElementById('noProgramSection').style.display    = 'none';
+    document.getElementById('programPickerSection').style.display = 'none';
+
+    var btn = document.getElementById('btnStartWorkout');
+    btn.href = 'workout.html?program=' + activeSlug + '&session=' + sessionKey;
+    btn.style.display = '';
+    document.getElementById('btnBrowsePrograms').style.display = 'none';
+
+    // Goal / active program mismatch hint
+    var expectedSlug = GOAL_PROGRAM_MAP[currentProfile.goal];
+    var hintEl = document.getElementById('mismatchHint');
+    if (expectedSlug && expectedSlug !== activeSlug && PROGRAM_META[expectedSlug] && ownedProgramsList.includes(expectedSlug)) {
+      var goalLabel    = GOAL_LABELS[currentProfile.goal] || currentProfile.goal;
+      var expectedName = PROGRAM_META[expectedSlug].name;
+      hintEl.innerHTML = 'Your goal is <strong>' + goalLabel + '</strong>. '
+        + '<a href="#" onclick="setActiveProgram(\'' + expectedSlug + '\'); return false;">Switch to ' + expectedName + '?</a>';
+      hintEl.style.display = '';
+    } else {
+      hintEl.style.display = 'none';
+    }
+  }
+
+  function showNoProgramState() {
+    document.getElementById('activeProgramSection').style.display  = 'none';
+    document.getElementById('programPickerSection').style.display   = 'none';
+    document.getElementById('mismatchHint').style.display            = 'none';
+    document.getElementById('noProgramSection').style.display        = '';
+    document.getElementById('btnStartWorkout').style.display          = 'none';
+    document.getElementById('btnBrowsePrograms').style.display        = '';
+  }
+
+  function showProgramPickerState(programs) {
+    document.getElementById('activeProgramSection').style.display  = 'none';
+    document.getElementById('noProgramSection').style.display       = 'none';
+    document.getElementById('mismatchHint').style.display            = 'none';
+    document.getElementById('btnStartWorkout').style.display          = 'none';
+    document.getElementById('btnBrowsePrograms').style.display        = 'none';
+
+    var listEl = document.getElementById('programPickerList');
+    listEl.innerHTML = programs.map(function(slug) {
+      var m = PROGRAM_META[slug];
+      return '<button class="program-picker-btn" onclick="setActiveProgram(\'' + slug + '\')">' + m.name + '</button>';
+    }).join('');
+    document.getElementById('programPickerSection').style.display = '';
+  }
+
+  async function setActiveProgram(slug) {
+    try {
+      var { data: s } = await supabaseClient.auth.getSession();
+      var userId = s.session.user.id;
+      await supabaseClient.from('profiles').update({ active_program: slug }).eq('id', userId);
+      currentProfile.active_program = slug;
+
+      document.getElementById('activeProgramSection').style.display  = 'none';
+      document.getElementById('noProgramSection').style.display       = 'none';
+      document.getElementById('programPickerSection').style.display   = 'none';
+      document.getElementById('mismatchHint').style.display            = 'none';
+
+      await showActiveProgramState(userId, slug, ownedProgramsList.length > 1);
+    } catch (err) {
+      console.error('setActiveProgram error:', err);
+      showToast('Error updating program — try again.');
+    }
+  }
+
+  function openProgramPicker() {
+    document.getElementById('activeProgramSection').style.display = 'none';
+    document.getElementById('btnStartWorkout').style.display       = 'none';
+    document.getElementById('mismatchHint').style.display           = 'none';
+    showProgramPickerState(ownedProgramsList);
   }
 
 </script>
