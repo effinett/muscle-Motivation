@@ -891,9 +891,11 @@
     if (timerInterval) clearInterval(timerInterval);
     stopRest();
     var progSlug = currentWorkout.program_slug || localStorage.getItem('wkt_prog_' + currentWorkout.id);
+    var sessKey  = currentWorkout.session_key || localStorage.getItem('wkt_sess_' + currentWorkout.id);
     localStorage.removeItem('wkt_start_' + currentWorkout.id);
     localStorage.removeItem('wkt_prog_' + currentWorkout.id);
-    if (progSlug) await advanceProgramSession(progSlug);
+    localStorage.removeItem('wkt_sess_' + currentWorkout.id);
+    if (progSlug) await advanceProgramSession(progSlug, sessKey);
     closeFinishModal();
     showToast('Workout saved!');
     setTimeout(function() { window.location.href = 'app.html'; }, 1600);
@@ -1095,7 +1097,7 @@
 
     var { data: workout, error } = await supabaseClient
       .from('workouts')
-      .insert({ user_id: currentUser.id, name: workoutName, date: new Date().toISOString().slice(0, 10), program_slug: programSlug })
+      .insert({ user_id: currentUser.id, name: workoutName, date: new Date().toISOString().slice(0, 10), program_slug: programSlug, session_key: sessionKey })
       .select().single();
     if (error) { showToast('Error starting workout.'); return; }
 
@@ -1103,6 +1105,7 @@
     exercises = [];
     localStorage.setItem('wkt_start_' + workout.id, Date.now());
     localStorage.setItem('wkt_prog_' + workout.id, programSlug);
+    localStorage.setItem('wkt_sess_' + workout.id, sessionKey);
 
     // Load pre-built exercises if the template exists; otherwise start blank
     if (sessData) {
@@ -1139,7 +1142,13 @@
 
   // PROGRAM_SCHEDULES, SESSION_LABELS, getScheduleForDays come from schedules.js
 
-  async function advanceProgramSession(programSlug) {
+  // Advance progression based on the session the user ACTUALLY completed, not a
+  // blind increment of the old index. completedKey is the session_key that was
+  // just finished (it may differ from the recommended one if the user manually
+  // chose a different workout). We find that key in the schedule and set the
+  // next index to completedIndex + 1 (wrapping with modulo). If the key is
+  // missing from the schedule we fall back to a safe increment and log it.
+  async function advanceProgramSession(programSlug, completedKey) {
     try {
       var { data: up } = await supabaseClient
         .from('user_programs').select('*')
@@ -1150,18 +1159,37 @@
         var { data: prof } = await supabaseClient
           .from('profiles').select('training_days').eq('id', currentUser.id).maybeSingle();
         var days = parseInt((prof && prof.training_days) || 3, 10);
-        var keys = getScheduleForDays(programSlug, days);
+        var bootKeys = getScheduleForDays(programSlug, days);
+        var bootDone = bootKeys.indexOf(completedKey);
+        var bootNext = bootDone >= 0 ? (bootDone + 1) % bootKeys.length : 1;
+        if (bootDone < 0) {
+          console.warn('advanceProgramSession: completed session_key "' + completedKey +
+            '" not in schedule', bootKeys, '— defaulting next index to 1');
+        }
         // user_programs stores progression only; training_days lives on profiles
         await supabaseClient.from('user_programs').insert({
           user_id:       currentUser.id,
           program_slug:  programSlug,
-          schedule_keys: keys,
-          current_index: 1,
+          schedule_keys: bootKeys,
+          current_index: bootNext,
         });
         return;
       }
 
-      var next = (up.current_index + 1) % up.schedule_keys.length;
+      var keys = (up.schedule_keys && up.schedule_keys.length)
+        ? up.schedule_keys
+        : getScheduleForDays(programSlug, 3);
+      var doneIdx = completedKey ? keys.indexOf(completedKey) : -1;
+      var next;
+      if (doneIdx >= 0) {
+        next = (doneIdx + 1) % keys.length;
+      } else {
+        // Fallback: session_key missing from schedule (legacy workout or remapped
+        // split). Advance from the last known index so we never get stuck.
+        console.warn('advanceProgramSession: completed session_key "' + completedKey +
+          '" not found in schedule', keys, '— falling back to current_index + 1');
+        next = ((up.current_index || 0) + 1) % keys.length;
+      }
       await supabaseClient.from('user_programs')
         .update({ current_index: next, updated_at: new Date().toISOString() }).eq('id', up.id);
     } catch (e) { /* non-fatal */ }

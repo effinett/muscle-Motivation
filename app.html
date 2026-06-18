@@ -363,6 +363,29 @@
       cursor: pointer; transition: border-color 0.2s;
     }
     .program-picker-btn:hover { border-color: var(--red); }
+    .choose-workout-link {
+      display: inline-block; margin-top: 12px;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+      color: var(--text-muted); text-decoration: none; cursor: pointer;
+      transition: color .2s;
+    }
+    .choose-workout-link:hover { color: var(--red); }
+    .workout-picker-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+    .workout-picker-btn {
+      display: flex; align-items: center; justify-content: space-between;
+      width: 100%; padding: 11px 14px; gap: 10px;
+      background: var(--surface-2); border: 1px solid var(--border-2);
+      border-radius: 8px; color: var(--text); font-size: 14px; font-weight: 600;
+      font-family: 'Barlow', sans-serif; text-align: left;
+      cursor: pointer; transition: border-color 0.2s;
+    }
+    .workout-picker-btn:hover { border-color: var(--red); }
+    .workout-picker-btn.selected { border-color: var(--red); }
+    .workout-picker-tag {
+      font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--text-muted); flex-shrink: 0;
+    }
+    .workout-picker-btn.selected .workout-picker-tag { color: var(--red); }
     .discard-session-link {
       font-size: 12px; color: var(--text-muted); text-decoration: none;
       transition: color .2s;
@@ -470,9 +493,14 @@
           <div>
             <div class="active-prog-label">Active Program</div>
             <div class="active-prog-name" id="activeProgramName">—</div>
-            <div class="active-prog-session">Today: <span id="todaySessionNameDash">—</span></div>
+            <div class="active-prog-session">Recommended next workout: <span id="todaySessionNameDash">—</span></div>
           </div>
           <button class="btn-change-prog" id="changeProgramBtn" style="display:none;" onclick="openProgramPicker()">Change</button>
+        </div>
+        <!-- Manual workout selection (still defaults to the recommended one) -->
+        <div id="chooseWorkoutWrap" style="display:none;">
+          <a href="#" class="choose-workout-link" id="chooseWorkoutLink" onclick="toggleWorkoutPicker(); return false;">Choose different workout</a>
+          <div id="workoutPickerList" class="workout-picker-list" style="display:none;"></div>
         </div>
       </div>
 
@@ -1051,6 +1079,13 @@
 
     var sessionKey = keys[idx % keys.length];
 
+    // Stash schedule state so the manual workout picker can offer every session
+    // in the current schedule (the recommended one stays the default).
+    activeProgramSlug      = activeSlug;
+    activeScheduleKeys     = keys;
+    recommendedSessionKey  = sessionKey;
+    selectedSessionKey     = sessionKey;
+
     document.getElementById('activeProgramName').textContent    = meta.name;
     document.getElementById('todaySessionNameDash').textContent  = SESSION_LABELS[sessionKey] || sessionKey;
     document.getElementById('changeProgramBtn').style.display   = canChange ? '' : 'none';
@@ -1060,8 +1095,15 @@
 
     var btn = document.getElementById('btnStartWorkout');
     btn.href = 'workout.html?program=' + activeSlug + '&session=' + sessionKey;
+    btn.textContent = 'Start Workout';
     btn.style.display = '';
     document.getElementById('btnBrowsePrograms').style.display = 'none';
+
+    // Reset + show the manual selection control (single-program owners get it too).
+    document.getElementById('workoutPickerList').style.display = 'none';
+    document.getElementById('chooseWorkoutLink').textContent   = 'Choose different workout';
+    document.getElementById('chooseWorkoutWrap').style.display  = '';
+    renderWorkoutPicker();
 
     // Goal / active program mismatch hint
     var expectedSlug = GOAL_PROGRAM_MAP[currentProfile.goal];
@@ -1124,7 +1166,49 @@
     document.getElementById('activeProgramSection').style.display = 'none';
     document.getElementById('btnStartWorkout').style.display       = 'none';
     document.getElementById('mismatchHint').style.display           = 'none';
+    document.getElementById('chooseWorkoutWrap').style.display      = 'none';
     showProgramPickerState(ownedProgramsList);
+  }
+
+  // ── Manual workout selection ──────────────────────────────────────
+  // The dashboard always recommends the next sequenced workout, but the user
+  // may manually pick any session in the active program's current schedule.
+  // Picking one only changes which workout Start launches — it never touches
+  // active_program or current_index (progression advances on finish instead).
+  var activeProgramSlug     = null;
+  var activeScheduleKeys    = [];
+  var recommendedSessionKey = null;
+  var selectedSessionKey    = null;
+
+  function toggleWorkoutPicker() {
+    var list = document.getElementById('workoutPickerList');
+    var open = list.style.display !== 'none';
+    list.style.display = open ? 'none' : '';
+    document.getElementById('chooseWorkoutLink').textContent =
+      open ? 'Choose different workout' : 'Hide workout list';
+  }
+
+  function renderWorkoutPicker() {
+    var list = document.getElementById('workoutPickerList');
+    list.innerHTML = activeScheduleKeys.map(function(key) {
+      var isSel = key === selectedSessionKey;
+      var isRec = key === recommendedSessionKey;
+      var tag   = isRec ? '<span class="workout-picker-tag">Recommended</span>'
+                 : isSel ? '<span class="workout-picker-tag">Selected</span>' : '';
+      return '<button class="workout-picker-btn' + (isSel ? ' selected' : '') + '" ' +
+        'onclick="selectDashWorkout(\'' + key + '\')">' +
+        '<span>' + (SESSION_LABELS[key] || key) + '</span>' + tag + '</button>';
+    }).join('');
+  }
+
+  function selectDashWorkout(key) {
+    if (activeScheduleKeys.indexOf(key) < 0) return;
+    selectedSessionKey = key;
+    var isRec = key === recommendedSessionKey;
+    var btn = document.getElementById('btnStartWorkout');
+    btn.href = 'workout.html?program=' + activeProgramSlug + '&session=' + key;
+    btn.textContent = isRec ? 'Start Workout' : 'Start selected workout';
+    renderWorkoutPicker();
   }
 
   var inProgressId = null;
@@ -1144,6 +1228,9 @@
     btn.style.display = '';
     document.getElementById('btnBrowsePrograms').style.display = 'none';
     document.getElementById('discardSessionRow').style.display = '';
+    // Safety: can't start a different workout until the unfinished one is
+    // resumed or discarded — hide the manual selection control for now.
+    document.getElementById('chooseWorkoutWrap').style.display = 'none';
   }
 
   async function discardDashboardSession() {

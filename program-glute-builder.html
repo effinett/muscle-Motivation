@@ -206,12 +206,14 @@
     .sched-row {
       display: flex; justify-content: space-between; gap: 12px;
       background: var(--surface2); border-radius: 8px; padding: 11px 14px;
+      border: 1px solid transparent; cursor: pointer; transition: border-color .15s;
     }
+    .sched-row:hover { border-color: var(--red); }
     .sched-row .day { font-weight: 600; color: var(--muted); font-size: 13px; min-width: 90px; }
     .sched-row .sess { color: var(--text); font-size: 13px; text-align: right; }
 
-    .sched-row.today { border: 1px solid var(--red); background: var(--red-dim); }
-    .sched-row.today .day { color: var(--red); }
+    .sched-row.today, .sched-row.selected { border: 1px solid var(--red); background: var(--red-dim); }
+    .sched-row.today .day, .sched-row.selected .day { color: var(--red); }
     .sched-note { color: var(--muted); font-size: 13px; margin-top: 14px; }
     .sched-note a { color: var(--red); text-decoration: none; font-weight: 600; }
     .sched-note a:hover { text-decoration: underline; }
@@ -621,7 +623,7 @@
   <div class="sticky-cta" id="stickyCta">
     <div class="sticky-cta-inner">
       <div>
-        <div class="sticky-cta-label">Today's Session</div>
+        <div class="sticky-cta-label">Recommended next workout</div>
         <div class="sticky-cta-name" id="todaySessionName">—</div>
       </div>
       <a class="sticky-cta-btn" id="startTodayBtn" href="workout.html">Start Workout</a>
@@ -639,21 +641,30 @@
   var PROGRAM_SLUG = 'glute_builder';
   // Schedules + labels come from schedules.js (single source of truth)
 
-  function updateTodaySession(keys, idx) {
-    var key = keys[idx % keys.length];
+  // Manual workout selection: the recommended (sequenced) session is the default,
+  // but the user can tap any session in the current schedule to train it now.
+  // Selecting only changes which workout Start launches — progression
+  // (current_index) advances on finish in workout.html based on what's completed.
+  var PROG_KEYS        = [];
+  var PROG_RECOMMENDED = null;
+  var PROG_SELECTED    = null;
+
+  function selectProgWorkout(key) {
+    if (PROG_KEYS.indexOf(key) < 0) return;
+    PROG_SELECTED = key;
     document.getElementById('todaySessionName').textContent = SESSION_LABELS[key] || key;
-    document.getElementById('startTodayBtn').href =
-      'workout.html?program=' + PROGRAM_SLUG + '&session=' + key;
-    document.getElementById('stickyCta').style.display = 'block';
+    var btn = document.getElementById('startTodayBtn');
+    btn.href = 'workout.html?program=' + PROGRAM_SLUG + '&session=' + key;
+    btn.textContent = (key === PROG_RECOMMENDED) ? 'Start Workout' : 'Start selected workout';
+    renderSchedulePreview();
   }
 
-  function renderSchedulePreview(days, keys, idx) {
-    document.getElementById('schedSummary').textContent =
-      'You train ' + days + ' days/week. Your sessions rotate in this order:';
-    var todayPos = idx % keys.length;
-    document.getElementById('schedPreview').innerHTML = keys.map(function(k, i) {
-      return '<div class="sched-row' + (i === todayPos ? ' today' : '') + '">' +
-        '<span class="day">Session ' + (i + 1) + (i === todayPos ? ' · Today' : '') + '</span>' +
+  function renderSchedulePreview() {
+    document.getElementById('schedPreview').innerHTML = PROG_KEYS.map(function(k, i) {
+      var cls  = (k === PROG_SELECTED ? ' selected' : '');
+      var note = (k === PROG_RECOMMENDED ? ' · Recommended' : '');
+      return '<div class="sched-row' + cls + '" onclick="selectProgWorkout(\'' + k + '\')">' +
+        '<span class="day">Session ' + (i + 1) + note + '</span>' +
         '<span class="sess">' + (SESSION_LABELS[k] || k) + '</span></div>';
     }).join('');
   }
@@ -671,8 +682,12 @@
       .maybeSingle();
     var idx = up ? (up.current_index || 0) : 0;
 
-    renderSchedulePreview(days, keys, idx);
-    updateTodaySession(keys, idx);
+    document.getElementById('schedSummary').textContent =
+      'You train ' + days + ' days/week. Your sessions rotate in this order — tap any session to train it now:';
+    PROG_KEYS        = keys;
+    PROG_RECOMMENDED = keys[idx % keys.length];
+    selectProgWorkout(PROG_RECOMMENDED);
+    document.getElementById('stickyCta').style.display = 'block';
   }
 
   window.addEventListener('load', function () {
