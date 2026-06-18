@@ -339,7 +339,6 @@
       text-transform: uppercase; color: var(--text-muted);
     }
     .active-prog-name { font-size: 15px; font-weight: 600; margin-top: 3px; }
-    .active-prog-session { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
     .btn-change-prog {
       flex-shrink: 0; padding: 6px 12px; background: transparent;
       border: 1px solid var(--border-2); border-radius: 6px;
@@ -363,29 +362,43 @@
       cursor: pointer; transition: border-color 0.2s;
     }
     .program-picker-btn:hover { border-color: var(--red); }
-    .choose-workout-link {
-      display: inline-block; margin-top: 12px;
-      font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
-      color: var(--text-muted); text-decoration: none; cursor: pointer;
-      transition: color .2s;
+    /* ── Workout selector dropdown ─────────────────────────────────── */
+    .workout-selector-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+      text-transform: uppercase; color: var(--text-muted);
+      margin-top: 18px; margin-bottom: 8px;
     }
-    .choose-workout-link:hover { color: var(--red); }
-    .workout-picker-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-    .workout-picker-btn {
+    .workout-selector-btn {
       display: flex; align-items: center; justify-content: space-between;
-      width: 100%; padding: 11px 14px; gap: 10px;
-      background: var(--surface-2); border: 1px solid var(--border-2);
+      width: 100%; padding: 14px 16px;
+      background: var(--surface-2); border: 1.5px solid var(--border-2);
+      border-radius: 10px; color: var(--text);
+      font-family: 'Barlow', sans-serif; font-size: 16px; font-weight: 700;
+      cursor: pointer; transition: border-color 0.2s, background 0.2s;
+      text-align: left;
+    }
+    .workout-selector-btn:hover { border-color: var(--red); }
+    .workout-selector-btn.open { border-color: var(--red); background: rgba(177,18,27,0.06); }
+    .workout-selector-chevron { flex-shrink: 0; transition: transform .2s; color: var(--text-muted); }
+    .workout-selector-btn.open .workout-selector-chevron { transform: rotate(180deg); }
+    .workout-dropdown {
+      display: none; flex-direction: column; gap: 6px; margin-top: 6px;
+    }
+    .workout-dropdown.open { display: flex; }
+    .workout-dropdown-option {
+      display: flex; align-items: center; justify-content: space-between;
+      width: 100%; padding: 12px 16px;
+      background: var(--surface-2); border: 1.5px solid var(--border-2);
       border-radius: 8px; color: var(--text); font-size: 14px; font-weight: 600;
       font-family: 'Barlow', sans-serif; text-align: left;
       cursor: pointer; transition: border-color 0.2s;
     }
-    .workout-picker-btn:hover { border-color: var(--red); }
-    .workout-picker-btn.selected { border-color: var(--red); }
-    .workout-picker-tag {
+    .workout-dropdown-option:hover { border-color: var(--red); }
+    .workout-dropdown-option.active { border-color: var(--red); background: rgba(177,18,27,0.08); }
+    .workout-dropdown-tag {
       font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-      color: var(--text-muted); flex-shrink: 0;
+      color: var(--red); flex-shrink: 0;
     }
-    .workout-picker-btn.selected .workout-picker-tag { color: var(--red); }
     .discard-session-link {
       font-size: 12px; color: var(--text-muted); text-decoration: none;
       transition: color .2s;
@@ -493,14 +506,17 @@
           <div>
             <div class="active-prog-label">Active Program</div>
             <div class="active-prog-name" id="activeProgramName">—</div>
-            <div class="active-prog-session">Recommended next workout: <span id="todaySessionNameDash">—</span></div>
           </div>
           <button class="btn-change-prog" id="changeProgramBtn" style="display:none;" onclick="openProgramPicker()">Change</button>
         </div>
-        <!-- Manual workout selection (still defaults to the recommended one) -->
+        <!-- Workout selector (shown when no unfinished session exists) -->
         <div id="chooseWorkoutWrap" style="display:none;">
-          <a href="#" class="choose-workout-link" id="chooseWorkoutLink" onclick="toggleWorkoutPicker(); return false;">Choose different workout</a>
-          <div id="workoutPickerList" class="workout-picker-list" style="display:none;"></div>
+          <div class="workout-selector-label">Today's Workout</div>
+          <button class="workout-selector-btn" id="workoutSelectorBtn" onclick="toggleWorkoutDropdown()">
+            <span id="workoutSelectorLabel">—</span>
+            <svg class="workout-selector-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div id="workoutDropdown" class="workout-dropdown"></div>
         </div>
       </div>
 
@@ -1087,7 +1103,6 @@
     selectedSessionKey     = sessionKey;
 
     document.getElementById('activeProgramName').textContent    = meta.name;
-    document.getElementById('todaySessionNameDash').textContent  = SESSION_LABELS[sessionKey] || sessionKey;
     document.getElementById('changeProgramBtn').style.display   = canChange ? '' : 'none';
     document.getElementById('activeProgramSection').style.display = '';
     document.getElementById('noProgramSection').style.display    = 'none';
@@ -1099,11 +1114,11 @@
     btn.style.display = '';
     document.getElementById('btnBrowsePrograms').style.display = 'none';
 
-    // Reset + show the manual selection control (single-program owners get it too).
-    document.getElementById('workoutPickerList').style.display = 'none';
-    document.getElementById('chooseWorkoutLink').textContent   = 'Choose different workout';
-    document.getElementById('chooseWorkoutWrap').style.display  = '';
-    renderWorkoutPicker();
+    // Show the workout selector (defaults to recommended, user can change).
+    document.getElementById('workoutDropdown').classList.remove('open');
+    document.getElementById('workoutSelectorBtn').classList.remove('open');
+    document.getElementById('chooseWorkoutWrap').style.display = '';
+    renderWorkoutSelector();
 
     // Goal / active program mismatch hint
     var expectedSlug = GOAL_PROGRAM_MAP[currentProfile.goal];
@@ -1170,32 +1185,35 @@
     showProgramPickerState(ownedProgramsList);
   }
 
-  // ── Manual workout selection ──────────────────────────────────────
-  // The dashboard always recommends the next sequenced workout, but the user
-  // may manually pick any session in the active program's current schedule.
-  // Picking one only changes which workout Start launches — it never touches
-  // active_program or current_index (progression advances on finish instead).
+  // ── Workout selector dropdown ─────────────────────────────────────
+  // Always defaults to the recommended next workout; user can open the dropdown
+  // and pick any session in the current schedule. Picking only changes the
+  // Start link — active_program and current_index are not touched.
   var activeProgramSlug     = null;
   var activeScheduleKeys    = [];
   var recommendedSessionKey = null;
   var selectedSessionKey    = null;
 
-  function toggleWorkoutPicker() {
-    var list = document.getElementById('workoutPickerList');
-    var open = list.style.display !== 'none';
-    list.style.display = open ? 'none' : '';
-    document.getElementById('chooseWorkoutLink').textContent =
-      open ? 'Choose different workout' : 'Hide workout list';
+  function toggleWorkoutDropdown() {
+    var dropdown = document.getElementById('workoutDropdown');
+    var btn      = document.getElementById('workoutSelectorBtn');
+    var open     = dropdown.classList.contains('open');
+    dropdown.classList.toggle('open', !open);
+    btn.classList.toggle('open', !open);
   }
 
-  function renderWorkoutPicker() {
-    var list = document.getElementById('workoutPickerList');
-    list.innerHTML = activeScheduleKeys.map(function(key) {
-      var isSel = key === selectedSessionKey;
-      var isRec = key === recommendedSessionKey;
-      var tag   = isRec ? '<span class="workout-picker-tag">Recommended</span>'
-                 : isSel ? '<span class="workout-picker-tag">Selected</span>' : '';
-      return '<button class="workout-picker-btn' + (isSel ? ' selected' : '') + '" ' +
+  function renderWorkoutSelector() {
+    // Update the selector button label
+    document.getElementById('workoutSelectorLabel').textContent =
+      SESSION_LABELS[selectedSessionKey] || selectedSessionKey || '—';
+
+    // Rebuild the dropdown options
+    var dropdown = document.getElementById('workoutDropdown');
+    dropdown.innerHTML = activeScheduleKeys.map(function(key) {
+      var isActive = key === selectedSessionKey;
+      var isRec    = key === recommendedSessionKey;
+      var tag = isRec ? '<span class="workout-dropdown-tag">Next up</span>' : '';
+      return '<button class="workout-dropdown-option' + (isActive ? ' active' : '') + '" ' +
         'onclick="selectDashWorkout(\'' + key + '\')">' +
         '<span>' + (SESSION_LABELS[key] || key) + '</span>' + tag + '</button>';
     }).join('');
@@ -1204,11 +1222,13 @@
   function selectDashWorkout(key) {
     if (activeScheduleKeys.indexOf(key) < 0) return;
     selectedSessionKey = key;
-    var isRec = key === recommendedSessionKey;
     var btn = document.getElementById('btnStartWorkout');
     btn.href = 'workout.html?program=' + activeProgramSlug + '&session=' + key;
-    btn.textContent = isRec ? 'Start Workout' : 'Start selected workout';
-    renderWorkoutPicker();
+    btn.textContent = 'Start Workout';
+    // Close the dropdown after selection
+    document.getElementById('workoutDropdown').classList.remove('open');
+    document.getElementById('workoutSelectorBtn').classList.remove('open');
+    renderWorkoutSelector();
   }
 
   var inProgressId = null;
