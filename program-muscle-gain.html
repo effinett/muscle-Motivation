@@ -817,8 +817,12 @@
           p.classList.toggle('active', p.getAttribute('data-panel') === days);
         });
         updateTodaySession(up.schedule_keys, up.current_index || 0);
+      } else {
+        updateTodaySession(SCHEDULES['3'], 0);
       }
-    } catch (e) { /* non-fatal */ }
+    } catch (e) {
+      updateTodaySession(SCHEDULES['3'], 0);
+    }
   }
 
   window.addEventListener('load', function () {
