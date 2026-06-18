@@ -945,9 +945,9 @@
       document.getElementById('dashSplit').textContent     = recalcPlan.training_split;
       document.getElementById('recalcModal').classList.remove('open');
 
-      // If training_days changed, remap active program schedule
-      if (recalcPlan.training_days !== prevTrainingDays && currentProfile.active_program) {
-        await remapUserProgramSchedule(s.session.user.id, recalcPlan.training_days);
+      // training_days is global — remap ALL owned programs when it changes
+      if (recalcPlan.training_days !== prevTrainingDays && ownedProgramsList.length > 0) {
+        await remapAllProgramSchedules(s.session.user.id, recalcPlan.training_days);
       }
 
       showToast('Goals updated!');
@@ -957,30 +957,43 @@
     }
   }
 
-  async function remapUserProgramSchedule(userId, newTrainingDays) {
-    var activeSlug = currentProfile.active_program;
-    if (!activeSlug) return;
+  // training_days is a GLOBAL profile setting — one source of truth, no per-program frequency.
+  // This function remaps ALL owned programs to the new schedule at once.
+  async function remapAllProgramSchedules(userId, newTrainingDays) {
+    if (!ownedProgramsList.length) return;
 
-    var { data: up } = await supabaseClient
+    // Fetch all existing user_programs rows for owned slugs in one query
+    var { data: rows } = await supabaseClient
       .from('user_programs').select('*')
-      .eq('user_id', userId).eq('program_slug', activeSlug).maybeSingle();
+      .eq('user_id', userId)
+      .in('program_slug', ownedProgramsList);
 
-    var newKeys = getScheduleForDays(activeSlug, newTrainingDays);
-    if (!up) return; // will be bootstrapped on first workout finish
+    var rowMap = {};
+    (rows || []).forEach(function(r) { rowMap[r.program_slug] = r; });
 
-    var oldKeys = up.schedule_keys || [];
-    if (oldKeys.join(',') === newKeys.join(',')) return; // already correct
+    var days = parseInt(newTrainingDays, 10) || 3;
 
-    var curKey = oldKeys[up.current_index % (oldKeys.length || 1)];
-    var newIdx = newKeys.indexOf(curKey);
-    if (newIdx < 0) newIdx = (up.current_index || 0) % newKeys.length;
+    await Promise.all(ownedProgramsList.map(async function(slug) {
+      var up      = rowMap[slug];
+      if (!up) return; // no row yet — bootstrapped on first workout finish with correct days
 
-    await supabaseClient.from('user_programs')
-      .update({ schedule_keys: newKeys, current_index: newIdx, training_days: parseInt(newTrainingDays, 10) || 3 })
-      .eq('id', up.id);
+      var newKeys = getScheduleForDays(slug, days);
+      var oldKeys = up.schedule_keys || [];
+      if (oldKeys.join(',') === newKeys.join(',')) return; // already correct, skip
 
-    // Refresh Today card with new next session
-    await showActiveProgramState(userId, activeSlug, ownedProgramsList.length > 1);
+      var curKey = oldKeys[up.current_index % (oldKeys.length || 1)];
+      var newIdx = newKeys.indexOf(curKey);
+      if (newIdx < 0) newIdx = (up.current_index || 0) % newKeys.length;
+
+      await supabaseClient.from('user_programs')
+        .update({ schedule_keys: newKeys, current_index: newIdx, training_days: days })
+        .eq('id', up.id);
+    }));
+
+    // Refresh Today card to show the updated next session for the active program
+    if (currentProfile.active_program) {
+      await showActiveProgramState(userId, currentProfile.active_program, ownedProgramsList.length > 1);
+    }
   }
 
   async function loadPurchases(userId) {
