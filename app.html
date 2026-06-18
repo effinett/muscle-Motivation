@@ -723,7 +723,8 @@
         if (profile.timeline) goalTag += ' · ' + (timelineLabels[profile.timeline] || profile.timeline);
         document.getElementById('dashGoalTag').textContent = goalTag;
 
-        document.getElementById('dashSplit').textContent = profile.training_split || '—';
+        // Neutral frequency label — never a program-specific split name here
+        document.getElementById('dashSplit').textContent = getFrequencyLabel(profile.training_days);
 
         document.getElementById('dashCalories').textContent = profile.target_calories
           ? profile.target_calories.toLocaleString() + ' kcal' : '—';
@@ -903,7 +904,7 @@
       document.getElementById('dashProtein').textContent   = recalcPlan.protein_target + 'g';
       document.getElementById('dashCarbs').textContent     = recalcPlan.carb_target + 'g';
       document.getElementById('dashFats').textContent      = recalcPlan.fat_target + 'g';
-      document.getElementById('dashSplit').textContent     = recalcPlan.training_split;
+      document.getElementById('dashSplit').textContent     = getFrequencyLabel(recalcPlan.training_days);
       document.getElementById('recalcModal').classList.remove('open');
 
       // training_days is global — remap ALL owned programs when it changes

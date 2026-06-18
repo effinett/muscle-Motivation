@@ -68,8 +68,19 @@ function getScheduleForDays(programSlug, trainingDays) {
   return table[d] || table[3] || ['full_a', 'full_b', 'full_c'];
 }
 
-/* Human label for the Training Split row — derived from the same days value
- * that drives getScheduleForDays, so label and launched workout never diverge. */
+/* Neutral frequency label for the dashboard "Training Split" stats row.
+ * Deliberately program-agnostic and split-agnostic: just the day count, so it
+ * never claims "Push / Pull / Legs" for, say, an active Glute Builder program.
+ * The Today card and program pages still show specific session names. */
+function getFrequencyLabel(trainingDays) {
+  var d = parseInt(trainingDays, 10);
+  if (!d) return 'Not training yet';
+  return d + (d === 1 ? ' day/week' : ' days/week');
+}
+
+/* Descriptive split name (Full Body / Upper-Lower / PPL) derived from days.
+ * Still used to populate profiles.training_split on recalc; NOT shown in the
+ * dashboard stats row anymore (see getFrequencyLabel). */
 function getSplitLabel(trainingDays) {
   var d = parseInt(trainingDays, 10);
   if (!d)       return 'Start with 2x Full Body';
