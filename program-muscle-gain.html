@@ -698,7 +698,7 @@
   <div class="sticky-cta" id="stickyCta">
     <div class="sticky-cta-inner">
       <div>
-        <div class="sticky-cta-label">Recommended next workout</div>
+        <div class="sticky-cta-label" id="ctaLabel">Recommended Next Workout</div>
         <div class="sticky-cta-name" id="todaySessionName">—</div>
       </div>
       <a class="sticky-cta-btn" id="startTodayBtn" href="workout.html">Start Workout</a>
@@ -724,32 +724,41 @@
   var PROG_RECOMMENDED = null;
   var PROG_SELECTED    = null;
 
+  // Program-page starts are OPTIONAL by default (mode=optional): they log to
+  // history but never advance dashboard progression (current_index). Only the
+  // Dashboard Start Workout uses mode=progression.
   function selectProgWorkout(key) {
     if (PROG_KEYS.indexOf(key) < 0) return;
     PROG_SELECTED = key;
     document.getElementById('todaySessionName').textContent = SESSION_LABELS[key] || key;
+    document.getElementById('ctaLabel').textContent =
+      (key === PROG_RECOMMENDED) ? 'Recommended Next Workout' : 'Optional Workout';
     var btn = document.getElementById('startTodayBtn');
-    btn.href = 'workout.html?program=' + PROGRAM_SLUG + '&session=' + key;
-    btn.textContent = (key === PROG_RECOMMENDED) ? 'Start Workout' : 'Start selected workout';
+    btn.href = 'workout.html?program=' + PROGRAM_SLUG + '&session=' + key + '&mode=optional';
+    btn.textContent = 'Start Workout';
     renderSchedulePreview();
   }
 
   function renderSchedulePreview() {
-    document.getElementById('schedPreview').innerHTML = PROG_KEYS.map(function(k, i) {
-      var cls  = (k === PROG_SELECTED ? ' selected' : '');
-      var note = (k === PROG_RECOMMENDED ? ' · Recommended' : '');
+    document.getElementById('schedPreview').innerHTML = PROG_KEYS.map(function(k) {
+      var isRec = (k === PROG_RECOMMENDED);
+      var cls   = (k === PROG_SELECTED ? ' selected' : '') + (isRec ? ' today' : '');
+      var label = isRec ? 'Recommended Next Workout' : 'Optional';
       return '<div class="sched-row' + cls + '" onclick="selectProgWorkout(\'' + k + '\')">' +
-        '<span class="day">Session ' + (i + 1) + note + '</span>' +
+        '<span class="day">' + label + '</span>' +
         '<span class="sess">' + (SESSION_LABELS[k] || k) + '</span></div>';
     }).join('');
   }
 
   // training_days is GLOBAL (profiles.training_days). This page only READS it —
   // it never stores a per-program frequency. current_index is progression only.
+  // The browsable list shows EVERY session in the program (Priority 3), not just
+  // the ones in the user's frequency schedule; the recommended next progression
+  // workout is highlighted but starting any session here is optional.
   async function loadUserProgram(userId) {
     var profile = await getProfile(userId);
     var days = (profile && profile.training_days) ? profile.training_days : 3;
-    var keys = getScheduleForDays(PROGRAM_SLUG, days);
+    var schedule = getScheduleForDays(PROGRAM_SLUG, days);
 
     var { data: up } = await supabaseClient
       .from('user_programs').select('current_index')
@@ -758,9 +767,9 @@
     var idx = up ? (up.current_index || 0) : 0;
 
     document.getElementById('schedSummary').textContent =
-      'You train ' + days + ' days/week. Your sessions rotate in this order — tap any session to train it now:';
-    PROG_KEYS        = keys;
-    PROG_RECOMMENDED = keys[idx % keys.length];
+      'You train ' + days + ' days/week. Your recommended next workout is marked below — but you can start any workout in this program as an optional session. Optional sessions log to your history without changing your dashboard progression.';
+    PROG_KEYS        = getAllSessionsForProgram(PROGRAM_SLUG);
+    PROG_RECOMMENDED = schedule[idx % schedule.length];
     selectProgWorkout(PROG_RECOMMENDED);
     document.getElementById('stickyCta').style.display = 'block';
   }

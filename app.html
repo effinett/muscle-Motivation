@@ -1193,7 +1193,9 @@
     document.getElementById('programPickerSection').style.display = 'none';
 
     var btn = document.getElementById('btnStartWorkout');
-    btn.href = 'workout.html?program=' + activeSlug + '&session=' + sessionKey;
+    // Dashboard launches are the progression driver — mode=progression so
+    // finishing advances current_index (program-page launches use mode=optional).
+    btn.href = 'workout.html?program=' + activeSlug + '&session=' + sessionKey + '&mode=progression';
     btn.textContent = 'Start Workout';
     btn.style.display = '';
     document.getElementById('btnBrowsePrograms').style.display = 'none';
@@ -1307,7 +1309,7 @@
     if (activeScheduleKeys.indexOf(key) < 0) return;
     selectedSessionKey = key;
     var btn = document.getElementById('btnStartWorkout');
-    btn.href = 'workout.html?program=' + activeProgramSlug + '&session=' + key;
+    btn.href = 'workout.html?program=' + activeProgramSlug + '&session=' + key + '&mode=progression';
     btn.textContent = 'Start Workout';
     // Close the dropdown after selection
     document.getElementById('workoutDropdown').classList.remove('open');

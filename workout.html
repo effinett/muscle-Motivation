@@ -558,9 +558,10 @@
         var params    = new URLSearchParams(window.location.search);
         var progSlug  = params.get('program');
         var sessKey   = params.get('session');
+        var mode      = params.get('mode');
         var histOpts = { limit: 10, targetId: 'historyList', emptyText: 'No workouts yet — start your first session above.' };
         if (progSlug && sessKey) {
-          await Promise.all([startProgramSession(progSlug, sessKey), loadHistory(histOpts)]);
+          await Promise.all([startProgramSession(progSlug, sessKey, mode), loadHistory(histOpts)]);
         } else {
           await Promise.all([checkActiveWorkout(), loadHistory(histOpts)]);
         }
@@ -576,10 +577,47 @@
   });
 
   // ── Exercise library ──────────────────────────────────────────────
+  // Search pool = global/default exercises + this user's saved custom
+  // exercises (Priority 6). Both are merged so manually added exercises stay
+  // reusable across future workouts. User entries are deduped against the
+  // global list by case-insensitive name so nothing shows up twice.
   async function loadExerciseLibrary() {
-    var { data } = await supabaseClient
-      .from('exercises').select('id, name, category, equipment').order('name');
-    if (data) exerciseLibrary = data;
+    var results = await Promise.all([
+      supabaseClient.from('exercises').select('id, name, category, equipment').order('name'),
+      supabaseClient.from('user_exercises').select('id, name, category').eq('user_id', currentUser.id).order('name')
+    ]);
+    var globalEx = results[0].data || [];
+    var userEx   = results[1].data || [];
+    var seen = {};
+    globalEx.forEach(function(e) { seen[e.name.toLowerCase()] = true; });
+    var merged = globalEx.slice();
+    userEx.forEach(function(e) {
+      if (seen[e.name.toLowerCase()]) return;
+      seen[e.name.toLowerCase()] = true;
+      merged.push({ id: e.id, name: e.name, category: e.category || 'Custom', equipment: null, user_created: true });
+    });
+    exerciseLibrary = merged;
+  }
+
+  // Persist a manually typed exercise to the user's library so it's reusable.
+  // Skips anything already in the merged library (global or user) — no dupes.
+  // Non-fatal: a failure here still lets the exercise be added to this workout.
+  async function saveUserExercise(name) {
+    var clean = (name || '').trim();
+    if (!clean) return;
+    var exists = exerciseLibrary.some(function(e) { return e.name.toLowerCase() === clean.toLowerCase(); });
+    if (exists) return;
+    try {
+      var { data } = await supabaseClient
+        .from('user_exercises')
+        .insert({ user_id: currentUser.id, name: clean })
+        .select().single();
+      if (data) {
+        exerciseLibrary.push({ id: data.id, name: data.name, category: 'Custom', equipment: null, user_created: true });
+      }
+    } catch (e) {
+      // Unique-violation (already saved) or transient error — safe to ignore.
+    }
   }
 
   // ── Check/resume active workout ───────────────────────────────────
@@ -649,9 +687,11 @@
   async function startWorkout() {
     var name = document.getElementById('workoutNameInput').value.trim();
     if (!name) { showToast('Give your workout a name.'); return; }
+    // Manual sessions are 'optional' (no program_slug) so they never advance
+    // dashboard progression. mode is still stored for a uniform finish path.
     var { data, error } = await supabaseClient
       .from('workouts')
-      .insert({ user_id: currentUser.id, name: name, date: new Date().toISOString().slice(0, 10) })
+      .insert({ user_id: currentUser.id, name: name, date: new Date().toISOString().slice(0, 10), mode: 'optional' })
       .select().single();
     if (error) { showToast('Error starting workout — try again.'); return; }
     currentWorkout = data;
@@ -803,6 +843,9 @@
 
   async function selectExercise(name) {
     closePicker();
+    // Save any brand-new (non-library) exercise to the user's library so it's
+    // reusable later. Dedupes internally — global/known names are no-ops.
+    await saveUserExercise(name);
     var orderIndex = exercises.length;
     var { data, error } = await supabaseClient
       .from('workout_exercises')
@@ -904,7 +947,12 @@
     localStorage.removeItem('wkt_start_' + currentWorkout.id);
     localStorage.removeItem('wkt_prog_' + currentWorkout.id);
     localStorage.removeItem('wkt_sess_' + currentWorkout.id);
-    if (progSlug) await advanceProgramSession(progSlug, sessKey);
+    // Progression advances ONLY for a dashboard progression workout. Optional
+    // workouts (program-page or manual) save to history but never touch
+    // current_index — even though they carry the same program_slug/session_key.
+    if (progSlug && currentWorkout.mode === 'progression') {
+      await advanceProgramSession(progSlug, sessKey);
+    }
     closeFinishModal();
     showToast('Workout saved!');
     setTimeout(function() { window.location.href = 'app.html'; }, 1600);
@@ -930,9 +978,21 @@
   // ── History ── rendering/loading/edit/delete live in workout-history.js (shared)
 
   // ── Program session start ─────────────────────────────────────────
-  async function startProgramSession(programSlug, sessionKey) {
+  // mode decides whether finishing advances dashboard progression:
+  //   'progression' (from Dashboard Start Workout) → advances current_index
+  //   'optional'    (from a Program Page)          → logs only, never advances
+  // Default to 'optional' when missing so a stray link can never wrongly
+  // advance progression (Priority 2 safety rule — never rely on session_key).
+  async function startProgramSession(programSlug, sessionKey, mode) {
+    mode = (mode === 'progression') ? 'progression' : 'optional';
+
+    // Resume/discard safety (Priority 5): if an unfinished workout already
+    // exists, resume IT instead of overwriting it with this new session.
     await checkActiveWorkout();
-    if (currentWorkout) return;
+    if (currentWorkout) {
+      showToast('You have an unfinished workout — finish or discard it before starting another.');
+      return;
+    }
 
     var { data: sessData } = await supabaseClient
       .from('program_workouts').select('*')
@@ -945,7 +1005,7 @@
 
     var { data: workout, error } = await supabaseClient
       .from('workouts')
-      .insert({ user_id: currentUser.id, name: workoutName, date: new Date().toISOString().slice(0, 10), program_slug: programSlug, session_key: sessionKey })
+      .insert({ user_id: currentUser.id, name: workoutName, date: new Date().toISOString().slice(0, 10), program_slug: programSlug, session_key: sessionKey, mode: mode })
       .select().single();
     if (error) { showToast('Error starting workout.'); return; }
 

@@ -68,6 +68,25 @@ function getScheduleForDays(programSlug, trainingDays) {
   return table[d] || table[3] || ['full_a', 'full_b', 'full_c'];
 }
 
+/* Every session a program offers, regardless of the user's training_days.
+ * Built by unioning all day-buckets (2–6) for the program, deduped and in
+ * order of first appearance. Used by program pages so a user can browse and
+ * start ANY workout in a program they own (Priority 3) — not just the ones in
+ * their current frequency schedule. The dashboard still uses getScheduleForDays
+ * for progression. */
+function getAllSessionsForProgram(programSlug) {
+  var table = PROGRAM_SCHEDULES[programSlug];
+  if (!table) return ['full_a', 'full_b', 'full_c'];
+  var seen = {};
+  var all = [];
+  [2, 3, 4, 5, 6].forEach(function(d) {
+    (table[d] || []).forEach(function(key) {
+      if (!seen[key]) { seen[key] = true; all.push(key); }
+    });
+  });
+  return all;
+}
+
 /* Neutral frequency label for the dashboard "Training Split" stats row.
  * Deliberately program-agnostic and split-agnostic: just the day count, so it
  * never claims "Push / Pull / Legs" for, say, an active Glute Builder program.
