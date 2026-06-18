@@ -658,19 +658,13 @@
 <!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="supabase.js"></script>
+<script src="schedules.js"></script>
 <script>
   var PRODUCT_SLUG = 'glute_builder';
   var PROGRAM_SLUG = 'glute_builder';
-  var SCHEDULES = {
-    '3': ['session_a', 'session_b', 'session_c'],
-    '4': ['session_a', 'upper', 'session_b', 'session_c']
-  };
-  var SESSION_NAMES = {
-    session_a: 'Session A — Hip Thrust Lead',
-    session_b: 'Session B — RDL Lead',
-    session_c: 'Session C — Squat Lead',
-    upper: 'Upper Body'
-  };
+  // Schedules + labels come from schedules.js (single source of truth)
+  var SCHEDULES     = PROGRAM_SCHEDULES.glute_builder;
+  var SESSION_NAMES = SESSION_LABELS;
 
   function updateTodaySession(scheduleKeys, currentIndex) {
     var key = scheduleKeys[currentIndex % scheduleKeys.length];

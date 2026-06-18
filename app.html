@@ -678,6 +678,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="supabase.js"></script>
+<script src="schedules.js"></script>
 <script>
 
   var currentProfile    = null;
@@ -687,52 +688,14 @@
 
   var GOAL_PROGRAM_MAP = { fatloss: 'fat_loss_blueprint', muscle: 'muscle_gain' };
 
-  var SESSION_NAMES_DASH = {
-    full_a: 'Full Body A',    full_b: 'Full Body B',    full_c: 'Full Body C',
-    upper_a: 'Upper A',       upper_b: 'Upper B',
-    lower_a: 'Lower A',       lower_b: 'Lower B',
-    push: 'Push',             pull: 'Pull',             legs: 'Legs',
-    session_a: 'Session A — Hip Thrust Lead',
-    session_b: 'Session B — RDL Lead',
-    session_c: 'Session C — Squat Lead',
-    glute_a: 'Glute A',       glute_b: 'Glute B',       glute_c: 'Glute C',
-    glute_lower_a: 'Glute & Lower A', glute_lower_b: 'Glute & Lower B',
-    upper: 'Upper Body',
-  };
+  // Session labels + PROGRAM_SCHEDULES + getScheduleForDays come from schedules.js
+  var SESSION_NAMES_DASH = SESSION_LABELS;
 
   var PROGRAM_META = {
     fat_loss_blueprint: { name: '90 Day Fat Loss Blueprint' },
     muscle_gain:        { name: 'Muscle Gain' },
     glute_builder:      { name: 'Glute Builder' },
   };
-
-  // Schedule keys per program per training-days bucket (2 / 3 / 4)
-  var PROGRAM_SCHEDULES = {
-    fat_loss_blueprint: {
-      2: ['full_a', 'full_b'],
-      3: ['full_a', 'full_b', 'full_c'],
-      4: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
-    },
-    muscle_gain: {
-      2: ['full_a', 'full_b'],
-      3: ['full_a', 'full_b', 'full_c'],
-      4: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
-    },
-    glute_builder: {
-      2: ['session_a', 'session_b'],
-      3: ['session_a', 'session_b', 'session_c'],
-      4: ['session_a', 'upper_a', 'session_b', 'upper_b'],
-    },
-  };
-
-  function getScheduleForDays(programSlug, trainingDays) {
-    var table = PROGRAM_SCHEDULES[programSlug];
-    if (!table) return ['full_a', 'full_b', 'full_c'];
-    var d = parseInt(trainingDays, 10);
-    if (!d || d < 2) d = 3;   // 0 / unset → 3-day default
-    d = Math.min(d, 4);       // cap at 4
-    return table[d] || table[3] || ['full_a', 'full_b', 'full_c'];
-  }
 
   window.addEventListener('load', function() {
     (async () => {
@@ -859,11 +822,9 @@
   }
 
   function rcGetSplit(days) {
-    if (days === 0) return 'Start with 2x Full Body';
-    if (days <= 2)  return 'Full Body A/B';
-    if (days === 3) return 'Full Body A/B/C';
-    if (days === 4) return 'Upper / Lower Split';
-    return 'Push / Pull / Legs';
+    // Delegate to the shared source of truth so the label always matches
+    // the schedule that getScheduleForDays will actually launch.
+    return getSplitLabel(days);
   }
 
   function runRecalc() {

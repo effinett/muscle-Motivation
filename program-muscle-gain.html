@@ -753,21 +753,13 @@
 <!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="supabase.js"></script>
+<script src="schedules.js"></script>
 <script>
   var PRODUCT_SLUG = 'muscle_gain';
   var PROGRAM_SLUG = 'muscle_gain';
-  var SCHEDULES = {
-    '2': ['full_a', 'full_b'],
-    '3': ['full_a', 'full_b', 'full_c'],
-    '4': ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
-    '5': ['push', 'pull', 'legs', 'upper_a', 'lower_a']
-  };
-  var SESSION_NAMES = {
-    upper_a: 'Upper A', upper_b: 'Upper B',
-    lower_a: 'Lower A', lower_b: 'Lower B',
-    push: 'Push', pull: 'Pull', legs: 'Legs',
-    full_a: 'Full Body A', full_b: 'Full Body B', full_c: 'Full Body C'
-  };
+  // Schedules + labels come from schedules.js (single source of truth)
+  var SCHEDULES     = PROGRAM_SCHEDULES.muscle_gain;
+  var SESSION_NAMES = SESSION_LABELS;
 
   function updateTodaySession(scheduleKeys, currentIndex) {
     var key = scheduleKeys[currentIndex % scheduleKeys.length];

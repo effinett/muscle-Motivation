@@ -670,23 +670,14 @@
 <!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="supabase.js"></script>
+<script src="schedules.js"></script>
 <script>
   var currentUser  = null;
   var userProgram  = null;
 
-  var SCHEDULES = {
-    '2': ['full_a', 'full_b'],
-    '3': ['full_a', 'full_b', 'full_c'],
-    '4': ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
-    '5': ['push', 'pull', 'legs', 'upper_a', 'lower_a']
-  };
-  var SESSION_NAMES = {
-    upper_a: 'Upper A',    lower_a: 'Lower A',
-    upper_b: 'Upper B',    lower_b: 'Lower B',
-    push: 'Push',          pull: 'Pull',
-    legs: 'Legs',          full_a: 'Full Body A',
-    full_b: 'Full Body B', full_c: 'Full Body C'
-  };
+  // Schedules + labels come from schedules.js (single source of truth)
+  var SCHEDULES     = PROGRAM_SCHEDULES.fat_loss_blueprint;
+  var SESSION_NAMES = SESSION_LABELS;
 
   window.addEventListener('load', function() {
     (async () => {

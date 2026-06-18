@@ -514,6 +514,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="supabase.js"></script>
+<script src="schedules.js"></script>
 <script>
   var currentUser     = null;
   var currentWorkout  = null;
@@ -1089,8 +1090,8 @@
 
     var day = new Date().toLocaleDateString('en-US', { weekday: 'short' });
     // Use template session_name if available, else derive a clean label from the key
-    var sessionLabel = sessData ? sessData.session_name : (SESSION_LABELS[sessionKey] || sessionKey.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); }));
-    var workoutName  = sessionLabel + ' — ' + day;
+    var sessLabel = sessData ? sessData.session_name : (SESSION_LABELS[sessionKey] || sessionKey.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); }));
+    var workoutName  = sessLabel + ' — ' + day;
 
     var { data: workout, error } = await supabaseClient
       .from('workouts')
@@ -1128,45 +1129,15 @@
       }
     }
     showActiveView();
+
+    // Task #8 safety net: if this scheduled session has no template content yet,
+    // tell the user clearly instead of silently launching an empty/fallback workout.
+    if (!sessData) {
+      showToast('"' + sessLabel + '" plan is coming soon — add your exercises below to log it.');
+    }
   }
 
-  var PROGRAM_SCHEDULES = {
-    fat_loss_blueprint: {
-      2: ['full_a', 'full_b'],
-      3: ['full_a', 'full_b', 'full_c'],
-      4: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
-    },
-    muscle_gain: {
-      2: ['full_a', 'full_b'],
-      3: ['full_a', 'full_b', 'full_c'],
-      4: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
-    },
-    glute_builder: {
-      2: ['session_a', 'session_b'],
-      3: ['session_a', 'session_b', 'session_c'],
-      4: ['session_a', 'upper_a', 'session_b', 'upper_b'],
-    },
-  };
-
-  var SESSION_LABELS = {
-    full_a: 'Full Body A', full_b: 'Full Body B', full_c: 'Full Body C',
-    upper_a: 'Upper A',    upper_b: 'Upper B',
-    lower_a: 'Lower A',    lower_b: 'Lower B',
-    session_a: 'Session A — Hip Thrust Lead',
-    session_b: 'Session B — RDL Lead',
-    session_c: 'Session C — Squat Lead',
-    glute_lower_a: 'Glute & Lower A', glute_lower_b: 'Glute & Lower B',
-    push: 'Push', pull: 'Pull', legs: 'Legs',
-  };
-
-  function getScheduleForDays(programSlug, trainingDays) {
-    var table = PROGRAM_SCHEDULES[programSlug];
-    if (!table) return ['full_a', 'full_b', 'full_c'];
-    var d = parseInt(trainingDays, 10);
-    if (!d || d < 2) d = 3;
-    d = Math.min(d, 4);
-    return table[d] || table[3] || ['full_a', 'full_b', 'full_c'];
-  }
+  // PROGRAM_SCHEDULES, SESSION_LABELS, getScheduleForDays come from schedules.js
 
   async function advanceProgramSession(programSlug) {
     try {
