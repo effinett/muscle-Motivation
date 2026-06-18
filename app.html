@@ -688,30 +688,51 @@
   var GOAL_PROGRAM_MAP = { fatloss: 'fat_loss_blueprint', muscle: 'muscle_gain' };
 
   var SESSION_NAMES_DASH = {
-    full_a: 'Full Body A',  full_b: 'Full Body B',  full_c: 'Full Body C',
-    upper_a: 'Upper A',     upper_b: 'Upper B',
-    lower_a: 'Lower A',     lower_b: 'Lower B',
-    push: 'Push',           pull: 'Pull',           legs: 'Legs',
+    full_a: 'Full Body A',    full_b: 'Full Body B',    full_c: 'Full Body C',
+    upper_a: 'Upper A',       upper_b: 'Upper B',
+    lower_a: 'Lower A',       lower_b: 'Lower B',
+    push: 'Push',             pull: 'Pull',             legs: 'Legs',
     session_a: 'Session A — Hip Thrust Lead',
     session_b: 'Session B — RDL Lead',
     session_c: 'Session C — Squat Lead',
+    glute_a: 'Glute A',       glute_b: 'Glute B',       glute_c: 'Glute C',
+    glute_lower_a: 'Glute & Lower A', glute_lower_b: 'Glute & Lower B',
     upper: 'Upper Body',
   };
 
   var PROGRAM_META = {
+    fat_loss_blueprint: { name: '90 Day Fat Loss Blueprint' },
+    muscle_gain:        { name: 'Muscle Gain' },
+    glute_builder:      { name: 'Glute Builder' },
+  };
+
+  // Schedule keys per program per training-days bucket (2 / 3 / 4)
+  var PROGRAM_SCHEDULES = {
     fat_loss_blueprint: {
-      name: '90 Day Fat Loss Blueprint',
-      defaultSchedule: ['full_a', 'full_b', 'full_c'],
+      2: ['full_a', 'full_b'],
+      3: ['full_a', 'full_b', 'full_c'],
+      4: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
     },
     muscle_gain: {
-      name: 'Muscle Gain',
-      defaultSchedule: ['full_a', 'full_b', 'full_c'],
+      2: ['full_a', 'full_b'],
+      3: ['full_a', 'full_b', 'full_c'],
+      4: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
     },
     glute_builder: {
-      name: 'Glute Builder',
-      defaultSchedule: ['session_a', 'session_b', 'session_c'],
+      2: ['session_a', 'session_b'],
+      3: ['session_a', 'session_b', 'session_c'],
+      4: ['session_a', 'upper_a', 'session_b', 'upper_b'],
     },
   };
+
+  function getScheduleForDays(programSlug, trainingDays) {
+    var table = PROGRAM_SCHEDULES[programSlug];
+    if (!table) return ['full_a', 'full_b', 'full_c'];
+    var d = parseInt(trainingDays, 10);
+    if (!d || d < 2) d = 3;   // 0 / unset → 3-day default
+    d = Math.min(d, 4);       // cap at 4
+    return table[d] || table[3] || ['full_a', 'full_b', 'full_c'];
+  }
 
   window.addEventListener('load', function() {
     (async () => {
@@ -907,6 +928,7 @@
   async function saveRecalc() {
     if (!recalcPlan) return;
     try {
+      var prevTrainingDays = currentProfile.training_days;
       var { data: s } = await supabaseClient.auth.getSession();
       var { error } = await supabaseClient
         .from('profiles').update(recalcPlan).eq('id', s.session.user.id);
@@ -922,11 +944,43 @@
       document.getElementById('dashFats').textContent      = recalcPlan.fat_target + 'g';
       document.getElementById('dashSplit').textContent     = recalcPlan.training_split;
       document.getElementById('recalcModal').classList.remove('open');
+
+      // If training_days changed, remap active program schedule
+      if (recalcPlan.training_days !== prevTrainingDays && currentProfile.active_program) {
+        await remapUserProgramSchedule(s.session.user.id, recalcPlan.training_days);
+      }
+
       showToast('Goals updated!');
     } catch (err) {
       console.error('saveRecalc:', err);
       showToast('Error saving — try again.');
     }
+  }
+
+  async function remapUserProgramSchedule(userId, newTrainingDays) {
+    var activeSlug = currentProfile.active_program;
+    if (!activeSlug) return;
+
+    var { data: up } = await supabaseClient
+      .from('user_programs').select('*')
+      .eq('user_id', userId).eq('program_slug', activeSlug).maybeSingle();
+
+    var newKeys = getScheduleForDays(activeSlug, newTrainingDays);
+    if (!up) return; // will be bootstrapped on first workout finish
+
+    var oldKeys = up.schedule_keys || [];
+    if (oldKeys.join(',') === newKeys.join(',')) return; // already correct
+
+    var curKey = oldKeys[up.current_index % (oldKeys.length || 1)];
+    var newIdx = newKeys.indexOf(curKey);
+    if (newIdx < 0) newIdx = (up.current_index || 0) % newKeys.length;
+
+    await supabaseClient.from('user_programs')
+      .update({ schedule_keys: newKeys, current_index: newIdx, training_days: parseInt(newTrainingDays, 10) || 3 })
+      .eq('id', up.id);
+
+    // Refresh Today card with new next session
+    await showActiveProgramState(userId, activeSlug, ownedProgramsList.length > 1);
   }
 
   async function loadPurchases(userId) {
@@ -992,12 +1046,33 @@
     var meta = PROGRAM_META[activeSlug];
     if (!meta) return;
 
+    // Schedule is driven by profile.training_days — not hardcoded
+    var correctKeys = getScheduleForDays(activeSlug, currentProfile.training_days);
+
     var { data: up } = await supabaseClient
-      .from('user_programs').select('schedule_keys, current_index')
+      .from('user_programs').select('id, schedule_keys, current_index, training_days')
       .eq('user_id', userId).eq('program_slug', activeSlug).maybeSingle();
 
-    var keys       = (up && up.schedule_keys && up.schedule_keys.length) ? up.schedule_keys : meta.defaultSchedule;
-    var idx        = up ? (up.current_index || 0) : 0;
+    var keys, idx;
+    if (!up || !(up.schedule_keys || []).length) {
+      keys = correctKeys;
+      idx  = 0;
+    } else {
+      keys = up.schedule_keys;
+      idx  = up.current_index || 0;
+      // Auto-remap if stored schedule doesn't match current training_days
+      if (keys.join(',') !== correctKeys.join(',')) {
+        var curKey = keys[idx % keys.length];
+        var newIdx = correctKeys.indexOf(curKey);
+        if (newIdx < 0) newIdx = idx % correctKeys.length;
+        supabaseClient.from('user_programs')
+          .update({ schedule_keys: correctKeys, current_index: newIdx, training_days: parseInt(currentProfile.training_days, 10) || 3 })
+          .eq('id', up.id).then(function(){});
+        keys = correctKeys;
+        idx  = newIdx;
+      }
+    }
+
     var sessionKey = keys[idx % keys.length];
 
     document.getElementById('activeProgramName').textContent    = meta.name;

@@ -1080,20 +1080,18 @@
 
   // ── Program session start ─────────────────────────────────────────
   async function startProgramSession(programSlug, sessionKey) {
-    // Reuse any active workout from today first
     await checkActiveWorkout();
     if (currentWorkout) return;
 
     var { data: sessData } = await supabaseClient
       .from('program_workouts').select('*')
       .eq('program_slug', programSlug).eq('session_key', sessionKey).maybeSingle();
-    if (!sessData) {
-      await checkActiveWorkout();
-      return;
-    }
 
     var day = new Date().toLocaleDateString('en-US', { weekday: 'short' });
-    var workoutName = sessData.session_name + ' — ' + day;
+    // Use template session_name if available, else derive a clean label from the key
+    var sessionLabel = sessData ? sessData.session_name : (SESSION_LABELS[sessionKey] || sessionKey.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); }));
+    var workoutName  = sessionLabel + ' — ' + day;
+
     var { data: workout, error } = await supabaseClient
       .from('workouts')
       .insert({ user_id: currentUser.id, name: workoutName, date: new Date().toISOString().slice(0, 10), program_slug: programSlug })
@@ -1105,35 +1103,70 @@
     localStorage.setItem('wkt_start_' + workout.id, Date.now());
     localStorage.setItem('wkt_prog_' + workout.id, programSlug);
 
-    var exList = sessData.exercises || [];
-    for (var i = 0; i < exList.length; i++) {
-      var ex = exList[i];
-      var { data: we } = await supabaseClient
-        .from('workout_exercises')
-        .insert({ workout_id: workout.id, exercise_name: ex.name, order_index: i })
-        .select().single();
-      if (!we) continue;
-      var newEx = { id: we.id, name: ex.name, order_index: i, last_perf: null, last_weight: null, last_reps: null, sets: [] };
-      await loadLastPerf(newEx);
-      exercises.push(newEx);
-      for (var s = 0; s < ex.sets; s++) {
-        var w = newEx.last_weight;
-        var r = newEx.last_reps || ex.reps_high;
-        var { data: sd } = await supabaseClient
-          .from('workout_sets')
-          .insert({ workout_exercise_id: we.id, set_number: s + 1, weight_lbs: w, reps: r, completed: false })
+    // Load pre-built exercises if the template exists; otherwise start blank
+    if (sessData) {
+      var exList = sessData.exercises || [];
+      for (var i = 0; i < exList.length; i++) {
+        var ex = exList[i];
+        var { data: we } = await supabaseClient
+          .from('workout_exercises')
+          .insert({ workout_id: workout.id, exercise_name: ex.name, order_index: i })
           .select().single();
-        if (sd) newEx.sets.push({ id: sd.id, set_number: s + 1, weight_lbs: w, reps: r, completed: false });
+        if (!we) continue;
+        var newEx = { id: we.id, name: ex.name, order_index: i, last_perf: null, last_weight: null, last_reps: null, sets: [] };
+        await loadLastPerf(newEx);
+        exercises.push(newEx);
+        for (var s = 0; s < ex.sets; s++) {
+          var w = newEx.last_weight;
+          var r = newEx.last_reps || ex.reps_high;
+          var { data: sd } = await supabaseClient
+            .from('workout_sets')
+            .insert({ workout_exercise_id: we.id, set_number: s + 1, weight_lbs: w, reps: r, completed: false })
+            .select().single();
+          if (sd) newEx.sets.push({ id: sd.id, set_number: s + 1, weight_lbs: w, reps: r, completed: false });
+        }
       }
     }
     showActiveView();
   }
 
-  var DEFAULT_SCHEDULES = {
-    fat_loss_blueprint: ['full_a', 'full_b', 'full_c'],
-    muscle_gain:        ['full_a', 'full_b', 'full_c'],
-    glute_builder:      ['session_a', 'session_b', 'session_c'],
+  var PROGRAM_SCHEDULES = {
+    fat_loss_blueprint: {
+      2: ['full_a', 'full_b'],
+      3: ['full_a', 'full_b', 'full_c'],
+      4: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
+    },
+    muscle_gain: {
+      2: ['full_a', 'full_b'],
+      3: ['full_a', 'full_b', 'full_c'],
+      4: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
+    },
+    glute_builder: {
+      2: ['session_a', 'session_b'],
+      3: ['session_a', 'session_b', 'session_c'],
+      4: ['session_a', 'upper_a', 'session_b', 'upper_b'],
+    },
   };
+
+  var SESSION_LABELS = {
+    full_a: 'Full Body A', full_b: 'Full Body B', full_c: 'Full Body C',
+    upper_a: 'Upper A',    upper_b: 'Upper B',
+    lower_a: 'Lower A',    lower_b: 'Lower B',
+    session_a: 'Session A — Hip Thrust Lead',
+    session_b: 'Session B — RDL Lead',
+    session_c: 'Session C — Squat Lead',
+    glute_lower_a: 'Glute & Lower A', glute_lower_b: 'Glute & Lower B',
+    push: 'Push', pull: 'Pull', legs: 'Legs',
+  };
+
+  function getScheduleForDays(programSlug, trainingDays) {
+    var table = PROGRAM_SCHEDULES[programSlug];
+    if (!table) return ['full_a', 'full_b', 'full_c'];
+    var d = parseInt(trainingDays, 10);
+    if (!d || d < 2) d = 3;
+    d = Math.min(d, 4);
+    return table[d] || table[3] || ['full_a', 'full_b', 'full_c'];
+  }
 
   async function advanceProgramSession(programSlug) {
     try {
@@ -1142,15 +1175,17 @@
         .eq('user_id', currentUser.id).eq('program_slug', programSlug).maybeSingle();
 
       if (!up) {
-        // No saved schedule — create one with defaults, already at index 1
-        // (index 0 was just completed)
-        var keys = DEFAULT_SCHEDULES[programSlug] || ['full_a', 'full_b', 'full_c'];
+        // No saved schedule — fetch profile for training_days, then bootstrap
+        var { data: prof } = await supabaseClient
+          .from('profiles').select('training_days').eq('id', currentUser.id).maybeSingle();
+        var days = parseInt((prof && prof.training_days) || 3, 10);
+        var keys = getScheduleForDays(programSlug, days);
         await supabaseClient.from('user_programs').insert({
           user_id:       currentUser.id,
           program_slug:  programSlug,
           schedule_keys: keys,
           current_index: 1,
-          training_days: 3,
+          training_days: days,
         });
         return;
       }
