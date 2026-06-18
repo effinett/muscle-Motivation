@@ -437,6 +437,50 @@
       color: var(--text-2);
     }
 
+    /* My Activity */
+    .activity-group { margin-bottom: 12px; }
+    .activity-group:last-child { margin-bottom: 0; }
+    .activity-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      margin-bottom: 8px;
+    }
+    .activity-title {
+      font-size: 13px; font-weight: 700; letter-spacing: 0.5px; color: var(--text);
+    }
+    .activity-viewall {
+      font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--red); text-decoration: none; white-space: nowrap; flex-shrink: 0;
+    }
+    .activity-viewall:hover { text-decoration: underline; }
+    .activity-viewall.disabled { color: var(--text-muted); cursor: default; pointer-events: none; }
+    .activity-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      background: var(--surface-2); border: 1px solid var(--border-2);
+      border-radius: 8px; padding: 11px 14px; margin-bottom: 6px;
+      text-decoration: none; color: var(--text);
+      transition: border-color 0.2s;
+    }
+    a.activity-row:hover { border-color: var(--red); }
+    .activity-row:last-child { margin-bottom: 0; }
+    .activity-row-main { min-width: 0; }
+    .activity-row-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .activity-row-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .activity-row-sub .prog { color: var(--red); font-weight: 600; }
+    .activity-row-date { font-size: 12px; color: var(--text-muted); white-space: nowrap; flex-shrink: 0; }
+    .activity-empty {
+      font-size: 13px; color: var(--text-muted); padding: 6px 2px;
+    }
+    .activity-soon {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; color: var(--text-muted); padding: 11px 14px;
+      background: var(--surface-2); border: 1px dashed var(--border-2); border-radius: 8px;
+    }
+    .activity-soon-badge {
+      font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--text-muted); border: 1px solid var(--border-2); border-radius: 4px;
+      padding: 2px 7px;
+    }
+
     /* Toast */
     .toast {
       position: fixed; bottom: 24px; left: 50%;
@@ -562,6 +606,45 @@
         <span class="quick-btn-icon"><i data-lucide="bot"></i></span>
         <span class="quick-btn-label">AI Coach</span>
       </a>
+    </div>
+
+    <!-- My Activity -->
+    <div class="section-label">My Activity</div>
+    <div class="card">
+      <!-- Recent Workouts -->
+      <div class="activity-group">
+        <div class="activity-head">
+          <span class="activity-title">Recent Workouts</span>
+          <a class="activity-viewall" href="workout-history.html">View All →</a>
+        </div>
+        <div id="recentWorkouts">
+          <div class="activity-empty">Loading…</div>
+        </div>
+      </div>
+
+      <!-- Weigh-Ins -->
+      <div class="activity-group">
+        <div class="activity-head">
+          <span class="activity-title">Weigh-Ins</span>
+          <span class="activity-viewall disabled">View All →</span>
+        </div>
+        <div class="activity-soon">
+          <span class="activity-soon-badge">Coming soon</span>
+          Weight tracking is on the way.
+        </div>
+      </div>
+
+      <!-- Nutrition Logs -->
+      <div class="activity-group">
+        <div class="activity-head">
+          <span class="activity-title">Nutrition Logs</span>
+          <span class="activity-viewall disabled">View All →</span>
+        </div>
+        <div class="activity-soon">
+          <span class="activity-soon-badge">Coming soon</span>
+          Food &amp; macro logging is on the way.
+        </div>
+      </div>
     </div>
 
     <!-- Your Numbers -->
@@ -793,6 +876,7 @@
 
         await loadPurchases(user.id);
         await checkDashboardInProgress(user.id);
+        await loadRecentActivity(user.id);
         if (new URLSearchParams(window.location.search).get('purchase') === 'success') {
           showToast('Purchase successful — your program is now unlocked.');
           history.replaceState(null, '', window.location.pathname);
@@ -1229,6 +1313,52 @@
     document.getElementById('workoutDropdown').classList.remove('open');
     document.getElementById('workoutSelectorBtn').classList.remove('open');
     renderWorkoutSelector();
+  }
+
+  // ── My Activity: Recent Workouts ──────────────────────────────────
+  // Compact, read-only preview of the 3 most recent completed workouts.
+  // Full detail (expand/edit/delete) lives on workout-history.html.
+  function escActivity(str) {
+    return String(str)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  async function loadRecentActivity(userId) {
+    var el = document.getElementById('recentWorkouts');
+    if (!el) return;
+    try {
+      var { data } = await supabaseClient
+        .from('workouts')
+        .select('id, name, created_at, duration_minutes, program_slug')
+        .eq('user_id', userId).eq('completed', true)
+        .order('created_at', { ascending: false }).limit(3);
+
+      if (!data || data.length === 0) {
+        el.innerHTML = '<div class="activity-empty">No completed workouts yet.</div>';
+        return;
+      }
+
+      el.innerHTML = data.map(function(w) {
+        var d = new Date(w.created_at);
+        var date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        var prog = (w.program_slug && typeof programName === 'function') ? programName(w.program_slug) : '';
+        var subBits = [];
+        if (prog) subBits.push('<span class="prog">' + escActivity(prog) + '</span>');
+        if (w.duration_minutes) subBits.push(w.duration_minutes + ' min');
+        var sub = subBits.length ? '<div class="activity-row-sub">' + subBits.join(' · ') + '</div>' : '';
+        return '<a class="activity-row" href="workout-history.html">' +
+          '<div class="activity-row-main">' +
+            '<div class="activity-row-name">' + escActivity(w.name || 'Workout') + '</div>' +
+            sub +
+          '</div>' +
+          '<div class="activity-row-date">' + date + '</div>' +
+        '</a>';
+      }).join('');
+    } catch (err) {
+      console.error('loadRecentActivity error:', err);
+      el.innerHTML = '<div class="activity-empty">Couldn\'t load workouts.</div>';
+    }
   }
 
   var inProgressId = null;

@@ -93,3 +93,15 @@ function getSplitLabel(trainingDays) {
 function sessionLabel(key) {
   return SESSION_LABELS[key] || key;
 }
+
+/* Display names for each program slug. Shared so workout history (and any other
+ * surface) can show a friendly program name from a stored program_slug. */
+var PROGRAM_NAMES = {
+  fat_loss_blueprint: '90-Day Fat Loss Blueprint',
+  muscle_gain:        'Muscle Gain',
+  glute_builder:      'Glute Builder',
+};
+
+function programName(slug) {
+  return PROGRAM_NAMES[slug] || '';
+}
