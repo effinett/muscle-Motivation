@@ -221,6 +221,11 @@
     .tab.active { background: var(--red); color: white; border-color: var(--red); }
     .sched-panel { display: none; }
     .sched-panel.active { display: block; }
+    .sched-row.today { border: 1px solid var(--red); background: var(--red-dim); }
+    .sched-row.today .day { color: var(--red); }
+    .sched-note { color: var(--muted); font-size: 13px; margin-top: 14px; }
+    .sched-note a { color: var(--red); text-decoration: none; font-weight: 600; }
+    .sched-note a:hover { text-decoration: underline; }
 
     /* Grid 2 */
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -383,32 +388,13 @@
       <div class="callout"><strong>Deload weeks (4, 8, 12):</strong> True recovery — reduce load by 30–40% AND cut sets by ~40%. This is lighter than the other programs. Glute tissue is trained every session in this program; it needs genuine recovery to continue growing. Keep the movements, dial back everything else.</div>
     </div>
 
-    <!-- Schedule -->
-    <div class="section-label">Choose Your Schedule</div>
+    <!-- Schedule (read-only — driven by global profile.training_days) -->
+    <div class="section-label">Your Schedule</div>
     <div class="card">
-      <p>Your dashboard already recommends a split based on your training days. Start with that recommendation and pick the matching schedule below.</p>
-      <div class="tabs">
-        <button class="tab active" data-sched="3">3 Days</button>
-        <button class="tab" data-sched="4">4 Days</button>
-      </div>
-
-      <div class="sched-panel active" data-panel="3">
-        <div class="sched-grid">
-          <div class="sched-row"><span class="day">Monday</span><span class="sess">Session A — Hip Thrust Lead</span></div>
-          <div class="sched-row"><span class="day">Wednesday</span><span class="sess">Session B — RDL Lead</span></div>
-          <div class="sched-row"><span class="day">Friday</span><span class="sess">Session C — Squat Lead</span></div>
-          <div class="sched-row"><span class="day">Other days</span><span class="sess">Walking + rest</span></div>
-        </div>
-      </div>
-      <div class="sched-panel" data-panel="4">
-        <div class="sched-grid">
-          <div class="sched-row"><span class="day">Monday</span><span class="sess">Session A — Hip Thrust Lead</span></div>
-          <div class="sched-row"><span class="day">Tuesday</span><span class="sess">Upper Body</span></div>
-          <div class="sched-row"><span class="day">Thursday</span><span class="sess">Session B — RDL Lead</span></div>
-          <div class="sched-row"><span class="day">Friday</span><span class="sess">Session C — Squat Lead</span></div>
-          <div class="sched-row"><span class="day">Other days</span><span class="sess">Rest + walking</span></div>
-        </div>
-      </div>
+      <p id="schedSummary">Loading your schedule…</p>
+      <div class="sched-grid" id="schedPreview"></div>
+      <p class="sched-note">Your training frequency applies to every program you own. To change it, use
+        <a href="app.html">Recalculate Goals</a> on your dashboard.</p>
     </div>
 
     <!-- Templates -->
@@ -663,63 +649,41 @@
   var PRODUCT_SLUG = 'glute_builder';
   var PROGRAM_SLUG = 'glute_builder';
   // Schedules + labels come from schedules.js (single source of truth)
-  var SCHEDULES     = PROGRAM_SCHEDULES.glute_builder;
-  var SESSION_NAMES = SESSION_LABELS;
 
-  function updateTodaySession(scheduleKeys, currentIndex) {
-    var key = scheduleKeys[currentIndex % scheduleKeys.length];
-    var name = SESSION_NAMES[key] || key;
-    document.getElementById('todaySessionName').textContent = name;
+  function updateTodaySession(keys, idx) {
+    var key = keys[idx % keys.length];
+    document.getElementById('todaySessionName').textContent = SESSION_LABELS[key] || key;
     document.getElementById('startTodayBtn').href =
       'workout.html?program=' + PROGRAM_SLUG + '&session=' + key;
     document.getElementById('stickyCta').style.display = 'block';
   }
 
-  async function saveSchedule(days) {
-    var keys = SCHEDULES[String(days)];
-    if (!keys) return;
-    try {
-      var session = await requireAuth();
-      var { data: existing } = await supabaseClient
-        .from('user_programs')
-        .select('current_index')
-        .eq('user_id', session.user.id)
-        .eq('program_slug', PROGRAM_SLUG)
-        .maybeSingle();
-      var idx = (existing && existing.current_index) ? existing.current_index : 0;
-      await supabaseClient.from('user_programs').upsert({
-        user_id: session.user.id,
-        program_slug: PROGRAM_SLUG,
-        schedule_keys: keys,
-        current_index: idx
-      }, { onConflict: 'user_id,program_slug' });
-      updateTodaySession(keys, idx);
-    } catch (e) { /* non-fatal */ }
+  function renderSchedulePreview(days, keys, idx) {
+    document.getElementById('schedSummary').textContent =
+      'You train ' + days + ' days/week. Your sessions rotate in this order:';
+    var todayPos = idx % keys.length;
+    document.getElementById('schedPreview').innerHTML = keys.map(function(k, i) {
+      return '<div class="sched-row' + (i === todayPos ? ' today' : '') + '">' +
+        '<span class="day">Session ' + (i + 1) + (i === todayPos ? ' · Today' : '') + '</span>' +
+        '<span class="sess">' + (SESSION_LABELS[k] || k) + '</span></div>';
+    }).join('');
   }
 
+  // training_days is GLOBAL (profiles.training_days). This page only READS it —
+  // it never stores a per-program frequency. current_index is progression only.
   async function loadUserProgram(userId) {
-    try {
-      var { data: up } = await supabaseClient
-        .from('user_programs')
-        .select('schedule_keys, current_index')
-        .eq('user_id', userId)
-        .eq('program_slug', PROGRAM_SLUG)
-        .maybeSingle();
-      if (up && up.schedule_keys && up.schedule_keys.length) {
-        var days = String(up.schedule_keys.length);
-        document.querySelectorAll('.tab').forEach(function(t) {
-          t.classList.toggle('active', t.getAttribute('data-sched') === days);
-        });
-        document.querySelectorAll('.sched-panel').forEach(function(p) {
-          p.classList.toggle('active', p.getAttribute('data-panel') === days);
-        });
-        updateTodaySession(up.schedule_keys, up.current_index || 0);
-      } else {
-        updateTodaySession(SCHEDULES['3'], 0);
-      }
-    } catch (e) {
-      updateTodaySession(SCHEDULES['3'], 0);
-    }
+    var profile = await getProfile(userId);
+    var days = (profile && profile.training_days) ? profile.training_days : 3;
+    var keys = getScheduleForDays(PROGRAM_SLUG, days);
+
+    var { data: up } = await supabaseClient
+      .from('user_programs').select('current_index')
+      .eq('user_id', userId).eq('program_slug', PROGRAM_SLUG)
+      .maybeSingle();
+    var idx = up ? (up.current_index || 0) : 0;
+
+    renderSchedulePreview(days, keys, idx);
+    updateTodaySession(keys, idx);
   }
 
   window.addEventListener('load', function () {
@@ -751,16 +715,6 @@
     })();
   });
 
-  document.addEventListener('click', function (e) {
-    if (!e.target.classList.contains('tab')) return;
-    var sched = e.target.getAttribute('data-sched');
-    document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
-    e.target.classList.add('active');
-    document.querySelectorAll('.sched-panel').forEach(function(p) {
-      p.classList.toggle('active', p.getAttribute('data-panel') === sched);
-    });
-    saveSchedule(sched);
-  });
 </script>
 </body>
 </html>

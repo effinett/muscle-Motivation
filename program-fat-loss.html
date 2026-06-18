@@ -212,6 +212,11 @@
     .tab.active { background: var(--red); color: white; border-color: var(--red); }
     .sched-panel { display: none; }
     .sched-panel.active { display: block; }
+    .sched-row.today { border: 1px solid var(--red); background: var(--red-dim); }
+    .sched-row.today .day { color: var(--red); }
+    .sched-note { color: var(--muted); font-size: 13px; margin-top: 14px; }
+    .sched-note a { color: var(--red); text-decoration: none; font-weight: 600; }
+    .sched-note a:hover { text-decoration: underline; }
 
     /* Two-column info */
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -363,52 +368,13 @@
       </ul>
     </div>
 
-    <!-- Schedule -->
-    <div class="section-label">Choose Your Schedule</div>
+    <!-- Schedule (read-only — driven by global profile.training_days) -->
+    <div class="section-label">Your Schedule</div>
     <div class="card">
-      <p>Pick the number of training days that fits your week. Each links to the templates below.</p>
-      <div class="tabs">
-        <button class="tab active" data-sched="2">2 Days</button>
-        <button class="tab" data-sched="3">3 Days</button>
-        <button class="tab" data-sched="4">4 Days</button>
-        <button class="tab" data-sched="5">5 Days</button>
-      </div>
-
-      <div class="sched-panel active" data-panel="2">
-        <div class="sched-grid">
-          <div class="sched-row"><span class="day">Monday</span><span class="sess">Full Body A</span></div>
-          <div class="sched-row"><span class="day">Thursday</span><span class="sess">Full Body B</span></div>
-          <div class="sched-row"><span class="day">Other days</span><span class="sess">Walking + recovery</span></div>
-        </div>
-      </div>
-      <div class="sched-panel" data-panel="3">
-        <div class="sched-grid">
-          <div class="sched-row"><span class="day">Monday</span><span class="sess">Full Body A</span></div>
-          <div class="sched-row"><span class="day">Wednesday</span><span class="sess">Full Body B</span></div>
-          <div class="sched-row"><span class="day">Friday</span><span class="sess">Full Body C</span></div>
-          <div class="sched-row"><span class="day">Other days</span><span class="sess">Walking</span></div>
-        </div>
-      </div>
-      <div class="sched-panel" data-panel="4">
-        <div class="sched-grid">
-          <div class="sched-row"><span class="day">Monday</span><span class="sess">Upper A</span></div>
-          <div class="sched-row"><span class="day">Tuesday</span><span class="sess">Lower A</span></div>
-          <div class="sched-row"><span class="day">Wednesday</span><span class="sess">Recovery + steps</span></div>
-          <div class="sched-row"><span class="day">Thursday</span><span class="sess">Upper B</span></div>
-          <div class="sched-row"><span class="day">Friday</span><span class="sess">Lower B</span></div>
-          <div class="sched-row"><span class="day">Weekend</span><span class="sess">Steps + optional conditioning</span></div>
-        </div>
-      </div>
-      <div class="sched-panel" data-panel="5">
-        <div class="sched-grid">
-          <div class="sched-row"><span class="day">Monday</span><span class="sess">Push</span></div>
-          <div class="sched-row"><span class="day">Tuesday</span><span class="sess">Pull</span></div>
-          <div class="sched-row"><span class="day">Wednesday</span><span class="sess">Legs</span></div>
-          <div class="sched-row"><span class="day">Thursday</span><span class="sess">Upper A</span></div>
-          <div class="sched-row"><span class="day">Friday</span><span class="sess">Lower A</span></div>
-          <div class="sched-row"><span class="day">Weekend</span><span class="sess">Recovery + walking</span></div>
-        </div>
-      </div>
+      <p id="schedSummary">Loading your schedule…</p>
+      <div class="sched-grid" id="schedPreview"></div>
+      <p class="sched-note">Your training frequency applies to every program you own. To change it, use
+        <a href="app.html">Recalculate Goals</a> on your dashboard.</p>
     </div>
 
     <!-- Templates -->
@@ -676,8 +642,7 @@
   var userProgram  = null;
 
   // Schedules + labels come from schedules.js (single source of truth)
-  var SCHEDULES     = PROGRAM_SCHEDULES.fat_loss_blueprint;
-  var SESSION_NAMES = SESSION_LABELS;
+  var PROGRAM_SLUG = 'fat_loss_blueprint';
 
   window.addEventListener('load', function() {
     (async () => {
@@ -705,59 +670,41 @@
     })();
   });
 
+  // training_days is GLOBAL (profiles.training_days). This page only READS it —
+  // it never stores a per-program frequency. current_index is progression only.
   async function loadUserProgram() {
-    const { data } = await supabaseClient
-      .from('user_programs').select('*')
-      .eq('user_id', currentUser.id).eq('program_slug', 'fat_loss_blueprint')
+    var profile = await getProfile(currentUser.id);
+    var days = (profile && profile.training_days) ? profile.training_days : 3;
+    var keys = getScheduleForDays(PROGRAM_SLUG, days);
+
+    var { data: up } = await supabaseClient
+      .from('user_programs').select('current_index')
+      .eq('user_id', currentUser.id).eq('program_slug', PROGRAM_SLUG)
       .maybeSingle();
+    var idx = up ? (up.current_index || 0) : 0;
 
-    userProgram = data;
-    const days  = data ? String(data.training_days) : '3';
-    const keys  = data ? data.schedule_keys : SCHEDULES['3'];
-    const idx   = data ? data.current_index : 0;
-
-    // Restore schedule tab
-    document.querySelectorAll('.tab').forEach(t =>
-      t.classList.toggle('active', t.getAttribute('data-sched') === days));
-    document.querySelectorAll('.sched-panel').forEach(p =>
-      p.classList.toggle('active', p.getAttribute('data-panel') === days));
-
+    renderSchedulePreview(days, keys, idx);
     updateTodaySession(keys, idx);
     document.getElementById('stickyCta').style.display = 'block';
   }
 
+  function renderSchedulePreview(days, keys, idx) {
+    document.getElementById('schedSummary').textContent =
+      'You train ' + days + ' days/week. Your sessions rotate in this order:';
+    var todayPos = idx % keys.length;
+    document.getElementById('schedPreview').innerHTML = keys.map(function(k, i) {
+      return '<div class="sched-row' + (i === todayPos ? ' today' : '') + '">' +
+        '<span class="day">Session ' + (i + 1) + (i === todayPos ? ' · Today' : '') + '</span>' +
+        '<span class="sess">' + (SESSION_LABELS[k] || k) + '</span></div>';
+    }).join('');
+  }
+
   function updateTodaySession(keys, idx) {
     var key  = keys[idx % keys.length];
-    var name = SESSION_NAMES[key] || key;
-    document.getElementById('todaySessionName').textContent = name;
+    document.getElementById('todaySessionName').textContent = SESSION_LABELS[key] || key;
     document.getElementById('startTodayBtn').href =
-      'workout.html?program=fat_loss_blueprint&session=' + key;
+      'workout.html?program=' + PROGRAM_SLUG + '&session=' + key;
   }
-
-  async function saveSchedule(days) {
-    var keys = SCHEDULES[days] || SCHEDULES['3'];
-    var idx  = userProgram ? userProgram.current_index : 0;
-    var { data } = await supabaseClient
-      .from('user_programs')
-      .upsert({
-        user_id: currentUser.id, program_slug: 'fat_loss_blueprint',
-        training_days: parseInt(days), schedule_keys: keys,
-        current_index: idx, updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id,program_slug' })
-      .select().single();
-    if (data) { userProgram = data; updateTodaySession(keys, idx); }
-  }
-
-  // Schedule tab switching
-  document.addEventListener('click', function(e) {
-    if (!e.target.classList.contains('tab')) return;
-    var sched = e.target.getAttribute('data-sched');
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    e.target.classList.add('active');
-    document.querySelectorAll('.sched-panel').forEach(p =>
-      p.classList.toggle('active', p.getAttribute('data-panel') === sched));
-    saveSchedule(sched);
-  });
 </script>
 </body>
 </html>
