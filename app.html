@@ -754,6 +754,7 @@
         document.getElementById('appContent').style.display = 'block';
 
         await loadPurchases(user.id);
+        await checkDashboardInProgress(user.id);
         if (new URLSearchParams(window.location.search).get('purchase') === 'success') {
           showToast('Purchase successful — your program is now unlocked.');
           history.replaceState(null, '', window.location.pathname);
@@ -1064,6 +1065,21 @@
     document.getElementById('btnStartWorkout').style.display       = 'none';
     document.getElementById('mismatchHint').style.display           = 'none';
     showProgramPickerState(ownedProgramsList);
+  }
+
+  async function checkDashboardInProgress(userId) {
+    var since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    var { data } = await supabaseClient
+      .from('workouts').select('id, name')
+      .eq('user_id', userId).eq('completed', false)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (!data) return;
+    var btn = document.getElementById('btnStartWorkout');
+    btn.textContent = 'Resume Workout';
+    btn.href        = 'workout.html';
+    btn.style.display = '';
+    document.getElementById('btnBrowsePrograms').style.display = 'none';
   }
 
 </script>

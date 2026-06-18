@@ -130,6 +130,14 @@
     }
     .history-ex-row:last-child { border-bottom: none; }
     .history-ex-sets { font-size: 12px; color: var(--text-muted); }
+    .history-delete { padding: 10px 0 0; text-align: right; }
+    .btn-del-history {
+      padding: 5px 12px; background: transparent; border: 1px solid var(--border-2);
+      border-radius: 6px; color: var(--text-muted); font-size: 11px; font-weight: 700;
+      letter-spacing: 1px; text-transform: uppercase; cursor: pointer;
+      font-family: 'Barlow', sans-serif; transition: border-color 0.2s, color 0.2s;
+    }
+    .btn-del-history:hover { border-color: var(--red); color: var(--red); }
     .empty-state { text-align: center; padding: 28px 0; color: var(--text-muted); font-size: 13px; }
 
     /* Active workout */
@@ -832,7 +840,7 @@
     if (error) { showToast('Error saving — try again.'); return; }
     if (timerInterval) clearInterval(timerInterval);
     stopRest();
-    var progSlug = localStorage.getItem('wkt_prog_' + currentWorkout.id);
+    var progSlug = currentWorkout.program_slug || localStorage.getItem('wkt_prog_' + currentWorkout.id);
     localStorage.removeItem('wkt_start_' + currentWorkout.id);
     localStorage.removeItem('wkt_prog_' + currentWorkout.id);
     if (progSlug) await advanceProgramSession(progSlug);
@@ -902,13 +910,30 @@
           '<span class="history-stat"><strong>' + exs.length + '</strong> exercises</span>' +
           '<span class="history-stat"><strong>' + doneSets + '/' + totalSets + '</strong> sets done</span>' +
         '</div>' +
-        '<div class="history-exlist">' + (exRows || '<div style="font-size:13px;color:var(--text-muted);padding:4px 0;">No exercises logged.</div>') + '</div>' +
+        '<div class="history-exlist">' +
+          (exRows || '<div style="font-size:13px;color:var(--text-muted);padding:4px 0;">No exercises logged.</div>') +
+          '<div class="history-delete"><button class="btn-del-history" onclick="event.stopPropagation();deleteHistoryWorkout(\'' + w.id + '\',\'' + esc(w.name || 'Workout') + '\')">Delete</button></div>' +
+        '</div>' +
         '</div>';
     }).join('');
   }
 
   function toggleHistory(card) {
     card.classList.toggle('expanded');
+  }
+
+  async function deleteHistoryWorkout(workoutId, workoutName) {
+    if (!confirm('Delete "' + workoutName + '"? This cannot be undone.')) return;
+    var { error } = await supabaseClient.from('workouts').delete().eq('id', workoutId);
+    if (error) { showToast('Error deleting workout.'); return; }
+    workoutHistory = workoutHistory.filter(function(w) { return w.id !== workoutId; });
+    if (workoutHistory.length === 0) {
+      document.getElementById('historyList').innerHTML =
+        '<div class="empty-state">No workouts yet — start your first session above.</div>';
+    } else {
+      renderHistory();
+    }
+    showToast('Workout deleted.');
   }
 
   // ── Program session start ─────────────────────────────────────────
@@ -962,12 +987,32 @@
     showActiveView();
   }
 
+  var DEFAULT_SCHEDULES = {
+    fat_loss_blueprint: ['full_a', 'full_b', 'full_c'],
+    muscle_gain:        ['full_a', 'full_b', 'full_c'],
+    glute_builder:      ['session_a', 'session_b', 'session_c'],
+  };
+
   async function advanceProgramSession(programSlug) {
     try {
       var { data: up } = await supabaseClient
         .from('user_programs').select('*')
         .eq('user_id', currentUser.id).eq('program_slug', programSlug).maybeSingle();
-      if (!up) return;
+
+      if (!up) {
+        // No saved schedule — create one with defaults, already at index 1
+        // (index 0 was just completed)
+        var keys = DEFAULT_SCHEDULES[programSlug] || ['full_a', 'full_b', 'full_c'];
+        await supabaseClient.from('user_programs').insert({
+          user_id:       currentUser.id,
+          program_slug:  programSlug,
+          schedule_keys: keys,
+          current_index: 1,
+          training_days: 3,
+        });
+        return;
+      }
+
       var next = (up.current_index + 1) % up.schedule_keys.length;
       await supabaseClient.from('user_programs')
         .update({ current_index: next, updated_at: new Date().toISOString() }).eq('id', up.id);
