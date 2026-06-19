@@ -721,6 +721,22 @@
       </div>
     </div>
 
+    <!-- Membership (shown only to subscribers) -->
+    <div id="membershipSection" style="display:none;">
+      <div class="section-label">Membership</div>
+      <div class="card">
+        <div class="plan-item">
+          <div>
+            <div class="plan-name">Muscle Motivation Membership</div>
+            <div class="plan-desc" id="membershipStatus">—</div>
+          </div>
+          <div class="plan-action">
+            <button class="btn-buy" id="manageBillingBtn" onclick="manageBilling(this)">Manage</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div><!-- /container -->
 </div><!-- /appContent -->
 
@@ -1110,6 +1126,68 @@
       await resolveActiveProgram(userId, ownedProgramsList);
     } catch (err) {
       console.error('loadPurchases error:', err);
+    }
+    await renderMembership(userId);
+  }
+
+  // ── Membership status + billing portal ────────────────────────────
+  async function renderMembership(userId) {
+    var section = document.getElementById('membershipSection');
+    try {
+      // Include past_due so a member with a failed payment still sees the card
+      // (and a warning) rather than silently losing access to manage billing.
+      var { data, error } = await supabaseClient
+        .from('purchases')
+        .select('status, current_period_end')
+        .eq('user_id', userId)
+        .eq('product', 'ai_membership')
+        .in('status', ['active', 'past_due'])
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (error) throw error;
+
+      var m = (data && data[0]) || null;
+      if (!m) { section.style.display = 'none'; return; }
+
+      var statusEl = document.getElementById('membershipStatus');
+      var renews = m.current_period_end
+        ? new Date(m.current_period_end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        : null;
+
+      if (m.status === 'past_due') {
+        statusEl.innerHTML = '<span style="color:var(--red);font-weight:700;">Payment failed</span> — update your card to keep access.';
+      } else {
+        statusEl.textContent = renews ? ('Active — renews ' + renews) : 'Active';
+      }
+      section.style.display = '';
+    } catch (err) {
+      console.error('renderMembership error:', err);
+      section.style.display = 'none';
+    }
+  }
+
+  async function manageBilling(btn) {
+    var orig = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Loading…';
+    try {
+      var session = await getSession();
+      if (!session) { window.location.href = 'auth.html'; return; }
+      var res = await fetch('/api/customer-portal', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + session.access_token },
+      });
+      if (!res.ok) {
+        var d = await res.json().catch(function(){ return {}; });
+        throw new Error(d.error || 'Could not open billing portal');
+      }
+      var json = await res.json();
+      window.location.href = json.url;
+    } catch (err) {
+      console.error('manageBilling:', err);
+      alert(err.message || 'Could not open billing portal. Please try again.');
+      btn.disabled = false;
+      btn.textContent = orig;
     }
   }
 

@@ -3,9 +3,10 @@
 // service role key (bypasses RLS — this is the ONLY writer to purchases).
 //
 // Events handled:
-//   checkout.session.completed     → upsert a purchase row (idempotent)
-//   customer.subscription.deleted  → flip status to 'canceled'
-//   customer.subscription.updated  → sync status for active / canceled
+//   checkout.session.completed              → upsert a purchase row (idempotent) + store customer id
+//   customer.subscription.created/updated   → sync status + renewal date
+//   customer.subscription.deleted           → flip status to 'canceled'
+//   invoice.payment_failed                  → flip status to 'past_due'
 
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -39,11 +40,15 @@ const handler = async (req, res) => {
       case 'checkout.session.completed':
         await onCheckoutCompleted(event.data.object);
         break;
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated':
+        await onSubscriptionUpdated(event.data.object);
+        break;
       case 'customer.subscription.deleted':
         await onSubscriptionDeleted(event.data.object);
         break;
-      case 'customer.subscription.updated':
-        await onSubscriptionUpdated(event.data.object);
+      case 'invoice.payment_failed':
+        await onInvoicePaymentFailed(event.data.object);
         break;
       default:
         // Acknowledge but ignore all other event types.
@@ -99,6 +104,18 @@ async function onCheckoutCompleted(session) {
     return;
   }
 
+  // For subscriptions, retrieve the sub so we can store the renewal date up
+  // front (rather than waiting for the next subscription.updated event).
+  let periodEnd = null;
+  if (session.subscription) {
+    try {
+      const sub = await stripe.subscriptions.retrieve(session.subscription);
+      periodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null;
+    } catch (err) {
+      console.warn('Could not retrieve subscription for period end:', err.message);
+    }
+  }
+
   await supabaseRequest(
     'POST',
     'purchases?on_conflict=stripe_session_id',
@@ -108,9 +125,20 @@ async function onCheckoutCompleted(session) {
       status:                 'active',
       stripe_session_id:      session.id,
       stripe_subscription_id: session.subscription ?? null,
+      current_period_end:     periodEnd,
     },
     'resolution=merge-duplicates,return=minimal'
   );
+
+  // Persist the Stripe customer id on the profile so we can open the billing
+  // portal later and reuse the same customer on repeat checkouts.
+  if (session.customer) {
+    await supabaseRequest(
+      'PATCH',
+      `profiles?id=eq.${encodeURIComponent(userId)}`,
+      { stripe_customer_id: session.customer }
+    );
+  }
 }
 
 // Subscription fully deleted (end of billing period or immediate cancel).
@@ -122,16 +150,39 @@ async function onSubscriptionDeleted(sub) {
   );
 }
 
-// Subscription updated — sync active ↔ canceled.
-// Ignores trialing, past_due, etc. — extend this switch when needed.
+// Subscription created/updated — sync status + renewal date.
+// Maps Stripe's lifecycle statuses onto our four allowed values.
 async function onSubscriptionUpdated(sub) {
-  const statusMap = { active: 'active', canceled: 'canceled' };
+  const statusMap = {
+    active:   'active',
+    trialing: 'active',
+    past_due: 'past_due',
+    unpaid:   'past_due',
+    canceled: 'canceled',
+  };
   const newStatus = statusMap[sub.status];
-  if (!newStatus) return;
+  if (!newStatus) return; // incomplete / incomplete_expired / paused → ignore
+
+  const patch = { status: newStatus };
+  if (sub.current_period_end) {
+    patch.current_period_end = new Date(sub.current_period_end * 1000).toISOString();
+  }
 
   await supabaseRequest(
     'PATCH',
     `purchases?stripe_subscription_id=eq.${encodeURIComponent(sub.id)}`,
-    { status: newStatus }
+    patch
+  );
+}
+
+// A recurring charge failed — mark the subscription past_due so the dashboard
+// can warn the user. Stripe keeps retrying; a later success fires
+// subscription.updated (status active) which restores access above.
+async function onInvoicePaymentFailed(invoice) {
+  if (!invoice.subscription) return; // one-time invoices have no subscription
+  await supabaseRequest(
+    'PATCH',
+    `purchases?stripe_subscription_id=eq.${encodeURIComponent(invoice.subscription)}`,
+    { status: 'past_due' }
   );
 }
