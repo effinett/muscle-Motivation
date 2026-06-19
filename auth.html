@@ -285,7 +285,7 @@
     </button>
   </div>
 
-  <a href="#" class="forgot-link" onclick="return false;">Forgot password?</a>
+  <a href="#" class="forgot-link" onclick="showForgot(); return false;">Forgot password?</a>
 </div>
         <button class="btn-primary" id="loginBtn" onclick="handleLogin()">Sign In</button>
         <p class="auth-footer">No account? <a href="#" onclick="switchTab('signup')">Create one free</a></p>
@@ -319,6 +319,19 @@
 </div>
         <button class="btn-primary" id="signupBtn" onclick="handleSignup()">Create My Account</button>
         <p class="auth-footer">Already a member? <a href="#" onclick="switchTab('login')">Sign in</a></p>
+      </div>
+
+      <!-- Forgot Password Form -->
+      <div id="forgotForm" style="display:none;">
+        <p style="font-size:14px; color:var(--grey); margin-bottom:18px; line-height:1.5;">
+          Enter the email on your account and we'll send you a link to reset your password.
+        </p>
+        <div class="form-group">
+          <label>Email Address</label>
+          <input type="email" id="forgotEmail" placeholder="you@example.com" autocomplete="email">
+        </div>
+        <button class="btn-primary" id="forgotBtn" onclick="handleForgot()">Send Reset Link</button>
+        <p class="auth-footer"><a href="#" onclick="showLoginFromForgot(); return false;">← Back to sign in</a></p>
       </div>
 
     </div><!-- end auth-box -->
@@ -422,12 +435,55 @@
     try {
       const { error } = await supabaseClient.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: 'https://musclemotivation.fit/onboarding.html' }
+        // Dynamic origin so OAuth works on localhost, Vercel previews, and prod
+        // alike. Each origin's /onboarding.html must be in Supabase's Redirect URLs.
+        options: { redirectTo: window.location.origin + '/onboarding.html' }
       });
       if (error) throw error;
     } catch (e) {
       showMsg(e.message || 'Google sign-in failed.');
     }
+  }
+
+  // ── Forgot password ────────────────────────────────────────
+  // Swap the login/signup UI for the reset-request form. Hides the
+  // tabs/social/divider so only the email field is shown.
+  function showForgot() {
+    document.querySelector('.auth-tabs').style.display = 'none';
+    document.querySelector('.social-btn').style.display = 'none';
+    document.querySelector('.divider').style.display = 'none';
+    document.getElementById('loginForm').style.display  = 'none';
+    document.getElementById('signupForm').style.display = 'none';
+    document.getElementById('forgotForm').style.display = 'block';
+    // Pre-fill from the login email if they already typed it.
+    var typed = document.getElementById('loginEmail').value.trim();
+    if (typed) document.getElementById('forgotEmail').value = typed;
+    clearMsg();
+  }
+
+  function showLoginFromForgot() {
+    document.querySelector('.auth-tabs').style.display = '';
+    document.querySelector('.social-btn').style.display = '';
+    document.querySelector('.divider').style.display = '';
+    document.getElementById('forgotForm').style.display = 'none';
+    switchTab('login');
+  }
+
+  async function handleForgot() {
+    const email = document.getElementById('forgotEmail').value.trim();
+    if (!email) return showMsg('Please enter your email address.');
+    setLoading('forgotBtn', true, 'Send Reset Link');
+    try {
+      const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + '/reset-password.html'
+      });
+      if (error) throw error;
+      // Neutral wording so we never reveal whether an account exists.
+      showMsg('If an account exists for that email, a reset link is on its way. Check your inbox (and spam).', 'success');
+    } catch (e) {
+      showMsg(e.message || 'Could not send the reset email. Please try again.');
+    }
+    setLoading('forgotBtn', false, 'Send Reset Link');
   }
 
  function togglePassword(inputId, button) {
@@ -445,6 +501,7 @@
   // Enter key
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
+    if (document.getElementById('forgotForm').style.display !== 'none') { handleForgot(); return; }
     const loginVisible = document.getElementById('loginForm').style.display !== 'none';
     if (loginVisible) handleLogin(); else handleSignup();
   });
