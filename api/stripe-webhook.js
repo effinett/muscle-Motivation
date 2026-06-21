@@ -208,6 +208,31 @@ function subIdFromInvoice(invoice) {
   return s || null;
 }
 
+// Cancel a subscription so billing stops, idempotently. Retrieves first and
+// skips if it is already canceled, and treats a missing subscription as success
+// — so repeated refund events never error or re-cancel.
+async function cancelSubscriptionIfActive(subId) {
+  try {
+    const sub = await stripe.subscriptions.retrieve(subId);
+    if (sub.status === 'canceled') {
+      console.log(`charge.refunded: subscription ${subId} already canceled — skipping`);
+      return;
+    }
+    await stripe.subscriptions.cancel(subId);
+    console.log(`charge.refunded: canceled subscription ${subId} to stop billing`);
+  } catch (err) {
+    // Already gone / never existed → nothing to bill, treat as done.
+    if (err && (err.code === 'resource_missing' || err.statusCode === 404)) {
+      console.log(`charge.refunded: subscription ${subId} not found (already removed) — skipping`);
+      return;
+    }
+    // Transient/unknown failure: rethrow so the webhook 500s and Stripe retries
+    // (the PATCH above and this cancel are both idempotent on retry).
+    console.error(`charge.refunded: failed to cancel subscription ${subId}:`, err.message);
+    throw err;
+  }
+}
+
 // A charge was refunded.
 //   - One-time program purchase  → revoke ownership (status 'refunded')
 //   - Subscription / membership   → deactivate access  (status 'refunded')
@@ -265,6 +290,9 @@ async function onChargeRefunded(charge) {
     } else {
       console.warn('charge.refunded: no subscription purchase matched', { subId, charge: charge.id });
     }
+    // Stop future billing — a refund alone does not end the subscription.
+    // Runs even if no DB row matched, so billing is always halted.
+    await cancelSubscriptionIfActive(subId);
     return;
   }
 
