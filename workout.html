@@ -225,6 +225,34 @@
     }
     .exercise-card-name { font-size: 16px; font-weight: 700; }
     .exercise-last { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+
+    /* Progressive-overload recommendation block */
+    .rec-block {
+      background: var(--surface-2); border: 1px solid var(--border-1);
+      border-left: 2px solid var(--red); border-radius: 8px;
+      padding: 10px 12px; margin-bottom: 14px;
+    }
+    .rec-row {
+      display: flex; align-items: baseline; gap: 8px;
+      font-size: 12px; line-height: 1.5;
+    }
+    .rec-key {
+      flex-shrink: 0; width: 56px; color: var(--text-muted);
+      font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+    }
+    .rec-val { color: var(--text-2); font-weight: 600; }
+    .rec-val.rec-rec { color: var(--text); }
+    .rec-val.rec-muted { color: var(--text-muted); font-weight: 500; }
+    .rec-note {
+      margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--border-1);
+      font-size: 12px; color: var(--text-2); line-height: 1.45;
+    }
+    .rec-badge {
+      display: inline-block; margin-left: 6px; padding: 1px 7px;
+      font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+      border-radius: 4px; vertical-align: middle;
+      background: var(--red-muted); border: 1px solid var(--red-border); color: var(--red);
+    }
     .btn-icon {
       background: none; border: none; color: var(--text-muted);
       cursor: pointer; padding: 4px 6px; border-radius: 6px;
@@ -527,6 +555,7 @@
 <script src="supabase.js"></script>
 <script src="schedules.js"></script>
 <script src="workout-history.js"></script>
+<script src="progression.js"></script>
 <script>
   var currentUser     = null;
   var currentWorkout  = null;
@@ -652,7 +681,11 @@
           })
       };
     });
-    await Promise.all(exercises.map(loadLastPerf));
+    await Promise.all(exercises.map(function(ex) {
+      return Promise.all([loadLastPerf(ex), loadExerciseHistory(ex)]);
+    }));
+    // Resumed program workout → restore goal ranges from its template.
+    await applyTemplateRanges(currentWorkout.program_slug, currentWorkout.session_key);
   }
 
   async function loadLastPerf(ex) {
@@ -681,6 +714,112 @@
     } catch (e) {
       // Non-fatal — last performance is a convenience feature
     }
+  }
+
+  // ── Progression history (Phase 3) ─────────────────────────────────
+  // Loads the last few COMPLETED sessions of this exercise (newest first) and
+  // attaches them to ex.history so progression.js can recommend the next move.
+  // Read-only and non-fatal — a failure just falls back to the empty state.
+  async function loadExerciseHistory(ex, limitSessions) {
+    ex.history = [];
+    try {
+      var { data: wexs } = await supabaseClient
+        .from('workout_exercises').select('id, workout_id')
+        .eq('exercise_name', ex.name);
+      if (!wexs || wexs.length === 0) return;
+      var ids = [...new Set(wexs.map(function(w) { return w.workout_id; }))];
+      var { data: ws } = await supabaseClient
+        .from('workouts').select('id, created_at')
+        .eq('user_id', currentUser.id).eq('completed', true)
+        .in('id', ids)
+        .order('created_at', { ascending: false })
+        .limit(limitSessions || 6);
+      if (!ws || ws.length === 0) return;
+      // Map each completed workout to its workout_exercise id for this exercise.
+      var wexByWorkout = {};
+      wexs.forEach(function(w) { wexByWorkout[w.workout_id] = w.id; });
+      var wexIds = ws.map(function(w) { return wexByWorkout[w.id]; }).filter(Boolean);
+      if (!wexIds.length) return;
+      var { data: sets } = await supabaseClient
+        .from('workout_sets')
+        .select('workout_exercise_id, set_number, weight_lbs, reps, completed, is_warmup')
+        .in('workout_exercise_id', wexIds)
+        .order('set_number');
+      var byWex = {};
+      (sets || []).forEach(function(s) {
+        (byWex[s.workout_exercise_id] = byWex[s.workout_exercise_id] || []).push(s);
+      });
+      ex.history = ws.map(function(w) {
+        var wexId = wexByWorkout[w.id];
+        return {
+          date: w.created_at,
+          sets: (byWex[wexId] || []).map(function(s) {
+            return { weight: s.weight_lbs, reps: s.reps, completed: s.completed, is_warmup: s.is_warmup };
+          })
+        };
+      }).filter(function(sess) { return sess.sets.length > 0; });
+    } catch (e) {
+      // Non-fatal — recommendations gracefully fall back to the empty state.
+    }
+  }
+
+  // Build the recommendation block HTML for an exercise card. Pure render —
+  // calls the progression engine with whatever history/range we have. Falls
+  // back to the legacy "Last:" line if progression.js failed to load.
+  function buildRecBlock(ex) {
+    if (typeof Progression === 'undefined' || !Progression.analyze) {
+      return ex.last_perf ? '<div class="exercise-last">Last: ' + esc(ex.last_perf) + '</div>' : '';
+    }
+    var rec = Progression.analyze({
+      exerciseName: ex.name,
+      repsLow: ex.reps_low,
+      repsHigh: ex.reps_high,
+      targetSets: ex.target_sets,
+      history: ex.history || [],
+      programmedWeight: ex.programmed_weight,
+      programmedReps: ex.programmed_reps
+    });
+    var rows = '<div class="rec-row"><span class="rec-key">Goal</span>' +
+               '<span class="rec-val">' + esc(rec.goalRange.display) + '</span></div>';
+    if (rec.hasHistory) {
+      rows += '<div class="rec-row"><span class="rec-key">Last</span>' +
+              '<span class="rec-val">' + esc(rec.lastPerformance.display) + '</span></div>';
+      rows += '<div class="rec-row"><span class="rec-key">Today</span>' +
+              '<span class="rec-val rec-rec">' + esc(rec.recommendedDisplay) + '</span></div>';
+    } else {
+      rows += '<div class="rec-row"><span class="rec-key">Last</span>' +
+              '<span class="rec-val rec-muted">No previous data yet</span></div>';
+      if (rec.recommendedWeight != null) {
+        rows += '<div class="rec-row"><span class="rec-key">Today</span>' +
+                '<span class="rec-val rec-rec">' + esc(rec.recommendedDisplay) + '</span></div>';
+      }
+    }
+    var badge = '';
+    if (rec.deloadSuggested) badge = '<span class="rec-badge">Deload?</span>';
+    else if (rec.plateau) badge = '<span class="rec-badge">Plateau</span>';
+    var note = rec.coachNote
+      ? '<div class="rec-note">' + esc(rec.coachNote) + badge + '</div>'
+      : '';
+    return '<div class="rec-block">' + rows + note + '</div>';
+  }
+
+  // Pull programmed rep ranges (reps_low/high/sets) from a program template so a
+  // RESUMED program workout still shows the right goal range. Manual workouts
+  // have no template — the engine defaults to 8–12. Non-fatal.
+  async function applyTemplateRanges(programSlug, sessionKey) {
+    if (!programSlug || !sessionKey) return;
+    try {
+      var { data } = await supabaseClient
+        .from('program_workouts').select('exercises')
+        .eq('program_slug', programSlug).eq('session_key', sessionKey).maybeSingle();
+      if (!data || !data.exercises) return;
+      var byName = {};
+      data.exercises.forEach(function(t) { byName[(t.name || '').toLowerCase()] = t; });
+      exercises.forEach(function(ex) {
+        var t = byName[(ex.name || '').toLowerCase()];
+        if (t) { ex.reps_low = t.reps_low; ex.reps_high = t.reps_high; ex.target_sets = t.sets; }
+      });
+    } catch (e) { /* non-fatal */ }
   }
 
   // ── Start workout ─────────────────────────────────────────────────
@@ -794,11 +933,11 @@
       '<div class="exercise-card-header">' +
         '<div>' +
           '<div class="exercise-card-name">' + esc(ex.name) + '</div>' +
-          (ex.last_perf ? '<div class="exercise-last">Last: ' + esc(ex.last_perf) + '</div>' : '') +
         '</div>' +
         '<button class="btn-icon" onclick="removeExercise(\'' + ex.id + '\',' + exIdx + ')" title="Remove exercise">' +
           '<i data-lucide="x"></i></button>' +
       '</div>' +
+      buildRecBlock(ex) +
       setsHtml +
       '<button class="btn-add-set" onclick="addSet(' + exIdx + ')">+ Add Set</button>' +
       '</div>';
@@ -852,8 +991,8 @@
       .insert({ workout_id: currentWorkout.id, exercise_name: name, order_index: orderIndex })
       .select().single();
     if (error) { showToast('Error adding exercise.'); return; }
-    var ex = { id: data.id, name: name, order_index: orderIndex, last_perf: null, last_weight: null, last_reps: null, sets: [] };
-    await loadLastPerf(ex);
+    var ex = { id: data.id, name: name, order_index: orderIndex, last_perf: null, last_weight: null, last_reps: null, sets: [], history: [] };
+    await Promise.all([loadLastPerf(ex), loadExerciseHistory(ex)]);
     exercises.push(ex);
     await addSet(exercises.length - 1);
   }
@@ -942,6 +1081,10 @@
     if (error) { showToast('Error saving — try again.'); return; }
     if (timerInterval) clearInterval(timerInterval);
     stopRest();
+    // PR detection (Phase 3) — runs after the workout is marked complete so the
+    // personal_records table reflects this session. Non-fatal: any failure here
+    // never blocks the save/redirect below.
+    var prMessages = await detectAndRecordPRs();
     var progSlug = currentWorkout.program_slug || localStorage.getItem('wkt_prog_' + currentWorkout.id);
     var sessKey  = currentWorkout.session_key || localStorage.getItem('wkt_sess_' + currentWorkout.id);
     localStorage.removeItem('wkt_start_' + currentWorkout.id);
@@ -954,8 +1097,57 @@
       await advanceProgramSession(progSlug, sessKey);
     }
     closeFinishModal();
-    showToast('Workout saved!');
-    setTimeout(function() { window.location.href = 'app.html'; }, 1600);
+    if (prMessages && prMessages.length) {
+      var extra = prMessages.length > 1 ? ' (+' + (prMessages.length - 1) + ' more)' : '';
+      showToast('🏆 New PR: ' + prMessages[0] + extra);
+      setTimeout(function() { window.location.href = 'app.html'; }, 2400);
+    } else {
+      showToast('Workout saved!');
+      setTimeout(function() { window.location.href = 'app.html'; }, 1600);
+    }
+  }
+
+  // Detect & persist personal records for every exercise in the finished
+  // workout. Returns an array of human-readable PR strings (e.g.
+  // "Bench Press 165 lb × 8") for any exercise that beat a PRIOR record. The
+  // first time an exercise is logged it silently seeds the record (no toast).
+  async function detectAndRecordPRs() {
+    var messages = [];
+    if (typeof Progression === 'undefined' || !Progression.evaluatePRs) return messages;
+    try {
+      for (var i = 0; i < exercises.length; i++) {
+        var ex = exercises[i];
+        var working = ex.sets
+          .filter(function(s) { return s.completed && s.weight_lbs != null && s.reps != null; })
+          .map(function(s) { return { weight: s.weight_lbs, reps: s.reps }; });
+        if (!working.length) continue;
+
+        var { data: prior } = await supabaseClient
+          .from('personal_records').select('*')
+          .eq('user_id', currentUser.id).eq('exercise_name', ex.name).maybeSingle();
+
+        var res = Progression.evaluatePRs(working, prior);
+        if (res.updated) {
+          await supabaseClient.from('personal_records').upsert({
+            user_id: currentUser.id,
+            exercise_name: ex.name,
+            best_weight: res.best.best_weight,
+            best_reps: res.best.best_reps,
+            best_volume: res.best.best_volume,
+            best_estimated_1rm: res.best.best_estimated_1rm,
+            source_workout_id: currentWorkout.id,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'user_id,exercise_name' });
+        }
+        if (res.hadPrior && res.topMessage) {
+          messages.push(ex.name + ' ' + res.topMessage);
+        }
+      }
+    } catch (e) {
+      // Non-fatal — PR detection is a bonus, never blocks saving the workout.
+      console.error('detectAndRecordPRs error:', e);
+    }
+    return messages;
   }
 
   // ── Discard workout ───────────────────────────────────────────────
@@ -1025,8 +1217,9 @@
           .insert({ workout_id: workout.id, exercise_name: ex.name, order_index: i })
           .select().single();
         if (!we) continue;
-        var newEx = { id: we.id, name: ex.name, order_index: i, last_perf: null, last_weight: null, last_reps: null, sets: [] };
-        await loadLastPerf(newEx);
+        var newEx = { id: we.id, name: ex.name, order_index: i, last_perf: null, last_weight: null, last_reps: null, sets: [],
+          history: [], reps_low: ex.reps_low, reps_high: ex.reps_high, target_sets: ex.sets };
+        await Promise.all([loadLastPerf(newEx), loadExerciseHistory(newEx)]);
         exercises.push(newEx);
         for (var s = 0; s < ex.sets; s++) {
           var w = newEx.last_weight;
