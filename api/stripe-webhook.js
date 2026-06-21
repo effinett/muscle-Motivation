@@ -114,10 +114,12 @@ async function onCheckoutCompleted(session) {
   // For subscriptions, retrieve the sub so we can store the renewal date up
   // front (rather than waiting for the next subscription.updated event).
   let periodEnd = null;
+  let cancelAtEnd = false;
   if (session.subscription) {
     try {
       const sub = await stripe.subscriptions.retrieve(session.subscription);
       periodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null;
+      cancelAtEnd = sub.cancel_at_period_end === true;
     } catch (err) {
       console.warn('Could not retrieve subscription for period end:', err.message);
     }
@@ -134,6 +136,7 @@ async function onCheckoutCompleted(session) {
       stripe_subscription_id:   session.subscription ?? null,
       stripe_payment_intent_id: session.payment_intent ?? null, // one-time only; null for subs
       current_period_end:       periodEnd,
+      cancel_at_period_end:     cancelAtEnd,
     },
     'resolution=merge-duplicates,return=minimal'
   );
@@ -172,7 +175,7 @@ async function onSubscriptionUpdated(sub) {
   const newStatus = statusMap[sub.status];
   if (!newStatus) return; // incomplete / incomplete_expired / paused → ignore
 
-  const patch = { status: newStatus };
+  const patch = { status: newStatus, cancel_at_period_end: sub.cancel_at_period_end === true };
   if (sub.current_period_end) {
     patch.current_period_end = new Date(sub.current_period_end * 1000).toISOString();
   }

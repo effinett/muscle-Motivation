@@ -1138,7 +1138,7 @@
       // (and a warning) rather than silently losing access to manage billing.
       var { data, error } = await supabaseClient
         .from('purchases')
-        .select('status, current_period_end')
+        .select('status, current_period_end, cancel_at_period_end')
         .eq('user_id', userId)
         .eq('product', 'ai_membership')
         .in('status', ['active', 'past_due'])
@@ -1149,15 +1149,28 @@
       var m = (data && data[0]) || null;
       if (!m) { section.style.display = 'none'; return; }
 
+      var periodEnd = m.current_period_end ? new Date(m.current_period_end) : null;
+
+      // Defensive: if a cancellation window has already elapsed but the
+      // subscription.deleted webhook hasn't landed yet, treat access as ended.
+      if (m.cancel_at_period_end && periodEnd && periodEnd < new Date()) {
+        section.style.display = 'none';
+        return;
+      }
+
       var statusEl = document.getElementById('membershipStatus');
-      var renews = m.current_period_end
-        ? new Date(m.current_period_end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      var dateStr = periodEnd
+        ? periodEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
         : null;
 
       if (m.status === 'past_due') {
         statusEl.innerHTML = '<span style="color:var(--red);font-weight:700;">Payment failed</span> — update your card to keep access.';
+      } else if (m.cancel_at_period_end) {
+        statusEl.innerHTML = dateStr
+          ? '<span style="color:var(--text-muted);">Canceled — access ends on ' + dateStr + '</span>'
+          : '<span style="color:var(--text-muted);">Canceled</span>';
       } else {
-        statusEl.textContent = renews ? ('Active — renews ' + renews) : 'Active';
+        statusEl.textContent = dateStr ? ('Active — renews ' + dateStr) : 'Active';
       }
       section.style.display = '';
     } catch (err) {
