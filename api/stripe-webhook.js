@@ -7,6 +7,7 @@
 //   customer.subscription.created/updated   → sync status + renewal date
 //   customer.subscription.deleted           → flip status to 'canceled'
 //   invoice.payment_failed                  → flip status to 'past_due'
+//   charge.refunded                         → revoke a fully-refunded one-time purchase
 
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -50,6 +51,9 @@ const handler = async (req, res) => {
       case 'invoice.payment_failed':
         await onInvoicePaymentFailed(event.data.object);
         break;
+      case 'charge.refunded':
+        await onChargeRefunded(event.data.object);
+        break;
       default:
         // Acknowledge but ignore all other event types.
     }
@@ -90,6 +94,9 @@ async function supabaseRequest(method, path, body, prefer = 'return=minimal') {
     const text = await res.text();
     throw new Error(`Supabase ${method} ${path} → ${res.status}: ${text}`);
   }
+  // return=minimal yields an empty body; return=representation yields rows.
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
 }
 
 // ── Event handlers ─────────────────────────────────────────────────────────
@@ -120,12 +127,13 @@ async function onCheckoutCompleted(session) {
     'POST',
     'purchases?on_conflict=stripe_session_id',
     {
-      user_id:                userId,
+      user_id:                  userId,
       product,
-      status:                 'active',
-      stripe_session_id:      session.id,
-      stripe_subscription_id: session.subscription ?? null,
-      current_period_end:     periodEnd,
+      status:                   'active',
+      stripe_session_id:        session.id,
+      stripe_subscription_id:   session.subscription ?? null,
+      stripe_payment_intent_id: session.payment_intent ?? null, // one-time only; null for subs
+      current_period_end:       periodEnd,
     },
     'resolution=merge-duplicates,return=minimal'
   );
@@ -185,4 +193,44 @@ async function onInvoicePaymentFailed(invoice) {
     `purchases?stripe_subscription_id=eq.${encodeURIComponent(invoice.subscription)}`,
     { status: 'past_due' }
   );
+}
+
+// A charge was refunded. Revoke ownership of a FULLY-refunded one-time program
+// purchase by flipping it to 'refunded'. Deliberately scoped so it never touches
+// subscriptions or unrelated purchases:
+//   - matches ONLY the row carrying this charge's PaymentIntent
+//   - matches ONLY one-time rows (stripe_subscription_id IS NULL); subscription
+//     refunds are left to the subscription.* / invoice.* events
+//   - partial refunds keep access (a customer who got $10 back still bought it)
+// Idempotent: re-delivery just re-sets status to 'refunded' (a no-op).
+async function onChargeRefunded(charge) {
+  const pi = charge.payment_intent;
+  if (!pi) {
+    console.warn('charge.refunded: charge has no payment_intent — skipping', { charge: charge.id });
+    return;
+  }
+
+  const fullyRefunded = charge.refunded === true || charge.amount_refunded >= charge.amount;
+  if (!fullyRefunded) {
+    console.log('charge.refunded: partial refund, access left intact', {
+      charge: charge.id, amount: charge.amount, amount_refunded: charge.amount_refunded,
+    });
+    return;
+  }
+
+  const updated = await supabaseRequest(
+    'PATCH',
+    `purchases?stripe_payment_intent_id=eq.${encodeURIComponent(pi)}&stripe_subscription_id=is.null`,
+    { status: 'refunded' },
+    'return=representation'
+  );
+
+  const count = Array.isArray(updated) ? updated.length : 0;
+  if (count > 0) {
+    console.log(`charge.refunded: revoked ${count} one-time purchase(s) for payment_intent ${pi}`);
+  } else {
+    // No row stored this PaymentIntent (e.g. a purchase made before refund
+    // handling shipped). Logged so it can be reconciled manually.
+    console.warn('charge.refunded: no matching one-time purchase for payment_intent', { pi, charge: charge.id });
+  }
 }
