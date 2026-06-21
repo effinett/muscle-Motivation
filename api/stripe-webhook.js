@@ -153,7 +153,8 @@ async function onCheckoutCompleted(session) {
 async function onSubscriptionDeleted(sub) {
   await supabaseRequest(
     'PATCH',
-    `purchases?stripe_subscription_id=eq.${encodeURIComponent(sub.id)}`,
+    // status=neq.refunded → a refunded membership stays refunded (terminal).
+    `purchases?stripe_subscription_id=eq.${encodeURIComponent(sub.id)}&status=neq.refunded`,
     { status: 'canceled' }
   );
 }
@@ -178,7 +179,8 @@ async function onSubscriptionUpdated(sub) {
 
   await supabaseRequest(
     'PATCH',
-    `purchases?stripe_subscription_id=eq.${encodeURIComponent(sub.id)}`,
+    // status=neq.refunded so a refund is never overwritten back to active.
+    `purchases?stripe_subscription_id=eq.${encodeURIComponent(sub.id)}&status=neq.refunded`,
     patch
   );
 }
@@ -190,26 +192,29 @@ async function onInvoicePaymentFailed(invoice) {
   if (!invoice.subscription) return; // one-time invoices have no subscription
   await supabaseRequest(
     'PATCH',
-    `purchases?stripe_subscription_id=eq.${encodeURIComponent(invoice.subscription)}`,
+    `purchases?stripe_subscription_id=eq.${encodeURIComponent(invoice.subscription)}&status=neq.refunded`,
     { status: 'past_due' }
   );
 }
 
-// A charge was refunded. Revoke ownership of a FULLY-refunded one-time program
-// purchase by flipping it to 'refunded'. Deliberately scoped so it never touches
-// subscriptions or unrelated purchases:
-//   - matches ONLY the row carrying this charge's PaymentIntent
-//   - matches ONLY one-time rows (stripe_subscription_id IS NULL); subscription
-//     refunds are left to the subscription.* / invoice.* events
-//   - partial refunds keep access (a customer who got $10 back still bought it)
-// Idempotent: re-delivery just re-sets status to 'refunded' (a no-op).
-async function onChargeRefunded(charge) {
-  const pi = charge.payment_intent;
-  if (!pi) {
-    console.warn('charge.refunded: charge has no payment_intent — skipping', { charge: charge.id });
-    return;
-  }
+// Pull the subscription id off an invoice, tolerating both the legacy
+// (invoice.subscription) and newer (invoice.parent.subscription_details)
+// API shapes. Returns a string id or null.
+function subIdFromInvoice(invoice) {
+  let s = invoice.subscription
+       || (invoice.parent && invoice.parent.subscription_details && invoice.parent.subscription_details.subscription)
+       || null;
+  if (s && typeof s === 'object') s = s.id;
+  return s || null;
+}
 
+// A charge was refunded.
+//   - One-time program purchase  → revoke ownership (status 'refunded')
+//   - Subscription / membership   → deactivate access  (status 'refunded')
+// Only FULL refunds act; a partial refund keeps access. Idempotent: re-delivery
+// just re-sets 'refunded' (a no-op), and the subscription.* handlers treat
+// 'refunded' as terminal so they never flip it back to active.
+async function onChargeRefunded(charge) {
   const fullyRefunded = charge.refunded === true || charge.amount_refunded >= charge.amount;
   if (!fullyRefunded) {
     console.log('charge.refunded: partial refund, access left intact', {
@@ -218,19 +223,53 @@ async function onChargeRefunded(charge) {
     return;
   }
 
-  const updated = await supabaseRequest(
-    'PATCH',
-    `purchases?stripe_payment_intent_id=eq.${encodeURIComponent(pi)}&stripe_subscription_id=is.null`,
-    { status: 'refunded' },
-    'return=representation'
-  );
-
-  const count = Array.isArray(updated) ? updated.length : 0;
-  if (count > 0) {
-    console.log(`charge.refunded: revoked ${count} one-time purchase(s) for payment_intent ${pi}`);
-  } else {
-    // No row stored this PaymentIntent (e.g. a purchase made before refund
-    // handling shipped). Logged so it can be reconciled manually.
-    console.warn('charge.refunded: no matching one-time purchase for payment_intent', { pi, charge: charge.id });
+  // 1) One-time program purchase — matched by the stored PaymentIntent and
+  //    scoped to one-time rows so a subscription is never caught here.
+  const pi = charge.payment_intent;
+  if (pi) {
+    const updated = await supabaseRequest(
+      'PATCH',
+      `purchases?stripe_payment_intent_id=eq.${encodeURIComponent(pi)}&stripe_subscription_id=is.null`,
+      { status: 'refunded' },
+      'return=representation'
+    );
+    if (Array.isArray(updated) && updated.length > 0) {
+      console.log(`charge.refunded: revoked ${updated.length} one-time purchase(s) for payment_intent ${pi}`);
+      return;
+    }
   }
+
+  // 2) Subscription charge — resolve the subscription via the invoice, then
+  //    deactivate that membership. A Stripe refund does NOT cancel the
+  //    subscription, so we mark the row 'refunded' (terminal) to cut access.
+  let subId = null;
+  try {
+    if (charge.invoice) {
+      const invoice = await stripe.invoices.retrieve(charge.invoice);
+      subId = subIdFromInvoice(invoice);
+    }
+  } catch (err) {
+    console.warn('charge.refunded: could not retrieve invoice', { invoice: charge.invoice, error: err.message });
+  }
+
+  if (subId) {
+    const updated = await supabaseRequest(
+      'PATCH',
+      `purchases?stripe_subscription_id=eq.${encodeURIComponent(subId)}`,
+      { status: 'refunded' },
+      'return=representation'
+    );
+    const count = Array.isArray(updated) ? updated.length : 0;
+    if (count > 0) {
+      console.log(`charge.refunded: deactivated ${count} subscription purchase(s) for subscription ${subId}`);
+    } else {
+      console.warn('charge.refunded: no subscription purchase matched', { subId, charge: charge.id });
+    }
+    return;
+  }
+
+  // Neither path matched (e.g. a purchase made before PaymentIntent was stored).
+  console.warn('charge.refunded: no matching purchase (one-time or subscription)', {
+    pi, invoice: charge.invoice || null, charge: charge.id,
+  });
 }
