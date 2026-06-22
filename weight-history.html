@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Weight History — Muscle Motivation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    :root {
+      --red:         #B1121B;
+      --red-muted:   rgba(177,18,27,0.12);
+      --red-border:  rgba(177,18,27,0.28);
+      --bg:          #080808;
+      --surface-1:   #0d0d0d;
+      --surface-2:   #131313;
+      --surface-3:   #1a1a1a;
+      --border-1:    #1c1c1c;
+      --border-2:    #252525;
+      --border-3:    #2f2f2f;
+      --text:        #ffffff;
+      --text-2:      #a0a0a0;
+      --text-muted:  #555555;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Barlow', sans-serif;
+      background: var(--bg); color: var(--text);
+      min-height: 100vh; overflow-x: hidden;
+    }
+
+    #authGate {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; min-height: 100vh;
+    }
+    #authGate img { width: 72px; margin-bottom: 16px; opacity: 0.6; }
+    #authGate p { color: var(--text-muted); font-size: 11px; letter-spacing: 2.5px; text-transform: uppercase; }
+
+    header {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(8,8,8,0.97); backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-1);
+      padding: 0 20px;
+      display: flex; align-items: center; justify-content: space-between; height: 60px;
+    }
+    .header-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .header-logo img { height: 42px; }
+    .header-logo span {
+      font-family: 'Bebas Neue', sans-serif; font-size: 18px;
+      letter-spacing: 2.5px; color: var(--text); text-transform: uppercase;
+    }
+    .btn-back {
+      padding: 6px 14px; font-size: 11px; font-family: 'Barlow', sans-serif;
+      font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+      background: transparent; border: 1px solid var(--border-2);
+      color: var(--text-muted); border-radius: 6px; cursor: pointer;
+      transition: border-color 0.2s, color 0.2s; text-decoration: none;
+    }
+    .btn-back:hover { border-color: var(--border-3); color: var(--text-2); }
+
+    .container { max-width: 680px; margin: 0 auto; padding: 28px 16px 120px; }
+
+    .page-title { font-family: 'Bebas Neue', sans-serif; font-size: 34px; letter-spacing: 1.5px; }
+    .page-sub { font-size: 13px; color: var(--text-muted); margin-top: 2px; margin-bottom: 8px; }
+
+    .section-label {
+      font-family: 'Barlow', sans-serif; font-size: 11px; font-weight: 700;
+      letter-spacing: 2px; color: var(--red); text-transform: uppercase;
+      margin-bottom: 12px; margin-top: 24px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border-1); }
+
+    /* Log Weight CTA */
+    .btn-log-weight {
+      display: inline-flex; align-items: center; gap: 8px; margin-top: 16px;
+      padding: 11px 20px; background: var(--red); border: none; border-radius: 8px;
+      color: white; font-family: 'Bebas Neue', sans-serif; font-size: 18px;
+      letter-spacing: 2px; cursor: pointer; transition: opacity 0.2s; text-decoration: none;
+    }
+    .btn-log-weight:hover { opacity: 0.85; }
+    .btn-log-weight i { width: 18px; height: 18px; }
+
+    /* Summary cards */
+    .summary-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
+    }
+    .summary-cell {
+      background: var(--surface-1); border: 1px solid var(--border-2);
+      border-radius: 10px; padding: 14px 16px; border-left: 2px solid var(--red);
+    }
+    .summary-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
+      text-transform: uppercase; color: var(--text-muted);
+    }
+    .summary-val {
+      font-family: 'Bebas Neue', sans-serif; font-size: 28px; line-height: 1;
+      margin-top: 5px; color: var(--text);
+    }
+    .summary-val small { font-family: 'Barlow', sans-serif; font-size: 12px; color: var(--text-muted); font-weight: 600; }
+    .summary-note { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+    /* Chart card */
+    .chart-card {
+      background: var(--surface-1); border: 1px solid var(--border-2);
+      border-radius: 10px; padding: 16px 14px 8px;
+    }
+    .chart-hint { font-size: 12px; color: var(--text-muted); padding: 18px 4px; text-align: center; }
+
+    /* Entry rows */
+    .wh-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      background: var(--surface-1); border: 1px solid var(--border-2);
+      border-radius: 10px; padding: 13px 16px; margin-bottom: 8px;
+    }
+    .wh-main { min-width: 0; }
+    .wh-weight { font-family: 'Bebas Neue', sans-serif; font-size: 24px; line-height: 1; letter-spacing: 1px; }
+    .wh-weight small { font-family: 'Barlow', sans-serif; font-size: 12px; color: var(--text-muted); font-weight: 600; letter-spacing: 0; }
+    .wh-date { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+    .wh-note { font-size: 12px; color: var(--text-2); margin-top: 3px; }
+    .wh-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+    .wh-delta { font-size: 13px; font-weight: 700; color: var(--text-2); white-space: nowrap; }
+    .wh-delta.same { color: var(--text-muted); }
+    .wh-actions { display: flex; gap: 6px; }
+    .wh-icon-btn {
+      width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+      background: transparent; border: 1px solid var(--border-2); border-radius: 7px;
+      color: var(--text-muted); cursor: pointer; transition: border-color .2s, color .2s;
+    }
+    .wh-icon-btn i { width: 15px; height: 15px; }
+    .wh-icon-btn.edit:hover { border-color: var(--text-2); color: var(--text-2); }
+    .wh-icon-btn.del:hover  { border-color: var(--red); color: var(--red); }
+
+    .empty-state { text-align: center; padding: 40px 0; color: var(--text-muted); font-size: 14px; line-height: 1.6; }
+    .empty-state a { color: var(--red); text-decoration: none; font-weight: 600; }
+    .empty-state a:hover { text-decoration: underline; }
+
+    /* ── Shared modal (mirrors app.html) ───────────────────────────── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.82); backdrop-filter: blur(6px);
+      align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: var(--surface-1); border: 1px solid var(--border-2);
+      border-radius: 14px; padding: 28px 24px; width: 100%; max-width: 420px;
+      max-height: 90vh; overflow-y: auto;
+    }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
+    .modal-title { font-family: 'Bebas Neue', sans-serif; font-size: 24px; letter-spacing: 1.5px; }
+    .modal-close {
+      background: none; border: none; color: var(--text-muted);
+      font-size: 18px; cursor: pointer; padding: 4px 8px; transition: color 0.2s;
+    }
+    .modal-close:hover { color: var(--text); }
+    .field-group { margin-bottom: 14px; }
+    .field-label {
+      display: block; font-size: 11px; font-weight: 700;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      color: var(--text-muted); margin-bottom: 6px;
+    }
+    .field-optional { font-weight: 400; text-transform: none; letter-spacing: 0; }
+    .field-group input {
+      width: 100%; padding: 10px 12px;
+      background: var(--surface-2); border: 1px solid var(--border-2);
+      border-radius: 8px; color: var(--text);
+      font-family: 'Barlow', sans-serif; font-size: 14px;
+      appearance: none; outline: none; transition: border-color 0.2s;
+    }
+    .field-group input:focus { border-color: var(--red); }
+    /* Make the native date picker indicator visible on the dark theme */
+    .field-group input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
+    .btn-calc {
+      width: 100%; margin-top: 8px; padding: 12px;
+      background: var(--red); border: none; border-radius: 8px;
+      color: white; font-family: 'Bebas Neue', sans-serif;
+      font-size: 18px; letter-spacing: 2px; cursor: pointer; transition: opacity 0.2s;
+    }
+    .btn-calc:hover { opacity: 0.85; }
+    .btn-calc:disabled { opacity: 0.5; cursor: default; }
+
+    .toast {
+      position: fixed; bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--surface-2); border: 1px solid var(--border-3);
+      color: var(--text); padding: 12px 24px; border-radius: 8px;
+      font-size: 14px; font-weight: 600;
+      transition: transform 0.35s ease, opacity 0.35s ease;
+      opacity: 0; z-index: 999; white-space: nowrap;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+    @media (max-width: 480px) {
+      header { padding: 0 14px; }
+      .header-logo span { display: none; }
+      .container { padding: 20px 12px 120px; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="authGate">
+  <img src="logow.png" alt="Muscle Motivation">
+  <p>Loading...</p>
+</div>
+
+<div id="appContent" style="display:none;">
+  <header>
+    <a class="header-logo" href="app.html">
+      <img src="logow.png" alt="Muscle Motivation">
+      <span>Muscle Motivation</span>
+    </a>
+    <a class="btn-back" href="app.html">← Dashboard</a>
+  </header>
+
+  <div class="container">
+    <div class="page-title">Weight History</div>
+    <div class="page-sub">Track your trend over time. One weigh-in per day — log again to update it.</div>
+    <button class="btn-log-weight" onclick="wlOpenModal()"><i data-lucide="scale"></i> Log Weight</button>
+
+    <!-- Summary -->
+    <div id="summaryWrap"></div>
+
+    <!-- Trend chart -->
+    <div id="chartWrap"></div>
+
+    <!-- Full log -->
+    <div class="section-label">All Weigh-Ins</div>
+    <div id="historyList">
+      <div class="empty-state">Loading…</div>
+    </div>
+  </div>
+</div>
+
+<!-- Log / Edit Weight Modal (markup injected by weight.js) -->
+<div id="weightModalMount"></div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Supabase -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase.js"></script>
+<script src="weight.js"></script>
+<script>
+  var currentUserId = null;
+  var currentProfile = null;
+  var currentLogs = [];
+
+  document.getElementById('weightModalMount').innerHTML = wlModalMarkup();
+
+  function showToast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(function () { t.classList.remove('show'); }, 3000);
+  }
+
+  function renderSummary(stats) {
+    var wrap = document.getElementById('summaryWrap');
+    if (!stats || stats.count === 0) { wrap.innerHTML = ''; return; }
+    var cells = [];
+    cells.push('<div class="summary-cell"><div class="summary-label">Current</div><div class="summary-val">' + wlRound1(stats.current) + ' <small>lbs</small></div></div>');
+    cells.push('<div class="summary-cell"><div class="summary-label">Entries</div><div class="summary-val">' + stats.count + '</div></div>');
+    if (stats.avg7 != null)
+      cells.push('<div class="summary-cell"><div class="summary-label">7-Day Avg</div><div class="summary-val">' + wlRound1(stats.avg7) + ' <small>lbs</small></div></div>');
+    if (stats.change30 != null)
+      cells.push('<div class="summary-cell"><div class="summary-label">30-Day Change</div><div class="summary-val" style="font-size:22px;">' + wlChangeStr(stats.change30) + '</div></div>');
+    wrap.innerHTML = '<div class="section-label">Summary</div><div class="summary-grid">' + cells.join('') + '</div>';
+  }
+
+  function renderChart(logs) {
+    var wrap = document.getElementById('chartWrap');
+    var svg = wlChartSVG(logs);
+    if (!svg) {
+      // Only show the trend section once there are at least 2 points.
+      wrap.innerHTML = (logs && logs.length === 1)
+        ? '<div class="section-label">Trend</div><div class="chart-card"><div class="chart-hint">Log one more day to see your trend line.</div></div>'
+        : '';
+      return;
+    }
+    wrap.innerHTML = '<div class="section-label">Trend</div><div class="chart-card">' + svg + '</div>';
+  }
+
+  function renderList(logs) {
+    var el = document.getElementById('historyList');
+    if (!logs || logs.length === 0) {
+      var fb = currentProfile && currentProfile.weight_lbs
+        ? 'No weigh-ins yet. Your starting weight is <strong>' + wlEsc(wlRound1(currentProfile.weight_lbs)) + ' lbs</strong>.<br><a href="#" onclick="wlOpenModal(); return false;">Log your first weigh-in →</a>'
+        : 'No weigh-ins yet.<br><a href="#" onclick="wlOpenModal(); return false;">Log your first weigh-in →</a>';
+      el.innerHTML = '<div class="empty-state">' + fb + '</div>';
+      return;
+    }
+    el.innerHTML = logs.map(function (l, i) {
+      var prev  = logs[i + 1]; // next older (desc order)
+      var delta = prev ? (+l.weight_lbs - +prev.weight_lbs) : null;
+      var deltaHTML = delta == null ? '' :
+        '<span class="wh-delta ' + (wlRound1(delta) === 0 ? 'same' : '') + '">' + wlChangeStr(delta) + '</span>';
+      return '<div class="wh-row">' +
+        '<div class="wh-main">' +
+          '<div class="wh-weight">' + wlRound1(l.weight_lbs) + ' <small>lbs</small></div>' +
+          '<div class="wh-date">' + wlEsc(wlFmtDateLong(l.logged_on)) + '</div>' +
+          (l.note ? '<div class="wh-note">' + wlEsc(l.note) + '</div>' : '') +
+        '</div>' +
+        '<div class="wh-right">' +
+          deltaHTML +
+          '<div class="wh-actions">' +
+            '<button class="wh-icon-btn edit" title="Edit" data-id="' + l.id + '" onclick="editEntry(this)"><i data-lucide="pencil"></i></button>' +
+            '<button class="wh-icon-btn del" title="Delete" data-id="' + l.id + '" onclick="deleteEntry(this)"><i data-lucide="trash-2"></i></button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+    lucide.createIcons();
+  }
+
+  function editEntry(btn) {
+    var id = btn.getAttribute('data-id');
+    var log = currentLogs.filter(function (l) { return l.id === id; })[0];
+    if (log) wlOpenModal({ weight_lbs: +log.weight_lbs, logged_on: log.logged_on, note: log.note || '' });
+  }
+
+  async function deleteEntry(btn) {
+    var id = btn.getAttribute('data-id');
+    if (!id) return;
+    if (!confirm('Delete this weigh-in? This cannot be undone.')) return;
+    var res = await wlDelete(id);
+    if (res.error) { console.error('deleteEntry', res.error); showToast('Error deleting — try again.'); return; }
+    // Re-point profiles.weight_lbs at the next most recent weigh-in (if any remain).
+    await wlSyncProfileWeight(currentUserId);
+    showToast('Weigh-in deleted.');
+    await refresh();
+  }
+
+  async function refresh() {
+    if (!currentUserId) return;
+    var logs = await wlFetchLogs(currentUserId, 365);
+    currentLogs = logs;
+    var stats = wlStats(logs, currentProfile ? currentProfile.weight_lbs : null);
+    renderSummary(stats);
+    renderChart(logs);
+    renderList(logs);
+  }
+
+  // Shared modal calls this after a successful save.
+  window.onWeightSaved = refresh;
+
+  window.addEventListener('load', function () {
+    (async () => {
+      try {
+        var session = await requireAuth();
+        currentUserId = session.user.id;
+        currentProfile = await getProfile(currentUserId);
+
+        document.getElementById('authGate').style.display   = 'none';
+        document.getElementById('appContent').style.display = 'block';
+
+        await refresh();
+        lucide.createIcons();
+      } catch (err) {
+        console.error('Weight history page error:', err);
+        window.location.href = 'auth.html';
+      }
+    })();
+  });
+</script>
+</body>
+</html>

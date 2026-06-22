@@ -481,6 +481,29 @@
       padding: 2px 7px;
     }
 
+    /* Weigh-in summary strip + delta pills */
+    .wi-summary {
+      display: flex; gap: 8px; margin-bottom: 8px;
+    }
+    .wi-stat {
+      flex: 1; background: var(--surface-2); border: 1px solid var(--border-2);
+      border-radius: 8px; padding: 9px 10px; min-width: 0;
+    }
+    .wi-stat-label {
+      font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .wi-stat-val {
+      font-family: 'Bebas Neue', sans-serif; font-size: 22px; line-height: 1;
+      margin-top: 4px; color: var(--text);
+    }
+    .wi-stat-val small { font-family: 'Barlow', sans-serif; font-size: 11px; color: var(--text-muted); font-weight: 600; }
+    .wi-delta {
+      font-size: 12px; font-weight: 700; white-space: nowrap; flex-shrink: 0;
+      color: var(--text-2);
+    }
+    .wi-delta.same { color: var(--text-muted); }
+
     /* Toast */
     .toast {
       position: fixed; bottom: 24px; left: 50%;
@@ -594,7 +617,7 @@
         <span class="quick-btn-icon"><i data-lucide="dumbbell"></i></span>
         <span class="quick-btn-label">Log Workout</span>
       </a>
-      <a class="quick-btn" href="#">
+      <a class="quick-btn" href="#" onclick="wlOpenModal(); return false;">
         <span class="quick-btn-icon"><i data-lucide="scale"></i></span>
         <span class="quick-btn-label">Log Weight</span>
       </a>
@@ -626,11 +649,11 @@
       <div class="activity-group">
         <div class="activity-head">
           <span class="activity-title">Weigh-Ins</span>
-          <span class="activity-viewall disabled">View All →</span>
+          <a class="activity-viewall" href="weight-history.html">View All →</a>
         </div>
-        <div class="activity-soon">
-          <span class="activity-soon-badge">Coming soon</span>
-          Weight tracking is on the way.
+        <div id="weighInSummary"></div>
+        <div id="recentWeighIns">
+          <div class="activity-empty">Loading…</div>
         </div>
       </div>
 
@@ -672,7 +695,7 @@
           <div class="stat-sub">grams / day</div>
         </div>
         <div class="stat-cell">
-          <div class="stat-label">Starting Weight</div>
+          <div class="stat-label">Current Weight</div>
           <div class="stat-value" id="dashStartWeight">—</div>
         </div>
         <div class="stat-cell">
@@ -817,15 +840,23 @@
   </div>
 </div>
 
+<!-- Log / Edit Weight Modal (markup injected by weight.js) -->
+<div id="weightModalMount"></div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="supabase.js"></script>
 <script src="schedules.js"></script>
+<script src="weight.js"></script>
 <script>
 
   var currentProfile    = null;
+  var currentUserId     = null;
   var ownedProgramsList = [];
+
+  // Mount the shared Log/Edit Weight modal (markup lives in weight.js).
+  document.getElementById('weightModalMount').innerHTML = wlModalMarkup();
 
   var GOAL_LABELS = { fatloss: 'Fat Loss', recomp: 'Recomposition', muscle: 'Muscle Gain' };
 
@@ -845,6 +876,7 @@
       try {
         var session = await requireAuth();
         var user    = session.user;
+        currentUserId = user.id;
         var profile = await getProfile(user.id);
         currentProfile = profile;
 
@@ -893,6 +925,7 @@
         await loadPurchases(user.id);
         await checkDashboardInProgress(user.id);
         await loadRecentActivity(user.id);
+        await loadRecentWeighIns(user.id);
         if (new URLSearchParams(window.location.search).get('purchase') === 'success') {
           showToast('Purchase successful — your program is now unlocked.');
           history.replaceState(null, '', window.location.pathname);
@@ -1453,6 +1486,62 @@
       el.innerHTML = '<div class="activity-empty">Couldn\'t load workouts.</div>';
     }
   }
+
+  // ── Weigh-Ins (dashboard) ──────────────────────────────────────
+  async function loadRecentWeighIns(userId) {
+    var listEl = document.getElementById('recentWeighIns');
+    var sumEl  = document.getElementById('weighInSummary');
+    if (!listEl) return;
+    try {
+      // Pull a 60-row window so 7-day avg / 30-day change can be computed.
+      var logs = await wlFetchLogs(userId, 60);
+      var profileWeight = currentProfile ? currentProfile.weight_lbs : null;
+      var stats = wlStats(logs, profileWeight);
+
+      if (stats.count === 0) {
+        sumEl.innerHTML = '';
+        listEl.innerHTML = profileWeight
+          ? '<div class="activity-empty">No weigh-ins yet. Your starting weight is <strong>' + wlEsc(wlRound1(profileWeight)) + ' lbs</strong> — tap <strong>Log Weight</strong> to start tracking.</div>'
+          : '<div class="activity-empty">No weigh-ins yet — tap <strong>Log Weight</strong> to start tracking.</div>';
+        return;
+      }
+
+      var cells = [];
+      cells.push('<div class="wi-stat"><div class="wi-stat-label">Current</div><div class="wi-stat-val">' + wlRound1(stats.current) + ' <small>lbs</small></div></div>');
+      if (stats.avg7 != null)
+        cells.push('<div class="wi-stat"><div class="wi-stat-label">7-Day Avg</div><div class="wi-stat-val">' + wlRound1(stats.avg7) + ' <small>lbs</small></div></div>');
+      if (stats.change30 != null)
+        cells.push('<div class="wi-stat"><div class="wi-stat-label">30-Day</div><div class="wi-stat-val" style="font-size:18px;">' + wlChangeStr(stats.change30) + '</div></div>');
+      sumEl.innerHTML = '<div class="wi-summary">' + cells.join('') + '</div>';
+
+      // Last 3 entries, each with delta vs the next-older entry (logs is desc).
+      listEl.innerHTML = logs.slice(0, 3).map(function (l, i) {
+        var prev  = logs[i + 1];
+        var delta = prev ? (+l.weight_lbs - +prev.weight_lbs) : null;
+        return '<a class="activity-row" href="weight-history.html">' +
+          '<div class="activity-row-main">' +
+            '<div class="activity-row-name">' + wlRound1(l.weight_lbs) + ' lbs</div>' +
+            (l.note ? '<div class="activity-row-sub">' + wlEsc(l.note) + '</div>' : '') +
+          '</div>' +
+          '<div class="activity-row-date">' + wlDeltaHTML(delta) + ' &nbsp; ' + wlEsc(wlFmtDate(l.logged_on)) + '</div>' +
+        '</a>';
+      }).join('');
+    } catch (err) {
+      console.error('loadRecentWeighIns error:', err);
+      listEl.innerHTML = '<div class="activity-empty">Couldn\'t load weigh-ins.</div>';
+    }
+  }
+
+  // Refresh the dashboard weigh-ins after the shared modal saves.
+  // wlSave() has already synced profiles.weight_lbs (and currentProfile) to the
+  // latest weigh-in, so mirror it into the Current Weight card too.
+  window.onWeightSaved = async function () {
+    if (!currentUserId) return;
+    if (currentProfile && currentProfile.weight_lbs != null) {
+      document.getElementById('dashStartWeight').textContent = currentProfile.weight_lbs + ' lbs';
+    }
+    await loadRecentWeighIns(currentUserId);
+  };
 
   var inProgressId = null;
 
