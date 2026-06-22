@@ -227,6 +227,57 @@
     }
     .btn-recalc:hover { border-color: var(--red); color: var(--red); }
 
+    /* P2 · today's workout status */
+    .workout-status { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; }
+    .workout-status .ws-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
+    .workout-status.done .ws-dot  { background: var(--green); }
+    .workout-status.done .ws-text { color: var(--text); }
+    .workout-status.todo .ws-dot  { background: var(--red); }
+    .workout-status.todo .ws-text { color: var(--text-2); }
+    .workout-status a { color: var(--red); text-decoration: none; font-weight: 700; margin-left: auto; }
+    .workout-status a:hover { text-decoration: underline; }
+
+    /* P4 · momentum streak */
+    .momentum-streak { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; flex-wrap: wrap; }
+    .momentum-streak:empty { display: none; }
+    .streak-num {
+      font-family: 'Bebas Neue', sans-serif; font-size: 30px; line-height: 1;
+      letter-spacing: 1px; color: var(--red);
+    }
+    .streak-num.cold { color: var(--text-muted); }
+    .streak-label { font-size: 12px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--text-2); }
+    .streak-week { font-size: 12px; color: var(--text-muted); font-weight: 600; margin-left: auto; }
+
+    /* P5 · reference */
+    .ref-details { margin-bottom: 12px; }
+    .ref-summary {
+      list-style: none; cursor: pointer; user-select: none;
+      padding: 12px 16px; background: var(--surface-1);
+      border: 1px solid var(--border-2); border-radius: 12px;
+      font-size: 13px; font-weight: 700; color: var(--text-2);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .ref-summary::-webkit-details-marker { display: none; }
+    .ref-summary::after { content: '▾'; color: var(--text-muted); transition: transform .2s; }
+    .ref-details[open] .ref-summary { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+    .ref-details[open] .ref-summary::after { transform: rotate(180deg); }
+    .ref-card { border-top: none; border-top-left-radius: 0; border-top-right-radius: 0; }
+    .ref-link-row {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
+      padding: 14px 16px; background: var(--surface-1);
+      border: 1px solid var(--border-2); border-radius: 12px;
+      text-decoration: none; color: var(--text-2); cursor: default;
+    }
+    .ref-link-label { font-size: 14px; font-weight: 600; }
+    .ref-soon {
+      margin-left: auto; font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
+      text-transform: uppercase; color: var(--text-muted);
+      border: 1px solid var(--border-2); border-radius: 999px; padding: 3px 9px;
+    }
+    .ref-history { display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 4px 4px 8px; }
+    .ref-history a { font-size: 12px; color: var(--text-muted); text-decoration: none; }
+    .ref-history a:hover { color: var(--text-2); text-decoration: underline; }
+
     /* Recalculate modal */
     .modal-overlay {
       display: none; position: fixed; inset: 0; z-index: 200;
@@ -637,99 +688,106 @@
       <div id="mismatchHint" style="display:none;" class="mismatch-hint"></div>
     </div>
 
-    <!-- Quick Actions -->
-    <div class="section-label">Quick Actions</div>
+    <!-- P1 · secondary log actions (primary CTA is the Today card above) -->
     <div class="quick-grid">
-      <a class="quick-btn" href="workout.html">
-        <span class="quick-btn-icon"><i data-lucide="dumbbell"></i></span>
-        <span class="quick-btn-label">Log Workout</span>
+      <a class="quick-btn" href="nutrition.html">
+        <span class="quick-btn-icon"><i data-lucide="utensils"></i></span>
+        <span class="quick-btn-label">Log Food</span>
       </a>
       <a class="quick-btn" href="#" onclick="wlOpenModal(); return false;">
         <span class="quick-btn-icon"><i data-lucide="scale"></i></span>
         <span class="quick-btn-label">Log Weight</span>
       </a>
-      <a class="quick-btn" href="nutrition.html">
-        <span class="quick-btn-icon"><i data-lucide="utensils"></i></span>
-        <span class="quick-btn-label">Log Food</span>
-      </a>
-      <a class="quick-btn" href="#">
-        <span class="quick-btn-icon"><i data-lucide="bot"></i></span>
-        <span class="quick-btn-label">AI Coach</span>
-      </a>
     </div>
 
-    <!-- My Activity -->
-    <div class="section-label">My Activity</div>
+    <!-- P2 · Today's Scoreboard -->
+    <div class="section-label">Today's Scoreboard</div>
     <div class="card">
-      <!-- Recent Workouts -->
-      <div class="activity-group">
-        <div class="activity-head">
-          <span class="activity-title">Recent Workouts</span>
-          <a class="activity-viewall" href="workout-history.html">View All →</a>
-        </div>
-        <div id="recentWorkouts">
-          <div class="activity-empty">Loading…</div>
-        </div>
+      <div id="nutritionSummary">
+        <div class="activity-empty">Loading…</div>
       </div>
-
-      <!-- Weigh-Ins -->
-      <div class="activity-group">
-        <div class="activity-head">
-          <span class="activity-title">Weigh-Ins</span>
-          <a class="activity-viewall" href="weight-history.html">View All →</a>
-        </div>
-        <div id="weighInSummary"></div>
-        <div id="recentWeighIns">
-          <div class="activity-empty">Loading…</div>
-        </div>
-      </div>
-
-      <!-- Nutrition Logs -->
-      <div class="activity-group">
-        <div class="activity-head">
-          <span class="activity-title">Today's Nutrition</span>
-          <a class="activity-viewall" href="nutrition.html">View All →</a>
-        </div>
-        <div id="nutritionSummary">
-          <div class="activity-empty">Loading…</div>
-        </div>
+      <div class="today-divider"></div>
+      <div id="workoutStatusToday" class="workout-status">
+        <span class="ws-dot"></span>
+        <span class="ws-text">Checking today's workout…</span>
       </div>
     </div>
 
-    <!-- Your Numbers -->
-    <div class="section-label">Your Numbers</div>
+    <!-- P3 · Goal Progress -->
+    <div class="section-label">Goal Progress</div>
     <div class="card">
-      <div class="numbers-grid">
-        <div class="stat-cell full">
-          <div class="stat-label">Target Calories</div>
-          <div class="stat-value" id="dashCalories">—</div>
-          <div class="stat-sub" id="dashCalSub"></div>
-        </div>
-        <div class="stat-cell">
-          <div class="stat-label">Protein</div>
-          <div class="stat-value" id="dashProtein">—</div>
-          <div class="stat-sub">grams / day</div>
-        </div>
-        <div class="stat-cell">
-          <div class="stat-label">Carbs</div>
-          <div class="stat-value" id="dashCarbs">—</div>
-          <div class="stat-sub">grams / day</div>
-        </div>
-        <div class="stat-cell">
-          <div class="stat-label">Fats</div>
-          <div class="stat-value" id="dashFats">—</div>
-          <div class="stat-sub">grams / day</div>
-        </div>
-        <div class="stat-cell">
-          <div class="stat-label">Current Weight</div>
-          <div class="stat-value" id="dashStartWeight">—</div>
-        </div>
-        <div class="stat-cell">
-          <div class="stat-label">Goal Weight</div>
-          <div class="stat-value" id="dashGoalWeight">—</div>
-        </div>
+      <div class="activity-head">
+        <span class="activity-title">Weight</span>
+        <a class="activity-viewall" href="weight-history.html">View All →</a>
+      </div>
+      <div id="weighInSummary"></div>
+      <div id="recentWeighIns">
+        <div class="activity-empty">Loading…</div>
       </div>
       <button class="btn-recalc" onclick="openRecalcModal()">Recalculate Goals</button>
+    </div>
+
+    <!-- P4 · Momentum -->
+    <div class="section-label">Momentum</div>
+    <div class="card">
+      <div id="momentumStreak" class="momentum-streak"></div>
+      <div class="activity-head">
+        <span class="activity-title">Recent Workouts</span>
+        <a class="activity-viewall" href="workout-history.html">View All →</a>
+      </div>
+      <div id="recentWorkouts">
+        <div class="activity-empty">Loading…</div>
+      </div>
+    </div>
+
+    <!-- P5 · Reference & More -->
+    <div class="section-label">Reference</div>
+    <details class="ref-details">
+      <summary class="ref-summary">Targets &amp; macros</summary>
+      <div class="card ref-card">
+        <div class="numbers-grid">
+          <div class="stat-cell full">
+            <div class="stat-label">Target Calories</div>
+            <div class="stat-value" id="dashCalories">—</div>
+            <div class="stat-sub" id="dashCalSub"></div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-label">Protein</div>
+            <div class="stat-value" id="dashProtein">—</div>
+            <div class="stat-sub">grams / day</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-label">Carbs</div>
+            <div class="stat-value" id="dashCarbs">—</div>
+            <div class="stat-sub">grams / day</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-label">Fats</div>
+            <div class="stat-value" id="dashFats">—</div>
+            <div class="stat-sub">grams / day</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-label">Current Weight</div>
+            <div class="stat-value" id="dashStartWeight">—</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-label">Goal Weight</div>
+            <div class="stat-value" id="dashGoalWeight">—</div>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <a class="ref-link-row" href="#" aria-disabled="true" onclick="return false;">
+      <span class="quick-btn-icon"><i data-lucide="bot"></i></span>
+      <span class="ref-link-label">AI Coach</span>
+      <span class="ref-soon">Soon</span>
+    </a>
+
+    <div class="ref-history">
+      <a href="workout-history.html">Workout history</a>
+      <a href="weight-history.html">Weight history</a>
+      <a href="nutrition.html">Nutrition log</a>
     </div>
 
     <!-- Programs -->
@@ -954,6 +1012,8 @@
         await loadRecentActivity(user.id);
         await loadRecentWeighIns(user.id);
         await loadNutritionSummary(user.id);
+        await loadTrainedToday(user.id);
+        await loadStreak(user.id);
         if (new URLSearchParams(window.location.search).get('purchase') === 'success') {
           showToast('Purchase successful — your program is now unlocked.');
           history.replaceState(null, '', window.location.pathname);
@@ -1515,6 +1575,74 @@
     }
   }
 
+  // ── P2 · Trained today? ────────────────────────────────────────
+  async function loadTrainedToday(userId) {
+    var el = document.getElementById('workoutStatusToday');
+    if (!el) return;
+    var today = (typeof nuToday === 'function') ? nuToday()
+      : new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    try {
+      var { data } = await supabaseClient.from('workouts')
+        .select('id').eq('user_id', userId).eq('completed', true).eq('date', today).limit(1);
+      if (data && data.length) {
+        el.className = 'workout-status done';
+        el.innerHTML = '<span class="ws-dot"></span><span class="ws-text">Trained today ✓</span>';
+      } else {
+        el.className = 'workout-status todo';
+        el.innerHTML = '<span class="ws-dot"></span><span class="ws-text">No workout logged yet today</span>';
+      }
+    } catch (err) {
+      console.error('loadTrainedToday error:', err);
+      el.className = 'workout-status';
+      el.innerHTML = '<span class="ws-dot"></span><span class="ws-text">Workout status unavailable</span>';
+    }
+  }
+
+  // ── P4 · Momentum (workout streak + this-week count) ───────────
+  function dashIso(d) {
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  }
+  // Consecutive-day streak; counts from today, or yesterday if today isn't logged
+  // yet (so a not-yet-trained today doesn't reset the streak).
+  function dashDayStreak(dateSet) {
+    var cursor = new Date(); cursor.setHours(0, 0, 0, 0);
+    if (!dateSet.has(dashIso(cursor))) {
+      cursor.setDate(cursor.getDate() - 1);
+      if (!dateSet.has(dashIso(cursor))) return 0;
+    }
+    var streak = 0;
+    while (dateSet.has(dashIso(cursor))) { streak++; cursor.setDate(cursor.getDate() - 1); }
+    return streak;
+  }
+  function dashThisWeekCount(dates) {
+    var now = new Date(); now.setHours(0, 0, 0, 0);
+    var weekAgo = new Date(now); weekAgo.setDate(weekAgo.getDate() - 6); // last 7 days incl today
+    return dates.filter(function (ds) {
+      var p = String(ds).split('-'); var d = new Date(+p[0], +p[1] - 1, +p[2]);
+      return d >= weekAgo && d <= now;
+    }).length;
+  }
+  async function loadStreak(userId) {
+    var el = document.getElementById('momentumStreak');
+    if (!el) return;
+    try {
+      var { data } = await supabaseClient.from('workouts')
+        .select('date').eq('user_id', userId).eq('completed', true)
+        .order('date', { ascending: false }).limit(180);
+      var dates = Array.from(new Set((data || []).map(function (w) { return w.date; })));
+      if (!dates.length) { el.innerHTML = ''; return; }
+      var streak = dashDayStreak(new Set(dates));
+      var week = dashThisWeekCount(dates);
+      el.innerHTML =
+        '<span class="streak-num' + (streak === 0 ? ' cold' : '') + '">' + streak + '</span>' +
+        '<span class="streak-label">day streak</span>' +
+        '<span class="streak-week">This week: ' + week + '</span>';
+    } catch (err) {
+      console.error('loadStreak error:', err);
+      el.innerHTML = '';
+    }
+  }
+
   // ── Today's Nutrition (dashboard) ──────────────────────────────
   // Read-only summary of today's food logs vs. profile targets.
   // NEVER writes targets — those are owned by Recalculate Goals.
@@ -1609,6 +1737,8 @@
         cells.push('<div class="wi-stat"><div class="wi-stat-label">7-Day Avg</div><div class="wi-stat-val">' + wlRound1(stats.avg7) + ' <small>lbs</small></div></div>');
       if (stats.change30 != null)
         cells.push('<div class="wi-stat"><div class="wi-stat-label">30-Day</div><div class="wi-stat-val" style="font-size:18px;">' + wlChangeStr(stats.change30) + '</div></div>');
+      if (currentProfile && currentProfile.goal_weight_lbs)
+        cells.push('<div class="wi-stat"><div class="wi-stat-label">Goal</div><div class="wi-stat-val">' + wlRound1(currentProfile.goal_weight_lbs) + ' <small>lbs</small></div></div>');
       sumEl.innerHTML = '<div class="wi-summary">' + cells.join('') + '</div>';
 
       // Last 3 entries, each with delta vs the next-older entry (logs is desc).
