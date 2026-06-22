@@ -38,7 +38,7 @@
     #fallback .fb-sub { color:var(--text-2); font-size:14px; margin-bottom:22px; }
 
     .recap {
-      max-width:440px; margin:0 auto; padding:28px 16px 48px;
+      max-width:440px; margin:0 auto; padding:26px 16px 132px;
       animation:fade-up .45s ease both;
     }
     @keyframes fade-up { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
@@ -74,12 +74,29 @@
     .stat-num { font-family:'Bebas Neue',sans-serif; font-size:30px; letter-spacing:1px; line-height:1; }
     .stat-label { font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text-muted); margin-top:6px; }
 
-    /* ── Section labels ── */
-    .section-label {
+    /* ── Sub labels (inside the collapsed breakdown) ── */
+    .sub-label {
       font-size:11px; font-weight:700; letter-spacing:2px; color:var(--red);
-      text-transform:uppercase; margin:30px 0 12px; display:flex; align-items:center; gap:10px;
+      text-transform:uppercase; margin:22px 0 10px; display:flex; align-items:center; gap:10px;
     }
-    .section-label::after { content:''; flex:1; height:1px; background:var(--border-1); }
+    .sub-label:first-child { margin-top:4px; }
+    .sub-label::after { content:''; flex:1; height:1px; background:var(--border-1); }
+
+    /* ── Collapsible detail ── */
+    .details { margin-top:18px; }
+    .details-summary {
+      list-style:none; cursor:pointer; user-select:none;
+      display:flex; align-items:center; justify-content:center; gap:8px;
+      padding:13px 16px; border-radius:12px;
+      background:var(--surface-1); border:1px solid var(--border-2); color:var(--text-2);
+      font-size:12px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase;
+      transition:border-color .2s, color .2s;
+    }
+    .details-summary::-webkit-details-marker { display:none; }
+    .details-summary:hover { border-color:var(--border-3); color:var(--text); }
+    .details-chevron { width:16px; height:16px; transition:transform .25s ease; }
+    .details[open] .details-chevron { transform:rotate(180deg); }
+    .details-body { animation:fade-up .3s ease both; }
 
     /* ── PR cards ── */
     .pr-card {
@@ -131,25 +148,28 @@
     .next-focus { font-size:13px; color:var(--text-2); margin-top:6px; line-height:1.5; }
     .next-standalone { font-size:13.5px; color:var(--text-2); line-height:1.55; }
 
-    /* ── Motivation ── */
+    /* ── Motivation (one quiet line) ── */
     .motivation {
-      text-align:center; font-size:15px; color:var(--text); line-height:1.55;
-      margin:30px auto 4px; max-width:340px; font-weight:500;
+      text-align:center; font-size:13px; color:var(--text-muted); line-height:1.5;
+      margin:16px auto 2px; max-width:320px; font-weight:500; letter-spacing:0.2px;
     }
+    .motivation:empty { display:none; }
 
-    /* ── Action buttons ── */
-    .action-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-top:26px; }
-    .act-btn {
-      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
-      padding:16px 8px; border-radius:12px; text-decoration:none; cursor:pointer;
-      background:var(--surface-1); border:1px solid var(--border-2); color:var(--text-2);
-      font-size:12px; font-weight:700; letter-spacing:0.5px; text-transform:uppercase;
-      transition:border-color .2s, color .2s;
+    /* ── Sticky Done bar ── */
+    .done-bar {
+      position:fixed; left:0; right:0; bottom:0; z-index:50;
+      padding:14px 16px calc(14px + env(safe-area-inset-bottom));
+      background:linear-gradient(to top, rgba(8,8,8,0.98) 70%, rgba(8,8,8,0));
+      backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+      border-top:1px solid var(--border-1);
     }
-    .act-btn svg { width:20px; height:20px; }
-    .act-btn:hover { border-color:var(--border-3); color:var(--text); }
-    .act-btn.act-primary { background:var(--red); border-color:var(--red); color:#fff; }
-    .act-btn.act-primary:hover { opacity:0.9; color:#fff; }
+    .done-btn {
+      display:block; max-width:440px; margin:0 auto; padding:15px; text-align:center;
+      background:var(--red); color:#fff; border-radius:12px; text-decoration:none;
+      font-family:'Bebas Neue',sans-serif; font-size:24px; letter-spacing:3px;
+      transition:opacity .2s;
+    }
+    .done-btn:hover { opacity:0.9; }
 
     .btn-dash {
       display:inline-flex; align-items:center; gap:8px; padding:12px 22px; background:var(--red);
@@ -183,32 +203,32 @@
       <div class="stat-grid" id="statGrid"></div>
     </div>
 
-    <!-- PR HIGHLIGHTS -->
-    <div class="section-label">PR Highlights</div>
+    <!-- PR HIGHLIGHTS (directly under summary) -->
     <div id="prSection"></div>
 
-    <!-- EXERCISE BREAKDOWN -->
-    <div class="section-label">Exercise Breakdown</div>
-    <div id="breakdown"></div>
-
-    <!-- PROGRESSION -->
-    <div class="section-label">Progression</div>
-    <div class="card" id="progressionCard"></div>
-
-    <!-- NEXT UP -->
-    <div class="section-label">Next Up</div>
-    <div class="card" id="nextCard"></div>
-
-    <!-- MOTIVATION -->
+    <!-- Subtle context-aware motivational line -->
     <div class="motivation" id="motivation"></div>
 
-    <!-- ACTIONS -->
-    <div class="action-grid">
-      <a class="act-btn act-primary" href="app.html"><i data-lucide="layout-dashboard"></i> Dashboard</a>
-      <a class="act-btn" href="workout-history.html"><i data-lucide="history"></i> History</a>
-      <a class="act-btn" href="app.html"><i data-lucide="scale"></i> Log Weight</a>
-      <a class="act-btn" href="workout.html"><i data-lucide="dumbbell"></i> New Workout</a>
-    </div>
+    <!-- COLLAPSED DETAIL (power users only) -->
+    <details class="details">
+      <summary class="details-summary">
+        <span>See Full Breakdown</span>
+        <i data-lucide="chevron-down" class="details-chevron"></i>
+      </summary>
+      <div class="details-body">
+        <div class="sub-label">Exercise Breakdown</div>
+        <div id="breakdown"></div>
+        <div class="sub-label">Progression</div>
+        <div class="card" id="progressionCard"></div>
+        <div class="sub-label">Next Up</div>
+        <div class="card" id="nextCard"></div>
+      </div>
+    </details>
+  </div>
+
+  <!-- Sticky primary action — always reachable -->
+  <div class="done-bar">
+    <a class="done-btn" href="app.html">Done</a>
   </div>
 </div>
 
@@ -477,16 +497,10 @@
     renderNext(w);
 
     // Motivation
-    var msgsPR = [
-      'This is how strength is built — not from one perfect workout, but from stacking sessions like this.',
-      'Records fall when you keep showing up. Today you proved it again.'
-    ];
-    var msgsNoPR = [
-      'Every workout is a vote for the person you want to become.',
-      'Progress is the sum of sessions like this one. You showed up — that\'s the work.'
-    ];
-    var pool = prCards.length ? msgsPR : msgsNoPR;
-    document.getElementById('motivation').textContent = pool[Math.floor(Math.random()*pool.length)];
+    // One quiet, context-aware line — PR day vs. a consistency day.
+    document.getElementById('motivation').textContent = prCards.length
+      ? 'Records fall when you keep showing up.'
+      : 'Consistency compounds.';
   }
 
   function notWarmup(s){ return !s.is_warmup; }
