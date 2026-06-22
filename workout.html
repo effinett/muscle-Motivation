@@ -481,14 +481,22 @@
 
     .pr-eyebrow {
       font-family: 'Barlow', sans-serif; font-size: 11px; font-weight: 700;
-      letter-spacing: 3px; text-transform: uppercase; color: var(--gold); margin-bottom: 12px;
+      letter-spacing: 3px; text-transform: uppercase; color: var(--gold); margin-bottom: 10px;
     }
-    .pr-list { margin-bottom: 22px; }
-    .pr-item {
-      font-family: 'Bebas Neue', sans-serif; font-size: 24px; letter-spacing: 1px;
-      line-height: 1.15; color: var(--text);
+    .pr-exercise {
+      font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 1px;
+      line-height: 1.05; color: var(--text);
     }
-    .pr-item + .pr-item { margin-top: 4px; }
+    .pr-stat {
+      font-family: 'Bebas Neue', sans-serif; font-size: 36px; letter-spacing: 1.5px;
+      line-height: 1.1; color: var(--gold); margin-top: 2px;
+    }
+    .pr-stat:empty { display: none; }
+    .pr-note {
+      font-family: 'Barlow', sans-serif; font-size: 12.5px; color: var(--text-2);
+      line-height: 1.45; margin-top: 8px;
+    }
+    .pr-note:empty { display: none; }
 
     @keyframes pr-pop {
       0%   { transform: scale(0.4); opacity: 0; }
@@ -692,8 +700,10 @@
       <span class="pr-spark pr-spark-3"></span>
       <div class="pr-badge"><i data-lucide="trophy"></i></div>
     </div>
-    <div class="pr-eyebrow">New Personal Record</div>
-    <div class="pr-list" id="prList"></div>
+    <div class="pr-eyebrow" id="prEyebrow">New PR</div>
+    <div class="pr-exercise" id="prExercise"></div>
+    <div class="pr-stat" id="prStat"></div>
+    <div class="pr-note" id="prNote"></div>
   </div>
 </div>
 
@@ -724,11 +734,8 @@
   var timerInterval   = null;
   var restInterval    = null;
   var restStart       = null;
-  // PR records as they were at the START of this session, keyed by exercise_name.
-  // Live per-set PR detection compares against this snapshot and advances its
-  // running best as PRs are hit, so the same set can't re-fire and a bigger PR
-  // later still does. Save remains the source of truth that writes records.
-  var prSnapshot      = {};
+  // Live PR session state (prState/prStateLoading) is declared with the live PR
+  // detection block below.
   // workoutHistory + history rendering/edit/delete live in workout-history.js (shared)
 
   // ── Init ──────────────────────────────────────────────────────────
@@ -755,9 +762,9 @@
         var mode      = params.get('mode');
         var histOpts = { limit: 10, targetId: 'historyList', emptyText: 'No workouts yet — start your first session above.' };
         if (progSlug && sessKey) {
-          await Promise.all([startProgramSession(progSlug, sessKey, mode), loadHistory(histOpts), loadPrSnapshot()]);
+          await Promise.all([startProgramSession(progSlug, sessKey, mode), loadHistory(histOpts)]);
         } else {
-          await Promise.all([checkActiveWorkout(), loadHistory(histOpts), loadPrSnapshot()]);
+          await Promise.all([checkActiveWorkout(), loadHistory(histOpts)]);
         }
 
         document.getElementById('authGate').style.display   = 'none';
@@ -1225,31 +1232,122 @@
     renderExercises();
   }
 
-  // ── Live PR detection (Phase 3) ───────────────────────────────────
-  // Load the user's existing PR records once at start so live detection can
-  // compare each completed set against the PRE-workout best. Non-fatal.
-  async function loadPrSnapshot() {
-    prSnapshot = {};
-    try {
-      var { data } = await supabaseClient
-        .from('personal_records')
-        .select('exercise_name, best_weight, best_reps, best_volume, best_estimated_1rm')
-        .eq('user_id', currentUser.id);
-      (data || []).forEach(function(r) { prSnapshot[r.exercise_name] = r; });
-    } catch (e) { /* non-fatal — live PR is a bonus */ }
+  // ── Live PR detection (Phase 4A) ──────────────────────────────────
+  // Per-exercise PR state for THIS session, keyed by exercise_name. Built from
+  // the user's full completed-set history (excluding the current workout) and
+  // then advanced in memory as PRs are hit. Tracking running bests is what
+  // prevents spam: deleting + re-adding the same set ties the record (no
+  // re-celebration), while a genuinely bigger set beats it and celebrates.
+  //   { everLogged, firstCelebrated, heaviestWeight, bestVolume, bestE1rm,
+  //     repsAtWeight: { <weight>: bestReps } }
+  var prState        = {};
+  var prStateLoading = {};
+
+  function liveNum(v) {
+    if (v === '' || v === null || v === undefined) return null;
+    var n = parseFloat(v);
+    return isNaN(n) ? null : n;
+  }
+  function liveFmtNum(n) { return (Math.round(n * 10) / 10).toString(); }
+  function liveEst1rm(w, r) { return w * (1 + r / 30); }
+  function liveFmtSet(w, r) { return (w == null ? r + ' reps' : liveFmtNum(w) + ' × ' + r); }
+
+  // Fold one achieved set into a PR state's running bests (weight-based only;
+  // bodyweight sets have nothing weight-based to compare).
+  function prSeed(st, w, r) {
+    if (w == null) return;
+    var vol = w * r, e1 = liveEst1rm(w, r);
+    if (st.heaviestWeight == null || w > st.heaviestWeight) st.heaviestWeight = w;
+    if (st.bestVolume == null || vol > st.bestVolume) st.bestVolume = vol;
+    if (st.bestE1rm == null || e1 > st.bestE1rm) st.bestE1rm = e1;
+    if (st.repsAtWeight[w] == null || r > st.repsAtWeight[w]) st.repsAtWeight[w] = r;
   }
 
-  // When a set is checked complete, see if it beats the running best for that
-  // exercise. If so, pop the trophy and advance the running best so the same
-  // set can't re-fire (but a bigger lift later still can).
-  function checkLivePr(ex, s) {
-    if (typeof Progression === 'undefined' || !Progression.evaluatePRs) return;
-    if (s.weight_lbs == null || s.reps == null) return;
-    var prior = prSnapshot[ex.name];
-    var res = Progression.evaluatePRs([{ weight: s.weight_lbs, reps: s.reps }], prior || {});
-    prSnapshot[ex.name] = res.best;          // advance running best (also seeds new exercises)
-    if (res.hadPrior && res.topMessage) {
-      showLivePr(ex.name + ' ' + res.topMessage);
+  // Build the baseline from ALL of this user's completed, non-warmup sets for
+  // the exercise, EXCLUDING the current workout. Uses raw set history so
+  // reps-at-weight PRs are correct for any weight (personal_records can't do
+  // that — it stores a single best_reps). Non-fatal: on error the exercise is
+  // simply treated as having no prior data.
+  async function loadPrBaseline(ex) {
+    var st = { everLogged: false, firstCelebrated: false,
+               heaviestWeight: null, bestVolume: null, bestE1rm: null, repsAtWeight: {} };
+    try {
+      var { data: wexs } = await supabaseClient
+        .from('workout_exercises').select('id, workout_id').eq('exercise_name', ex.name);
+      if (!wexs || !wexs.length) return st;
+      var ids = [...new Set(wexs.map(function(w) { return w.workout_id; }))];
+      var { data: ws } = await supabaseClient
+        .from('workouts').select('id')
+        .eq('user_id', currentUser.id).eq('completed', true).in('id', ids);
+      var valid = {};
+      (ws || []).forEach(function(w) { valid[w.id] = true; });
+      if (currentWorkout) delete valid[currentWorkout.id];   // exclude the in-progress workout
+      var wexIds = wexs.filter(function(we) { return valid[we.workout_id]; })
+                       .map(function(we) { return we.id; });
+      if (!wexIds.length) return st;
+      var { data: sets } = await supabaseClient
+        .from('workout_sets').select('weight_lbs, reps, completed, is_warmup')
+        .in('workout_exercise_id', wexIds);
+      (sets || []).forEach(function(s) {
+        if (s.is_warmup) return;             // never count warmups
+        if (!s.completed) return;            // only achieved sets count as records
+        var r = liveNum(s.reps);
+        if (r == null || r <= 0) return;
+        st.everLogged = true;
+        prSeed(st, liveNum(s.weight_lbs), r);
+      });
+    } catch (e) { /* non-fatal — live PR is a bonus */ }
+    return st;
+  }
+
+  // Cache the baseline promise so rapid set checks don't double-query.
+  async function getPrState(ex) {
+    if (prState[ex.name]) return prState[ex.name];
+    if (!prStateLoading[ex.name]) prStateLoading[ex.name] = loadPrBaseline(ex);
+    prState[ex.name] = await prStateLoading[ex.name];
+    return prState[ex.name];
+  }
+
+  // Called when a set is checked complete. Decides whether this set establishes
+  // a NEW record (or is the first-ever log) and, if so, pops one tasteful
+  // celebration. Running bests are always advanced so the same value can't
+  // re-fire. Single overlay per set — highest-priority category wins the
+  // headline (heaviest > reps-at-weight > est 1RM > volume).
+  async function checkLivePr(ex, s) {
+    var r = liveNum(s.reps);
+    if (r == null || r <= 0) return;
+    var w = liveNum(s.weight_lbs);
+    var st = await getPrState(ex);
+
+    // First time this exercise has ever been logged → one baseline achievement.
+    if (!st.everLogged) {
+      st.everLogged = true;
+      var firstTime = !st.firstCelebrated;
+      st.firstCelebrated = true;
+      prSeed(st, w, r);
+      if (firstTime) {
+        showLivePr({ eyebrow: 'First Time Logged', exercise: ex.name,
+          detail: liveFmtSet(w, r), note: 'Baseline set — every PR builds from here.' });
+      }
+      return;
+    }
+
+    // Weight-based PRs need a weight (bodyweight sets can't be compared safely).
+    if (w == null) return;
+    var vol = w * r, e1 = liveEst1rm(w, r);
+    var cat = null, note = null;
+    if (st.heaviestWeight == null || w > st.heaviestWeight) {
+      cat = 'weight'; note = 'Heaviest ' + ex.name + ' you\'ve lifted.';
+    } else if (st.repsAtWeight[w] != null && r > st.repsAtWeight[w]) {
+      cat = 'reps'; note = 'Most reps ever at ' + liveFmtNum(w) + ' lb.';
+    } else if (st.bestE1rm == null || e1 > st.bestE1rm + 1e-9) {
+      cat = 'e1rm'; note = 'Best estimated 1RM yet — about ' + Math.round(e1) + ' lb.';
+    } else if (st.bestVolume == null || vol > st.bestVolume) {
+      cat = 'volume'; note = 'Best set volume yet.';
+    }
+    prSeed(st, w, r);   // advance every running best regardless of which fired
+    if (cat) {
+      showLivePr({ eyebrow: 'New PR', exercise: ex.name, detail: liveFmtSet(w, r), note: note });
     }
   }
 
@@ -1298,8 +1396,11 @@
   // Centered trophy that pops in when a set earns a PR, then auto-dismisses so
   // the user stays in their session. Tap anywhere to close early.
   var _liveTimer = null;
-  function showLivePr(message) {
-    document.getElementById('prList').innerHTML = '<div class="pr-item">' + esc(message) + '</div>';
+  function showLivePr(p) {
+    document.getElementById('prEyebrow').textContent  = p.eyebrow;
+    document.getElementById('prExercise').textContent = p.exercise || '';
+    document.getElementById('prStat').textContent     = p.detail || '';
+    document.getElementById('prNote').textContent     = p.note || '';
     document.getElementById('prModal').classList.add('open');
     lucide.createIcons();
     clearTimeout(_liveTimer);
