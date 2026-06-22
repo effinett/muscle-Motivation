@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Log Workout — Muscle Motivation</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -322,7 +322,7 @@
       background: var(--green); border: none; border-radius: 10px;
       color: #050505; font-family: 'Bebas Neue', sans-serif; font-size: 22px;
       letter-spacing: 2px; cursor: pointer; transition: opacity 0.2s;
-      margin-top: 8px; margin-bottom: 32px;
+      margin-top: 8px; margin-bottom: calc(32px + env(safe-area-inset-bottom, 0px));
     }
     .btn-finish-bottom:hover { opacity: 0.85; }
 
@@ -537,6 +537,7 @@
       .container { padding: 20px 12px 120px; }
     }
   </style>
+  <link rel="stylesheet" href="safe-area.css">
 </head>
 <body>
 

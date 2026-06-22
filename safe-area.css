@@ -1,0 +1,28 @@
+/* ──────────────────────────────────────────────────────────────────────────
+ * Muscle Motivation — global iPhone safe-area support (notch + home indicator)
+ *
+ * Linked LAST in <head> on every page. Requires `viewport-fit=cover` in the
+ * viewport meta (without it iOS reports every inset as 0).
+ *
+ * Every rule resolves to 0 on desktop and non-notch devices, so those layouts
+ * are unchanged. Lightweight + future-proof: a new sticky control just adds the
+ * .safe-area-bottom (or .safe-area-top) class — no per-page CSS needed.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/* Sticky member-app headers clear the status bar / notch. Scoped via
+   .header-logo so it never touches hero-style <header>s (calculator/onboarding).
+   :has() → modern Safari; older browsers simply ignore it (graceful no-op). */
+header:has(.header-logo) { padding-top: env(safe-area-inset-top, 0px); }
+
+/* Bottom-anchored toasts / rest strips ride above the home indicator.
+   margin-bottom is additive to their existing `bottom:` offset and never
+   clobbers their padding. */
+.toast,
+.rest-strip,
+#storeToast { margin-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* Future-proof hooks for any fixed/sticky action bar or header.
+   Keep the element's own padding via the --sa-pad-* var (set it to match the
+   bar's base padding) and add the device inset on top. */
+.safe-area-bottom { padding-bottom: calc(var(--sa-pad-b, 16px) + env(safe-area-inset-bottom, 0px)); }
+.safe-area-top    { padding-top:    calc(var(--sa-pad-t, 0px)  + env(safe-area-inset-top, 0px)); }
