@@ -211,10 +211,41 @@
       font-size: 13px; font-weight: 600; white-space: nowrap;
       overflow: hidden; text-overflow: ellipsis;
     }
-    .nu-chip-cal {
+    .nu-chip-more { color: var(--text-2); border-style: dashed; }
+    .nu-chip-more:hover { color: var(--text); }
+    /* back button (shown only in the Saved Foods search view) */
+    .nu-back {
+      background: none; border: none; color: var(--text-muted);
+      font-size: 20px; line-height: 1; cursor: pointer; padding: 0 10px 0 0;
+      transition: color .2s;
+    }
+    .nu-back:hover { color: var(--text); }
+    /* Saved Foods search panel */
+    .nu-search-input {
+      width: 100%; padding: 11px 12px; margin-bottom: 12px;
+      background: var(--surface-2); border: 1px solid var(--border-2);
+      border-radius: 8px; color: var(--text);
+      font-family: 'Barlow', sans-serif; font-size: 14px; outline: none;
+      transition: border-color .2s;
+    }
+    .nu-search-input:focus { border-color: var(--red); }
+    .nu-saved-list { display: flex; flex-direction: column; gap: 7px; max-height: 46vh; overflow-y: auto; }
+    .nu-saved-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      width: 100%; text-align: left; cursor: pointer;
+      background: var(--surface-2); border: 1px solid var(--border-2);
+      border-radius: 10px; padding: 11px 14px; transition: border-color .2s;
+    }
+    .nu-saved-row:hover { border-color: var(--red-border); }
+    .nu-saved-name {
+      font-family: 'Barlow', sans-serif; font-size: 14px; font-weight: 600; color: var(--text);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .nu-saved-cal {
       font-family: 'Bebas Neue', sans-serif; font-size: 15px; letter-spacing: 0.5px;
       color: var(--text-2); flex-shrink: 0;
     }
+    .nu-search-empty { font-size: 12px; color: var(--text-muted); padding: 10px 2px; }
     .btn-calc {
       width: 100%; margin-top: 8px; padding: 12px;
       background: var(--red); border: none; border-radius: 8px;

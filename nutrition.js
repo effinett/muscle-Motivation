@@ -181,6 +181,11 @@ function nuOpenModal(prefill) {
   document.getElementById('nuModalTitle').textContent = prefill.id ? 'Edit Food' : 'Add Food';
   document.getElementById('nuDeleteBtn').style.display = prefill.id ? 'block' : 'none';
 
+  // Always open on the Add/Edit form view (reset the Saved Foods search panel).
+  document.getElementById('nuSearchView').style.display = 'none';
+  document.getElementById('nuAddView').style.display    = 'block';
+  document.getElementById('nuBackBtn').style.display     = 'none';
+
   // Recent/saved foods quick-add — only offered when adding a new entry, never
   // when editing an existing log (where the fields are already populated).
   var recentWrap = document.getElementById('nuRecentWrap');
@@ -259,13 +264,17 @@ async function nuDeleteFromModal() {
 }
 
 /* ── recent / saved foods quick-add ────────────────────────────────────── */
+var NU_RECENT_VISIBLE = 6;          // chips shown before the "Show more" chip
+var nu_recentFoods = [];            // full saved-food list (recent-first), shared
+                                    // by the chips and the Saved Foods search panel
+
 // Fire-and-forget loader: the modal opens immediately, chips fill in when ready.
 async function nuLoadRecent() {
   try {
     var s = await supabaseClient.auth.getSession();
     var uid = s.data.session && s.data.session.user && s.data.session.user.id;
     if (!uid) { nuRenderRecent([]); return; }
-    var foods = await nuFetchRecentFoods(uid, 12);
+    var foods = await nuFetchRecentFoods(uid, 100);
     nuRenderRecent(foods);
   } catch (e) {
     console.error('nuLoadRecent error:', e);
@@ -274,35 +283,108 @@ async function nuLoadRecent() {
 }
 
 function nuRenderRecent(foods) {
+  nu_recentFoods = foods || [];
   var wrap = document.getElementById('nuRecentWrap');
   var chips = document.getElementById('nuRecentChips');
   if (!wrap || !chips) return;
-  if (!foods || !foods.length) { wrap.style.display = 'none'; chips.innerHTML = ''; return; }
-  chips.innerHTML = foods.map(function (f) {
-    return '<button type="button" class="nu-chip"' +
-      ' data-name="' + nuEsc(f.name) + '"' +
-      ' data-cal="' + (+f.default_calories || 0) + '"' +
-      ' data-p="' + (+f.default_protein || 0) + '"' +
-      ' data-c="' + (+f.default_carbs || 0) + '"' +
-      ' data-f="' + (+f.default_fat || 0) + '"' +
-      ' onclick="nuPickRecent(this)">' +
-      '<span class="nu-chip-name">' + nuEsc(f.name) + '</span>' +
-      '<span class="nu-chip-cal">' + nuRound(f.default_calories) + '</span>' +
-    '</button>';
+  if (!nu_recentFoods.length) { wrap.style.display = 'none'; chips.innerHTML = ''; return; }
+  // Chips show a SHORTENED label; the full name is preserved in nu_recentFoods.
+  var html = nu_recentFoods.slice(0, NU_RECENT_VISIBLE).map(function (f, i) {
+    return '<button type="button" class="nu-chip" onclick="nuPickSaved(' + i + ')">' +
+        '<span class="nu-chip-name">' + nuEsc(nuShortLabel(f.name)) + '</span>' +
+      '</button>';
   }).join('');
+  if (nu_recentFoods.length > NU_RECENT_VISIBLE) {
+    html += '<button type="button" class="nu-chip nu-chip-more" onclick="nuOpenSearch()">Show more</button>';
+  }
+  chips.innerHTML = html;
   wrap.style.display = 'block';
 }
 
-// Prefill name + per-serving macros from a saved food. Servings resets to 1 and
-// the meal selection is left as-is so the user can still adjust before saving.
-function nuPickRecent(el) {
-  document.getElementById('nuName').value     = el.getAttribute('data-name');
-  document.getElementById('nuCalories').value = el.getAttribute('data-cal');
-  document.getElementById('nuProtein').value  = el.getAttribute('data-p');
-  document.getElementById('nuCarbs').value    = el.getAttribute('data-c');
-  document.getElementById('nuFat').value      = el.getAttribute('data-f');
+// Prefill from a saved food — works from a chip OR the Saved Foods search list.
+// The FULL name fills the Food field (never the shortened chip label); servings
+// resets to 1 and meal is left as-is so the user can still adjust before saving.
+function nuPickSaved(i) {
+  var f = nu_recentFoods[i];
+  if (!f) return;
+  document.getElementById('nuName').value     = f.name;
+  document.getElementById('nuCalories').value = +f.default_calories || 0;
+  document.getElementById('nuProtein').value  = +f.default_protein  || 0;
+  document.getElementById('nuCarbs').value    = +f.default_carbs    || 0;
+  document.getElementById('nuFat').value       = +f.default_fat      || 0;
   document.getElementById('nuServings').value = 1;
+  nuCloseSearch();                  // return to the form if we came from search
   document.getElementById('nuServings').focus();
+}
+
+/* ── Saved Foods search panel (opened via "Show more") ─────────────────── */
+function nuOpenSearch() {
+  document.getElementById('nuAddView').style.display    = 'none';
+  document.getElementById('nuSearchView').style.display = 'block';
+  document.getElementById('nuBackBtn').style.display    = 'inline-block';
+  document.getElementById('nuModalTitle').textContent   = 'Saved Foods';
+  document.getElementById('nuSearch').value = '';
+  nuRenderSearchList('');
+  setTimeout(function () { document.getElementById('nuSearch').focus(); }, 60);
+}
+
+function nuCloseSearch() {
+  var sv = document.getElementById('nuSearchView');
+  if (!sv || sv.style.display === 'none') return;
+  sv.style.display = 'none';
+  document.getElementById('nuAddView').style.display = 'block';
+  document.getElementById('nuBackBtn').style.display = 'none';
+  document.getElementById('nuModalTitle').textContent =
+    document.getElementById('nuFoodId').value ? 'Edit Food' : 'Add Food';
+}
+
+function nuFilterSaved() {
+  nuRenderSearchList(document.getElementById('nuSearch').value);
+}
+
+function nuRenderSearchList(q) {
+  var list = document.getElementById('nuSearchList');
+  if (!list) return;
+  q = (q || '').trim().toLowerCase();
+  var rows = nu_recentFoods
+    .map(function (f, i) { return { f: f, i: i }; })
+    .filter(function (o) { return !q || o.f.name.toLowerCase().indexOf(q) >= 0; });
+  if (!rows.length) {
+    list.innerHTML = '<div class="nu-search-empty">' +
+      (nu_recentFoods.length ? 'No saved foods match.' : 'No saved foods yet.') + '</div>';
+    return;
+  }
+  list.innerHTML = rows.map(function (o) {
+    return '<button type="button" class="nu-saved-row" onclick="nuPickSaved(' + o.i + ')">' +
+        '<span class="nu-saved-name">' + nuEsc(o.f.name) + '</span>' +
+        '<span class="nu-saved-cal">' + nuRound(o.f.default_calories) + ' kcal</span>' +
+      '</button>';
+  }).join('');
+}
+
+// Display-only chip label: drop a trailing measure ("...,6 oz") and low-info
+// qualifier words ("Fairlife Protein Shake" -> "Fairlife Shake"). Already-short
+// names pass through untouched. The full name is always kept in nu_recentFoods.
+// "protein" and "greek" are intentionally NOT here — they're meaningful food
+// distinctions, not noise. We only strip fat/diet descriptors and packaging words.
+var NU_FILLER = [
+  'pro','organic','original','natural','plain','unsweetened',
+  'nonfat','non-fat','low-fat','lowfat','reduced-fat','reduced','fat-free',
+  'whole','skim','lean','raw','cooked','fresh','grass-fed','free-range',
+  'boneless','skinless'
+];
+function nuShortLabel(name) {
+  var full = String(name == null ? '' : name).trim();
+  var base = full.split(',')[0].trim();          // drop ", 6 oz"-style measures
+  var kept = base.split(/\s+/).filter(function (w) {
+    var lw = w.toLowerCase().replace(/[().]/g, '');
+    if (/^\d+(\.\d+)?%$/.test(lw)) return false;  // 2%, 0%, 1.5%
+    return NU_FILLER.indexOf(lw) === -1;
+  });
+  var short = kept.join(' ').replace(/\s+/g, ' ').trim();
+  // Never hard-truncate (that loses the food's identity) — the chip's CSS
+  // max-width + text-overflow ellipsis handles any pathologically long name.
+  return short || base || full;
 }
 
 // Reusable modal markup (kept identical on every page that logs food).
@@ -314,49 +396,56 @@ function nuModalMarkup() {
   '<div class="modal-overlay" id="foodModal" onclick="nuCloseModal(event)">' +
     '<div class="modal-box">' +
       '<div class="modal-header">' +
+        '<button class="nu-back" id="nuBackBtn" style="display:none;" onclick="nuCloseSearch()" title="Back">←</button>' +
         '<div class="modal-title" id="nuModalTitle">Add Food</div>' +
         '<button class="modal-close" onclick="document.getElementById(\'foodModal\').classList.remove(\'open\')">✕</button>' +
       '</div>' +
-      '<input type="hidden" id="nuFoodId">' +
-      '<div class="nu-recent" id="nuRecentWrap" style="display:none;">' +
-        '<div class="nu-recent-label">Recent foods</div>' +
-        '<div class="nu-recent-chips" id="nuRecentChips"></div>' +
+      '<div id="nuAddView">' +
+        '<input type="hidden" id="nuFoodId">' +
+        '<div class="nu-recent" id="nuRecentWrap" style="display:none;">' +
+          '<div class="nu-recent-label">Recent foods</div>' +
+          '<div class="nu-recent-chips" id="nuRecentChips"></div>' +
+        '</div>' +
+        '<div class="field-group">' +
+          '<label class="field-label">Food</label>' +
+          '<input type="text" id="nuName" maxlength="80" placeholder="e.g. Chicken breast, 6 oz">' +
+        '</div>' +
+        '<div class="nu-row">' +
+          '<div class="field-group">' +
+            '<label class="field-label">Meal</label>' +
+            '<select id="nuMeal">' + mealOpts + '</select>' +
+          '</div>' +
+          '<div class="field-group">' +
+            '<label class="field-label">Servings</label>' +
+            '<input type="number" id="nuServings" inputmode="decimal" step="0.25" min="0" value="1">' +
+          '</div>' +
+        '</div>' +
+        '<div class="field-hint">Macros are per serving.</div>' +
+        '<div class="nu-row nu-row-4">' +
+          '<div class="field-group">' +
+            '<label class="field-label">Calories</label>' +
+            '<input type="number" id="nuCalories" inputmode="numeric" step="1" min="0" placeholder="0">' +
+          '</div>' +
+          '<div class="field-group">' +
+            '<label class="field-label">Protein (g)</label>' +
+            '<input type="number" id="nuProtein" inputmode="decimal" step="0.1" min="0" placeholder="0">' +
+          '</div>' +
+          '<div class="field-group">' +
+            '<label class="field-label">Carbs (g)</label>' +
+            '<input type="number" id="nuCarbs" inputmode="decimal" step="0.1" min="0" placeholder="0">' +
+          '</div>' +
+          '<div class="field-group">' +
+            '<label class="field-label">Fat (g)</label>' +
+            '<input type="number" id="nuFat" inputmode="decimal" step="0.1" min="0" placeholder="0">' +
+          '</div>' +
+        '</div>' +
+        '<button class="btn-calc" id="nuSaveBtn" onclick="nuSave()">Save Food</button>' +
+        '<button class="btn-delete-log" id="nuDeleteBtn" style="display:none;" onclick="nuDeleteFromModal()">Delete Entry</button>' +
       '</div>' +
-      '<div class="field-group">' +
-        '<label class="field-label">Food</label>' +
-        '<input type="text" id="nuName" maxlength="80" placeholder="e.g. Chicken breast, 6 oz">' +
+      '<div id="nuSearchView" style="display:none;">' +
+        '<input type="text" class="nu-search-input" id="nuSearch" maxlength="80" placeholder="Search saved foods…" oninput="nuFilterSaved()">' +
+        '<div class="nu-saved-list" id="nuSearchList"></div>' +
       '</div>' +
-      '<div class="nu-row">' +
-        '<div class="field-group">' +
-          '<label class="field-label">Meal</label>' +
-          '<select id="nuMeal">' + mealOpts + '</select>' +
-        '</div>' +
-        '<div class="field-group">' +
-          '<label class="field-label">Servings</label>' +
-          '<input type="number" id="nuServings" inputmode="decimal" step="0.25" min="0" value="1">' +
-        '</div>' +
-      '</div>' +
-      '<div class="field-hint">Macros are per serving.</div>' +
-      '<div class="nu-row nu-row-4">' +
-        '<div class="field-group">' +
-          '<label class="field-label">Calories</label>' +
-          '<input type="number" id="nuCalories" inputmode="numeric" step="1" min="0" placeholder="0">' +
-        '</div>' +
-        '<div class="field-group">' +
-          '<label class="field-label">Protein (g)</label>' +
-          '<input type="number" id="nuProtein" inputmode="decimal" step="0.1" min="0" placeholder="0">' +
-        '</div>' +
-        '<div class="field-group">' +
-          '<label class="field-label">Carbs (g)</label>' +
-          '<input type="number" id="nuCarbs" inputmode="decimal" step="0.1" min="0" placeholder="0">' +
-        '</div>' +
-        '<div class="field-group">' +
-          '<label class="field-label">Fat (g)</label>' +
-          '<input type="number" id="nuFat" inputmode="decimal" step="0.1" min="0" placeholder="0">' +
-        '</div>' +
-      '</div>' +
-      '<button class="btn-calc" id="nuSaveBtn" onclick="nuSave()">Save Food</button>' +
-      '<button class="btn-delete-log" id="nuDeleteBtn" style="display:none;" onclick="nuDeleteFromModal()">Delete Entry</button>' +
     '</div>' +
   '</div>';
 }
