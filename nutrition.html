@@ -188,6 +188,33 @@
     .nu-row.nu-row-4 { grid-template-columns: repeat(2, 1fr); }
     .nu-row .field-group { margin-bottom: 14px; }
     .field-hint { font-size: 11px; color: var(--text-muted); margin: -4px 0 12px; }
+    /* recent / saved foods quick-add */
+    .nu-recent { margin-bottom: 18px; }
+    .nu-recent-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+      text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px;
+    }
+    .nu-recent-chips {
+      display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px;
+      -webkit-overflow-scrolling: touch; scrollbar-width: none;
+    }
+    .nu-recent-chips::-webkit-scrollbar { height: 0; }
+    .nu-chip {
+      flex-shrink: 0; display: inline-flex; align-items: center; gap: 8px;
+      max-width: 220px; padding: 7px 13px; cursor: pointer;
+      background: var(--surface-2); border: 1px solid var(--border-2);
+      border-radius: 999px; color: var(--text);
+      font-family: 'Barlow', sans-serif; transition: border-color .2s, background .2s;
+    }
+    .nu-chip:hover { border-color: var(--red-border); background: var(--surface-3); }
+    .nu-chip-name {
+      font-size: 13px; font-weight: 600; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    .nu-chip-cal {
+      font-family: 'Bebas Neue', sans-serif; font-size: 15px; letter-spacing: 0.5px;
+      color: var(--text-2); flex-shrink: 0;
+    }
     .btn-calc {
       width: 100%; margin-top: 8px; padding: 12px;
       background: var(--red); border: none; border-radius: 8px;

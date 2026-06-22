@@ -61,6 +61,25 @@ async function nuFetchLogs(userId, date) {
   }
 }
 
+// Fetch the user's recently-saved foods (per-serving defaults), newest first.
+// Powers the quick-add chips in the Add Food modal. food_logs stays the source
+// of truth for logged history — this is reuse convenience only.
+async function nuFetchRecentFoods(userId, limit) {
+  try {
+    var res = await supabaseClient
+      .from('foods')
+      .select('id, name, default_calories, default_protein, default_carbs, default_fat')
+      .eq('user_id', userId)
+      .order('updated_at', { ascending: false })
+      .limit(limit || 12);
+    if (res.error) throw res.error;
+    return res.data || [];
+  } catch (e) {
+    console.error('nuFetchRecentFoods error:', e);
+    return [];
+  }
+}
+
 // Upsert the reusable food definition (per-serving defaults). Returns its id, or
 // null on failure — a null food_id is fine, the log still stores its own snapshot.
 async function nuUpsertFood(userId, food) {
@@ -161,6 +180,16 @@ function nuOpenModal(prefill) {
 
   document.getElementById('nuModalTitle').textContent = prefill.id ? 'Edit Food' : 'Add Food';
   document.getElementById('nuDeleteBtn').style.display = prefill.id ? 'block' : 'none';
+
+  // Recent/saved foods quick-add — only offered when adding a new entry, never
+  // when editing an existing log (where the fields are already populated).
+  var recentWrap = document.getElementById('nuRecentWrap');
+  if (prefill.id) {
+    if (recentWrap) recentWrap.style.display = 'none';
+  } else {
+    nuLoadRecent();
+  }
+
   document.getElementById('foodModal').classList.add('open');
   setTimeout(function () { document.getElementById('nuName').focus(); }, 60);
 }
@@ -229,6 +258,53 @@ async function nuDeleteFromModal() {
   }
 }
 
+/* ── recent / saved foods quick-add ────────────────────────────────────── */
+// Fire-and-forget loader: the modal opens immediately, chips fill in when ready.
+async function nuLoadRecent() {
+  try {
+    var s = await supabaseClient.auth.getSession();
+    var uid = s.data.session && s.data.session.user && s.data.session.user.id;
+    if (!uid) { nuRenderRecent([]); return; }
+    var foods = await nuFetchRecentFoods(uid, 12);
+    nuRenderRecent(foods);
+  } catch (e) {
+    console.error('nuLoadRecent error:', e);
+    nuRenderRecent([]);
+  }
+}
+
+function nuRenderRecent(foods) {
+  var wrap = document.getElementById('nuRecentWrap');
+  var chips = document.getElementById('nuRecentChips');
+  if (!wrap || !chips) return;
+  if (!foods || !foods.length) { wrap.style.display = 'none'; chips.innerHTML = ''; return; }
+  chips.innerHTML = foods.map(function (f) {
+    return '<button type="button" class="nu-chip"' +
+      ' data-name="' + nuEsc(f.name) + '"' +
+      ' data-cal="' + (+f.default_calories || 0) + '"' +
+      ' data-p="' + (+f.default_protein || 0) + '"' +
+      ' data-c="' + (+f.default_carbs || 0) + '"' +
+      ' data-f="' + (+f.default_fat || 0) + '"' +
+      ' onclick="nuPickRecent(this)">' +
+      '<span class="nu-chip-name">' + nuEsc(f.name) + '</span>' +
+      '<span class="nu-chip-cal">' + nuRound(f.default_calories) + '</span>' +
+    '</button>';
+  }).join('');
+  wrap.style.display = 'block';
+}
+
+// Prefill name + per-serving macros from a saved food. Servings resets to 1 and
+// the meal selection is left as-is so the user can still adjust before saving.
+function nuPickRecent(el) {
+  document.getElementById('nuName').value     = el.getAttribute('data-name');
+  document.getElementById('nuCalories').value = el.getAttribute('data-cal');
+  document.getElementById('nuProtein').value  = el.getAttribute('data-p');
+  document.getElementById('nuCarbs').value    = el.getAttribute('data-c');
+  document.getElementById('nuFat').value      = el.getAttribute('data-f');
+  document.getElementById('nuServings').value = 1;
+  document.getElementById('nuServings').focus();
+}
+
 // Reusable modal markup (kept identical on every page that logs food).
 function nuModalMarkup() {
   var mealOpts = NU_MEALS.map(function (m) {
@@ -242,6 +318,10 @@ function nuModalMarkup() {
         '<button class="modal-close" onclick="document.getElementById(\'foodModal\').classList.remove(\'open\')">✕</button>' +
       '</div>' +
       '<input type="hidden" id="nuFoodId">' +
+      '<div class="nu-recent" id="nuRecentWrap" style="display:none;">' +
+        '<div class="nu-recent-label">Recent foods</div>' +
+        '<div class="nu-recent-chips" id="nuRecentChips"></div>' +
+      '</div>' +
       '<div class="field-group">' +
         '<label class="field-label">Food</label>' +
         '<input type="text" id="nuName" maxlength="80" placeholder="e.g. Chicken breast, 6 oz">' +
