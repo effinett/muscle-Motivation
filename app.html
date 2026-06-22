@@ -238,7 +238,9 @@
     .workout-status a:hover { text-decoration: underline; }
 
     /* P4 · momentum streak */
-    .momentum-streak { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; flex-wrap: wrap; }
+    /* breathing room when a card sits directly under a card-grid (Recent Activity) */
+    .quick-grid + .card { margin-top: 14px; }
+    .momentum-streak { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
     .momentum-streak:empty { display: none; }
     .streak-num {
       font-family: 'Bebas Neue', sans-serif; font-size: 30px; line-height: 1;
