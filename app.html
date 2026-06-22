@@ -635,8 +635,8 @@
       <div class="welcome-sub" id="dashDate"></div>
     </div>
 
-    <!-- Today -->
-    <div class="section-label">Today</div>
+    <!-- 1 · Today's Workout -->
+    <div class="section-label">Today's Workout</div>
     <div class="card card-featured">
       <div class="today-header">
         <div>
@@ -691,7 +691,8 @@
       <div id="mismatchHint" style="display:none;" class="mismatch-hint"></div>
     </div>
 
-    <!-- P1 · secondary log actions (primary CTA is the Today card above) -->
+    <!-- 2 · Quick Actions -->
+    <div class="section-label">Quick Actions</div>
     <div class="quick-grid quick-grid-3">
       <a class="quick-btn" href="workout.html">
         <span class="quick-btn-icon"><i data-lucide="dumbbell"></i></span>
@@ -707,8 +708,8 @@
       </a>
     </div>
 
-    <!-- P2 · Today's Scoreboard -->
-    <div class="section-label">Today's Scoreboard</div>
+    <!-- 3 · Nutrition Progress -->
+    <div class="section-label">Nutrition Progress</div>
     <div class="card">
       <div id="nutritionSummary">
         <div class="activity-empty">Loading…</div>
@@ -720,7 +721,34 @@
       </div>
     </div>
 
-    <!-- P3 · Goal Progress -->
+    <!-- 4 · Recent Activity -->
+    <div class="section-label">Recent Activity</div>
+    <div class="quick-grid quick-grid-3">
+      <a class="quick-btn" href="workout-history.html">
+        <span class="quick-btn-icon"><i data-lucide="history"></i></span>
+        <span class="quick-btn-label">Workout History</span>
+      </a>
+      <a class="quick-btn" href="weight-history.html">
+        <span class="quick-btn-icon"><i data-lucide="trending-up"></i></span>
+        <span class="quick-btn-label">Weight History</span>
+      </a>
+      <a class="quick-btn" href="nutrition.html">
+        <span class="quick-btn-icon"><i data-lucide="clipboard-list"></i></span>
+        <span class="quick-btn-label">Nutrition History</span>
+      </a>
+    </div>
+    <div class="card">
+      <div id="momentumStreak" class="momentum-streak"></div>
+      <div class="activity-head">
+        <span class="activity-title">Recent Workouts</span>
+        <a class="activity-viewall" href="workout-history.html">View All →</a>
+      </div>
+      <div id="recentWorkouts">
+        <div class="activity-empty">Loading…</div>
+      </div>
+    </div>
+
+    <!-- 5 · Goal Progress & Weight Trend -->
     <div class="section-label">Goal Progress</div>
     <div class="card">
       <div class="activity-head">
@@ -734,21 +762,6 @@
       <button class="btn-recalc" onclick="openRecalcModal()">Recalculate Goals</button>
     </div>
 
-    <!-- P4 · Momentum -->
-    <div class="section-label">Momentum</div>
-    <div class="card">
-      <div id="momentumStreak" class="momentum-streak"></div>
-      <div class="activity-head">
-        <span class="activity-title">Recent Workouts</span>
-        <a class="activity-viewall" href="workout-history.html">View All →</a>
-      </div>
-      <div id="recentWorkouts">
-        <div class="activity-empty">Loading…</div>
-      </div>
-    </div>
-
-    <!-- P5 · Reference & More -->
-    <div class="section-label">Reference</div>
     <details class="ref-details">
       <summary class="ref-summary">Targets &amp; macros</summary>
       <div class="card ref-card">
@@ -785,19 +798,7 @@
       </div>
     </details>
 
-    <a class="ref-link-row" href="#" aria-disabled="true" onclick="return false;">
-      <span class="quick-btn-icon"><i data-lucide="bot"></i></span>
-      <span class="ref-link-label">AI Coach</span>
-      <span class="ref-soon">Soon</span>
-    </a>
-
-    <div class="ref-history">
-      <a href="workout-history.html">Workout history</a>
-      <a href="weight-history.html">Weight history</a>
-      <a href="nutrition.html">Nutrition log</a>
-    </div>
-
-    <!-- Programs -->
+    <!-- 6 · Programs -->
     <div class="section-label">Programs</div>
     <div class="card">
       <div class="plan-item" data-product="fat_loss_blueprint">
@@ -850,6 +851,14 @@
         </div>
       </div>
     </div>
+
+    <!-- 7 · AI Coaching -->
+    <div class="section-label">AI Coaching</div>
+    <a class="ref-link-row" href="#" aria-disabled="true" onclick="return false;">
+      <span class="quick-btn-icon"><i data-lucide="bot"></i></span>
+      <span class="ref-link-label">AI Coach</span>
+      <span class="ref-soon">Coming Soon</span>
+    </a>
 
   </div><!-- /container -->
 </div><!-- /appContent -->
