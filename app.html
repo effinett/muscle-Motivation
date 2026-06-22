@@ -469,6 +469,9 @@
       grid-template-columns: 1fr 1fr;
       gap: 10px;
     }
+    .quick-grid-3 { grid-template-columns: repeat(3, 1fr); }
+    .quick-grid-3 .quick-btn { padding: 16px 8px; }
+    .quick-grid-3 .quick-btn-label { font-size: 10px; }
     .quick-btn {
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
@@ -689,7 +692,11 @@
     </div>
 
     <!-- P1 · secondary log actions (primary CTA is the Today card above) -->
-    <div class="quick-grid">
+    <div class="quick-grid quick-grid-3">
+      <a class="quick-btn" href="workout.html">
+        <span class="quick-btn-icon"><i data-lucide="dumbbell"></i></span>
+        <span class="quick-btn-label">Log Workout</span>
+      </a>
       <a class="quick-btn" href="nutrition.html">
         <span class="quick-btn-icon"><i data-lucide="utensils"></i></span>
         <span class="quick-btn-label">Log Food</span>
