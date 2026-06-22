@@ -431,6 +431,91 @@
     }
     .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 
+    /* ── PR Celebration ─────────────────────────────────────────────── */
+    :root { --gold: #E6B450; --gold-soft: rgba(230,180,80,0.16); }
+    #prModal { align-items: center; justify-content: center; padding: 24px; }
+    .pr-celebrate {
+      position: relative; text-align: center; width: 100%; max-width: 360px;
+      padding: 40px 28px 26px;
+      background:
+        radial-gradient(120% 80% at 50% 0%, rgba(230,180,80,0.10), transparent 60%),
+        var(--surface-1);
+      border: 1px solid var(--border-2); border-top: 2px solid var(--gold);
+      border-radius: 16px;
+    }
+    #prModal.open .pr-celebrate { animation: pr-pop 0.5s cubic-bezier(0.2,0.9,0.3,1.25) both; }
+
+    .pr-badge-wrap {
+      position: relative; width: 96px; height: 96px; margin: 0 auto 18px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .pr-badge {
+      position: relative; z-index: 2; width: 76px; height: 76px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--gold);
+      background: radial-gradient(circle at 50% 35%, rgba(230,180,80,0.22), rgba(230,180,80,0.05));
+      border: 1px solid rgba(230,180,80,0.45);
+      box-shadow: 0 0 0 1px rgba(230,180,80,0.10), 0 0 28px rgba(230,180,80,0.28);
+    }
+    #prModal.open .pr-badge { animation: pr-badge-glow 2.4s ease-in-out 0.4s infinite; }
+    .pr-badge svg { width: 38px; height: 38px; }
+
+    .pr-ring {
+      position: absolute; inset: 0; margin: auto; width: 76px; height: 76px;
+      border-radius: 50%; border: 1px solid rgba(230,180,80,0.5); opacity: 0;
+    }
+    #prModal.open .pr-ring   { animation: pr-ring 2.2s ease-out 0.45s infinite; }
+    #prModal.open .pr-ring-2 { animation: pr-ring 2.2s ease-out 1.55s infinite; }
+
+    .pr-spark {
+      position: absolute; width: 6px; height: 6px; border-radius: 50%;
+      background: var(--gold); opacity: 0; z-index: 3;
+      box-shadow: 0 0 6px rgba(230,180,80,0.8);
+    }
+    .pr-spark-1 { top: 6px;  left: 18px; }
+    .pr-spark-2 { top: 14px; right: 12px; }
+    .pr-spark-3 { bottom: 12px; left: 30px; }
+    #prModal.open .pr-spark-1 { animation: pr-twinkle 1.8s ease-in-out 0.6s infinite; }
+    #prModal.open .pr-spark-2 { animation: pr-twinkle 1.8s ease-in-out 1.1s infinite; }
+    #prModal.open .pr-spark-3 { animation: pr-twinkle 1.8s ease-in-out 1.5s infinite; }
+
+    .pr-eyebrow {
+      font-family: 'Barlow', sans-serif; font-size: 11px; font-weight: 700;
+      letter-spacing: 3px; text-transform: uppercase; color: var(--gold); margin-bottom: 12px;
+    }
+    .pr-list { margin-bottom: 22px; }
+    .pr-item {
+      font-family: 'Bebas Neue', sans-serif; font-size: 24px; letter-spacing: 1px;
+      line-height: 1.15; color: var(--text);
+    }
+    .pr-item + .pr-item { margin-top: 4px; }
+    .pr-continue { max-width: 220px; margin: 0 auto; }
+
+    @keyframes pr-pop {
+      0%   { transform: scale(0.4); opacity: 0; }
+      100% { transform: scale(1);   opacity: 1; }
+    }
+    @keyframes pr-badge-glow {
+      0%, 100% { box-shadow: 0 0 0 1px rgba(230,180,80,0.10), 0 0 22px rgba(230,180,80,0.22); }
+      50%      { box-shadow: 0 0 0 1px rgba(230,180,80,0.18), 0 0 38px rgba(230,180,80,0.45); }
+    }
+    @keyframes pr-ring {
+      0%   { transform: scale(0.85); opacity: 0.65; }
+      80%  { opacity: 0; }
+      100% { transform: scale(1.9);  opacity: 0; }
+    }
+    @keyframes pr-twinkle {
+      0%, 100% { opacity: 0; transform: scale(0.5); }
+      50%      { opacity: 1; transform: scale(1.1); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #prModal.open .pr-celebrate,
+      #prModal.open .pr-badge,
+      #prModal.open .pr-ring,
+      #prModal.open .pr-spark { animation: none; }
+      .pr-spark { display: none; }
+    }
+
     @media (max-width: 480px) {
       header { padding: 0 14px; }
       .header-logo span { display: none; }
@@ -546,6 +631,23 @@
       <button class="btn-cancel" onclick="closeDiscardModal()">Cancel</button>
       <button class="btn-confirm-finish" style="background:var(--red);" onclick="discardWorkout()">Discard</button>
     </div>
+  </div>
+</div>
+
+<!-- PR Celebration -->
+<div class="overlay" id="prModal" onclick="onPrBgClick(event)">
+  <div class="pr-celebrate">
+    <div class="pr-badge-wrap">
+      <span class="pr-ring"></span>
+      <span class="pr-ring pr-ring-2"></span>
+      <span class="pr-spark pr-spark-1"></span>
+      <span class="pr-spark pr-spark-2"></span>
+      <span class="pr-spark pr-spark-3"></span>
+      <div class="pr-badge"><i data-lucide="trophy"></i></div>
+    </div>
+    <div class="pr-eyebrow">New Personal Record</div>
+    <div class="pr-list" id="prList"></div>
+    <button class="btn-primary pr-continue" onclick="closePrCelebration()">Continue</button>
   </div>
 </div>
 
@@ -1098,14 +1200,36 @@
     }
     closeFinishModal();
     if (prMessages && prMessages.length) {
-      var extra = prMessages.length > 1 ? ' (+' + (prMessages.length - 1) + ' more)' : '';
-      showToast('🏆 New PR: ' + prMessages[0] + extra);
-      setTimeout(function() { window.location.href = 'app.html'; }, 2400);
+      // Celebrate the PR(s), then continue to the dashboard.
+      showPrCelebration(prMessages, function() { window.location.href = 'app.html'; });
     } else {
       showToast('Workout saved!');
       setTimeout(function() { window.location.href = 'app.html'; }, 1600);
     }
   }
+
+  // ── PR celebration ────────────────────────────────────────────────
+  var _prDone  = null;
+  var _prTimer = null;
+  function showPrCelebration(messages, done) {
+    _prDone = done || null;
+    document.getElementById('prList').innerHTML = messages.map(function(m) {
+      return '<div class="pr-item">' + esc(m) + '</div>';
+    }).join('');
+    document.getElementById('prModal').classList.add('open');
+    lucide.createIcons();
+    // Safety auto-continue so a user who walks away still lands on the dashboard.
+    clearTimeout(_prTimer);
+    _prTimer = setTimeout(closePrCelebration, 8000);
+  }
+  function closePrCelebration() {
+    clearTimeout(_prTimer);
+    document.getElementById('prModal').classList.remove('open');
+    var done = _prDone; _prDone = null;
+    if (done) done();
+  }
+  // Tapping the backdrop also continues (same as the Continue button).
+  function onPrBgClick(e) { if (e.target === document.getElementById('prModal')) closePrCelebration(); }
 
   // Detect & persist personal records for every exercise in the finished
   // workout. Returns an array of human-readable PR strings (e.g.
