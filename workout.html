@@ -360,9 +360,12 @@
     #pickerModal { align-items: flex-end; justify-content: center; }
     .picker-sheet {
       background: var(--surface-1); border: 1px solid var(--border-2);
-      border-radius: 16px 16px 0 0; padding: 24px 20px 20px;
+      border-radius: 16px 16px 0 0;
+      /* safe-area padding keeps Cancel above the home indicator */
+      padding: 24px 20px calc(20px + env(safe-area-inset-bottom, 0px));
       width: 100%; max-width: 680px; max-height: 80vh;
       display: flex; flex-direction: column;
+      transition: transform 0.15s ease;
     }
     .picker-drag { width: 40px; height: 4px; background: var(--border-3); border-radius: 2px; margin: 0 auto 18px; }
     .picker-title { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 1.5px; margin-bottom: 12px; }
@@ -372,7 +375,12 @@
       font-family: 'Barlow', sans-serif; font-size: 15px; outline: none; margin-bottom: 10px;
     }
     .picker-search:focus { border-color: var(--red); }
-    .picker-list { overflow-y: auto; flex: 1; }
+    /* Custom "+ Add" lives in a fixed zone under the search, above the scroll
+       list — so it stays visible while the keyboard is open and the list scrolls. */
+    .picker-add-row { flex-shrink: 0; }
+    .picker-add-row:empty { display: none; }
+    .picker-add-row .picker-item { border-bottom: 1px solid var(--border-2); }
+    .picker-list { overflow-y: auto; flex: 1; min-height: 0; -webkit-overflow-scrolling: touch; }
     .picker-item {
       display: flex; align-items: center; justify-content: space-between;
       padding: 11px 4px; border-bottom: 1px solid var(--border-1);
@@ -611,6 +619,7 @@
     <div class="picker-title">Add Exercise</div>
     <input class="picker-search" type="text" id="pickerSearch"
       placeholder="Search exercises or type custom…" oninput="filterPicker(this.value)">
+    <div class="picker-add-row" id="pickerAddRow"></div>
     <div class="picker-list" id="pickerList"></div>
     <button class="btn-picker-close" onclick="closePicker()">Cancel</button>
   </div>
@@ -1062,10 +1071,46 @@
     document.getElementById('pickerSearch').value = '';
     filterPicker('');
     document.getElementById('pickerModal').classList.add('open');
+    bindPickerViewport();
     setTimeout(function() { document.getElementById('pickerSearch').focus(); }, 80);
   }
-  function closePicker() { document.getElementById('pickerModal').classList.remove('open'); }
+  function closePicker() {
+    document.getElementById('pickerModal').classList.remove('open');
+    unbindPickerViewport();
+  }
   function onPickerBgClick(e) { if (e.target === document.getElementById('pickerModal')) closePicker(); }
+
+  // ── Mobile keyboard handling ──────────────────────────────────────
+  // Lift the bottom sheet above the on-screen keyboard and cap its height to the
+  // visible (visualViewport) area, so the search field, the "+ Add" row and a
+  // scrollable result list all stay reachable without dismissing the keyboard.
+  // No-op on desktop, where the keyboard inset is always 0 (CSS 80vh governs).
+  function syncPickerViewport() {
+    var vv = window.visualViewport;
+    var sheet = document.querySelector('.picker-sheet');
+    if (!vv || !sheet) return;
+    var kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    if (kb > 0) {
+      sheet.style.maxHeight = (vv.height - 12) + 'px';
+      sheet.style.transform = 'translateY(-' + kb + 'px)';
+    } else {
+      sheet.style.maxHeight = '';   // restore CSS 80vh — desktop unchanged
+      sheet.style.transform = '';
+    }
+  }
+  function bindPickerViewport() {
+    if (!window.visualViewport) return;
+    window.visualViewport.addEventListener('resize', syncPickerViewport);
+    window.visualViewport.addEventListener('scroll', syncPickerViewport);
+    syncPickerViewport();
+  }
+  function unbindPickerViewport() {
+    var sheet = document.querySelector('.picker-sheet');
+    if (sheet) { sheet.style.maxHeight = ''; sheet.style.transform = ''; }
+    if (!window.visualViewport) return;
+    window.visualViewport.removeEventListener('resize', syncPickerViewport);
+    window.visualViewport.removeEventListener('scroll', syncPickerViewport);
+  }
 
   function filterPicker(query) {
     var q = query.toLowerCase().trim();
@@ -1079,16 +1124,21 @@
         '<span class="picker-item-plus"><i data-lucide="plus" style="width:16px;height:16px;"></i></span>' +
         '</div>';
     });
+    // The custom "+ Add" option renders in its own fixed zone — directly under
+    // the search input and above the scroll list — so it stays tappable while the
+    // keyboard is open and the result list scrolls independently.
+    var addRow = '';
     if (q && !filtered.find(function(e) { return e.name.toLowerCase() === q; })) {
-      rows.unshift('<div class="picker-item" data-name="' + esc(query.trim()) + '" onclick="selectExercise(this.dataset.name)">' +
+      addRow = '<div class="picker-item" data-name="' + esc(query.trim()) + '" onclick="selectExercise(this.dataset.name)">' +
         '<div><div class="picker-item-name">+ Add "' + esc(query.trim()) + '"</div>' +
         '<div class="picker-item-cat">Custom exercise</div></div>' +
         '<span class="picker-item-plus"><i data-lucide="plus" style="width:16px;height:16px;"></i></span>' +
-        '</div>');
+        '</div>';
     }
+    document.getElementById('pickerAddRow').innerHTML = addRow;
     document.getElementById('pickerList').innerHTML = rows.length
       ? rows.join('')
-      : '<div class="empty-state">No exercises found.</div>';
+      : (addRow ? '' : '<div class="empty-state">No exercises found.</div>');
     lucide.createIcons();
   }
 
