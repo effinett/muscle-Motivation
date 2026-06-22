@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Workout Complete — Muscle Motivation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    :root {
+      --red:#B1121B; --red-muted:rgba(177,18,27,0.12); --red-border:rgba(177,18,27,0.28);
+      --bg:#080808; --surface-1:#0d0d0d; --surface-2:#131313; --surface-3:#1a1a1a;
+      --border-1:#1c1c1c; --border-2:#252525; --border-3:#2f2f2f;
+      --text:#fff; --text-2:#a0a0a0; --text-muted:#555;
+      --green:#22c55e; --green-muted:rgba(34,197,94,0.10); --green-border:rgba(34,197,94,0.30);
+      --gold:#E6B450; --gold-soft:rgba(230,180,80,0.14); --gold-border:rgba(230,180,80,0.30);
+    }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body {
+      font-family:'Barlow',sans-serif; color:var(--text); min-height:100vh;
+      background:
+        radial-gradient(120% 60% at 50% -5%, rgba(34,197,94,0.07), transparent 55%),
+        radial-gradient(90% 50% at 50% 110%, rgba(177,18,27,0.06), transparent 60%),
+        var(--bg);
+      -webkit-font-smoothing:antialiased;
+    }
+
+    #authGate, #fallback {
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      min-height:100vh; text-align:center; padding:24px;
+    }
+    #authGate img { width:64px; margin-bottom:16px; opacity:0.6; }
+    #authGate p { color:var(--text-muted); font-size:11px; letter-spacing:2.5px; text-transform:uppercase; }
+    #fallback { display:none; }
+    #fallback .fb-title { font-family:'Bebas Neue',sans-serif; font-size:26px; letter-spacing:1px; margin-bottom:8px; }
+    #fallback .fb-sub { color:var(--text-2); font-size:14px; margin-bottom:22px; }
+
+    .recap {
+      max-width:440px; margin:0 auto; padding:28px 16px 48px;
+      animation:fade-up .45s ease both;
+    }
+    @keyframes fade-up { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+
+    /* ── Hero card ── */
+    .hero-card {
+      position:relative; text-align:center; padding:34px 24px 26px;
+      background:
+        radial-gradient(120% 80% at 50% 0%, rgba(34,197,94,0.10), transparent 60%),
+        var(--surface-1);
+      border:1px solid var(--border-2); border-top:2px solid var(--green); border-radius:18px;
+      animation:pop .5s cubic-bezier(0.2,0.9,0.3,1.25) both;
+    }
+    @keyframes pop { 0% { transform:scale(0.5); opacity:0; } 100% { transform:scale(1); opacity:1; } }
+    .hero-badge {
+      width:66px; height:66px; border-radius:50%; margin:0 auto 16px;
+      display:flex; align-items:center; justify-content:center; color:var(--green);
+      background:var(--green-muted); border:1px solid var(--green-border);
+      box-shadow:0 0 28px rgba(34,197,94,0.22);
+    }
+    .hero-badge svg { width:32px; height:32px; }
+    .hero-eyebrow { font-size:11px; font-weight:700; letter-spacing:3px; text-transform:uppercase; color:var(--green); margin-bottom:6px; }
+    .hero-title { font-family:'Bebas Neue',sans-serif; font-size:42px; letter-spacing:1.5px; line-height:0.95; }
+    .hero-sub { font-size:14px; color:var(--text-2); line-height:1.5; margin:10px auto 0; max-width:300px; }
+    .hero-meta { font-size:12px; color:var(--text-muted); margin-top:14px; line-height:1.5; }
+    .hero-meta strong { color:var(--text-2); font-weight:600; }
+
+    .stat-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-top:20px; }
+    .stat {
+      background:var(--surface-2); border:1px solid var(--border-1);
+      border-radius:12px; padding:14px 8px;
+    }
+    .stat-num { font-family:'Bebas Neue',sans-serif; font-size:30px; letter-spacing:1px; line-height:1; }
+    .stat-label { font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text-muted); margin-top:6px; }
+
+    /* ── Section labels ── */
+    .section-label {
+      font-size:11px; font-weight:700; letter-spacing:2px; color:var(--red);
+      text-transform:uppercase; margin:30px 0 12px; display:flex; align-items:center; gap:10px;
+    }
+    .section-label::after { content:''; flex:1; height:1px; background:var(--border-1); }
+
+    /* ── PR cards ── */
+    .pr-card {
+      display:flex; align-items:center; gap:14px; padding:14px 16px; margin-bottom:10px;
+      background:var(--gold-soft); border:1px solid var(--gold-border); border-radius:12px;
+    }
+    .pr-card-icon {
+      width:40px; height:40px; flex-shrink:0; border-radius:10px; color:var(--gold);
+      display:flex; align-items:center; justify-content:center;
+      background:rgba(230,180,80,0.12); border:1px solid var(--gold-border);
+    }
+    .pr-card-icon svg { width:20px; height:20px; }
+    .pr-card-kind { font-size:10px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--gold); }
+    .pr-card-detail { font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:0.5px; line-height:1.05; margin-top:2px; }
+    .no-pr {
+      padding:18px 18px; background:var(--surface-1); border:1px solid var(--border-2);
+      border-left:2px solid var(--green); border-radius:12px;
+    }
+    .no-pr-title { font-family:'Bebas Neue',sans-serif; font-size:20px; letter-spacing:0.5px; margin-bottom:4px; }
+    .no-pr-sub { font-size:13px; color:var(--text-2); line-height:1.5; }
+
+    /* ── Generic card ── */
+    .card { background:var(--surface-1); border:1px solid var(--border-2); border-radius:12px; padding:16px 18px; margin-bottom:10px; }
+
+    /* ── Exercise breakdown ── */
+    .bd-row { display:flex; flex-direction:column; gap:8px; }
+    .bd-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .bd-name { font-size:15px; font-weight:700; }
+    .bd-pill { font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; padding:3px 9px; border-radius:5px; white-space:nowrap; }
+    .bd-pill.improved { color:var(--green); background:var(--green-muted); border:1px solid var(--green-border); }
+    .bd-pill.matched  { color:var(--text-2); background:var(--surface-2); border:1px solid var(--border-2); }
+    .bd-pill.lower    { color:#e0894a; background:rgba(224,137,74,0.10); border:1px solid rgba(224,137,74,0.30); }
+    .bd-pill.first    { color:var(--gold); background:var(--gold-soft); border:1px solid var(--gold-border); }
+    .bd-perf { display:flex; gap:18px; }
+    .bd-col-label { font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text-muted); margin-bottom:3px; }
+    .bd-col-val { font-size:13px; color:var(--text-2); font-weight:600; }
+
+    /* ── Progression ── */
+    .prog-lead { font-size:14px; font-weight:600; margin-bottom:12px; line-height:1.4; }
+    .prog-lead strong { color:var(--green); }
+    .prog-item { padding:8px 0; border-top:1px solid var(--border-1); }
+    .prog-item:first-of-type { border-top:none; padding-top:0; }
+    .prog-ex { font-size:13px; font-weight:700; margin-bottom:2px; }
+    .prog-note { font-size:12.5px; color:var(--text-2); line-height:1.45; }
+
+    /* ── Next up ── */
+    .next-label { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px; }
+    .next-name { font-family:'Bebas Neue',sans-serif; font-size:24px; letter-spacing:0.5px; }
+    .next-focus { font-size:13px; color:var(--text-2); margin-top:6px; line-height:1.5; }
+    .next-standalone { font-size:13.5px; color:var(--text-2); line-height:1.55; }
+
+    /* ── Motivation ── */
+    .motivation {
+      text-align:center; font-size:15px; color:var(--text); line-height:1.55;
+      margin:30px auto 4px; max-width:340px; font-weight:500;
+    }
+
+    /* ── Action buttons ── */
+    .action-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-top:26px; }
+    .act-btn {
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+      padding:16px 8px; border-radius:12px; text-decoration:none; cursor:pointer;
+      background:var(--surface-1); border:1px solid var(--border-2); color:var(--text-2);
+      font-size:12px; font-weight:700; letter-spacing:0.5px; text-transform:uppercase;
+      transition:border-color .2s, color .2s;
+    }
+    .act-btn svg { width:20px; height:20px; }
+    .act-btn:hover { border-color:var(--border-3); color:var(--text); }
+    .act-btn.act-primary { background:var(--red); border-color:var(--red); color:#fff; }
+    .act-btn.act-primary:hover { opacity:0.9; color:#fff; }
+
+    .btn-dash {
+      display:inline-flex; align-items:center; gap:8px; padding:12px 22px; background:var(--red);
+      border:none; border-radius:10px; color:#fff; font-family:'Bebas Neue',sans-serif;
+      font-size:18px; letter-spacing:1.5px; cursor:pointer; text-decoration:none;
+    }
+  </style>
+</head>
+<body>
+
+<div id="authGate">
+  <img src="logow.png" alt="Muscle Motivation">
+  <p>Loading recap…</p>
+</div>
+
+<div id="fallback">
+  <div class="fb-title">Recap Unavailable</div>
+  <div class="fb-sub" id="fbSub">We couldn't load that workout.</div>
+  <a class="btn-dash" href="app.html"><i data-lucide="arrow-left"></i> Back to Dashboard</a>
+</div>
+
+<div id="content" style="display:none;">
+  <div class="recap">
+    <!-- HERO -->
+    <div class="hero-card">
+      <div class="hero-badge"><i data-lucide="check"></i></div>
+      <div class="hero-eyebrow">Session Done</div>
+      <div class="hero-title">Workout Complete</div>
+      <div class="hero-sub">Strong work. You showed up and got it done.</div>
+      <div class="hero-meta" id="heroMeta"></div>
+      <div class="stat-grid" id="statGrid"></div>
+    </div>
+
+    <!-- PR HIGHLIGHTS -->
+    <div class="section-label">PR Highlights</div>
+    <div id="prSection"></div>
+
+    <!-- EXERCISE BREAKDOWN -->
+    <div class="section-label">Exercise Breakdown</div>
+    <div id="breakdown"></div>
+
+    <!-- PROGRESSION -->
+    <div class="section-label">Progression</div>
+    <div class="card" id="progressionCard"></div>
+
+    <!-- NEXT UP -->
+    <div class="section-label">Next Up</div>
+    <div class="card" id="nextCard"></div>
+
+    <!-- MOTIVATION -->
+    <div class="motivation" id="motivation"></div>
+
+    <!-- ACTIONS -->
+    <div class="action-grid">
+      <a class="act-btn act-primary" href="app.html"><i data-lucide="layout-dashboard"></i> Dashboard</a>
+      <a class="act-btn" href="workout-history.html"><i data-lucide="history"></i> History</a>
+      <a class="act-btn" href="app.html"><i data-lucide="scale"></i> Log Weight</a>
+      <a class="act-btn" href="workout.html"><i data-lucide="dumbbell"></i> New Workout</a>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase.js"></script>
+<script src="schedules.js"></script>
+<script src="progression.js"></script>
+<script>
+  var user = null;
+
+  // ── helpers ───────────────────────────────────────────────────────
+  function num(v){ if(v===''||v===null||v===undefined) return null; var n=parseFloat(v); return isNaN(n)?null:n; }
+  function fmtNum(n){ return (Math.round(n*10)/10).toString(); }
+  function est1rm(w,r){ return w*(1+r/30); }
+  function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+  // Completed, non-warmup sets only (what "counts").
+  function working(sets){ return (sets||[]).filter(function(s){ return s.completed && !s.is_warmup && num(s.reps)!=null; }); }
+
+  // Format a set list: "165 × 8, 8, 8" when uniform weight, else per-set.
+  function fmtSets(sets){
+    var rich = sets.map(function(s){ return { w:num(s.weight_lbs!=null?s.weight_lbs:s.weight), r:num(s.reps) }; })
+                   .filter(function(s){ return s.r!=null; });
+    if(!rich.length) return '—';
+    var ws = rich.map(function(s){ return s.w; });
+    var uniform = ws.every(function(w){ return w===ws[0]; });
+    if(uniform){ var lab = ws[0]==null?'BW':fmtNum(ws[0]); return lab + ' × ' + rich.map(function(s){return s.r;}).join(', '); }
+    return rich.map(function(s){ return (s.w==null?'BW':fmtNum(s.w)) + '×' + s.r; }).join(', ');
+  }
+
+  // Best estimated-1RM (or reps for bodyweight) across completed sets — used to
+  // rank today vs the previous session.
+  function score(sets){
+    var best=0;
+    working(sets).forEach(function(s){
+      var w=num(s.weight_lbs!=null?s.weight_lbs:s.weight), r=num(s.reps);
+      var sc = (w==null) ? r : est1rm(w,r);
+      if(sc>best) best=sc;
+    });
+    return best;
+  }
+
+  function showFallback(msg){
+    document.getElementById('authGate').style.display='none';
+    if(msg) document.getElementById('fbSub').textContent=msg;
+    document.getElementById('fallback').style.display='flex';
+    lucide.createIcons();
+  }
+
+  // ── data ──────────────────────────────────────────────────────────
+  window.addEventListener('load', function(){ (async()=>{
+    try {
+      var session = await requireAuth();
+      user = session.user;
+      var id = new URLSearchParams(window.location.search).get('workout_id');
+      if(!id){ showFallback('No workout was specified.'); return; }
+      var data = await loadAll(id);
+      if(!data){ showFallback("We couldn't load that workout."); return; }
+      render(data);
+      document.getElementById('authGate').style.display='none';
+      document.getElementById('content').style.display='block';
+      lucide.createIcons();
+    } catch(e){
+      console.error('recap error:', e);
+      showFallback('Something went wrong loading your recap.');
+    }
+  })(); });
+
+  async function loadAll(workoutId){
+    // Current workout + its exercises + sets (RLS scopes to this user).
+    var { data: w } = await supabaseClient
+      .from('workouts')
+      .select('id,user_id,name,created_at,date,duration_minutes,program_slug,session_key,mode, workout_exercises(id,exercise_name,order_index, workout_sets(set_number,weight_lbs,reps,completed,is_warmup))')
+      .eq('id', workoutId).maybeSingle();
+    if(!w || w.user_id !== user.id) return null;
+
+    var exs = (w.workout_exercises||[]).slice()
+      .sort(function(a,b){ return (a.order_index||0)-(b.order_index||0); })
+      .map(function(e){
+        return { name:e.exercise_name,
+          sets:(e.workout_sets||[]).slice().sort(function(a,b){ return (a.set_number||0)-(b.set_number||0); }) };
+      });
+
+    var names = exs.map(function(e){ return e.name; });
+    var history = names.length ? await loadHistory(names, workoutId) : {};
+
+    // Optional: programmed rep ranges for the session (for progression text).
+    var ranges = {};
+    if(w.program_slug && w.session_key){
+      try {
+        var { data: tmpl } = await supabaseClient.from('program_workouts')
+          .select('exercises').eq('program_slug', w.program_slug).eq('session_key', w.session_key).maybeSingle();
+        if(tmpl && tmpl.exercises) tmpl.exercises.forEach(function(t){ ranges[(t.name||'').toLowerCase()] = t; });
+      } catch(e){}
+    }
+    return { w:w, exs:exs, history:history, ranges:ranges };
+  }
+
+  // For each exercise name, return historical sessions (newest first), built from
+  // the user's OTHER completed workouts (current workout excluded). Raw sets.
+  async function loadHistory(names, excludeWorkoutId){
+    var out = {};
+    try {
+      var { data: wexs } = await supabaseClient
+        .from('workout_exercises').select('id,exercise_name,workout_id').in('exercise_name', names);
+      if(!wexs || !wexs.length) return out;
+      var ids = [...new Set(wexs.map(function(x){return x.workout_id;}))];
+      var { data: ws } = await supabaseClient
+        .from('workouts').select('id,created_at').eq('user_id', user.id).eq('completed', true).in('id', ids);
+      var when = {}; (ws||[]).forEach(function(x){ when[x.id]=x.created_at; });
+      var valid = wexs.filter(function(x){ return when[x.workout_id] && x.workout_id !== excludeWorkoutId; });
+      var wexIds = valid.map(function(x){ return x.id; });
+      if(!wexIds.length) return out;
+      var { data: sets } = await supabaseClient
+        .from('workout_sets').select('workout_exercise_id,set_number,weight_lbs,reps,completed,is_warmup').in('workout_exercise_id', wexIds);
+      var byWex = {}; (sets||[]).forEach(function(s){ (byWex[s.workout_exercise_id]=byWex[s.workout_exercise_id]||[]).push(s); });
+      valid.forEach(function(x){
+        var ss = (byWex[x.id]||[]).slice().sort(function(a,b){ return (a.set_number||0)-(b.set_number||0); });
+        if(!ss.length) return;
+        (out[x.exercise_name]=out[x.exercise_name]||[]).push({ date:when[x.workout_id], sets:ss });
+      });
+      Object.keys(out).forEach(function(n){ out[n].sort(function(a,b){ return new Date(b.date)-new Date(a.date); }); });
+    } catch(e){ console.error('loadHistory', e); }
+    return out;
+  }
+
+  // Build pre-workout PR baseline from history sessions (completed, non-warmup).
+  function baseline(sessions){
+    var b = { everLogged:false, heaviestWeight:null, bestVolume:null, bestE1rm:null, repsAtWeight:{} };
+    (sessions||[]).forEach(function(sess){
+      working(sess.sets).forEach(function(s){
+        var r=num(s.reps); if(r==null||r<=0) return;
+        b.everLogged=true;
+        var w=num(s.weight_lbs!=null?s.weight_lbs:s.weight);
+        if(w==null) return;
+        var vol=w*r, e1=est1rm(w,r);
+        if(b.heaviestWeight==null||w>b.heaviestWeight) b.heaviestWeight=w;
+        if(b.bestVolume==null||vol>b.bestVolume) b.bestVolume=vol;
+        if(b.bestE1rm==null||e1>b.bestE1rm) b.bestE1rm=e1;
+        if(b.repsAtWeight[w]==null||r>b.repsAtWeight[w]) b.repsAtWeight[w]=r;
+      });
+    });
+    return b;
+  }
+
+  // ── render ────────────────────────────────────────────────────────
+  function render(d){
+    var w=d.w, exs=d.exs, history=d.history, ranges=d.ranges;
+
+    // Hero meta + stats
+    var dt = new Date(w.created_at || w.date);
+    var dateStr = dt.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
+    var dur = w.duration_minutes || 0;
+    document.getElementById('heroMeta').innerHTML =
+      '<strong>' + esc(w.name || 'Workout') + '</strong><br>' + dateStr + (dur ? ' · ' + dur + ' min' : '');
+
+    var totalSets=0, totalReps=0, totalVol=0, workingExCount=0;
+    exs.forEach(function(e){
+      var ws = working(e.sets);
+      if(ws.length) workingExCount++;
+      totalSets += ws.length;
+      ws.forEach(function(s){
+        var r=num(s.reps), wt=num(s.weight_lbs);
+        if(r!=null){ totalReps+=r; if(wt!=null) totalVol+=wt*r; }
+      });
+    });
+    var volLabel = totalVol>=1000 ? (Math.round(totalVol/100)/10)+'k' : totalVol;
+    function stat(n,l){ return '<div class="stat"><div class="stat-num">'+n+'</div><div class="stat-label">'+l+'</div></div>'; }
+    document.getElementById('statGrid').innerHTML =
+      stat(workingExCount, workingExCount===1?'exercise':'exercises') +
+      stat(totalSets, 'working sets') +
+      stat(totalReps, 'reps') +
+      stat(volLabel, 'lb volume');
+
+    // PR detection + exercise breakdown + progression (single pass)
+    var prCards=[], bdRows=[], progItems=[], improved=0, analyzable=0;
+    exs.forEach(function(e){
+      var ws = working(e.sets);
+      var sessions = history[e.name] || [];
+      var base = baseline(sessions);
+      var prevSession = sessions.length ? sessions[0] : null;
+
+      // ---- PR cards ----
+      if(ws.length){
+        if(!base.everLogged){
+          prCards.push({ kind:'First Time Logged', detail:e.name });
+        } else {
+          var maxW=null, bestVol=null, bestE1=null, e1set=null, volset=null, wset=null;
+          var repsImp=null;   // {weight, reps}
+          ws.forEach(function(s){
+            var r=num(s.reps), wt=num(s.weight_lbs); if(r==null) return;
+            if(wt==null) return;
+            if(maxW==null||wt>maxW){ maxW=wt; wset=s; }
+            var vol=wt*r; if(bestVol==null||vol>bestVol){ bestVol=vol; volset=s; }
+            var e1=est1rm(wt,r); if(bestE1==null||e1>bestE1){ bestE1=e1; e1set=s; }
+            if(base.repsAtWeight[wt]!=null && r>base.repsAtWeight[wt] && (!repsImp || r>repsImp.reps)){ repsImp={weight:wt,reps:r}; }
+          });
+          // One headline PR per exercise (priority: heaviest > reps-at-weight >
+          // est 1RM > volume) so the recap stays clean, not a wall of cards.
+          var card = null;
+          if(maxW!=null && base.heaviestWeight!=null && maxW>base.heaviestWeight)
+            card = { kind:'New Heaviest — '+e.name, detail:fmtNum(maxW)+' lb × '+num(wset.reps) };
+          else if(repsImp)
+            card = { kind:'Most Reps at '+fmtNum(repsImp.weight)+' lb — '+e.name, detail:fmtNum(repsImp.weight)+' × '+repsImp.reps };
+          else if(bestE1!=null && base.bestE1rm!=null && bestE1>base.bestE1rm+1e-9)
+            card = { kind:'New Estimated 1RM — '+e.name, detail:'~'+Math.round(bestE1)+' lb' };
+          else if(bestVol!=null && base.bestVolume!=null && bestVol>base.bestVolume)
+            card = { kind:'New Best Volume — '+e.name, detail:fmtNum(num(volset.weight_lbs))+' × '+num(volset.reps) };
+          if(card) prCards.push(card);
+        }
+      }
+
+      // ---- breakdown ----
+      var result, cls;
+      if(!base.everLogged){ result='First Time Logged'; cls='first'; }
+      else {
+        var t=score(e.sets), p=prevSession?score(prevSession.sets):0;
+        if(t>p+0.01){ result='Improved'; cls='improved'; improved++; }
+        else if(t>=p-0.01){ result='Matched'; cls='matched'; }
+        else { result='Slightly Lower'; cls='lower'; }
+      }
+      if(base.everLogged) analyzable++;
+      bdRows.push(
+        '<div class="card bd-row">'+
+          '<div class="bd-head"><div class="bd-name">'+esc(e.name)+'</div>'+
+            '<span class="bd-pill '+cls+'">'+result+'</span></div>'+
+          '<div class="bd-perf">'+
+            '<div><div class="bd-col-label">Last</div><div class="bd-col-val">'+(prevSession?esc(fmtSets(prevSession.sets.filter(notWarmup))):'—')+'</div></div>'+
+            '<div><div class="bd-col-label">Today</div><div class="bd-col-val">'+esc(fmtSets(ws))+'</div></div>'+
+          '</div>'+
+        '</div>');
+
+      // ---- progression recommendation (reflects today) ----
+      if(ws.length && typeof Progression!=='undefined' && Progression.analyze){
+        var tmpl = ranges[e.name.toLowerCase()] || {};
+        var hist = [{ date:w.created_at, sets: e.sets.map(mapSet) }]
+                   .concat(sessions.map(function(s){ return { date:s.date, sets:s.sets.map(mapSet) }; }));
+        var rec = Progression.analyze({ exerciseName:e.name, repsLow:tmpl.reps_low, repsHigh:tmpl.reps_high, targetSets:tmpl.sets, history:hist });
+        progItems.push('<div class="prog-item"><div class="prog-ex">'+esc(e.name)+'</div><div class="prog-note">'+esc(rec.coachNote)+'</div></div>');
+      }
+    });
+
+    // PR section
+    var prSec = document.getElementById('prSection');
+    if(prCards.length){
+      prSec.innerHTML = prCards.map(function(c){
+        return '<div class="pr-card"><div class="pr-card-icon"><i data-lucide="trophy"></i></div>'+
+          '<div><div class="pr-card-kind">'+esc(c.kind)+'</div><div class="pr-card-detail">'+esc(c.detail)+'</div></div></div>';
+      }).join('');
+    } else {
+      prSec.innerHTML = '<div class="no-pr"><div class="no-pr-title">No PRs today — and that\'s fine.</div>'+
+        '<div class="no-pr-sub">You still banked another session. Consistency is what drives progress.</div></div>';
+    }
+
+    // Breakdown
+    document.getElementById('breakdown').innerHTML = bdRows.join('') || '<div class="card"><div class="bd-col-val">No exercises logged.</div></div>';
+
+    // Progression
+    var lead = analyzable
+      ? 'You improved on <strong>'+improved+'</strong> of '+analyzable+' tracked exercise'+(analyzable===1?'':'s')+' today.'
+      : 'Baseline logged — progression guidance starts next session.';
+    document.getElementById('progressionCard').innerHTML =
+      '<div class="prog-lead">'+lead+'</div>' + (progItems.join('') || '');
+
+    // Next up
+    renderNext(w);
+
+    // Motivation
+    var msgsPR = [
+      'This is how strength is built — not from one perfect workout, but from stacking sessions like this.',
+      'Records fall when you keep showing up. Today you proved it again.'
+    ];
+    var msgsNoPR = [
+      'Every workout is a vote for the person you want to become.',
+      'Progress is the sum of sessions like this one. You showed up — that\'s the work.'
+    ];
+    var pool = prCards.length ? msgsPR : msgsNoPR;
+    document.getElementById('motivation').textContent = pool[Math.floor(Math.random()*pool.length)];
+  }
+
+  function notWarmup(s){ return !s.is_warmup; }
+  function mapSet(s){ return { weight:num(s.weight_lbs!=null?s.weight_lbs:s.weight), reps:num(s.reps), completed:s.completed, is_warmup:s.is_warmup }; }
+
+  async function renderNext(w){
+    var el = document.getElementById('nextCard');
+    if(!w.program_slug){
+      el.innerHTML = '<div class="next-standalone">The next time you train these exercises, Muscle Motivation will use today\'s performance to guide your progression.</div>';
+      return;
+    }
+    try {
+      var { data: up } = await supabaseClient.from('user_programs')
+        .select('schedule_keys,current_index').eq('user_id', user.id).eq('program_slug', w.program_slug).maybeSingle();
+      var keys = (up && up.schedule_keys && up.schedule_keys.length) ? up.schedule_keys : (typeof getScheduleForDays==='function' ? getScheduleForDays(w.program_slug, 3) : []);
+      var idx = up ? (up.current_index||0) : 0;
+      var nextKey = keys.length ? keys[idx % keys.length] : null;
+      var label = nextKey && typeof sessionLabel==='function' ? sessionLabel(nextKey) : (nextKey||'');
+      var prog = typeof programName==='function' ? programName(w.program_slug) : '';
+
+      var focus = '';
+      if(nextKey){
+        try {
+          var { data: t } = await supabaseClient.from('program_workouts')
+            .select('exercises').eq('program_slug', w.program_slug).eq('session_key', nextKey).maybeSingle();
+          if(t && t.exercises && t.exercises.length){
+            focus = t.exercises.slice(0,3).map(function(x){ return x.name; }).join(' · ');
+          }
+        } catch(e){}
+      }
+      el.innerHTML =
+        '<div class="next-label">'+esc(prog || 'Next session')+'</div>'+
+        '<div class="next-name">'+esc(label || 'Next Workout')+'</div>'+
+        (focus ? '<div class="next-focus">Focus: '+esc(focus)+'</div>' : '');
+    } catch(e){
+      el.innerHTML = '<div class="next-standalone">Your next session will use today\'s performance to guide progression.</div>';
+    }
+  }
+</script>
+</body>
+</html>

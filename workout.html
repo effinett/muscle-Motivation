@@ -515,59 +515,11 @@
       0%, 100% { opacity: 0; transform: scale(0.5); }
       50%      { opacity: 1; transform: scale(1.1); }
     }
-    /* ── Post-workout completion recap ──────────────────────────────── */
-    #completeModal { align-items: center; justify-content: center; padding: 24px; }
-    .complete-box {
-      position: relative; text-align: center; width: 100%; max-width: 380px;
-      padding: 36px 26px 26px; background: var(--surface-1);
-      border: 1px solid var(--border-2); border-top: 2px solid var(--green);
-      border-radius: 16px;
-    }
-    #completeModal.open .complete-box { animation: pr-pop 0.45s cubic-bezier(0.2,0.9,0.3,1.25) both; }
-    .complete-badge {
-      width: 64px; height: 64px; border-radius: 50%; margin: 0 auto 16px;
-      display: flex; align-items: center; justify-content: center; color: var(--green);
-      background: var(--green-muted); border: 1px solid var(--green-border);
-    }
-    .complete-badge svg { width: 30px; height: 30px; }
-    .complete-eyebrow {
-      font-size: 11px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase;
-      color: var(--green); margin-bottom: 6px;
-    }
-    .complete-title {
-      font-family: 'Bebas Neue', sans-serif; font-size: 30px; letter-spacing: 1.5px;
-      line-height: 1; margin-bottom: 22px;
-    }
-    .complete-stats {
-      display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 4px;
-    }
-    .cmp-stat {
-      background: var(--surface-2); border: 1px solid var(--border-1);
-      border-radius: 10px; padding: 12px 6px;
-    }
-    .cmp-stat-num { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 1px; line-height: 1; }
-    .cmp-stat-label {
-      font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-      color: var(--text-muted); margin-top: 5px;
-    }
-    .complete-prs:not(:empty) {
-      margin-top: 16px; padding: 14px 16px; text-align: left;
-      background: var(--gold-soft); border: 1px solid rgba(230,180,80,0.30); border-radius: 10px;
-    }
-    .cmp-pr-head {
-      display: flex; align-items: center; gap: 7px; color: var(--gold);
-      font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 8px;
-    }
-    .cmp-pr-head svg { width: 15px; height: 15px; }
-    .cmp-pr-item { font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.5; }
-    .complete-continue { margin-top: 22px; }
-
     @media (prefers-reduced-motion: reduce) {
       #prModal.open .pr-celebrate,
       #prModal.open .pr-badge,
       #prModal.open .pr-ring,
-      #prModal.open .pr-spark,
-      #completeModal.open .complete-box { animation: none; }
+      #prModal.open .pr-spark { animation: none; }
       .pr-spark { display: none; }
     }
 
@@ -704,18 +656,6 @@
     <div class="pr-exercise" id="prExercise"></div>
     <div class="pr-stat" id="prStat"></div>
     <div class="pr-note" id="prNote"></div>
-  </div>
-</div>
-
-<!-- Post-workout completion recap -->
-<div class="overlay" id="completeModal" onclick="onCompleteBgClick(event)">
-  <div class="complete-box">
-    <div class="complete-badge"><i data-lucide="check"></i></div>
-    <div class="complete-eyebrow">Session Done</div>
-    <div class="complete-title">Workout Complete</div>
-    <div class="complete-stats" id="cmpStats"></div>
-    <div class="complete-prs" id="cmpPrs"></div>
-    <button class="btn-primary complete-continue" onclick="closeWorkoutComplete()">Continue</button>
   </div>
 </div>
 
@@ -1376,7 +1316,7 @@
     // PR detection (Phase 3) — runs after the workout is marked complete so the
     // personal_records table reflects this session. Non-fatal: any failure here
     // never blocks the save/redirect below.
-    var prMessages = await detectAndRecordPRs();
+    await detectAndRecordPRs();
     var progSlug = currentWorkout.program_slug || localStorage.getItem('wkt_prog_' + currentWorkout.id);
     var sessKey  = currentWorkout.session_key || localStorage.getItem('wkt_sess_' + currentWorkout.id);
     localStorage.removeItem('wkt_start_' + currentWorkout.id);
@@ -1389,7 +1329,8 @@
       await advanceProgramSession(progSlug, sessKey);
     }
     closeFinishModal();
-    showWorkoutComplete(elapsed, prMessages);
+    // Dedicated full-screen recap page (Phase 4A) — replaces the inline modal.
+    window.location.href = 'workout-complete.html?workout_id=' + currentWorkout.id;
   }
 
   // ── Live PR trophy (transient, mid-workout) ───────────────────────
@@ -1410,41 +1351,6 @@
     clearTimeout(_liveTimer);
     document.getElementById('prModal').classList.remove('open');
   }
-
-  // ── Post-workout completion recap ─────────────────────────────────
-  function showWorkoutComplete(elapsed, prMessages) {
-    var totalSets = exercises.reduce(function(n, ex) { return n + ex.sets.length; }, 0);
-    var doneSets  = exercises.reduce(function(n, ex) {
-      return n + ex.sets.filter(function(s) { return s.completed; }).length; }, 0);
-    var volume = exercises.reduce(function(v, ex) {
-      return v + ex.sets.reduce(function(sv, s) {
-        return sv + ((s.completed && s.weight_lbs != null && s.reps != null) ? s.weight_lbs * s.reps : 0);
-      }, 0);
-    }, 0);
-
-    function stat(num, label) {
-      return '<div class="cmp-stat"><div class="cmp-stat-num">' + num + '</div>' +
-             '<div class="cmp-stat-label">' + label + '</div></div>';
-    }
-    var grid = stat(elapsed, 'min') +
-               stat(exercises.length, exercises.length === 1 ? 'exercise' : 'exercises') +
-               stat(doneSets + '/' + totalSets, 'sets') +
-               stat(volume >= 1000 ? (Math.round(volume / 100) / 10) + 'k' : volume, 'lbs lifted');
-    document.getElementById('cmpStats').innerHTML = grid;
-
-    var prHtml = '';
-    if (prMessages && prMessages.length) {
-      prHtml = '<div class="cmp-pr-head"><i data-lucide="trophy"></i> ' +
-        prMessages.length + ' New Personal Record' + (prMessages.length > 1 ? 's' : '') + '</div>' +
-        prMessages.map(function(m) { return '<div class="cmp-pr-item">' + esc(m) + '</div>'; }).join('');
-    }
-    document.getElementById('cmpPrs').innerHTML = prHtml;
-
-    document.getElementById('completeModal').classList.add('open');
-    lucide.createIcons();
-  }
-  function closeWorkoutComplete() { window.location.href = 'app.html'; }
-  function onCompleteBgClick(e) { if (e.target === document.getElementById('completeModal')) closeWorkoutComplete(); }
 
   // Detect & persist personal records for every exercise in the finished
   // workout. Returns an array of human-readable PR strings (e.g.
