@@ -121,6 +121,43 @@
     return arr;
   }
 
+  // Every set the user set up that session (non-warmup, has reps) — completed
+  // OR not. This is the PRESCRIBED/attempted set count, used to figure out the
+  // target set count. It must stay separate from the COMPLETED set count so an
+  // incomplete session never shrinks the target (see resolveTargetSets).
+  function loggedSets(session) {
+    if (!session || !session.sets) return [];
+    return session.sets.filter(function (s) {
+      return !s.is_warmup && num(s.reps) !== null;
+    });
+  }
+
+  // Resolve how many sets the user SHOULD do, independent of how many they
+  // actually completed last time. Priority:
+  //   1. programmed/prescribed sets passed in (program exercise)
+  //   2. an explicit previous prescription passed in
+  //   3. the user's most common logged set count for this exercise (ties → more)
+  //   4. fallback of 3
+  function resolveTargetSets(input, history) {
+    var t = num(input.targetSets);
+    if (t && t > 0) return Math.round(t);
+    var p = num(input.prescribedSets);
+    if (p && p > 0) return Math.round(p);
+    var counts = (history || []).map(function (s) { return loggedSets(s).length; })
+                                .filter(function (n) { return n > 0; });
+    if (counts.length) {
+      var freq = {};
+      counts.forEach(function (c) { freq[c] = (freq[c] || 0) + 1; });
+      var bestC = null, bestF = -1;
+      Object.keys(freq).forEach(function (k) {
+        var c = parseInt(k, 10), f = freq[k];
+        if (f > bestF || (f === bestF && c > bestC)) { bestF = f; bestC = c; }
+      });
+      return bestC;
+    }
+    return 3;
+  }
+
   // ── Display formatting ─────────────────────────────────────────────────────
   function formatPerformance(sets) {
     var rich = sets.map(function (s) { return { w: num(s.weight), r: num(s.reps) }; })
@@ -198,7 +235,7 @@
       var pw = num(input.programmedWeight);
       var pr = num(input.programmedReps);
       var recReps = pr !== null ? pr : low;
-      var recSets = num(input.targetSets) || 3;
+      var recSets = resolveTargetSets(input, history);
       var startWeight = pw !== null ? roundWeight(pw, equip) : null;
       var note;
       if (startWeight !== null) {
@@ -229,13 +266,42 @@
     var repsArr = repsAtWeight(lastWorking, base);
     var minReps = Math.min.apply(null, repsArr);
     var maxReps = Math.max.apply(null, repsArr);
-    var setCount = num(input.targetSets) || repsArr.length || lastWorking.length || 3;
+
+    // Target set count is resolved INDEPENDENTLY of how many sets were actually
+    // completed — an incomplete session must never shrink the target. lastWorking
+    // is the COMPLETED set count (or all logged sets when none were ticked).
+    var targetSets    = resolveTargetSets(input, history);
+    var completedSets = lastWorking.length;
 
     var plat = detectPlateau(history);
 
     var action, recWeight, recReps, note;
     var inc = weightIncrement(equip, name);
 
+    // ── Incomplete session: completed fewer sets than the target ─────────────
+    // Hold the weight, keep the SAME target set count, and ask the user to
+    // finish all sets before earning a weight increase. Never reduce the target.
+    if (completedSets < targetSets) {
+      recWeight = base;
+      recReps = Math.min(high, Math.max(low, isFinite(maxReps) ? maxReps : low));
+      return {
+        hasHistory: true,
+        equipment: equip,
+        goalRange: goalRange,
+        lastPerformance: { weight: base, reps: repsArr, display: formatPerformance(lastWorking) },
+        recommendedWeight: recWeight,
+        recommendedReps: recReps,
+        recommendedSets: targetSets,
+        recommendedDisplay: formatRecommendation(recWeight, recReps, targetSets),
+        action: 'incomplete',
+        plateau: false,
+        deloadSuggested: false,
+        coachNote: 'Complete all target sets before increasing weight.'
+      };
+    }
+
+    // Weight only increases when the top of the range is hit across ALL target
+    // sets — guaranteed here because completedSets >= targetSets.
     var allHitHigh = repsArr.length > 0 && minReps >= high;
 
     if (allHitHigh) {
@@ -314,8 +380,8 @@
       },
       recommendedWeight: recWeight,
       recommendedReps: recReps,
-      recommendedSets: setCount,
-      recommendedDisplay: formatRecommendation(recWeight, recReps, setCount),
+      recommendedSets: targetSets,
+      recommendedDisplay: formatRecommendation(recWeight, recReps, targetSets),
       action: action,
       plateau: plat.plateau,
       deloadSuggested: deloadSuggested,
