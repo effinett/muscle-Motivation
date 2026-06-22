@@ -453,6 +453,33 @@
     }
     .activity-viewall:hover { text-decoration: underline; }
     .activity-viewall.disabled { color: var(--text-muted); cursor: default; pointer-events: none; }
+    /* Today's Nutrition summary card */
+    .nut-hero { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+    .nut-hero-num {
+      font-family: 'Bebas Neue', sans-serif; font-size: 40px; line-height: 0.9;
+      letter-spacing: 1px; color: var(--green); flex-shrink: 0;
+    }
+    .nut-hero-num.over { color: #e0a800; }
+    .nut-hero-meta { min-width: 0; }
+    .nut-hero-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+      text-transform: uppercase; color: var(--text-2);
+    }
+    .nut-hero-sub { font-size: 12px; color: var(--text-muted); font-weight: 600; margin-top: 2px; }
+    .nut-track { height: 6px; background: var(--surface-3); border-radius: 4px; overflow: hidden; }
+    .nut-track-cal { margin-bottom: 14px; }
+    .nut-fill { height: 100%; background: var(--red); border-radius: 4px; transition: width .3s ease; }
+    .nut-fill.cal { background: var(--green); }
+    .nut-fill.over { background: #e0a800; }
+    .nut-macro { margin-top: 10px; }
+    .nut-macro-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 5px; }
+    .nut-macro-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
+      text-transform: uppercase; color: var(--text-2);
+    }
+    .nut-macro-val { font-size: 12px; color: var(--text); font-weight: 600; }
+    .nut-macro-val small { color: var(--text-muted); font-weight: 500; }
+    .nut-note { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
     .activity-row {
       display: flex; align-items: center; justify-content: space-between; gap: 12px;
       background: var(--surface-2); border: 1px solid var(--border-2);
@@ -1502,17 +1529,55 @@
       }
       var t = nuDayTotals(logs);
       var p = currentProfile || {};
-      function cell(label, consumed, target, unit) {
+      var calTarget = +p.target_calories || 0;
+
+      // Compact macro bar: label · consumed/target · fill (amber when over target).
+      function macroBar(label, consumed, target) {
         var c = nuRound(consumed);
-        var val = target ? (c + ' <small>/ ' + target + (unit ? unit : '') + '</small>') : (c + (unit ? ' ' + unit : ''));
-        return '<div class="wi-stat"><div class="wi-stat-label">' + label + '</div><div class="wi-stat-val" style="font-size:18px;">' + val + '</div></div>';
+        var pct = target ? Math.min(100, Math.round(consumed / target * 100)) : 0;
+        var over = target && consumed > target;
+        var val = target ? (c + ' <small>/ ' + target + ' g</small>') : (c + ' g');
+        return '<div class="nut-macro">' +
+            '<div class="nut-macro-head">' +
+              '<span class="nut-macro-label">' + label + '</span>' +
+              '<span class="nut-macro-val">' + val + '</span>' +
+            '</div>' +
+            '<div class="nut-track"><div class="nut-fill' + (over ? ' over' : '') + '" style="width:' + pct + '%"></div></div>' +
+          '</div>';
       }
-      el.innerHTML = '<div class="wi-summary">' +
-        cell('Calories', t.calories, p.target_calories || 0, '') +
-        cell('Protein',  t.protein,  p.protein_target || 0, 'g') +
-        cell('Carbs',    t.carbs,    p.carb_target || 0, 'g') +
-        cell('Fat',      t.fat,      p.fat_target || 0, 'g') +
-      '</div>';
+
+      var html;
+      if (calTarget) {
+        // Hero = calories left (or over). Bar green, amber once over target.
+        var consumedCal = nuRound(t.calories);
+        var left = calTarget - consumedCal;
+        var over = left < 0;
+        var pct = Math.min(100, Math.round(consumedCal / calTarget * 100));
+        html =
+          '<div class="nut-hero">' +
+            '<div class="nut-hero-num' + (over ? ' over' : '') + '">' + (over ? '−' + Math.abs(left) : left) + '</div>' +
+            '<div class="nut-hero-meta">' +
+              '<div class="nut-hero-label">' + (over ? 'Calories Over' : 'Calories Left') + '</div>' +
+              '<div class="nut-hero-sub">' + consumedCal.toLocaleString() + ' / ' + calTarget.toLocaleString() + ' kcal</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="nut-track nut-track-cal"><div class="nut-fill cal' + (over ? ' over' : '') + '" style="width:' + pct + '%"></div></div>' +
+          macroBar('Protein', t.protein, +p.protein_target || 0) +
+          macroBar('Carbs',   t.carbs,   +p.carb_target    || 0) +
+          macroBar('Fat',     t.fat,     +p.fat_target     || 0);
+      } else {
+        // No calorie target yet — show consumed totals + nudge (can't compute "left").
+        html =
+          '<div class="nut-hero">' +
+            '<div class="nut-hero-num">' + nuRound(t.calories).toLocaleString() + '</div>' +
+            '<div class="nut-hero-meta">' +
+              '<div class="nut-hero-label">Calories Today</div>' +
+              '<div class="nut-hero-sub">P ' + nuRound(t.protein) + 'g · C ' + nuRound(t.carbs) + 'g · F ' + nuRound(t.fat) + 'g</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="nut-note">Set your targets (Recalculate Goals) to track progress.</div>';
+      }
+      el.innerHTML = html;
     } catch (err) {
       console.error('loadNutritionSummary error:', err);
       el.innerHTML = '<div class="activity-empty">Couldn\'t load nutrition.</div>';
