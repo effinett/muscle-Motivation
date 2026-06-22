@@ -621,7 +621,7 @@
         <span class="quick-btn-icon"><i data-lucide="scale"></i></span>
         <span class="quick-btn-label">Log Weight</span>
       </a>
-      <a class="quick-btn" href="#">
+      <a class="quick-btn" href="nutrition.html">
         <span class="quick-btn-icon"><i data-lucide="utensils"></i></span>
         <span class="quick-btn-label">Log Food</span>
       </a>
@@ -660,12 +660,11 @@
       <!-- Nutrition Logs -->
       <div class="activity-group">
         <div class="activity-head">
-          <span class="activity-title">Nutrition Logs</span>
-          <span class="activity-viewall disabled">View All →</span>
+          <span class="activity-title">Today's Nutrition</span>
+          <a class="activity-viewall" href="nutrition.html">View All →</a>
         </div>
-        <div class="activity-soon">
-          <span class="activity-soon-badge">Coming soon</span>
-          Food &amp; macro logging is on the way.
+        <div id="nutritionSummary">
+          <div class="activity-empty">Loading…</div>
         </div>
       </div>
     </div>
@@ -849,6 +848,7 @@
 <script src="supabase.js"></script>
 <script src="schedules.js"></script>
 <script src="weight.js"></script>
+<script src="nutrition.js"></script>
 <script>
 
   var currentProfile    = null;
@@ -926,6 +926,7 @@
         await checkDashboardInProgress(user.id);
         await loadRecentActivity(user.id);
         await loadRecentWeighIns(user.id);
+        await loadNutritionSummary(user.id);
         if (new URLSearchParams(window.location.search).get('purchase') === 'success') {
           showToast('Purchase successful — your program is now unlocked.');
           history.replaceState(null, '', window.location.pathname);
@@ -1484,6 +1485,37 @@
     } catch (err) {
       console.error('loadRecentActivity error:', err);
       el.innerHTML = '<div class="activity-empty">Couldn\'t load workouts.</div>';
+    }
+  }
+
+  // ── Today's Nutrition (dashboard) ──────────────────────────────
+  // Read-only summary of today's food logs vs. profile targets.
+  // NEVER writes targets — those are owned by Recalculate Goals.
+  async function loadNutritionSummary(userId) {
+    var el = document.getElementById('nutritionSummary');
+    if (!el) return;
+    try {
+      var logs = await nuFetchLogs(userId, nuToday());
+      if (!logs.length) {
+        el.innerHTML = '<div class="activity-empty">No food logged today — tap <strong>Log Food</strong> to start tracking.</div>';
+        return;
+      }
+      var t = nuDayTotals(logs);
+      var p = currentProfile || {};
+      function cell(label, consumed, target, unit) {
+        var c = nuRound(consumed);
+        var val = target ? (c + ' <small>/ ' + target + (unit ? unit : '') + '</small>') : (c + (unit ? ' ' + unit : ''));
+        return '<div class="wi-stat"><div class="wi-stat-label">' + label + '</div><div class="wi-stat-val" style="font-size:18px;">' + val + '</div></div>';
+      }
+      el.innerHTML = '<div class="wi-summary">' +
+        cell('Calories', t.calories, p.target_calories || 0, '') +
+        cell('Protein',  t.protein,  p.protein_target || 0, 'g') +
+        cell('Carbs',    t.carbs,    p.carb_target || 0, 'g') +
+        cell('Fat',      t.fat,      p.fat_target || 0, 'g') +
+      '</div>';
+    } catch (err) {
+      console.error('loadNutritionSummary error:', err);
+      el.innerHTML = '<div class="activity-empty">Couldn\'t load nutrition.</div>';
     }
   }
 
