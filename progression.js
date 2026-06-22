@@ -26,6 +26,12 @@
   var DEFAULT_HIGH = 12;
   var PLATEAU_SESSIONS = 3; // sessions without improvement before flagging plateau
 
+  // Default working-set target for a brand-new exercise with no prescription.
+  var DEFAULT_TARGET_SETS = 3;
+  // History must span more than one session before it can establish a target —
+  // a single recent (possibly incomplete) workout must never set the target.
+  var MIN_SESSIONS_FOR_ESTABLISHED_TARGET = 2;
+
   // ── Helpers ───────────────────────────────────────────────────────────────
   function num(v) {
     if (v === '' || v === null || v === undefined) return null;
@@ -132,30 +138,73 @@
     });
   }
 
+  // ── Exercise classification (Phase 3 stub — minimum viable architecture) ────
+  // Deliberately lightweight. There is NO classification table, AI, or volume
+  // science here yet. This is the single seam future phases extend:
+  //   • classifyExercise()           → replace the regex with a lookup table
+  //   • EXERCISE_CATEGORY_DEFAULTS   → per-category / per-goal default sets
+  //   • VOLUME_LANDMARKS             → MEV / MAV / MRV per category (AI volume)
+  // Callers only ever ask for defaultTargetSets(name), so the internals can grow
+  // without touching the engine or the UI.
+  var COMPOUND_RE = /(squat|deadlift|bench|press|\brow\b|pulldown|pull.?up|chin.?up|\bdip\b|lunge|hip thrust|clean|snatch|thruster|leg press)/i;
+
+  function classifyExercise(name) {
+    return COMPOUND_RE.test(name || '') ? 'compound' : 'isolation';
+  }
+
+  // Per-category defaults. Both 3 working sets for now (per spec) — the shape
+  // lets a future version tune compound vs. isolation independently.
+  var EXERCISE_CATEGORY_DEFAULTS = {
+    compound:  { defaultSets: DEFAULT_TARGET_SETS },
+    isolation: { defaultSets: DEFAULT_TARGET_SETS }
+  };
+
+  // Placeholder ONLY — not consulted by any logic yet. Reserved so future AI
+  // volume work (MEV/MAV/MRV weekly set landmarks per category) has a home.
+  var VOLUME_LANDMARKS = {
+    compound:  { mev: null, mav: null, mrv: null },
+    isolation: { mev: null, mav: null, mrv: null }
+  };
+
+  function defaultTargetSets(name) {
+    var conf = EXERCISE_CATEGORY_DEFAULTS[classifyExercise(name)] || EXERCISE_CATEGORY_DEFAULTS.isolation;
+    return conf.defaultSets;
+  }
+
+  // The user's established logged set count, but ONLY when history is deep
+  // enough to be meaningful (>= MIN_SESSIONS_FOR_ESTABLISHED_TARGET sessions).
+  // A single recent session — which may be incomplete — never counts. Uses the
+  // most common LOGGED (set-up, not completed) count so an unfinished workout
+  // can't shrink the target. Ties break toward more sets. Returns null if there
+  // isn't enough history to establish a target.
+  function establishedTargetSets(history) {
+    var counts = (history || []).map(function (s) { return loggedSets(s).length; })
+                                .filter(function (n) { return n > 0; });
+    if (counts.length < MIN_SESSIONS_FOR_ESTABLISHED_TARGET) return null;
+    var freq = {};
+    counts.forEach(function (c) { freq[c] = (freq[c] || 0) + 1; });
+    var bestC = null, bestF = -1;
+    Object.keys(freq).forEach(function (k) {
+      var c = parseInt(k, 10), f = freq[k];
+      if (f > bestF || (f === bestF && c > bestC)) { bestF = f; bestC = c; }
+    });
+    return bestC;
+  }
+
   // Resolve how many sets the user SHOULD do, independent of how many they
   // actually completed last time. Priority:
   //   1. programmed/prescribed sets passed in (program exercise)
   //   2. an explicit previous prescription passed in
-  //   3. the user's most common logged set count for this exercise (ties → more)
-  //   4. fallback of 3
+  //   3. the user's established target from SUFFICIENT history (never one session)
+  //   4. category default (compound/isolation → 3 for now)
   function resolveTargetSets(input, history) {
     var t = num(input.targetSets);
     if (t && t > 0) return Math.round(t);
     var p = num(input.prescribedSets);
     if (p && p > 0) return Math.round(p);
-    var counts = (history || []).map(function (s) { return loggedSets(s).length; })
-                                .filter(function (n) { return n > 0; });
-    if (counts.length) {
-      var freq = {};
-      counts.forEach(function (c) { freq[c] = (freq[c] || 0) + 1; });
-      var bestC = null, bestF = -1;
-      Object.keys(freq).forEach(function (k) {
-        var c = parseInt(k, 10), f = freq[k];
-        if (f > bestF || (f === bestF && c > bestC)) { bestF = f; bestC = c; }
-      });
-      return bestC;
-    }
-    return 3;
+    var established = establishedTargetSets(history);
+    if (established) return established;
+    return defaultTargetSets(input.exerciseName);
   }
 
   // ── Display formatting ─────────────────────────────────────────────────────
@@ -458,8 +507,17 @@
     weightIncrement: weightIncrement,
     estimate1RM: estimate1RM,
     workingSets: workingSets,
+    // Exercise classification / target-set seam (extend in future phases)
+    classifyExercise: classifyExercise,
+    defaultTargetSets: defaultTargetSets,
+    resolveTargetSets: resolveTargetSets,
+    establishedTargetSets: establishedTargetSets,
+    EXERCISE_CATEGORY_DEFAULTS: EXERCISE_CATEGORY_DEFAULTS,
+    VOLUME_LANDMARKS: VOLUME_LANDMARKS,
     DEFAULT_LOW: DEFAULT_LOW,
     DEFAULT_HIGH: DEFAULT_HIGH,
+    DEFAULT_TARGET_SETS: DEFAULT_TARGET_SETS,
+    MIN_SESSIONS_FOR_ESTABLISHED_TARGET: MIN_SESSIONS_FOR_ESTABLISHED_TARGET,
     PLATEAU_SESSIONS: PLATEAU_SESSIONS
   };
 
