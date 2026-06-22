@@ -489,7 +489,6 @@
       line-height: 1.15; color: var(--text);
     }
     .pr-item + .pr-item { margin-top: 4px; }
-    .pr-continue { max-width: 220px; margin: 0 auto; }
 
     @keyframes pr-pop {
       0%   { transform: scale(0.4); opacity: 0; }
@@ -508,11 +507,59 @@
       0%, 100% { opacity: 0; transform: scale(0.5); }
       50%      { opacity: 1; transform: scale(1.1); }
     }
+    /* ── Post-workout completion recap ──────────────────────────────── */
+    #completeModal { align-items: center; justify-content: center; padding: 24px; }
+    .complete-box {
+      position: relative; text-align: center; width: 100%; max-width: 380px;
+      padding: 36px 26px 26px; background: var(--surface-1);
+      border: 1px solid var(--border-2); border-top: 2px solid var(--green);
+      border-radius: 16px;
+    }
+    #completeModal.open .complete-box { animation: pr-pop 0.45s cubic-bezier(0.2,0.9,0.3,1.25) both; }
+    .complete-badge {
+      width: 64px; height: 64px; border-radius: 50%; margin: 0 auto 16px;
+      display: flex; align-items: center; justify-content: center; color: var(--green);
+      background: var(--green-muted); border: 1px solid var(--green-border);
+    }
+    .complete-badge svg { width: 30px; height: 30px; }
+    .complete-eyebrow {
+      font-size: 11px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase;
+      color: var(--green); margin-bottom: 6px;
+    }
+    .complete-title {
+      font-family: 'Bebas Neue', sans-serif; font-size: 30px; letter-spacing: 1.5px;
+      line-height: 1; margin-bottom: 22px;
+    }
+    .complete-stats {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 4px;
+    }
+    .cmp-stat {
+      background: var(--surface-2); border: 1px solid var(--border-1);
+      border-radius: 10px; padding: 12px 6px;
+    }
+    .cmp-stat-num { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 1px; line-height: 1; }
+    .cmp-stat-label {
+      font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--text-muted); margin-top: 5px;
+    }
+    .complete-prs:not(:empty) {
+      margin-top: 16px; padding: 14px 16px; text-align: left;
+      background: var(--gold-soft); border: 1px solid rgba(230,180,80,0.30); border-radius: 10px;
+    }
+    .cmp-pr-head {
+      display: flex; align-items: center; gap: 7px; color: var(--gold);
+      font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 8px;
+    }
+    .cmp-pr-head svg { width: 15px; height: 15px; }
+    .cmp-pr-item { font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.5; }
+    .complete-continue { margin-top: 22px; }
+
     @media (prefers-reduced-motion: reduce) {
       #prModal.open .pr-celebrate,
       #prModal.open .pr-badge,
       #prModal.open .pr-ring,
-      #prModal.open .pr-spark { animation: none; }
+      #prModal.open .pr-spark,
+      #completeModal.open .complete-box { animation: none; }
       .pr-spark { display: none; }
     }
 
@@ -634,8 +681,8 @@
   </div>
 </div>
 
-<!-- PR Celebration -->
-<div class="overlay" id="prModal" onclick="onPrBgClick(event)">
+<!-- Live PR Trophy (mid-workout, transient) -->
+<div class="overlay" id="prModal" onclick="closeLivePr()">
   <div class="pr-celebrate">
     <div class="pr-badge-wrap">
       <span class="pr-ring"></span>
@@ -647,7 +694,18 @@
     </div>
     <div class="pr-eyebrow">New Personal Record</div>
     <div class="pr-list" id="prList"></div>
-    <button class="btn-primary pr-continue" onclick="closePrCelebration()">Continue</button>
+  </div>
+</div>
+
+<!-- Post-workout completion recap -->
+<div class="overlay" id="completeModal" onclick="onCompleteBgClick(event)">
+  <div class="complete-box">
+    <div class="complete-badge"><i data-lucide="check"></i></div>
+    <div class="complete-eyebrow">Session Done</div>
+    <div class="complete-title">Workout Complete</div>
+    <div class="complete-stats" id="cmpStats"></div>
+    <div class="complete-prs" id="cmpPrs"></div>
+    <button class="btn-primary complete-continue" onclick="closeWorkoutComplete()">Continue</button>
   </div>
 </div>
 
@@ -666,6 +724,11 @@
   var timerInterval   = null;
   var restInterval    = null;
   var restStart       = null;
+  // PR records as they were at the START of this session, keyed by exercise_name.
+  // Live per-set PR detection compares against this snapshot and advances its
+  // running best as PRs are hit, so the same set can't re-fire and a bigger PR
+  // later still does. Save remains the source of truth that writes records.
+  var prSnapshot      = {};
   // workoutHistory + history rendering/edit/delete live in workout-history.js (shared)
 
   // ── Init ──────────────────────────────────────────────────────────
@@ -692,9 +755,9 @@
         var mode      = params.get('mode');
         var histOpts = { limit: 10, targetId: 'historyList', emptyText: 'No workouts yet — start your first session above.' };
         if (progSlug && sessKey) {
-          await Promise.all([startProgramSession(progSlug, sessKey, mode), loadHistory(histOpts)]);
+          await Promise.all([startProgramSession(progSlug, sessKey, mode), loadHistory(histOpts), loadPrSnapshot()]);
         } else {
-          await Promise.all([checkActiveWorkout(), loadHistory(histOpts)]);
+          await Promise.all([checkActiveWorkout(), loadHistory(histOpts), loadPrSnapshot()]);
         }
 
         document.getElementById('authGate').style.display   = 'none';
@@ -1153,12 +1216,41 @@
   }
 
   async function toggleSet(setId, exIdx, setIdx) {
-    var s = exercises[exIdx].sets[setIdx];
+    var ex = exercises[exIdx];
+    var s = ex.sets[setIdx];
     s.completed = !s.completed;
     await supabaseClient.from('workout_sets').update({ completed: s.completed }).eq('id', setId);
-    if (s.completed) startRest();
+    if (s.completed) { startRest(); checkLivePr(ex, s); }
     else stopRest();
     renderExercises();
+  }
+
+  // ── Live PR detection (Phase 3) ───────────────────────────────────
+  // Load the user's existing PR records once at start so live detection can
+  // compare each completed set against the PRE-workout best. Non-fatal.
+  async function loadPrSnapshot() {
+    prSnapshot = {};
+    try {
+      var { data } = await supabaseClient
+        .from('personal_records')
+        .select('exercise_name, best_weight, best_reps, best_volume, best_estimated_1rm')
+        .eq('user_id', currentUser.id);
+      (data || []).forEach(function(r) { prSnapshot[r.exercise_name] = r; });
+    } catch (e) { /* non-fatal — live PR is a bonus */ }
+  }
+
+  // When a set is checked complete, see if it beats the running best for that
+  // exercise. If so, pop the trophy and advance the running best so the same
+  // set can't re-fire (but a bigger lift later still can).
+  function checkLivePr(ex, s) {
+    if (typeof Progression === 'undefined' || !Progression.evaluatePRs) return;
+    if (s.weight_lbs == null || s.reps == null) return;
+    var prior = prSnapshot[ex.name];
+    var res = Progression.evaluatePRs([{ weight: s.weight_lbs, reps: s.reps }], prior || {});
+    prSnapshot[ex.name] = res.best;          // advance running best (also seeds new exercises)
+    if (res.hadPrior && res.topMessage) {
+      showLivePr(ex.name + ' ' + res.topMessage);
+    }
   }
 
   // ── Finish workout ────────────────────────────────────────────────
@@ -1199,37 +1291,59 @@
       await advanceProgramSession(progSlug, sessKey);
     }
     closeFinishModal();
-    if (prMessages && prMessages.length) {
-      // Celebrate the PR(s), then continue to the dashboard.
-      showPrCelebration(prMessages, function() { window.location.href = 'app.html'; });
-    } else {
-      showToast('Workout saved!');
-      setTimeout(function() { window.location.href = 'app.html'; }, 1600);
-    }
+    showWorkoutComplete(elapsed, prMessages);
   }
 
-  // ── PR celebration ────────────────────────────────────────────────
-  var _prDone  = null;
-  var _prTimer = null;
-  function showPrCelebration(messages, done) {
-    _prDone = done || null;
-    document.getElementById('prList').innerHTML = messages.map(function(m) {
-      return '<div class="pr-item">' + esc(m) + '</div>';
-    }).join('');
+  // ── Live PR trophy (transient, mid-workout) ───────────────────────
+  // Centered trophy that pops in when a set earns a PR, then auto-dismisses so
+  // the user stays in their session. Tap anywhere to close early.
+  var _liveTimer = null;
+  function showLivePr(message) {
+    document.getElementById('prList').innerHTML = '<div class="pr-item">' + esc(message) + '</div>';
     document.getElementById('prModal').classList.add('open');
     lucide.createIcons();
-    // Safety auto-continue so a user who walks away still lands on the dashboard.
-    clearTimeout(_prTimer);
-    _prTimer = setTimeout(closePrCelebration, 8000);
+    clearTimeout(_liveTimer);
+    _liveTimer = setTimeout(closeLivePr, 2800);
   }
-  function closePrCelebration() {
-    clearTimeout(_prTimer);
+  function closeLivePr() {
+    clearTimeout(_liveTimer);
     document.getElementById('prModal').classList.remove('open');
-    var done = _prDone; _prDone = null;
-    if (done) done();
   }
-  // Tapping the backdrop also continues (same as the Continue button).
-  function onPrBgClick(e) { if (e.target === document.getElementById('prModal')) closePrCelebration(); }
+
+  // ── Post-workout completion recap ─────────────────────────────────
+  function showWorkoutComplete(elapsed, prMessages) {
+    var totalSets = exercises.reduce(function(n, ex) { return n + ex.sets.length; }, 0);
+    var doneSets  = exercises.reduce(function(n, ex) {
+      return n + ex.sets.filter(function(s) { return s.completed; }).length; }, 0);
+    var volume = exercises.reduce(function(v, ex) {
+      return v + ex.sets.reduce(function(sv, s) {
+        return sv + ((s.completed && s.weight_lbs != null && s.reps != null) ? s.weight_lbs * s.reps : 0);
+      }, 0);
+    }, 0);
+
+    function stat(num, label) {
+      return '<div class="cmp-stat"><div class="cmp-stat-num">' + num + '</div>' +
+             '<div class="cmp-stat-label">' + label + '</div></div>';
+    }
+    var grid = stat(elapsed, 'min') +
+               stat(exercises.length, exercises.length === 1 ? 'exercise' : 'exercises') +
+               stat(doneSets + '/' + totalSets, 'sets') +
+               stat(volume >= 1000 ? (Math.round(volume / 100) / 10) + 'k' : volume, 'lbs lifted');
+    document.getElementById('cmpStats').innerHTML = grid;
+
+    var prHtml = '';
+    if (prMessages && prMessages.length) {
+      prHtml = '<div class="cmp-pr-head"><i data-lucide="trophy"></i> ' +
+        prMessages.length + ' New Personal Record' + (prMessages.length > 1 ? 's' : '') + '</div>' +
+        prMessages.map(function(m) { return '<div class="cmp-pr-item">' + esc(m) + '</div>'; }).join('');
+    }
+    document.getElementById('cmpPrs').innerHTML = prHtml;
+
+    document.getElementById('completeModal').classList.add('open');
+    lucide.createIcons();
+  }
+  function closeWorkoutComplete() { window.location.href = 'app.html'; }
+  function onCompleteBgClick(e) { if (e.target === document.getElementById('completeModal')) closeWorkoutComplete(); }
 
   // Detect & persist personal records for every exercise in the finished
   // workout. Returns an array of human-readable PR strings (e.g.
