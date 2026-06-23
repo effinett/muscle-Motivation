@@ -379,6 +379,16 @@
       transition: opacity 0.2s;
     }
     .btn-start:hover { opacity: 0.85; }
+    .btn-choose-workout {
+      display: block; width: 100%; margin-top: 10px;
+      padding: 12px 20px;
+      background: transparent; border: 1px solid var(--border-2); border-radius: 8px;
+      color: var(--text); text-align: center;
+      font-family: 'Barlow', sans-serif; font-weight: 700;
+      font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase;
+      text-decoration: none; transition: border-color 0.2s, color 0.2s;
+    }
+    .btn-choose-workout:hover { border-color: var(--red); color: var(--red); }
 
     /* Active program section */
     .active-prog-row {
@@ -689,6 +699,10 @@
       <div id="discardSessionRow" style="display:none; text-align:center; margin-top:10px;">
         <a href="#" class="discard-session-link" onclick="discardDashboardSession(); return false;">Discard unfinished session</a>
       </div>
+
+      <!-- Secondary: always-available path to the full workout chooser
+           (recommended program workout, saved templates, one-off, history). -->
+      <a class="btn-choose-workout" href="workout.html">Choose Workout</a>
 
       <!-- Goal / program mismatch hint -->
       <div id="mismatchHint" style="display:none;" class="mismatch-hint"></div>

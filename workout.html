@@ -595,11 +595,29 @@
 
     <!-- Start screen -->
     <div id="startView">
-      <div class="section-label">New Workout</div>
+
+      <!-- 1 · Recommended (today's owned program workout, if any) -->
+      <div id="recommendedSection" style="display:none;">
+        <div class="section-label">Recommended</div>
+        <div id="recommendedWrap"></div>
+      </div>
+
+      <!-- 2 · My Workouts (saved templates) -->
+      <div class="section-label">My Workouts</div>
+      <div id="templateList">
+        <div class="empty-state">No saved workouts yet — build one to start training in one tap.</div>
+      </div>
+      <button class="btn-add-exercise" onclick="newTemplate()" style="margin-top:4px;">
+        <i data-lucide="plus"></i>
+        New Template
+      </button>
+
+      <!-- 3 · One-Off Workout (build/log without saving a template) -->
+      <div class="section-label">One-Off Workout</div>
       <div class="card">
         <div class="start-icon"><i data-lucide="dumbbell"></i></div>
-        <div class="start-title">Ready to Train?</div>
-        <div class="start-sub">Name your session and hit start — we'll track every set.</div>
+        <div class="start-title">Quick Session</div>
+        <div class="start-sub">Log a workout right now without saving it as a template.</div>
         <div class="field-group">
           <label class="field-label" for="workoutNameInput">Workout Name</label>
           <input class="field-input" type="text" id="workoutNameInput" placeholder="e.g. Push Day A" maxlength="60">
@@ -607,19 +625,15 @@
         <button class="btn-primary" onclick="startWorkout()">Start Workout</button>
       </div>
 
-      <div class="section-label">My Workouts</div>
-      <div id="templateList">
-        <div class="empty-state">No saved workouts yet — build one to start training in one tap.</div>
-      </div>
-      <button class="btn-add-exercise" onclick="newTemplate()" style="margin-top:4px;">
-        <i data-lucide="plus"></i>
-        New Workout Template
-      </button>
-
-      <div class="section-label">Recent Workouts</div>
+      <!-- 4 · History -->
+      <div class="section-label">History</div>
       <div id="historyList">
         <div class="empty-state">No workouts yet — start your first session above.</div>
       </div>
+      <a class="btn-add-exercise" href="workout-history.html" style="margin-top:4px; text-decoration:none;">
+        <i data-lucide="history"></i>
+        View Workout History
+      </a>
     </div>
 
     <!-- Active workout view -->
@@ -795,7 +809,7 @@
           // the user backs out.
           await Promise.all([startTemplateSession(templateId), loadTemplates(), loadHistory(histOpts)]);
         } else {
-          await Promise.all([checkActiveWorkout(), loadTemplates(), loadHistory(histOpts)]);
+          await Promise.all([checkActiveWorkout(), loadRecommended(profile), loadTemplates(), loadHistory(histOpts)]);
         }
 
         document.getElementById('authGate').style.display   = 'none';
@@ -1632,16 +1646,63 @@
 
   var TEMPLATE_DEFAULT_SETS = 3;
 
+  // ── Recommended (today's owned program workout) ───────────────────
+  // Computed from the SAME source of truth the dashboard uses: the active
+  // program (profiles.active_program) + the saved progression cursor
+  // (user_programs.current_index / schedule_keys), with schedules.js as the
+  // fallback. Starting it re-uses the existing program launch (mode=progression)
+  // so progression advances exactly as it does from the dashboard.
+  async function loadRecommended(profile) {
+    try {
+      var slug = profile && profile.active_program;
+      if (!slug || typeof PROGRAM_SCHEDULES === 'undefined' || !PROGRAM_SCHEDULES[slug]) return;
+      // Ownership guard — active_program could be stale after a refund.
+      var { data: pur } = await supabaseClient.from('purchases')
+        .select('id').eq('user_id', currentUser.id).eq('product', slug).eq('status', 'active').limit(1);
+      if (!pur || !pur.length) return;
+      var { data: up } = await supabaseClient.from('user_programs')
+        .select('schedule_keys, current_index')
+        .eq('user_id', currentUser.id).eq('program_slug', slug).maybeSingle();
+      var keys = (up && up.schedule_keys && up.schedule_keys.length)
+        ? up.schedule_keys : getScheduleForDays(slug, profile.training_days);
+      var idx = up ? (up.current_index || 0) : 0;
+      renderRecommended(slug, keys[idx % keys.length]);
+    } catch (e) { /* non-fatal — section stays hidden */ }
+  }
+
+  function renderRecommended(slug, key) {
+    var pname = (typeof programName === 'function' && programName(slug)) || slug;
+    var sname = (typeof sessionLabel === 'function') ? sessionLabel(key) : key;
+    document.getElementById('recommendedWrap').innerHTML =
+      '<div class="tpl-card">' +
+        '<div class="tpl-info">' +
+          '<div class="tpl-name">' + esc(sname) + '</div>' +
+          '<div class="tpl-sub">' + esc(pname) + ' · Next up</div>' +
+        '</div>' +
+        '<div class="tpl-actions">' +
+          '<button class="btn-tpl-start" onclick="startRecommended(\'' + esc(slug) + '\',\'' + esc(key) + '\')">Start</button>' +
+        '</div>' +
+      '</div>';
+    document.getElementById('recommendedSection').style.display = '';
+  }
+
+  function startRecommended(slug, key) {
+    // Re-use the existing program launch (the dashboard's progression driver).
+    window.location.href = 'workout.html?program=' + encodeURIComponent(slug) +
+      '&session=' + encodeURIComponent(key) + '&mode=progression';
+  }
+
   async function loadTemplates() {
     try {
-      var { data } = await supabaseClient
+      var { data, error } = await supabaseClient
         .from('workout_templates')
         .select('id, name, exercises, times_used, last_used_at, sort_order, created_at')
         .eq('user_id', currentUser.id)
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: true });
+      if (error) { console.error('loadTemplates error:', error); }
       templates = data || [];
-    } catch (e) { templates = []; }
+    } catch (e) { console.error('loadTemplates exception:', e); templates = []; }
     renderTemplateList();
   }
 
@@ -1790,11 +1851,16 @@
   }
 
   async function saveTemplate() {
+    // Guard against a lost draft (e.g. navigating back) so we never throw
+    // silently and skip the write.
+    if (!editingTemplate) { showToast('Nothing to save — start a new workout.'); return; }
     var name = document.getElementById('templateNameInput').value.trim();
     if (!name) { showToast('Give your workout a name.'); return; }
-    if (!editingTemplate.exercises.length) { showToast('Add at least one exercise.'); return; }
+    var list = editingTemplate.exercises || [];
+    if (!list.length) { showToast('Add at least one exercise.'); return; }
+    if (!currentUser) { showToast('Session expired — please refresh.'); return; }
     // Normalise each exercise so stored shape matches program_workouts exactly.
-    var clean = editingTemplate.exercises.map(function(ex) {
+    var clean = list.map(function(ex) {
       var lo = parseInt(ex.reps_low, 10);  if (isNaN(lo)) lo = 8;
       var hi = parseInt(ex.reps_high, 10); if (isNaN(hi)) hi = 12;
       if (hi < lo) hi = lo;
@@ -1802,17 +1868,33 @@
       return { name: ex.name, sets: sets, reps_low: lo, reps_high: hi,
                notes: (ex.notes || '').trim(), rest_sec: ex.rest_sec || 90 };
     });
-    var row = { user_id: currentUser.id, name: name, exercises: clean, updated_at: new Date().toISOString() };
-    var resp;
-    if (editingTemplate.id) {
-      resp = await supabaseClient.from('workout_templates').update(row).eq('id', editingTemplate.id);
-    } else {
-      resp = await supabaseClient.from('workout_templates').insert(row);
+    try {
+      var query;
+      if (editingTemplate.id) {
+        query = supabaseClient.from('workout_templates')
+          .update({ name: name, exercises: clean, updated_at: new Date().toISOString() })
+          .eq('id', editingTemplate.id).select().single();
+      } else {
+        query = supabaseClient.from('workout_templates')
+          .insert({ user_id: currentUser.id, name: name, exercises: clean })
+          .select().single();
+      }
+      var { data, error } = await query;
+      // Surface the real failure instead of failing silently — these were the
+      // hard-to-diagnose cases (RLS, network, schema). .select().single()
+      // confirms the row actually persisted.
+      if (error || !data) {
+        console.error('saveTemplate failed:', error);
+        showToast('Could not save: ' + ((error && error.message) || 'no row returned') );
+        return;
+      }
+      showToast(editingTemplate.id ? 'Workout updated.' : 'Workout saved.');
+      showStartView();
+      await loadTemplates();
+    } catch (e) {
+      console.error('saveTemplate exception:', e);
+      showToast('Could not save — check your connection and try again.');
     }
-    if (resp.error) { showToast('Error saving workout — try again.'); return; }
-    showToast(editingTemplate.id ? 'Workout updated.' : 'Workout saved.');
-    showStartView();
-    await loadTemplates();
   }
 
   async function duplicateTemplate(id) {
