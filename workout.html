@@ -317,6 +317,42 @@
       cursor: pointer; transition: border-color 0.2s, color 0.2s; margin-bottom: 12px;
     }
     .btn-add-exercise:hover { border-color: var(--red); color: var(--red); }
+
+    /* ── Custom Workout templates (Tier 2) ── */
+    .tpl-card {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--surface-1); border: 1px solid var(--border-2);
+      border-radius: 10px; padding: 14px 16px; margin-bottom: 10px;
+    }
+    .tpl-info { flex: 1; min-width: 0; }
+    .tpl-name { font-size: 15px; font-weight: 600; margin-bottom: 3px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tpl-sub { font-size: 12px; color: var(--text-muted);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tpl-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+    .btn-tpl-start {
+      padding: 9px 16px; background: var(--red); border: none; border-radius: 7px;
+      color: #fff; font-family: 'Bebas Neue', sans-serif; font-size: 16px;
+      letter-spacing: 1.5px; cursor: pointer; transition: opacity 0.2s;
+    }
+    .btn-tpl-start:hover { opacity: 0.85; }
+    .btn-icon[disabled] { opacity: 0.3; pointer-events: none; }
+
+    .builder-header { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+    .builder-title { font-family: 'Bebas Neue', sans-serif; font-size: 24px; letter-spacing: 1.5px; }
+    .tpl-ex-card {
+      background: var(--surface-1); border: 1px solid var(--border-2);
+      border-radius: 10px; padding: 14px 16px; margin-bottom: 10px;
+    }
+    .tpl-ex-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+    .tpl-ex-name { font-size: 15px; font-weight: 600; min-width: 0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tpl-ex-move { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+    .tpl-ex-fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+    .tpl-field { display: flex; flex-direction: column; gap: 4px; }
+    .tpl-field label { font-size: 10px; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; color: var(--text-muted); }
+    .tpl-notes { font-size: 13px; padding: 8px 10px; }
     .btn-finish-bottom {
       display: block; width: 100%; padding: 16px;
       background: var(--green); border: none; border-radius: 10px;
@@ -571,6 +607,15 @@
         <button class="btn-primary" onclick="startWorkout()">Start Workout</button>
       </div>
 
+      <div class="section-label">My Workouts</div>
+      <div id="templateList">
+        <div class="empty-state">No saved workouts yet — build one to start training in one tap.</div>
+      </div>
+      <button class="btn-add-exercise" onclick="newTemplate()" style="margin-top:4px;">
+        <i data-lucide="plus"></i>
+        New Workout Template
+      </button>
+
       <div class="section-label">Recent Workouts</div>
       <div id="historyList">
         <div class="empty-state">No workouts yet — start your first session above.</div>
@@ -599,6 +644,29 @@
       </button>
 
       <button class="btn-finish-bottom" onclick="openFinishModal()">Finish Workout</button>
+    </div>
+
+    <!-- Template builder view -->
+    <div id="builderView" style="display:none;">
+      <div class="builder-header">
+        <button class="btn-back" onclick="cancelBuilder()"><i data-lucide="arrow-left"></i> Back</button>
+        <div class="builder-title">Build Workout</div>
+      </div>
+      <div class="card">
+        <div class="field-group" style="margin-bottom:0;">
+          <label class="field-label" for="templateNameInput">Workout Name</label>
+          <input class="field-input" type="text" id="templateNameInput" placeholder="e.g. Push Day A" maxlength="60">
+        </div>
+      </div>
+
+      <div class="section-label">Exercises</div>
+      <div id="builderExerciseList"></div>
+      <button class="btn-add-exercise" onclick="openTemplatePicker()">
+        <i data-lucide="plus"></i>
+        Add Exercise
+      </button>
+
+      <button class="btn-primary" style="margin-top:18px;" onclick="saveTemplate()">Save Workout</button>
     </div>
 
   </div>
@@ -684,6 +752,13 @@
   var timerInterval   = null;
   var restInterval    = null;
   var restStart       = null;
+  // Custom Workout templates (Tier 2). templates = the user's saved list;
+  // editingTemplate = the in-memory draft currently open in the builder;
+  // pickerMode routes the shared exercise picker to either the live workout
+  // ('workout') or the template builder ('template').
+  var templates       = [];
+  var editingTemplate = null;
+  var pickerMode      = 'workout';
   // Live PR session state (prState/prStateLoading) is declared with the live PR
   // detection block below.
   // workoutHistory + history rendering/edit/delete live in workout-history.js (shared)
@@ -710,11 +785,17 @@
         var progSlug  = params.get('program');
         var sessKey   = params.get('session');
         var mode      = params.get('mode');
+        var templateId = params.get('template');
         var histOpts = { limit: 10, targetId: 'historyList', emptyText: 'No workouts yet — start your first session above.' };
         if (progSlug && sessKey) {
           await Promise.all([startProgramSession(progSlug, sessKey, mode), loadHistory(histOpts)]);
+        } else if (templateId) {
+          // Launched from a saved template (?template=<uuid>). Same active-session
+          // guard as a program launch; loads My Workouts so the list is ready if
+          // the user backs out.
+          await Promise.all([startTemplateSession(templateId), loadTemplates(), loadHistory(histOpts)]);
         } else {
-          await Promise.all([checkActiveWorkout(), loadHistory(histOpts)]);
+          await Promise.all([checkActiveWorkout(), loadTemplates(), loadHistory(histOpts)]);
         }
 
         document.getElementById('authGate').style.display   = 'none';
@@ -1069,6 +1150,7 @@
 
   // ── Exercise picker ───────────────────────────────────────────────
   function openPicker() {
+    pickerMode = 'workout';
     document.getElementById('pickerSearch').value = '';
     filterPicker('');
     document.getElementById('pickerModal').classList.add('open');
@@ -1148,6 +1230,9 @@
     // Save any brand-new (non-library) exercise to the user's library so it's
     // reusable later. Dedupes internally — global/known names are no-ops.
     await saveUserExercise(name);
+    // Template builder reuses this same picker — route the pick into the draft
+    // instead of the live workout.
+    if (pickerMode === 'template') { addTemplateExercise(name); return; }
     var orderIndex = exercises.length;
     var { data, error } = await supabaseClient
       .from('workout_exercises')
@@ -1535,6 +1620,294 @@
     if (!sessData) {
       showToast('"' + sessLabel + '" plan is coming soon — add your exercises below to log it.');
     }
+  }
+
+  // ── Custom Workout templates (Tier 2) ────────────────────────────
+  // A template is the user-owned twin of a program_workouts row: same JSONB
+  // `exercises` shape, so launching one reuses the exact program-session
+  // expansion below. Templates store NO performance history — recommendations
+  // always come from exercise history (loadLastPerf / loadExerciseHistory),
+  // which is program-agnostic, so custom workouts get the same progression as
+  // purchased programs for free.
+
+  var TEMPLATE_DEFAULT_SETS = 3;
+
+  async function loadTemplates() {
+    try {
+      var { data } = await supabaseClient
+        .from('workout_templates')
+        .select('id, name, exercises, times_used, last_used_at, sort_order, created_at')
+        .eq('user_id', currentUser.id)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true });
+      templates = data || [];
+    } catch (e) { templates = []; }
+    renderTemplateList();
+  }
+
+  function templateSummary(t) {
+    var list = t.exercises || [];
+    if (!list.length) return 'No exercises yet';
+    var names = list.slice(0, 3).map(function(e) { return e.name; }).join(', ');
+    return list.length + (list.length === 1 ? ' exercise · ' : ' exercises · ') + names + (list.length > 3 ? '…' : '');
+  }
+
+  function renderTemplateList() {
+    var el = document.getElementById('templateList');
+    if (!el) return;
+    if (!templates.length) {
+      el.innerHTML = '<div class="empty-state">No saved workouts yet — build one to start training in one tap.</div>';
+      return;
+    }
+    el.innerHTML = templates.map(function(t) {
+      return '<div class="tpl-card">' +
+        '<div class="tpl-info">' +
+          '<div class="tpl-name">' + esc(t.name) + '</div>' +
+          '<div class="tpl-sub">' + esc(templateSummary(t)) + '</div>' +
+        '</div>' +
+        '<div class="tpl-actions">' +
+          '<button class="btn-tpl-start" onclick="startTemplate(\'' + t.id + '\')">Start</button>' +
+          '<button class="btn-icon" title="Edit" onclick="editTemplate(\'' + t.id + '\')"><i data-lucide="pencil"></i></button>' +
+          '<button class="btn-icon" title="Duplicate" onclick="duplicateTemplate(\'' + t.id + '\')"><i data-lucide="copy"></i></button>' +
+          '<button class="btn-icon" title="Delete" onclick="deleteTemplate(\'' + t.id + '\')"><i data-lucide="trash-2"></i></button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+    lucide.createIcons();
+  }
+
+  // ── Builder view ──────────────────────────────────────────────────
+  function showStartView() {
+    document.getElementById('builderView').style.display = 'none';
+    document.getElementById('startView').style.display   = 'block';
+    editingTemplate = null;
+  }
+
+  function showBuilderView() {
+    document.getElementById('startView').style.display   = 'none';
+    document.getElementById('activeView').style.display  = 'none';
+    document.getElementById('builderView').style.display = 'block';
+    document.getElementById('templateNameInput').value = editingTemplate.name || '';
+    renderBuilderExercises();
+    window.scrollTo(0, 0);
+  }
+
+  function newTemplate() {
+    editingTemplate = { id: null, name: '', exercises: [] };
+    showBuilderView();
+    setTimeout(function() { document.getElementById('templateNameInput').focus(); }, 60);
+  }
+
+  function editTemplate(id) {
+    var t = templates.find(function(x) { return x.id === id; });
+    if (!t) return;
+    // Deep copy so edits aren't applied to the cached list until Save.
+    editingTemplate = { id: t.id, name: t.name, exercises: JSON.parse(JSON.stringify(t.exercises || [])) };
+    showBuilderView();
+  }
+
+  function cancelBuilder() { showStartView(); }
+
+  function renderBuilderExercises() {
+    var el = document.getElementById('builderExerciseList');
+    var list = editingTemplate.exercises;
+    if (!list.length) {
+      el.innerHTML = '<div class="empty-state" style="padding:20px 0;">No exercises yet — add your first one below.</div>';
+      return;
+    }
+    el.innerHTML = list.map(function(ex, i) { return buildTemplateExCard(ex, i); }).join('');
+    lucide.createIcons();
+  }
+
+  function buildTemplateExCard(ex, idx) {
+    var last = editingTemplate.exercises.length - 1;
+    return '<div class="tpl-ex-card">' +
+      '<div class="tpl-ex-head">' +
+        '<div class="tpl-ex-name">' + esc(ex.name) + '</div>' +
+        '<div class="tpl-ex-move">' +
+          '<button class="btn-icon" title="Move up"' + (idx === 0 ? ' disabled' : '') +
+            ' onclick="moveTemplateExercise(' + idx + ',-1)"><i data-lucide="chevron-up"></i></button>' +
+          '<button class="btn-icon" title="Move down"' + (idx === last ? ' disabled' : '') +
+            ' onclick="moveTemplateExercise(' + idx + ',1)"><i data-lucide="chevron-down"></i></button>' +
+          '<button class="btn-icon" title="Remove" onclick="removeTemplateExercise(' + idx + ')"><i data-lucide="x"></i></button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="tpl-ex-fields">' +
+        '<div class="tpl-field"><label>Sets</label>' +
+          '<input class="hist-set-in" type="number" min="1" max="20" step="1" value="' + (ex.sets != null ? ex.sets : '') +
+          '" onchange="updateTemplateField(' + idx + ',\'sets\',this.value)"></div>' +
+        '<div class="tpl-field"><label>Reps (low)</label>' +
+          '<input class="hist-set-in" type="number" min="1" max="100" step="1" value="' + (ex.reps_low != null ? ex.reps_low : '') +
+          '" onchange="updateTemplateField(' + idx + ',\'reps_low\',this.value)"></div>' +
+        '<div class="tpl-field"><label>Reps (high)</label>' +
+          '<input class="hist-set-in" type="number" min="1" max="100" step="1" value="' + (ex.reps_high != null ? ex.reps_high : '') +
+          '" onchange="updateTemplateField(' + idx + ',\'reps_high\',this.value)"></div>' +
+      '</div>' +
+      '<input class="field-input tpl-notes" type="text" maxlength="140" placeholder="Notes (optional)"' +
+        ' value="' + esc(ex.notes || '') + '" onchange="updateTemplateField(' + idx + ',\'notes\',this.value)">' +
+    '</div>';
+  }
+
+  function openTemplatePicker() {
+    pickerMode = 'template';
+    document.getElementById('pickerSearch').value = '';
+    filterPicker('');
+    document.getElementById('pickerModal').classList.add('open');
+    bindPickerViewport();
+    setTimeout(function() { document.getElementById('pickerSearch').focus(); }, 80);
+  }
+
+  function addTemplateExercise(name) {
+    editingTemplate.exercises.push({
+      name: name, sets: TEMPLATE_DEFAULT_SETS,
+      reps_low: 8, reps_high: 12, notes: '', rest_sec: 90
+    });
+    renderBuilderExercises();
+  }
+
+  function updateTemplateField(idx, field, value) {
+    var ex = editingTemplate.exercises[idx];
+    if (!ex) return;
+    if (field === 'notes') {
+      ex.notes = (value || '').trim();
+    } else {
+      var n = parseInt(value, 10);
+      ex[field] = isNaN(n) ? null : n;
+    }
+  }
+
+  function moveTemplateExercise(idx, dir) {
+    var list = editingTemplate.exercises;
+    var j = idx + dir;
+    if (j < 0 || j >= list.length) return;
+    var tmp = list[idx]; list[idx] = list[j]; list[j] = tmp;
+    renderBuilderExercises();
+  }
+
+  function removeTemplateExercise(idx) {
+    editingTemplate.exercises.splice(idx, 1);
+    renderBuilderExercises();
+  }
+
+  async function saveTemplate() {
+    var name = document.getElementById('templateNameInput').value.trim();
+    if (!name) { showToast('Give your workout a name.'); return; }
+    if (!editingTemplate.exercises.length) { showToast('Add at least one exercise.'); return; }
+    // Normalise each exercise so stored shape matches program_workouts exactly.
+    var clean = editingTemplate.exercises.map(function(ex) {
+      var lo = parseInt(ex.reps_low, 10);  if (isNaN(lo)) lo = 8;
+      var hi = parseInt(ex.reps_high, 10); if (isNaN(hi)) hi = 12;
+      if (hi < lo) hi = lo;
+      var sets = parseInt(ex.sets, 10);    if (isNaN(sets) || sets < 1) sets = TEMPLATE_DEFAULT_SETS;
+      return { name: ex.name, sets: sets, reps_low: lo, reps_high: hi,
+               notes: (ex.notes || '').trim(), rest_sec: ex.rest_sec || 90 };
+    });
+    var row = { user_id: currentUser.id, name: name, exercises: clean, updated_at: new Date().toISOString() };
+    var resp;
+    if (editingTemplate.id) {
+      resp = await supabaseClient.from('workout_templates').update(row).eq('id', editingTemplate.id);
+    } else {
+      resp = await supabaseClient.from('workout_templates').insert(row);
+    }
+    if (resp.error) { showToast('Error saving workout — try again.'); return; }
+    showToast(editingTemplate.id ? 'Workout updated.' : 'Workout saved.');
+    showStartView();
+    await loadTemplates();
+  }
+
+  async function duplicateTemplate(id) {
+    var t = templates.find(function(x) { return x.id === id; });
+    if (!t) return;
+    var { error } = await supabaseClient.from('workout_templates').insert({
+      user_id: currentUser.id,
+      name: (t.name + ' (Copy)').slice(0, 60),
+      exercises: JSON.parse(JSON.stringify(t.exercises || [])),
+      source_program_slug: t.source_program_slug || null
+    });
+    if (error) { showToast('Error duplicating workout.'); return; }
+    showToast('Workout duplicated.');
+    await loadTemplates();
+  }
+
+  async function deleteTemplate(id) {
+    var t = templates.find(function(x) { return x.id === id; });
+    if (!t) return;
+    if (!confirm('Delete "' + t.name + '"? This cannot be undone. Workouts you already logged from it are kept.')) return;
+    var { error } = await supabaseClient.from('workout_templates').delete().eq('id', id);
+    if (error) { showToast('Error deleting workout.'); return; }
+    showToast('Workout deleted.');
+    await loadTemplates();
+  }
+
+  function startTemplate(id) {
+    // Already on workout.html — launch directly (no navigation hop).
+    startTemplateSession(id);
+  }
+
+  // Launch a logged session FROM a template. Mirrors startProgramSession's
+  // expansion but reads workout_templates and never advances program
+  // progression (mode='optional', program_slug stays NULL). The template row is
+  // only read here — it is preserved and reusable forever. template_id is stored
+  // on the workout for provenance (future AI).
+  async function startTemplateSession(templateId) {
+    // Same active-session guard as a program launch (Priority 5).
+    await checkActiveWorkout();
+    if (currentWorkout) {
+      showActiveView();
+      showToast('You have an unfinished workout — finish or discard it before starting another.');
+      return;
+    }
+
+    var { data: tpl } = await supabaseClient
+      .from('workout_templates').select('*').eq('id', templateId).maybeSingle();
+    if (!tpl) { showToast('Workout not found.'); showStartView(); return; }
+
+    var day = new Date().toLocaleDateString('en-US', { weekday: 'short' });
+    var workoutName = (tpl.name + ' — ' + day).slice(0, 60);
+
+    var { data: workout, error } = await supabaseClient
+      .from('workouts')
+      .insert({ user_id: currentUser.id, name: workoutName, date: new Date().toISOString().slice(0, 10),
+                template_id: tpl.id, mode: 'optional' })
+      .select().single();
+    if (error) { showToast('Error starting workout.'); return; }
+
+    currentWorkout = workout;
+    exercises = [];
+    localStorage.setItem('wkt_start_' + workout.id, Date.now());
+
+    var exList = tpl.exercises || [];
+    for (var i = 0; i < exList.length; i++) {
+      var ex = exList[i];
+      var { data: we } = await supabaseClient
+        .from('workout_exercises')
+        .insert({ workout_id: workout.id, exercise_name: ex.name, order_index: i })
+        .select().single();
+      if (!we) continue;
+      var newEx = { id: we.id, name: ex.name, order_index: i, last_perf: null, last_weight: null, last_reps: null,
+        sets: [], history: [], reps_low: ex.reps_low, reps_high: ex.reps_high, target_sets: ex.sets };
+      await Promise.all([loadLastPerf(newEx), loadExerciseHistory(newEx)]);
+      exercises.push(newEx);
+      var nSets = parseInt(ex.sets, 10) || TEMPLATE_DEFAULT_SETS;
+      for (var s = 0; s < nSets; s++) {
+        var w = newEx.last_weight;
+        var r = newEx.last_reps || ex.reps_high;
+        var { data: sd } = await supabaseClient
+          .from('workout_sets')
+          .insert({ workout_exercise_id: we.id, set_number: s + 1, weight_lbs: w, reps: r, completed: false })
+          .select().single();
+        if (sd) newEx.sets.push({ id: sd.id, set_number: s + 1, weight_lbs: w, reps: r, completed: false });
+      }
+    }
+
+    // Usage signal for "frequently used" (future AI). Non-fatal.
+    try {
+      await supabaseClient.from('workout_templates')
+        .update({ times_used: (tpl.times_used || 0) + 1, last_used_at: new Date().toISOString() })
+        .eq('id', tpl.id);
+    } catch (e) { /* non-fatal */ }
+
+    showActiveView();
   }
 
   // PROGRAM_SCHEDULES, SESSION_LABELS, getScheduleForDays come from schedules.js
