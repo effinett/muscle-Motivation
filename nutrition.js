@@ -532,6 +532,7 @@ function nuNormalizeUsdaFood(f) {
     usda_fdc_id: f.fdcId,
     name: f.brand ? (f.description + ' (' + f.brand + ')') : f.description,
     brand: f.brand || '',
+    group: f.group || 'generic',          // 'branded' | 'generic' (from the proxy ranking)
     serving_description: servingDesc,
     serving_amount: servingAmount,
     serving_unit: servingUnit,
@@ -674,14 +675,26 @@ async function nuRunUsdaSearch(q) {
   }
 }
 
+var NU_GROUP_LABELS = { branded: '⭐ Branded Foods', generic: 'USDA Generic Foods' };
+
 function nuRenderUsdaResults() {
   var list = document.getElementById('nuUsdaResults');
   if (!list) return;
+  // Results arrive branded-first (proxy-ranked); insert a header whenever the
+  // group changes so branded and generic foods are visually separated.
+  var lastGroup = null;
   list.innerHTML = nu_usdaResults.map(function (f, i) {
+    var header = '';
+    var group = f.group || 'generic';
+    if (group !== lastGroup) {
+      lastGroup = group;
+      header = '<div class="nu-usda-group">' + (NU_GROUP_LABELS[group] || 'USDA Foods') + '</div>';
+    }
     var macros = nuRound(f.calories) + ' kcal · P ' + nuRound1(f.protein) +
                  ' · C ' + nuRound1(f.carbs) + ' · F ' + nuRound1(f.fat);
     var sub = (f.brand ? nuEsc(f.brand) + ' · ' : '') + nuEsc(f.serving_description);
-    return '<button type="button" class="nu-usda-row" onclick="nuPickUsda(' + i + ')">' +
+    return header +
+      '<button type="button" class="nu-usda-row" onclick="nuPickUsda(' + i + ')">' +
         '<span class="nu-usda-main">' +
           '<span class="nu-usda-name">' + nuEsc(f.name) + '</span>' +
           '<span class="nu-usda-sub">' + sub + '</span>' +
