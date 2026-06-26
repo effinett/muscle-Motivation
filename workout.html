@@ -1683,7 +1683,8 @@
         var ex = exList[i];
         var { data: we } = await supabaseClient
           .from('workout_exercises')
-          .insert({ workout_id: workout.id, exercise_name: ex.name, order_index: i, exercise_id: libraryExerciseId(ex.name) })
+          .insert({ workout_id: workout.id, exercise_name: ex.name, order_index: i,
+                  exercise_id: (ex.exercise_id != null ? ex.exercise_id : libraryExerciseId(ex.name)) })
           .select().single();
         if (!we) continue;
         var newEx = { id: we.id, name: ex.name, order_index: i, last_perf: null, last_weight: null, last_reps: null, sets: [],
@@ -1898,7 +1899,10 @@
   function addTemplateExercise(name) {
     editingTemplate.exercises.push({
       name: name, sets: TEMPLATE_DEFAULT_SETS,
-      reps_low: 8, reps_high: 12, notes: '', rest_sec: 90
+      reps_low: 8, reps_high: 12, notes: '', rest_sec: 90,
+      // Stable library id so the template still resolves if the exercise is
+      // renamed later. Null for free-typed names / user customs.
+      exercise_id: libraryExerciseId(name)
     });
     renderBuilderExercises();
   }
@@ -1943,7 +1947,10 @@
       if (hi < lo) hi = lo;
       var sets = parseInt(ex.sets, 10);    if (isNaN(sets) || sets < 1) sets = TEMPLATE_DEFAULT_SETS;
       return { name: ex.name, sets: sets, reps_low: lo, reps_high: hi,
-               notes: (ex.notes || '').trim(), rest_sec: ex.rest_sec || 90 };
+               notes: (ex.notes || '').trim(), rest_sec: ex.rest_sec || 90,
+               // Preserve a captured id; otherwise resolve once on save so
+               // templates built before this change get upgraded (exact match).
+               exercise_id: ex.exercise_id != null ? ex.exercise_id : libraryExerciseId(ex.name) };
     });
     try {
       var query;
@@ -2040,7 +2047,8 @@
       var ex = exList[i];
       var { data: we } = await supabaseClient
         .from('workout_exercises')
-        .insert({ workout_id: workout.id, exercise_name: ex.name, order_index: i, exercise_id: libraryExerciseId(ex.name) })
+        .insert({ workout_id: workout.id, exercise_name: ex.name, order_index: i,
+                  exercise_id: (ex.exercise_id != null ? ex.exercise_id : libraryExerciseId(ex.name)) })
         .select().single();
       if (!we) continue;
       var newEx = { id: we.id, name: ex.name, order_index: i, last_perf: null, last_weight: null, last_reps: null,
