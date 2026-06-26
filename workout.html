@@ -888,11 +888,11 @@
 
   // ── Check/resume active workout ───────────────────────────────────
   async function checkActiveWorkout() {
-    var since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    // Most recent unfinished workout, regardless of age — an unfinished session
+    // must never become an invisible orphan. Resume/discard is the only way out.
     var { data } = await supabaseClient
       .from('workouts').select('*')
       .eq('user_id', currentUser.id).eq('completed', false)
-      .gte('created_at', since)
       .order('created_at', { ascending: false }).limit(1).maybeSingle();
     if (data) {
       currentWorkout = data;
