@@ -270,15 +270,29 @@ function nuShowForm(withBack) {
   document.getElementById('nuSearchView').style.display = 'none';
   document.getElementById('nuUsdaView').style.display   = 'none';
   document.getElementById('nuAddView').style.display    = 'block';
-  document.getElementById('nuModalTitle').textContent =
-    document.getElementById('nuFoodId').value ? 'Edit Food' : 'Add Food';
+  var editing = !!document.getElementById('nuFoodId').value;
+  // USDA pick → polished selected-food card; manual/edit → plain editable form.
+  var isUsda = !!(nu_pendingSource && nu_pendingSource.usda_fdc_id);
+  nuSetMode(isUsda);
+  document.getElementById('nuModalTitle').textContent = editing ? 'Edit Food' : 'Add Food';
+  document.getElementById('nuSaveBtn').textContent = editing ? 'Save Changes' : 'Add Food';
   document.getElementById('nuBackBtn').style.display = withBack ? 'inline-block' : 'none';
-  // The "Per serving" line belongs to a USDA pick only.
-  if (!nu_pendingSource) {
-    var srcLine = document.getElementById('nuServingNote');
-    if (srcLine) srcLine.style.display = 'none';
-  }
   nuUpdateTotalPreview();
+}
+
+// Toggle the two faces of the Add form. USDA shows the card header + serving
+// dropdown + big macro readout; manual/edit shows the editable name + macro
+// inputs. The hidden macro inputs still exist in BOTH modes (nuApplyServing keeps
+// them filled for USDA) so nuSave stays unchanged.
+function nuSetMode(isUsda) {
+  function show(id, on) { var e = document.getElementById(id); if (e) e.style.display = on ? '' : 'none'; }
+  show('nuDbSearchBtn', !isUsda);
+  show('nuCardHeader',  isUsda);
+  show('nuNameGroup',   !isUsda);
+  show('nuServingRow',  isUsda);
+  show('nuManualMacros', !isUsda);
+  show('nuMacroReadout', isUsda);
+  if (isUsda) { var rw = document.getElementById('nuRecentWrap'); if (rw) rw.style.display = 'none'; }
 }
 
 function nuCloseModal(e) {
@@ -531,8 +545,10 @@ function nuNormalizeUsdaFood(f) {
   return {
     usda_fdc_id: f.fdcId,
     name: f.brand ? (f.description + ' (' + f.brand + ')') : f.description,
+    description: f.description || '',     // bare USDA name (card title; name keeps the brand suffix)
     brand: f.brand || '',
     group: f.group || 'generic',          // 'branded' | 'generic' (from the proxy ranking)
+    has_serving: size > 0,                // did USDA give a real manufacturer serving?
     serving_description: servingDesc,
     serving_amount: servingAmount,
     serving_unit: servingUnit,
@@ -548,17 +564,55 @@ function nuNormalizeUsdaFood(f) {
   };
 }
 
-// Multiply a per-serving food's macros by quantity (shared by detail preview).
-function nuScaleMacros(food, qty) {
-  var q = +qty || 1;
+// Per-UNIT macros for `g` grams of a food, from its per-100 g nutrient panel.
+// The single weight-accurate scaling used by every serving option below.
+function nuScalePer100(n, g) {
+  n = n || {}; var k = (+g || 0) / 100;
   return {
-    calories: nuRound((+food.calories || 0) * q),
-    protein:  nuRound1((+food.protein || 0) * q),
-    carbs:    nuRound1((+food.carbs   || 0) * q),
-    fat:      nuRound1((+food.fat     || 0) * q),
-    fiber:    nuRound1((+food.fiber   || 0) * q),
-    sugar:    nuRound1((+food.sugar   || 0) * q),
+    calories: nuRound((+n.kcal   || 0) * k),
+    protein:  nuRound1((+n.protein || 0) * k),
+    carbs:    nuRound1((+n.carbs  || 0) * k),
+    fat:      nuRound1((+n.fat    || 0) * k),
+    fiber:    nuRound1((+n.fiber  || 0) * k),
+    sugar:    nuRound1((+n.sugar  || 0) * k),
   };
+}
+
+// Build the serving-size dropdown options for a normalized USDA food, using ONLY
+// data already in the search payload (Phase 3.1.2 — proxy is not touched, so no
+// USDA foodPortions list). Weight-accurate only:
+//   • manufacturer serving (when USDA provided one)
+//   • 100 g and 1 oz + custom grams (only for weight-based foods; never for ml,
+//     where there is no reliable gram weight to convert)
+// Each option carries the PER-UNIT macros so quantity simply multiplies them.
+function nuBuildServingOptions(f) {
+  var opts = [];
+  var per100 = f.raw && f.raw.nutrients ? f.raw.nutrients : null;
+  var weightBased = per100 && f.serving_unit !== 'ml';
+
+  if (f.has_serving) {
+    // The food's own serving. Recompute from per-100 g when grams are known so it
+    // stays consistent with the other gram options; fall back to the ml per-serving.
+    var per = (weightBased && f.grams) ? nuScalePer100(per100, f.grams)
+      : { calories: f.calories, protein: f.protein, carbs: f.carbs, fat: f.fat, fiber: f.fiber, sugar: f.sugar };
+    opts.push({ key: 'serving', label: f.serving_description || '1 serving', perUnit: per,
+      grams: f.grams != null ? f.grams : null, amount: f.serving_amount, unit: f.serving_unit,
+      description: f.serving_description || '1 serving' });
+  }
+  if (weightBased) {
+    opts.push({ key: '100g', label: '100 g', perUnit: nuScalePer100(per100, 100),
+      grams: 100, amount: 100, unit: 'g', description: '100 g' });
+    opts.push({ key: 'oz', label: '1 oz (28 g)', perUnit: nuScalePer100(per100, 28.3495),
+      grams: 28.3495, amount: 1, unit: 'oz', description: '1 oz (28 g)' });
+    opts.push({ key: 'custom', label: 'Custom grams…', custom: true });
+  }
+  if (!opts.length) {
+    // Last resort (e.g. ml food with no serving): log the per-serving values as-is.
+    opts.push({ key: 'serving', label: f.serving_description || '1 serving',
+      perUnit: { calories: f.calories, protein: f.protein, carbs: f.carbs, fat: f.fat, fiber: f.fiber, sugar: f.sugar },
+      grams: f.grams, amount: f.serving_amount, unit: f.serving_unit, description: f.serving_description || '1 serving' });
+  }
+  return opts;
 }
 
 /* ── USDA search view — the DEFAULT path for a new entry ───────────────────── */
@@ -692,7 +746,8 @@ function nuRenderUsdaResults() {
     }
     var macros = nuRound(f.calories) + ' kcal · P ' + nuRound1(f.protein) +
                  ' · C ' + nuRound1(f.carbs) + ' · F ' + nuRound1(f.fat);
-    var sub = (f.brand ? nuEsc(f.brand) + ' · ' : '') + nuEsc(f.serving_description);
+    var sub = (f.brand ? nuEsc(f.brand) + ' · ' : '') + nuEsc(f.serving_description) +
+      ' · <span class="nu-verified-sm">✓ USDA</span>';
     return header +
       '<button type="button" class="nu-usda-row" onclick="nuPickUsda(' + i + ')">' +
         '<span class="nu-usda-main">' +
@@ -700,66 +755,124 @@ function nuRenderUsdaResults() {
           '<span class="nu-usda-sub">' + sub + '</span>' +
           '<span class="nu-usda-macros">' + macros + '</span>' +
         '</span>' +
-        '<span class="nu-usda-cals">' + nuRound(f.calories) + '</span>' +
+        '<span class="nu-usda-cals">' + nuRound(f.calories) + '<small>kcal</small></span>' +
       '</button>';
   }).join('');
 }
 
-// Selecting a USDA result moves to the detail step: name + macros auto-filled
-// (per serving), provenance stashed, and a serving line shown. The user only sets
-// meal + quantity; the live total recalculates as quantity changes.
+// Selecting a USDA result opens the polished selected-food card: name + brand +
+// ✓USDA header, a serving dropdown (built from the payload), a quantity stepper,
+// and a big live macro readout. The user only picks serving + quantity.
+var nu_servingOptions = [];
+
 function nuPickUsda(i) {
   var f = nu_usdaResults[i];
   if (!f) return;
   nu_pendingSource = f;
-  document.getElementById('nuName').value     = f.name;
-  document.getElementById('nuCalories').value = f.calories;
-  document.getElementById('nuProtein').value  = f.protein;
-  document.getElementById('nuCarbs').value    = f.carbs;
-  document.getElementById('nuFat').value       = f.fat;
+  document.getElementById('nuName').value = f.name;      // logged name keeps the brand suffix
+
+  // Card header.
+  document.getElementById('nuCardName').textContent = f.description || f.name;
+  var bEl = document.getElementById('nuCardBrand');
+  bEl.textContent = f.brand || '';
+  bEl.style.display = f.brand ? 'inline-block' : 'none';
+
+  // Serving dropdown — accurate options only (manufacturer serving, 100 g, 1 oz, custom).
+  nu_servingOptions = nuBuildServingOptions(f);
+  var sel = document.getElementById('nuServingSelect');
+  sel.innerHTML = nu_servingOptions.map(function (o) {
+    return '<option value="' + o.key + '">' + nuEsc(o.label) + '</option>';
+  }).join('');
+  var def = f.has_serving ? 'serving' : (nu_servingOptions[0] && nu_servingOptions[0].key);
+  sel.value = def;
+  document.getElementById('nuCustomGrams').value = '';
   document.getElementById('nuServings').value = 1;
 
-  // This food is specific — hide the recent-foods quick-add on the detail step.
-  var recentWrap = document.getElementById('nuRecentWrap');
-  if (recentWrap) recentWrap.style.display = 'none';
-
-  // Show the source serving (e.g. "Per serving: 1 cup") so quantity is meaningful.
-  var srcLine = document.getElementById('nuServingNote');
-  if (srcLine) {
-    srcLine.textContent = 'Per serving: ' + (f.serving_description || '1 serving') +
-      (f.brand ? ' · ' + f.brand : '');
-    srcLine.style.display = 'block';
-  }
-
   nu_formBackTo = 'search';            // back arrow returns to the search results
-  nuShowForm(true);
-  nuUpdateTotalPreview();
-  setTimeout(function () { document.getElementById('nuServings').focus(); }, 60);
+  nuShowForm(true);                    // switches the form into USDA-card mode
+  nuApplyServing(def);                 // fills hidden inputs + readout for the default serving
+  setTimeout(function () { document.getElementById('nuServingSelect').focus(); }, 60);
 }
 
-// Live total = per-serving inputs × quantity. Keeps the detail step auto-updating
-// as the user changes quantity (and reflects manual edits too).
+// Apply a chosen serving: compute its PER-UNIT macros, fill the (hidden) macro
+// inputs so nuSave is unchanged, sync the USDA provenance to the chosen serving,
+// and refresh the live readout. 'custom' reveals a grams field.
+function nuApplyServing(key) {
+  if (!nu_pendingSource) return;
+  var per100 = nu_pendingSource.raw && nu_pendingSource.raw.nutrients;
+  var customEl = document.getElementById('nuCustomGrams');
+  var pu, grams, amount, unit, desc;
+
+  if (key === 'custom') {
+    if (customEl) customEl.style.display = 'block';
+    var g = parseFloat(customEl && customEl.value);
+    if (!g || g <= 0) g = 100;
+    pu = nuScalePer100(per100, g);
+    grams = g; amount = g; unit = 'g'; desc = nuRound1(g) + ' g';
+  } else {
+    if (customEl) customEl.style.display = 'none';
+    var opt = null;
+    for (var i = 0; i < nu_servingOptions.length; i++) {
+      if (nu_servingOptions[i].key === key) { opt = nu_servingOptions[i]; break; }
+    }
+    if (!opt) return;
+    pu = opt.perUnit; grams = opt.grams; amount = opt.amount; unit = opt.unit; desc = opt.description;
+  }
+
+  // Hidden per-unit inputs (the unchanged save path reads these).
+  document.getElementById('nuCalories').value = pu.calories;
+  document.getElementById('nuProtein').value  = pu.protein;
+  document.getElementById('nuCarbs').value    = pu.carbs;
+  document.getElementById('nuFat').value      = pu.fat;
+  // Keep provenance in lockstep with the chosen serving.
+  nu_pendingSource.calories = pu.calories; nu_pendingSource.protein = pu.protein;
+  nu_pendingSource.carbs = pu.carbs; nu_pendingSource.fat = pu.fat;
+  nu_pendingSource.fiber = pu.fiber; nu_pendingSource.sugar = pu.sugar;
+  nu_pendingSource.grams = (grams != null ? grams : null);
+  nu_pendingSource.serving_amount = amount;
+  nu_pendingSource.serving_unit = unit;
+  nu_pendingSource.serving_description = desc;
+
+  nuUpdateTotalPreview();
+}
+
+// Quantity stepper. Buttons move by whole units (the common case); typing still
+// allows any decimal (0.25 etc). Clamped above zero.
+function nuQtyStep(delta) {
+  var el = document.getElementById('nuServings');
+  var v = parseFloat(el.value);
+  if (isNaN(v)) v = 1;
+  v = Math.round((v + delta) * 100) / 100;
+  if (v < 0.25) v = 0.25;
+  el.value = v;
+  nuUpdateTotalPreview();
+}
+
+// Live nutrition = per-unit inputs × quantity. Updates BOTH the manual preview
+// line and the big USDA readout (whichever is visible); cheap and idempotent.
 function nuUpdateTotalPreview() {
-  var el = document.getElementById('nuTotalPreview');
-  if (!el) return;
   var sv = parseFloat(document.getElementById('nuServings').value);
   if (!sv || sv <= 0) sv = 1;
   var cal = parseFloat(document.getElementById('nuCalories').value) || 0;
   var p   = parseFloat(document.getElementById('nuProtein').value)  || 0;
   var c   = parseFloat(document.getElementById('nuCarbs').value)    || 0;
   var fa  = parseFloat(document.getElementById('nuFat').value)      || 0;
-  el.innerHTML = 'Total: <strong>' + nuRound(cal * sv) + ' kcal</strong>' +
-    ' · P ' + nuRound1(p * sv) + ' · C ' + nuRound1(c * sv) + ' · F ' + nuRound1(fa * sv);
+  var tCal = nuRound(cal * sv), tP = nuRound1(p * sv), tC = nuRound1(c * sv), tF = nuRound1(fa * sv);
+
+  var prev = document.getElementById('nuTotalPreview');
+  if (prev) prev.innerHTML = 'Total: <strong>' + tCal + ' kcal</strong>' +
+    ' · P ' + tP + ' · C ' + tC + ' · F ' + tF;
+
+  function set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
+  set('nuRoCal', tCal); set('nuRoPro', tP + 'g'); set('nuRoCarb', tC + 'g'); set('nuRoFat', tF + 'g');
 }
 
-// Clears carried USDA provenance the moment the user hand-edits the food name,
-// and refreshes the live total (a hand-edit makes it a custom/manual food).
+// Clears carried USDA provenance the moment the user hand-edits the food name
+// (manual mode only — the name input is hidden during a USDA pick).
 function nuNameEdited() {
   if (nu_pendingSource &&
       document.getElementById('nuName').value !== nu_pendingSource.name) {
     nu_pendingSource = null;
-    var srcLine = document.getElementById('nuServingNote');
-    if (srcLine) srcLine.style.display = 'none';
   }
 }
 
@@ -778,6 +891,7 @@ function nuModalMarkup() {
       '</div>' +
       '<div id="nuAddView">' +
         '<input type="hidden" id="nuFoodId">' +
+        // manual/edit only — jump (back) to the food-database search
         '<button type="button" class="nu-dbsearch" id="nuDbSearchBtn" onclick="nuOpenUsda()">' +
           '<span class="nu-dbsearch-ico">🔍</span>' +
           '<span>Search food database</span>' +
@@ -786,42 +900,71 @@ function nuModalMarkup() {
           '<div class="nu-recent-label">Recent foods</div>' +
           '<div class="nu-recent-chips" id="nuRecentChips"></div>' +
         '</div>' +
-        '<div class="field-group">' +
+        // USDA pick only — selected-food card header
+        '<div class="nu-card-header" id="nuCardHeader" style="display:none;">' +
+          '<div class="nu-card-name" id="nuCardName"></div>' +
+          '<div class="nu-card-meta">' +
+            '<span class="nu-card-brand" id="nuCardBrand" style="display:none;"></span>' +
+            '<span class="nu-verified">✓ USDA</span>' +
+          '</div>' +
+        '</div>' +
+        // manual/edit only — editable food name
+        '<div class="field-group" id="nuNameGroup">' +
           '<label class="field-label">Food</label>' +
           '<input type="text" id="nuName" maxlength="80" placeholder="e.g. Chicken breast, 6 oz" oninput="nuNameEdited()">' +
         '</div>' +
-        '<div class="nu-serving-note" id="nuServingNote" style="display:none;"></div>' +
-        '<div class="nu-row">' +
+        // USDA pick only — serving-size dropdown (+ optional custom grams)
+        '<div class="field-group" id="nuServingRow" style="display:none;">' +
+          '<label class="field-label">Serving</label>' +
+          '<select id="nuServingSelect" onchange="nuApplyServing(this.value)"></select>' +
+          '<input type="number" id="nuCustomGrams" class="nu-custom-grams" style="display:none;" inputmode="decimal" step="1" min="1" placeholder="grams" oninput="nuApplyServing(\'custom\')">' +
+        '</div>' +
+        // common — meal + quantity stepper
+        '<div class="nu-row" id="nuMealQtyRow">' +
           '<div class="field-group">' +
             '<label class="field-label">Meal</label>' +
             '<select id="nuMeal">' + mealOpts + '</select>' +
           '</div>' +
           '<div class="field-group">' +
             '<label class="field-label">Quantity</label>' +
-            '<input type="number" id="nuServings" inputmode="decimal" step="0.25" min="0" value="1" oninput="nuUpdateTotalPreview()">' +
+            '<div class="nu-stepper">' +
+              '<button type="button" class="nu-step" onclick="nuQtyStep(-1)" aria-label="Decrease quantity">−</button>' +
+              '<input type="number" id="nuServings" inputmode="decimal" step="0.25" min="0.25" value="1" oninput="nuUpdateTotalPreview()">' +
+              '<button type="button" class="nu-step" onclick="nuQtyStep(1)" aria-label="Increase quantity">+</button>' +
+            '</div>' +
           '</div>' +
         '</div>' +
-        '<div class="field-hint">Values below are per serving — quantity scales them.</div>' +
-        '<div class="nu-row nu-row-4">' +
-          '<div class="field-group">' +
-            '<label class="field-label">Calories</label>' +
-            '<input type="number" id="nuCalories" inputmode="numeric" step="1" min="0" placeholder="0" oninput="nuUpdateTotalPreview()">' +
+        // manual/edit only — editable per-serving macro inputs + small preview
+        '<div id="nuManualMacros">' +
+          '<div class="field-hint">Values below are per serving — quantity scales them.</div>' +
+          '<div class="nu-row nu-row-4">' +
+            '<div class="field-group">' +
+              '<label class="field-label">Calories</label>' +
+              '<input type="number" id="nuCalories" inputmode="numeric" step="1" min="0" placeholder="0" oninput="nuUpdateTotalPreview()">' +
+            '</div>' +
+            '<div class="field-group">' +
+              '<label class="field-label">Protein (g)</label>' +
+              '<input type="number" id="nuProtein" inputmode="decimal" step="0.1" min="0" placeholder="0" oninput="nuUpdateTotalPreview()">' +
+            '</div>' +
+            '<div class="field-group">' +
+              '<label class="field-label">Carbs (g)</label>' +
+              '<input type="number" id="nuCarbs" inputmode="decimal" step="0.1" min="0" placeholder="0" oninput="nuUpdateTotalPreview()">' +
+            '</div>' +
+            '<div class="field-group">' +
+              '<label class="field-label">Fat (g)</label>' +
+              '<input type="number" id="nuFat" inputmode="decimal" step="0.1" min="0" placeholder="0" oninput="nuUpdateTotalPreview()">' +
+            '</div>' +
           '</div>' +
-          '<div class="field-group">' +
-            '<label class="field-label">Protein (g)</label>' +
-            '<input type="number" id="nuProtein" inputmode="decimal" step="0.1" min="0" placeholder="0" oninput="nuUpdateTotalPreview()">' +
-          '</div>' +
-          '<div class="field-group">' +
-            '<label class="field-label">Carbs (g)</label>' +
-            '<input type="number" id="nuCarbs" inputmode="decimal" step="0.1" min="0" placeholder="0" oninput="nuUpdateTotalPreview()">' +
-          '</div>' +
-          '<div class="field-group">' +
-            '<label class="field-label">Fat (g)</label>' +
-            '<input type="number" id="nuFat" inputmode="decimal" step="0.1" min="0" placeholder="0" oninput="nuUpdateTotalPreview()">' +
-          '</div>' +
+          '<div class="nu-total-preview" id="nuTotalPreview"></div>' +
         '</div>' +
-        '<div class="nu-total-preview" id="nuTotalPreview"></div>' +
-        '<button class="btn-calc" id="nuSaveBtn" onclick="nuSave()">Save Food</button>' +
+        // USDA pick only — large live macro readout (the chosen serving × quantity)
+        '<div class="nu-readout" id="nuMacroReadout" style="display:none;">' +
+          '<div class="nu-readout-cell"><div class="nu-readout-num" id="nuRoCal">0</div><div class="nu-readout-lab">Calories</div></div>' +
+          '<div class="nu-readout-cell"><div class="nu-readout-num" id="nuRoPro">0g</div><div class="nu-readout-lab">Protein</div></div>' +
+          '<div class="nu-readout-cell"><div class="nu-readout-num" id="nuRoCarb">0g</div><div class="nu-readout-lab">Carbs</div></div>' +
+          '<div class="nu-readout-cell"><div class="nu-readout-num" id="nuRoFat">0g</div><div class="nu-readout-lab">Fat</div></div>' +
+        '</div>' +
+        '<button class="btn-calc" id="nuSaveBtn" onclick="nuSave()">Add Food</button>' +
         '<button class="btn-delete-log" id="nuDeleteBtn" style="display:none;" onclick="nuDeleteFromModal()">Delete Entry</button>' +
       '</div>' +
       '<div id="nuSearchView" style="display:none;">' +

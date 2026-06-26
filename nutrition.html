@@ -282,9 +282,14 @@
     }
     .nu-usda-macros { font-size: 11px; color: var(--text-2); margin-top: 1px; }
     .nu-usda-cals {
-      font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 0.5px;
-      color: var(--text-2); flex-shrink: 0;
+      font-family: 'Bebas Neue', sans-serif; font-size: 20px; letter-spacing: 0.5px;
+      color: var(--text); flex-shrink: 0; text-align: right; line-height: 1;
     }
+    .nu-usda-cals small {
+      display: block; font-family: 'Barlow', sans-serif; font-size: 9px;
+      font-weight: 700; letter-spacing: 1px; color: var(--text-muted); text-transform: uppercase;
+    }
+    .nu-verified-sm { color: var(--green); font-weight: 700; white-space: nowrap; }
     .nu-usda-group {
       font-family: 'Barlow', sans-serif; font-size: 11px; font-weight: 700;
       letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-2);
@@ -300,12 +305,63 @@
       transition: border-color .2s, color .2s;
     }
     .nu-usda-manual:hover { border-color: var(--red-border); color: var(--text); }
-    /* USDA pick: per-serving source line + live recalculated total */
-    .nu-serving-note {
-      font-size: 12px; color: var(--text-2); margin: -4px 0 14px;
-      padding: 8px 12px; background: var(--red-muted);
-      border: 1px solid var(--red-border); border-radius: 8px;
+    /* ── USDA selected-food card (Phase 3.1.2) ─────────────────────────── */
+    /* Card header: food name + brand + verified badge */
+    .nu-card-header { margin-bottom: 18px; }
+    .nu-card-name {
+      font-family: 'Bebas Neue', sans-serif; font-size: 24px; letter-spacing: 0.5px;
+      line-height: 1.1; color: var(--text);
     }
+    .nu-card-meta { display: flex; align-items: center; gap: 8px; margin-top: 7px; flex-wrap: wrap; }
+    .nu-card-brand {
+      font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--text-2);
+    }
+    .nu-verified {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase;
+      color: var(--green); border: 1px solid rgba(34,197,94,0.35);
+      background: rgba(34,197,94,0.10); padding: 2px 8px; border-radius: 999px;
+    }
+    /* Serving dropdown + optional custom-grams input (16px font avoids iOS zoom) */
+    #nuServingSelect, .nu-custom-grams { font-size: 16px; }
+    .nu-custom-grams { margin-top: 8px; }
+    /* Quantity stepper — thumb-friendly ± buttons around the input */
+    .nu-stepper { display: flex; align-items: stretch; gap: 8px; }
+    .nu-step {
+      flex: 0 0 46px; min-height: 46px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--surface-2); border: 1px solid var(--border-2);
+      border-radius: 8px; color: var(--text); font-size: 24px; line-height: 1;
+      cursor: pointer; user-select: none; transition: border-color .2s, background .2s;
+    }
+    .nu-step:hover { border-color: var(--red-border); background: var(--surface-3); }
+    .nu-step:active { background: var(--surface-3); }
+    .nu-stepper input {
+      flex: 1; min-width: 0; text-align: center;
+      padding: 10px 8px; font-size: 16px;
+      background: var(--surface-2); border: 1px solid var(--border-2);
+      border-radius: 8px; color: var(--text);
+      font-family: 'Barlow', sans-serif; outline: none; appearance: none;
+      transition: border-color .2s;
+    }
+    .nu-stepper input:focus { border-color: var(--red); }
+    /* Big live macro readout (chosen serving × quantity) */
+    .nu-readout {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+      margin: 8px 0 16px; padding: 14px 8px;
+      background: var(--surface-1); border: 1px solid var(--border-2); border-radius: 12px;
+    }
+    .nu-readout-cell { text-align: center; min-width: 0; }
+    .nu-readout-num {
+      font-family: 'Bebas Neue', sans-serif; font-size: 26px; letter-spacing: 0.5px;
+      line-height: 1; color: var(--text);
+    }
+    .nu-readout-cell:first-child .nu-readout-num { color: var(--green); }
+    .nu-readout-lab {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase;
+      color: var(--text-muted); margin-top: 5px;
+    }
+    /* Manual-entry small live total (per-serving inputs) */
     .nu-total-preview {
       font-family: 'Barlow', sans-serif; font-size: 13px; color: var(--text-2);
       text-align: center; margin: 4px 0 4px; min-height: 18px;
@@ -344,6 +400,10 @@
       .header-logo span { display: none; }
       .container { padding: 20px 12px 120px; }
       .nu-row.nu-row-4 { grid-template-columns: repeat(2, 1fr); }
+      /* Keep the 4-up readout from overflowing on narrow phones */
+      .nu-readout { gap: 4px; padding: 14px 4px; }
+      .nu-readout-num { font-size: 22px; }
+      .nu-readout-lab { font-size: 9px; letter-spacing: 0.5px; }
     }
   </style>
   <link rel="stylesheet" href="safe-area.css">
