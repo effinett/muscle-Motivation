@@ -82,22 +82,31 @@ async function nuFetchRecentFoods(userId, limit) {
 
 // Upsert the reusable food definition (per-serving defaults). Returns its id, or
 // null on failure — a null food_id is fine, the log still stores its own snapshot.
-async function nuUpsertFood(userId, food) {
+// `src` (optional) carries USDA provenance so a saved food remembers its origin.
+async function nuUpsertFood(userId, food, src) {
   try {
+    var row = {
+      user_id: userId,
+      name: food.name,
+      default_calories: food.calories,
+      default_protein: food.protein,
+      default_carbs: food.carbs,
+      default_fat: food.fat,
+      updated_at: new Date().toISOString(),
+    };
+    // Only stamp source columns on a fresh USDA pick; manual saves leave them at
+    // their defaults so we never overwrite a food's provenance with 'manual'.
+    if (src) {
+      row.source              = 'usda';
+      row.brand               = src.brand || null;
+      row.usda_fdc_id         = src.usda_fdc_id != null ? String(src.usda_fdc_id) : null;
+      row.serving_description = src.serving_description || null;
+      row.default_fiber       = src.fiber != null ? src.fiber : null;
+      row.default_sugar       = src.sugar != null ? src.sugar : null;
+    }
     var res = await supabaseClient
       .from('foods')
-      .upsert(
-        {
-          user_id: userId,
-          name: food.name,
-          default_calories: food.calories,
-          default_protein: food.protein,
-          default_carbs: food.carbs,
-          default_fat: food.fat,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_id,name' } // matches the plain unique index on (user_id, name)
-      )
+      .upsert(row, { onConflict: 'user_id,name' }) // matches the plain unique index on (user_id, name)
       .select('id')
       .single();
     if (res.error) throw res.error;
@@ -111,14 +120,20 @@ async function nuUpsertFood(userId, food) {
 
 // Save a log entry. Macros passed in are PER SERVING; we store the multiplied snapshot.
 // If id is provided, updates that row; otherwise inserts a new one.
+//
+// entry.src (optional) is the per-serving USDA source object from a database pick.
+// When present we stamp source provenance (fdc id, brand, fiber/sugar, raw payload);
+// when absent on an UPDATE we leave the existing source columns untouched so editing
+// a USDA-logged food's macros never erases where it came from.
 async function nuSaveLog(userId, entry) {
   var servings = entry.servings != null ? +entry.servings : 1;
   var perCal = +entry.calories || 0, perP = +entry.protein || 0, perC = +entry.carbs || 0, perF = +entry.fat || 0;
+  var src = entry.src || null;
 
   // Keep a reusable food definition in sync (best-effort; null is acceptable).
   var foodId = await nuUpsertFood(userId, {
     name: entry.name, calories: perCal, protein: perP, carbs: perC, fat: perF,
-  });
+  }, src);
 
   var row = {
     user_id: userId,
@@ -133,6 +148,21 @@ async function nuSaveLog(userId, entry) {
     fat: nuRound1(perF * servings),
     updated_at: new Date().toISOString(),
   };
+
+  // Source columns: only written for a fresh USDA pick (insert or edit). A plain
+  // manual insert relies on the DB default source='manual'; a plain edit omits
+  // them entirely to preserve any existing provenance.
+  if (src) {
+    row.source              = 'usda';
+    row.usda_fdc_id         = src.usda_fdc_id != null ? String(src.usda_fdc_id) : null;
+    row.brand               = src.brand || null;
+    row.serving_description = src.serving_description || null;
+    row.serving_amount      = src.serving_amount != null ? src.serving_amount : null;
+    row.grams               = src.grams != null ? nuRound1(src.grams * servings) : null;
+    row.fiber               = src.fiber != null ? nuRound1(src.fiber * servings) : null;
+    row.sugar               = src.sugar != null ? nuRound1(src.sugar * servings) : null;
+    row.raw_source_data     = src.raw || null;
+  }
 
   if (entry.id) {
     return await supabaseClient.from('food_logs').update(row).eq('id', entry.id).select().single();
@@ -181,8 +211,11 @@ function nuOpenModal(prefill) {
   document.getElementById('nuModalTitle').textContent = prefill.id ? 'Edit Food' : 'Add Food';
   document.getElementById('nuDeleteBtn').style.display = prefill.id ? 'block' : 'none';
 
-  // Always open on the Add/Edit form view (reset the Saved Foods search panel).
+  // Always open on the Add/Edit form view (reset both search panels).
+  nu_pendingSource = null;                // fresh open = no carried USDA provenance
   document.getElementById('nuSearchView').style.display = 'none';
+  var usdaView = document.getElementById('nuUsdaView');
+  if (usdaView) usdaView.style.display = 'none';
   document.getElementById('nuAddView').style.display    = 'block';
   document.getElementById('nuBackBtn').style.display     = 'none';
 
@@ -223,6 +256,9 @@ async function nuSave() {
   try {
     var s = await supabaseClient.auth.getSession();
     var uid = s.data.session.user.id;
+    // Only attach USDA provenance if the picked food's name is still intact —
+    // editing the name means the user is logging something else, so log it manual.
+    var src = (nu_pendingSource && nu_pendingSource.name === name) ? nu_pendingSource : null;
     var res = await nuSaveLog(uid, {
       id: document.getElementById('nuFoodId').value || null,
       name: name, meal: meal, servings: servings,
@@ -231,6 +267,7 @@ async function nuSave() {
       protein: isNaN(protein) ? 0 : protein,
       carbs:   isNaN(carbs)   ? 0 : carbs,
       fat:     isNaN(fat)     ? 0 : fat,
+      src: src,
     });
     if (res.error) throw res.error;
     document.getElementById('foodModal').classList.remove('open');
@@ -307,6 +344,7 @@ function nuRenderRecent(foods) {
 function nuPickSaved(i) {
   var f = nu_recentFoods[i];
   if (!f) return;
+  nu_pendingSource = null;          // re-logging a saved food is a plain manual entry
   document.getElementById('nuName').value     = f.name;
   document.getElementById('nuCalories').value = +f.default_calories || 0;
   document.getElementById('nuProtein').value  = +f.default_protein  || 0;
@@ -320,6 +358,8 @@ function nuPickSaved(i) {
 /* ── Saved Foods search panel (opened via "Show more") ─────────────────── */
 function nuOpenSearch() {
   document.getElementById('nuAddView').style.display    = 'none';
+  var usdaView = document.getElementById('nuUsdaView');
+  if (usdaView) usdaView.style.display = 'none';
   document.getElementById('nuSearchView').style.display = 'block';
   document.getElementById('nuBackBtn').style.display    = 'inline-block';
   document.getElementById('nuModalTitle').textContent   = 'Saved Foods';
@@ -387,6 +427,213 @@ function nuShortLabel(name) {
   return short || base || full;
 }
 
+/* ── USDA FoodData Central search ──────────────────────────────────────────
+ * The page never sees the USDA key — it calls the /api/usda-search proxy with
+ * the user's Supabase token. Normalization (per-100g → per-serving) lives here
+ * so future barcode/photo logging can reuse the same nuNormalizeUsdaFood path.
+ * ──────────────────────────────────────────────────────────────────────── */
+var nu_pendingSource = null;   // per-serving USDA provenance for the next save
+var nu_usdaResults   = [];     // normalized results backing the result rows
+var nu_usdaTimer     = null;   // debounce timer
+var nu_usdaAbort     = null;   // AbortController for the in-flight request
+var nu_usdaSeq       = 0;      // guards against stale responses landing late
+
+// Fetch trimmed USDA foods through the proxy. `signal` cancels stale requests.
+async function nuUsdaSearch(query, signal) {
+  var s = await supabaseClient.auth.getSession();
+  var token = s.data.session && s.data.session.access_token;
+  if (!token) throw new Error('Not authenticated');
+  var res = await fetch('/api/usda-search?q=' + encodeURIComponent(query), {
+    headers: { Authorization: 'Bearer ' + token },
+    signal: signal,
+  });
+  if (!res.ok) {
+    var msg = 'Search failed.';
+    try { var j = await res.json(); if (j && j.error) msg = j.error; } catch (e) {}
+    var err = new Error(msg); err.status = res.status; throw err;
+  }
+  var data = await res.json();
+  return (data && data.foods) || [];
+}
+
+// Convert one trimmed USDA food (nutrients per 100 g + serving info) into a
+// PER-SERVING object matching what the Add form / nuSaveLog expect.
+function nuNormalizeUsdaFood(f) {
+  var per100 = f.nutrients || {};
+  var size = +f.servingSize;
+  var unit = (f.servingSizeUnit || '').toLowerCase();
+  var factor, grams, servingAmount, servingUnit, servingDesc;
+
+  if (size > 0 && (unit === 'g' || unit === 'gram' || unit === 'grams' || unit === 'ml')) {
+    factor = size / 100;                       // scale per-100g down to one serving
+    grams = (unit === 'ml') ? null : size;     // ml has no reliable gram weight
+    servingAmount = size; servingUnit = unit;
+    servingDesc = f.householdServing || (nuRound1(size) + ' ' + unit);
+  } else {
+    factor = 1;                                // base unit is 100 g
+    grams = 100; servingAmount = 100; servingUnit = 'g';
+    servingDesc = f.householdServing || '100 g';
+  }
+  function sc(v) { return nuRound1((+v || 0) * factor); }
+
+  return {
+    usda_fdc_id: f.fdcId,
+    name: f.brand ? (f.description + ' (' + f.brand + ')') : f.description,
+    brand: f.brand || '',
+    serving_description: servingDesc,
+    serving_amount: servingAmount,
+    serving_unit: servingUnit,
+    grams: grams,
+    // per-serving macros
+    calories: nuRound((+per100.kcal || 0) * factor),
+    protein: sc(per100.protein),
+    carbs:   sc(per100.carbs),
+    fat:     sc(per100.fat),
+    fiber:   sc(per100.fiber),
+    sugar:   sc(per100.sugar),
+    raw: f,
+  };
+}
+
+// Multiply a per-serving food's macros by quantity (shared by detail preview).
+function nuScaleMacros(food, qty) {
+  var q = +qty || 1;
+  return {
+    calories: nuRound((+food.calories || 0) * q),
+    protein:  nuRound1((+food.protein || 0) * q),
+    carbs:    nuRound1((+food.carbs   || 0) * q),
+    fat:      nuRound1((+food.fat     || 0) * q),
+    fiber:    nuRound1((+food.fiber   || 0) * q),
+    sugar:    nuRound1((+food.sugar   || 0) * q),
+  };
+}
+
+/* ── USDA search view (third modal panel) ─────────────────────────────────── */
+function nuOpenUsda() {
+  document.getElementById('nuAddView').style.display    = 'none';
+  document.getElementById('nuSearchView').style.display = 'none';
+  document.getElementById('nuUsdaView').style.display   = 'block';
+  document.getElementById('nuBackBtn').style.display    = 'inline-block';
+  document.getElementById('nuModalTitle').textContent   = 'Search Foods';
+  document.getElementById('nuUsdaInput').value = '';
+  nu_usdaResults = [];
+  nuUsdaSetStatus('Type at least 2 letters to search the food database.');
+  document.getElementById('nuUsdaResults').innerHTML = '';
+  setTimeout(function () { document.getElementById('nuUsdaInput').focus(); }, 60);
+}
+
+function nuCloseUsda() {
+  var v = document.getElementById('nuUsdaView');
+  if (!v || v.style.display === 'none') return false;
+  if (nu_usdaAbort) { try { nu_usdaAbort.abort(); } catch (e) {} nu_usdaAbort = null; }
+  if (nu_usdaTimer) { clearTimeout(nu_usdaTimer); nu_usdaTimer = null; }
+  v.style.display = 'none';
+  document.getElementById('nuAddView').style.display = 'block';
+  document.getElementById('nuBackBtn').style.display = 'none';
+  document.getElementById('nuModalTitle').textContent =
+    document.getElementById('nuFoodId').value ? 'Edit Food' : 'Add Food';
+  return true;
+}
+
+// Single back-button dispatcher — closes whichever sub-panel is open.
+function nuModalBack() {
+  if (nuCloseUsda()) return;
+  nuCloseSearch();
+}
+
+function nuUsdaSetStatus(msg, kind) {
+  var el = document.getElementById('nuUsdaStatus');
+  if (!el) return;
+  el.className = 'nu-usda-status' + (kind ? ' ' + kind : '');
+  el.textContent = msg || '';
+  el.style.display = msg ? 'block' : 'none';
+}
+
+// Debounced + stale-cancelling input handler.
+function nuUsdaInputChanged() {
+  var q = document.getElementById('nuUsdaInput').value.trim();
+  if (nu_usdaTimer) clearTimeout(nu_usdaTimer);
+
+  if (q.length < 2) {
+    if (nu_usdaAbort) { try { nu_usdaAbort.abort(); } catch (e) {} nu_usdaAbort = null; }
+    nu_usdaResults = [];
+    document.getElementById('nuUsdaResults').innerHTML = '';
+    nuUsdaSetStatus('Type at least 2 letters to search the food database.');
+    return;
+  }
+
+  nu_usdaTimer = setTimeout(function () { nuRunUsdaSearch(q); }, 300);
+}
+
+async function nuRunUsdaSearch(q) {
+  // Cancel any in-flight request and tag this one so a late response can't win.
+  if (nu_usdaAbort) { try { nu_usdaAbort.abort(); } catch (e) {} }
+  nu_usdaAbort = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var seq = ++nu_usdaSeq;
+
+  nuUsdaSetStatus('Searching…', 'loading');
+  document.getElementById('nuUsdaResults').innerHTML = '';
+
+  try {
+    var foods = await nuUsdaSearch(q, nu_usdaAbort ? nu_usdaAbort.signal : undefined);
+    if (seq !== nu_usdaSeq) return;                       // a newer search superseded us
+    nu_usdaResults = foods.map(nuNormalizeUsdaFood);
+    if (!nu_usdaResults.length) {
+      nuUsdaSetStatus('No foods found for “' + q + '”.', 'empty');
+      return;
+    }
+    nuUsdaSetStatus('');
+    nuRenderUsdaResults();
+  } catch (err) {
+    if (err && err.name === 'AbortError') return;         // stale request — ignore
+    if (seq !== nu_usdaSeq) return;
+    console.error('nuRunUsdaSearch error:', err);
+    nuUsdaSetStatus(err && err.message ? err.message : 'Search failed. Try again.', 'error');
+  }
+}
+
+function nuRenderUsdaResults() {
+  var list = document.getElementById('nuUsdaResults');
+  if (!list) return;
+  list.innerHTML = nu_usdaResults.map(function (f, i) {
+    var macros = nuRound(f.calories) + ' kcal · P ' + nuRound1(f.protein) +
+                 ' · C ' + nuRound1(f.carbs) + ' · F ' + nuRound1(f.fat);
+    var sub = (f.brand ? nuEsc(f.brand) + ' · ' : '') + nuEsc(f.serving_description);
+    return '<button type="button" class="nu-usda-row" onclick="nuPickUsda(' + i + ')">' +
+        '<span class="nu-usda-main">' +
+          '<span class="nu-usda-name">' + nuEsc(f.name) + '</span>' +
+          '<span class="nu-usda-sub">' + sub + '</span>' +
+          '<span class="nu-usda-macros">' + macros + '</span>' +
+        '</span>' +
+        '<span class="nu-usda-cals">' + nuRound(f.calories) + '</span>' +
+      '</button>';
+  }).join('');
+}
+
+// Selecting a USDA result prefills the existing Add form (1 serving) and stashes
+// the per-serving provenance so the save writes source='usda' + metadata.
+function nuPickUsda(i) {
+  var f = nu_usdaResults[i];
+  if (!f) return;
+  nu_pendingSource = f;
+  document.getElementById('nuName').value     = f.name;
+  document.getElementById('nuCalories').value = f.calories;
+  document.getElementById('nuProtein').value  = f.protein;
+  document.getElementById('nuCarbs').value    = f.carbs;
+  document.getElementById('nuFat').value       = f.fat;
+  document.getElementById('nuServings').value = 1;
+  nuCloseUsda();
+  document.getElementById('nuServings').focus();
+}
+
+// Clears carried USDA provenance the moment the user hand-edits the food name.
+function nuNameEdited() {
+  if (nu_pendingSource &&
+      document.getElementById('nuName').value !== nu_pendingSource.name) {
+    nu_pendingSource = null;
+  }
+}
+
 // Reusable modal markup (kept identical on every page that logs food).
 function nuModalMarkup() {
   var mealOpts = NU_MEALS.map(function (m) {
@@ -396,19 +643,23 @@ function nuModalMarkup() {
   '<div class="modal-overlay" id="foodModal" onclick="nuCloseModal(event)">' +
     '<div class="modal-box">' +
       '<div class="modal-header">' +
-        '<button class="nu-back" id="nuBackBtn" style="display:none;" onclick="nuCloseSearch()" title="Back">←</button>' +
+        '<button class="nu-back" id="nuBackBtn" style="display:none;" onclick="nuModalBack()" title="Back">←</button>' +
         '<div class="modal-title" id="nuModalTitle">Add Food</div>' +
         '<button class="modal-close" onclick="document.getElementById(\'foodModal\').classList.remove(\'open\')">✕</button>' +
       '</div>' +
       '<div id="nuAddView">' +
         '<input type="hidden" id="nuFoodId">' +
+        '<button type="button" class="nu-dbsearch" id="nuDbSearchBtn" onclick="nuOpenUsda()">' +
+          '<span class="nu-dbsearch-ico">🔍</span>' +
+          '<span>Search food database</span>' +
+        '</button>' +
         '<div class="nu-recent" id="nuRecentWrap" style="display:none;">' +
           '<div class="nu-recent-label">Recent foods</div>' +
           '<div class="nu-recent-chips" id="nuRecentChips"></div>' +
         '</div>' +
         '<div class="field-group">' +
           '<label class="field-label">Food</label>' +
-          '<input type="text" id="nuName" maxlength="80" placeholder="e.g. Chicken breast, 6 oz">' +
+          '<input type="text" id="nuName" maxlength="80" placeholder="e.g. Chicken breast, 6 oz" oninput="nuNameEdited()">' +
         '</div>' +
         '<div class="nu-row">' +
           '<div class="field-group">' +
@@ -445,6 +696,11 @@ function nuModalMarkup() {
       '<div id="nuSearchView" style="display:none;">' +
         '<input type="text" class="nu-search-input" id="nuSearch" maxlength="80" placeholder="Search saved foods…" oninput="nuFilterSaved()">' +
         '<div class="nu-saved-list" id="nuSearchList"></div>' +
+      '</div>' +
+      '<div id="nuUsdaView" style="display:none;">' +
+        '<input type="text" class="nu-search-input" id="nuUsdaInput" maxlength="80" autocomplete="off" placeholder="Search foods (e.g. chicken breast)…" oninput="nuUsdaInputChanged()">' +
+        '<div class="nu-usda-status" id="nuUsdaStatus"></div>' +
+        '<div class="nu-usda-list" id="nuUsdaResults"></div>' +
       '</div>' +
     '</div>' +
   '</div>';
