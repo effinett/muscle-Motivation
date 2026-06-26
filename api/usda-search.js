@@ -9,12 +9,20 @@
 // stays light and the reusable client normalizer (nuNormalizeUsdaFood) owns the
 // per-serving macro math — the same normalizer future barcode/photo logging reuse.
 //
-// Env: USDA_API_KEY (free from https://api.data.gov/signup/). SUPABASE_URL +
-// SUPABASE_ANON_KEY are already set for the Stripe routes.
+// Env: USDA_API_KEY (free from https://api.data.gov/signup/). If it's missing we
+// fall back to the shared DEMO_KEY for local/dev — rate-limited, NOT for prod —
+// and warn loudly in the logs + response. SUPABASE_URL + SUPABASE_ANON_KEY are
+// already set for the Stripe routes. The key is never sent to the browser.
 
 const SUPABASE_URL      = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const USDA_API_KEY      = process.env.USDA_API_KEY;
+
+// Local/dev fallback ONLY. DEMO_KEY is api.data.gov's shared demo key — heavily
+// rate-limited (per-IP/hour) and not for production. We use it only when a real
+// USDA_API_KEY is absent, and we surface a clear warning when we do.
+const EFFECTIVE_KEY = USDA_API_KEY || 'DEMO_KEY';
+const USING_DEMO    = !USDA_API_KEY;
 
 const USDA_ENDPOINT = 'https://api.nal.usda.gov/fdc/v1/foods/search';
 
@@ -88,9 +96,10 @@ module.exports = async (req, res) => {
     const user = await getUserFromToken(token);
     if (!user || !user.id) return res.status(401).json({ error: 'Not authenticated' });
 
-    if (!USDA_API_KEY) {
-      // Surfaced to the client as a friendly "search unavailable" state.
-      return res.status(503).json({ error: 'Food database is not configured yet.' });
+    if (USING_DEMO) {
+      // Loud in the server logs so a missing prod env var is obvious in Vercel.
+      console.warn('usda-search: USDA_API_KEY missing — falling back to DEMO_KEY ' +
+        '(rate-limited, not for production). Set USDA_API_KEY in the environment.');
     }
 
     const q = (req.query.q || '').toString().trim();
@@ -99,14 +108,21 @@ module.exports = async (req, res) => {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
 
     const usdaUrl =
-      `${USDA_ENDPOINT}?api_key=${encodeURIComponent(USDA_API_KEY)}` +
+      `${USDA_ENDPOINT}?api_key=${encodeURIComponent(EFFECTIVE_KEY)}` +
       `&query=${encodeURIComponent(q)}` +
       `&dataType=${encodeURIComponent('Branded,Foundation,SR Legacy')}` +
       `&pageSize=25&pageNumber=${page}`;
 
     const r = await fetch(usdaUrl);
     if (!r.ok) {
-      console.error('usda-search upstream error:', r.status);
+      console.error('usda-search upstream error:', r.status, USING_DEMO ? '(DEMO_KEY)' : '');
+      if (r.status === 429) {
+        return res.status(429).json({
+          error: USING_DEMO
+            ? 'Rate limited — DEMO_KEY is shared and capped. Set a real USDA_API_KEY.'
+            : 'Too many searches right now. Try again in a moment.',
+        });
+      }
       return res.status(502).json({ error: 'Food database is unavailable right now.' });
     }
     const data = await r.json();
@@ -114,7 +130,9 @@ module.exports = async (req, res) => {
 
     // Short CDN cache: identical queries are common while typing/paging.
     res.setHeader('Cache-Control', 'private, max-age=60');
-    return res.status(200).json({ foods, totalHits: data.totalHits || foods.length });
+    const body = { foods, totalHits: data.totalHits || foods.length };
+    if (USING_DEMO) body.warning = 'Using DEMO_KEY (rate-limited, dev only).';
+    return res.status(200).json(body);
   } catch (err) {
     console.error('usda-search error:', err);
     return res.status(500).json({ error: 'Search failed. Try again.' });
