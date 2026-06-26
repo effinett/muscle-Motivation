@@ -253,6 +253,13 @@
       border-radius: 4px; vertical-align: middle;
       background: var(--red-muted); border: 1px solid var(--red-border); color: var(--red);
     }
+    .rec-deload-btn {
+      margin-top: 8px; padding: 7px 12px; width: 100%;
+      background: var(--red-muted); border: 1px solid var(--red-border); border-radius: 7px;
+      color: var(--red); font-family: 'Barlow', sans-serif; font-size: 12px; font-weight: 700;
+      letter-spacing: 1px; text-transform: uppercase; cursor: pointer; transition: background 0.2s;
+    }
+    .rec-deload-btn:hover { background: var(--red-border); }
     .btn-icon {
       background: none; border: none; color: var(--text-muted);
       cursor: pointer; padding: 4px 6px; border-radius: 6px;
@@ -983,11 +990,12 @@
   // Build the recommendation block HTML for an exercise card. Pure render —
   // calls the progression engine with whatever history/range we have. Falls
   // back to the legacy "Last:" line if progression.js failed to load.
-  function buildRecBlock(ex) {
-    if (typeof Progression === 'undefined' || !Progression.analyze) {
-      return ex.last_perf ? '<div class="exercise-last">Last: ' + esc(ex.last_perf) + '</div>' : '';
-    }
-    var rec = Progression.analyze({
+  // Single source of truth for an exercise's recommendation. Used by BOTH the
+  // rec card (display) and set pre-fill (input seeding) so the boxes always match
+  // the "Today" line. Pure read — no DB, no side effects.
+  function recForExercise(ex) {
+    if (typeof Progression === 'undefined' || !Progression.analyze) return null;
+    return Progression.analyze({
       exerciseName: ex.name,
       repsLow: ex.reps_low,
       repsHigh: ex.reps_high,
@@ -996,6 +1004,13 @@
       programmedWeight: ex.programmed_weight,
       programmedReps: ex.programmed_reps
     });
+  }
+
+  function buildRecBlock(ex, exIdx) {
+    var rec = recForExercise(ex);
+    if (!rec) {
+      return ex.last_perf ? '<div class="exercise-last">Last: ' + esc(ex.last_perf) + '</div>' : '';
+    }
     var rows = '<div class="rec-row"><span class="rec-key">Goal</span>' +
                '<span class="rec-val">' + esc(rec.goalRange.display) + '</span></div>';
     if (rec.hasHistory) {
@@ -1017,7 +1032,27 @@
     var note = rec.coachNote
       ? '<div class="rec-note">' + esc(rec.coachNote) + badge + '</div>'
       : '';
-    return '<div class="rec-block">' + rows + note + '</div>';
+    // Advisory deload — one tap drops the pre-filled WEIGHTS only (reps stay
+    // blank). Never applied automatically.
+    var deloadBtn = '';
+    if (rec.deloadSuggested && rec.deloadWeight != null && exIdx != null) {
+      deloadBtn = '<button class="rec-deload-btn" onclick="applyDeload(' + exIdx + ',' +
+        rec.deloadWeight + ')">Drop to ' + esc(String(rec.deloadWeight)) + ' lb</button>';
+    }
+    return '<div class="rec-block">' + rows + note + deloadBtn + '</div>';
+  }
+
+  // Apply an accepted deload: set every set's WEIGHT to the suggested load and
+  // persist. Reps are deliberately left untouched (still the measured result).
+  async function applyDeload(exIdx, weight) {
+    var ex = exercises[exIdx];
+    if (!ex) return;
+    await Promise.all(ex.sets.map(function(s) {
+      s.weight_lbs = weight;
+      return supabaseClient.from('workout_sets').update({ weight_lbs: weight }).eq('id', s.id);
+    }));
+    renderExercises();
+    showToast('Deload applied — weights set to ' + weight + ' lb.');
   }
 
   // Pull programmed rep ranges (reps_low/high/sets) from a program template so a
@@ -1154,7 +1189,7 @@
         '<button class="btn-icon" onclick="removeExercise(\'' + ex.id + '\',' + exIdx + ')" title="Remove exercise">' +
           '<i data-lucide="x"></i></button>' +
       '</div>' +
-      buildRecBlock(ex) +
+      buildRecBlock(ex, exIdx) +
       setsHtml +
       '<button class="btn-add-set" onclick="addSet(' + exIdx + ')">+ Add Set</button>' +
       '</div>';
@@ -1256,7 +1291,12 @@
     var ex = { id: data.id, name: name, order_index: orderIndex, last_perf: null, last_weight: null, last_reps: null, sets: [], history: [] };
     await Promise.all([loadLastPerf(ex), loadExerciseHistory(ex)]);
     exercises.push(ex);
-    await addSet(exercises.length - 1);
+    // Pre-create the recommended number of straight sets, each pre-filled with
+    // the recommended weight (reps blank). addSet seeds the first from the
+    // recommendation and copies the weight forward.
+    var rec = recForExercise(ex);
+    var nSets = (rec && rec.recommendedSets) ? rec.recommendedSets : 1;
+    for (var k = 0; k < nSets; k++) await addSet(exercises.length - 1);
   }
 
   async function removeExercise(id, exIdx) {
@@ -1270,19 +1310,22 @@
   async function addSet(exIdx) {
     var ex = exercises[exIdx];
     var setNum = ex.sets.length + 1;
-    var weight = null, reps = null;
+    // Reps are ALWAYS left blank (the measured result the user enters). Weight is
+    // pre-filled: the first set takes the engine recommendation, later sets copy
+    // the previous set's weight only (straight-sets model).
+    var weight = null;
     if (ex.sets.length > 0) {
       weight = ex.sets[ex.sets.length - 1].weight_lbs;
-      reps   = ex.sets[ex.sets.length - 1].reps;
-    } else if (ex.last_weight != null) {
-      weight = ex.last_weight; reps = ex.last_reps;
+    } else {
+      var rec = recForExercise(ex);
+      weight = rec ? rec.recommendedWeight : null;
     }
     var { data, error } = await supabaseClient
       .from('workout_sets')
-      .insert({ workout_exercise_id: ex.id, set_number: setNum, weight_lbs: weight, reps: reps, completed: false })
+      .insert({ workout_exercise_id: ex.id, set_number: setNum, weight_lbs: weight, reps: null, completed: false })
       .select().single();
     if (error) { showToast('Error adding set.'); return; }
-    ex.sets.push({ id: data.id, set_number: setNum, weight_lbs: weight, reps: reps, completed: false });
+    ex.sets.push({ id: data.id, set_number: setNum, weight_lbs: weight, reps: null, completed: false });
     renderExercises();
     setTimeout(function() {
       var el = document.getElementById('ex-' + ex.id);
@@ -1306,15 +1349,32 @@
 
   async function updateSet(setId, exIdx, setIdx, field, value) {
     var parsed = value !== '' ? parseFloat(value) : null;
-    exercises[exIdx].sets[setIdx][field] = parsed;
+    var s = exercises[exIdx].sets[setIdx];
+    s[field] = parsed;
     var update = {};
     update[field] = parsed;
+    // A set only counts once reps are entered. Clearing reps on a completed set
+    // reverts it to incomplete — no checked-but-uncounted sets.
+    if (field === 'reps' && !(parsed > 0) && s.completed) {
+      s.completed = false;
+      update.completed = false;
+      await supabaseClient.from('workout_sets').update(update).eq('id', setId);
+      renderExercises();
+      return;
+    }
     await supabaseClient.from('workout_sets').update(update).eq('id', setId);
   }
 
   async function toggleSet(setId, exIdx, setIdx) {
     var ex = exercises[exIdx];
     var s = ex.sets[setIdx];
+    // A set only counts once reps are entered. Block completing a blank-rep
+    // (e.g. pre-filled) set so weight-only sets never look done or pollute
+    // history. Weight is not required (bodyweight).
+    if (!s.completed && !(s.reps > 0)) {
+      showToast('Enter reps to complete this set.');
+      return;
+    }
     s.completed = !s.completed;
     await supabaseClient.from('workout_sets').update({ completed: s.completed }).eq('id', setId);
     if (s.completed) { startRest(); checkLivePr(ex, s); }
@@ -1616,14 +1676,17 @@
           history: [], reps_low: ex.reps_low, reps_high: ex.reps_high, target_sets: ex.sets };
         await Promise.all([loadLastPerf(newEx), loadExerciseHistory(newEx)]);
         exercises.push(newEx);
-        for (var s = 0; s < ex.sets; s++) {
-          var w = newEx.last_weight;
-          var r = newEx.last_reps || ex.reps_high;
+        // Pre-fill the recommended weight on every straight set; reps stay blank
+        // (the measured result). Set count honors the programmed/target logic.
+        var prec  = recForExercise(newEx);
+        var pSets = (prec && prec.recommendedSets) ? prec.recommendedSets : ex.sets;
+        var pw    = prec ? prec.recommendedWeight : null;
+        for (var s = 0; s < pSets; s++) {
           var { data: sd } = await supabaseClient
             .from('workout_sets')
-            .insert({ workout_exercise_id: we.id, set_number: s + 1, weight_lbs: w, reps: r, completed: false })
+            .insert({ workout_exercise_id: we.id, set_number: s + 1, weight_lbs: pw, reps: null, completed: false })
             .select().single();
-          if (sd) newEx.sets.push({ id: sd.id, set_number: s + 1, weight_lbs: w, reps: r, completed: false });
+          if (sd) newEx.sets.push({ id: sd.id, set_number: s + 1, weight_lbs: pw, reps: null, completed: false });
         }
       }
     }
@@ -1970,15 +2033,17 @@
         sets: [], history: [], reps_low: ex.reps_low, reps_high: ex.reps_high, target_sets: ex.sets };
       await Promise.all([loadLastPerf(newEx), loadExerciseHistory(newEx)]);
       exercises.push(newEx);
-      var nSets = parseInt(ex.sets, 10) || TEMPLATE_DEFAULT_SETS;
+      // Pre-fill the recommended weight on every straight set; reps stay blank.
+      var prec  = recForExercise(newEx);
+      var nSets = (prec && prec.recommendedSets) ? prec.recommendedSets
+                : (parseInt(ex.sets, 10) || TEMPLATE_DEFAULT_SETS);
+      var pw    = prec ? prec.recommendedWeight : null;
       for (var s = 0; s < nSets; s++) {
-        var w = newEx.last_weight;
-        var r = newEx.last_reps || ex.reps_high;
         var { data: sd } = await supabaseClient
           .from('workout_sets')
-          .insert({ workout_exercise_id: we.id, set_number: s + 1, weight_lbs: w, reps: r, completed: false })
+          .insert({ workout_exercise_id: we.id, set_number: s + 1, weight_lbs: pw, reps: null, completed: false })
           .select().single();
-        if (sd) newEx.sets.push({ id: sd.id, set_number: s + 1, weight_lbs: w, reps: r, completed: false });
+        if (sd) newEx.sets.push({ id: sd.id, set_number: s + 1, weight_lbs: pw, reps: null, completed: false });
       }
     }
 

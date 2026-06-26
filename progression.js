@@ -306,6 +306,8 @@
         action: 'start',
         plateau: false,
         deloadSuggested: false,
+        deloadWeight: null,
+        deloadReason: null,
         coachNote: note
       };
     }
@@ -345,6 +347,8 @@
         action: 'incomplete',
         plateau: false,
         deloadSuggested: false,
+        deloadWeight: null,
+        deloadReason: null,
         coachNote: 'Complete all target sets before increasing weight.'
       };
     }
@@ -382,40 +386,61 @@
         note = 'Bring every set up to ' + high + ' reps, then add weight next time.';
       }
     } else {
-      // Below the bottom of the range.
-      var severe = minReps < (low - 2);
-      if (severe && base !== null && equip !== 'bodyweight') {
-        action = 'reduce';
-        recWeight = roundWeight(base * 0.9, equip);
-        if (recWeight >= base) recWeight = Math.max(0, base - inc); // ensure it actually drops
-        recReps = low;
-        note = 'Reps dropped well below ' + low + '. Reduce to ' + fmtNum(recWeight) + ' lb and rebuild clean volume.';
-      } else {
-        action = 'hold';
-        recWeight = base;
-        recReps = low;
-        note = 'Stay at this weight until you hit at least ' + low + ' reps on every set.';
-      }
+      // Below the bottom of the range → HOLD. Weight is never auto-lowered after
+      // a single bad session; any reduction happens only through an accepted
+      // deload suggestion (computed below).
+      action = 'hold';
+      recWeight = base;
+      recReps = low;
+      note = 'Stay at this weight until you hit at least ' + low + ' reps on every set.';
     }
 
-    // ── Fold plateau / deload guidance into the note ────────────────────────
-    // Deload is reserved for a clear drop in performance, or a repeated grind
-    // where the user keeps stalling at/below the bottom of the range. A flat
-    // plateau that's still inside the rep range just gets a "push for the top"
-    // nudge, not a deload.
-    var deloadCandidate = plat.declining || (plat.plateau && (action === 'reduce' || minReps < low));
+    // ── Deload detection (advisory only — never lowers recommendedWeight) ────
+    // Two independent triggers, neither fires when the user just earned an
+    // increase:
+    //   • regression — best estimated-1RM dropped >10% vs the previous session
+    //   • stall      — same working weight for 3 sessions with no 1RM improvement
+    // The recommended (pre-filled) weight stays at the current load; deloadWeight
+    // is what the user gets IF they accept the suggestion.
     var deloadSuggested = false;
-    if (deloadCandidate && action !== 'increase') {
-      deloadSuggested = true;
-      if (base !== null && equip !== 'bodyweight') {
-        var deloadW = roundWeight(base * 0.9, equip);
-        if (deloadW >= base) deloadW = Math.max(0, base - inc);
-        note = 'Progress has stalled for ' + plat.sessions + ' sessions. Consider a deload — drop to about ' + fmtNum(deloadW) + ' lb and rebuild.';
-      } else {
-        note = 'Progress has stalled for ' + plat.sessions + ' sessions. Consider an easier variation or extra rest, then rebuild.';
+    var deloadReason = null;
+    var deloadWeight = null;
+    if (action !== 'increase') {
+      // Regression: one clear drop session-over-session.
+      if (history.length >= 2) {
+        var eLast = sessionScore(history[0]);
+        var ePrev = sessionScore(history[1]);
+        if (ePrev > 0 && eLast < 0.9 * ePrev) {
+          deloadSuggested = true;
+          deloadReason = 'regression';
+        }
       }
-    } else if (plat.plateau && action === 'hold') {
-      note += ' You\'ve held here ' + plat.sessions + ' sessions — push for the top of the range.';
+      // Stall: three sessions at the same working weight with no improvement.
+      if (!deloadSuggested && history.length >= 3) {
+        var b0 = pickBaseWeight(workingSets(history[0]));
+        var b1 = pickBaseWeight(workingSets(history[1]));
+        var b2 = pickBaseWeight(workingSets(history[2]));
+        var sameWeight = b0 !== null && b0 === b1 && b1 === b2;
+        var improved3 = sessionScore(history[0]) > sessionScore(history[2]) + 0.01;
+        if (sameWeight && !improved3) {
+          deloadSuggested = true;
+          deloadReason = 'stall';
+        }
+      }
+      if (deloadSuggested) {
+        if (base !== null && equip !== 'bodyweight') {
+          deloadWeight = roundWeight(base * 0.9, equip);
+          if (deloadWeight >= base) deloadWeight = Math.max(0, base - inc);
+        }
+        note = (deloadReason === 'regression'
+                 ? 'Your top set dropped noticeably from last time. '
+                 : 'Progress has stalled for 3 sessions. ')
+             + (deloadWeight !== null
+                 ? 'Consider a deload — drop to about ' + fmtNum(deloadWeight) + ' lb and rebuild.'
+                 : 'Consider an easier variation or extra rest, then rebuild.');
+      } else if (plat.plateau && action === 'hold') {
+        note += ' You\'ve held here ' + plat.sessions + ' sessions — push for the top of the range.';
+      }
     }
 
     return {
@@ -434,6 +459,8 @@
       action: action,
       plateau: plat.plateau,
       deloadSuggested: deloadSuggested,
+      deloadWeight: deloadWeight,
+      deloadReason: deloadReason,
       coachNote: note
     };
   }

@@ -136,26 +136,55 @@ test('analyze: mid-range reps → hold weight, add a rep', () => {
   assert.equal(r.recommendedReps, 11); // +1 toward the top
 });
 
-// ── analyze: well below range → reduce ──────────────────────────────────────
-test('analyze: reps well below the floor → reduce weight ~10%', () => {
+// ── analyze: below the floor → HOLD (never auto-reduce) ─────────────────────
+// A single bad session must never silently lower the weight. The engine holds
+// and asks for the floor; any reduction is now a deload SUGGESTION only.
+test('analyze: reps below the floor → hold, weight unchanged (no auto-reduce)', () => {
   const r = P.analyze({
     exerciseName: 'Bench Press', repsLow: 8, repsHigh: 12, targetSets: 3,
-    history: [session(100, 5, 3)] // 5 < (8 - 2)
+    history: [session(100, 5, 3)] // 5 < floor, but only one session
   });
-  assert.equal(r.action, 'reduce');
-  assert.equal(r.recommendedWeight, 90);
+  assert.equal(r.action, 'hold');
+  assert.equal(r.recommendedWeight, 100);   // held, NOT reduced to 90
   assert.equal(r.recommendedReps, 8);
+  assert.equal(r.deloadSuggested, false);    // one session can't trigger a deload
 });
 
-// ── analyze: plateau folds into deload guidance ─────────────────────────────
-test('analyze: declining over the plateau window suggests a deload', () => {
+// ── analyze: regression deload (advisory, weight held) ──────────────────────
+test('analyze: best est-1RM drops >10% vs last session → regression deload', () => {
   const r = P.analyze({
     exerciseName: 'Bench Press', repsLow: 8, repsHigh: 12, targetSets: 3,
-    // newest first, scores declining (reps=1 → score == weight): 100, 110, 120
-    history: [session(100, 1, 3), session(110, 1, 3), session(120, 1, 3)]
+    // newest first: 100×3 (e1RM 110) after 100×10 (e1RM ~133) → ~17% drop
+    history: [session(100, 3, 3), session(100, 10, 3)]
   });
   assert.equal(r.deloadSuggested, true);
+  assert.equal(r.deloadReason, 'regression');
+  assert.equal(r.recommendedWeight, 100);    // pre-fill weight is NOT lowered
+  assert.equal(r.deloadWeight, 90);          // the suggested drop, if accepted
+  assert.ok(r.deloadWeight < r.recommendedWeight);
+});
+
+// ── analyze: stall deload (3 sessions, same weight, no improvement) ─────────
+test('analyze: 3 sessions same weight with no improvement → stall deload', () => {
+  const r = P.analyze({
+    exerciseName: 'Bench Press', repsLow: 8, repsHigh: 12, targetSets: 3,
+    history: [session(100, 8, 3), session(100, 8, 3), session(100, 8, 3)]
+  });
+  assert.equal(r.deloadSuggested, true);
+  assert.equal(r.deloadReason, 'stall');
+  assert.equal(r.recommendedWeight, 100);    // held, advisory only
   assert.match(r.coachNote, /stalled/i);
+});
+
+// ── analyze: an earned increase never also suggests a deload ────────────────
+test('analyze: topping the range → increase, never a deload', () => {
+  const r = P.analyze({
+    exerciseName: 'Bench Press', repsLow: 8, repsHigh: 12, targetSets: 3,
+    history: [session(100, 12, 3), session(100, 12, 3), session(100, 12, 3)]
+  });
+  assert.equal(r.action, 'increase');
+  assert.equal(r.deloadSuggested, false);
+  assert.equal(r.deloadWeight, null);
 });
 
 // ── detectPlateau ───────────────────────────────────────────────────────────
