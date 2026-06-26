@@ -175,8 +175,13 @@ module.exports = async (req, res) => {
       return Array.isArray(d.foods) ? d.foods.map(trimFood) : [];
     }
 
+    // Branded pulls a WIDE pool (USDA max 200). USDA's own relevance buries the
+    // right product deep — e.g. "kirkland peanut butter" wouldn't surface Kirkland's
+    // organic PB inside the top 50 — so we cast a wide net and let our scorer float
+    // the brand+food match to the top. We trim + score + cap, so the client still
+    // receives a small, clean list regardless of pool size.
     const [brandedRes, genericRes] = await Promise.allSettled([
-      fetchType('Branded', 50),
+      fetchType('Branded', 200),
       fetchType('Foundation,SR Legacy', 15),
     ]);
 
