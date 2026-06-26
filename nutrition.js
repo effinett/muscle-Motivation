@@ -242,25 +242,43 @@ function nuOpenModal(prefill) {
   document.getElementById('nuModalTitle').textContent = prefill.id ? 'Edit Food' : 'Add Food';
   document.getElementById('nuDeleteBtn').style.display = prefill.id ? 'block' : 'none';
 
-  // Always open on the Add/Edit form view (reset both search panels).
+  // Reset transient state and hide every sub-panel before choosing a start view.
   nu_pendingSource = null;                // fresh open = no carried USDA provenance
+  nu_formBackTo = null;
   document.getElementById('nuSearchView').style.display = 'none';
   var usdaView = document.getElementById('nuUsdaView');
   if (usdaView) usdaView.style.display = 'none';
-  document.getElementById('nuAddView').style.display    = 'block';
-  document.getElementById('nuBackBtn').style.display     = 'none';
-
-  // Recent/saved foods quick-add — only offered when adding a new entry, never
-  // when editing an existing log (where the fields are already populated).
-  var recentWrap = document.getElementById('nuRecentWrap');
-  if (prefill.id) {
-    if (recentWrap) recentWrap.style.display = 'none';
-  } else {
-    nuLoadRecent();
-  }
+  document.getElementById('nuAddView').style.display    = 'none';
+  nuUpdateTotalPreview();
 
   document.getElementById('foodModal').classList.add('open');
-  setTimeout(function () { document.getElementById('nuName').focus(); }, 60);
+
+  if (prefill.id) {
+    // Editing an existing entry → straight to the form (fields already filled).
+    document.getElementById('nuRecentWrap').style.display = 'none';
+    nuShowForm(false);
+  } else {
+    // New entry → USDA search is the default path (manual entry is the fallback).
+    nu_recentLoaded = false;              // form's recent chips load lazily on demand
+    nuShowUsdaSearch(true);
+  }
+}
+
+// Show the add/detail form. `withBack` controls the header back arrow (used when
+// the form was reached from the search results so the user can return to search).
+function nuShowForm(withBack) {
+  document.getElementById('nuSearchView').style.display = 'none';
+  document.getElementById('nuUsdaView').style.display   = 'none';
+  document.getElementById('nuAddView').style.display    = 'block';
+  document.getElementById('nuModalTitle').textContent =
+    document.getElementById('nuFoodId').value ? 'Edit Food' : 'Add Food';
+  document.getElementById('nuBackBtn').style.display = withBack ? 'inline-block' : 'none';
+  // The "Per serving" line belongs to a USDA pick only.
+  if (!nu_pendingSource) {
+    var srcLine = document.getElementById('nuServingNote');
+    if (srcLine) srcLine.style.display = 'none';
+  }
+  nuUpdateTotalPreview();
 }
 
 function nuCloseModal(e) {
@@ -468,6 +486,9 @@ var nu_usdaResults   = [];     // normalized results backing the result rows
 var nu_usdaTimer     = null;   // debounce timer
 var nu_usdaAbort     = null;   // AbortController for the in-flight request
 var nu_usdaSeq       = 0;      // guards against stale responses landing late
+var nu_usdaIsRoot    = false;  // true when search is the modal's root (new entry)
+var nu_formBackTo    = null;   // where the form's back arrow returns ('search' | null)
+var nu_recentLoaded  = false;  // lazy-load guard for the manual form's recent chips
 
 // Fetch trimmed USDA foods through the proxy. `signal` cancels stale requests.
 async function nuUsdaSearch(query, signal) {
@@ -539,37 +560,67 @@ function nuScaleMacros(food, qty) {
   };
 }
 
-/* ── USDA search view (third modal panel) ─────────────────────────────────── */
-function nuOpenUsda() {
+/* ── USDA search view — the DEFAULT path for a new entry ───────────────────── */
+// isRoot: true when search is the modal's root (new Add Food) so there's no back
+//   arrow — the user reaches the form by picking a result or "enter manually".
+// preserve: keep the current query + results (used when returning from the form).
+function nuShowUsdaSearch(isRoot, preserve) {
+  nu_usdaIsRoot = !!isRoot;
   document.getElementById('nuAddView').style.display    = 'none';
   document.getElementById('nuSearchView').style.display = 'none';
   document.getElementById('nuUsdaView').style.display   = 'block';
-  document.getElementById('nuBackBtn').style.display    = 'inline-block';
-  document.getElementById('nuModalTitle').textContent   = 'Search Foods';
-  document.getElementById('nuUsdaInput').value = '';
-  nu_usdaResults = [];
-  nuUsdaSetStatus('Type at least 2 letters to search the food database.');
-  document.getElementById('nuUsdaResults').innerHTML = '';
+  document.getElementById('nuModalTitle').textContent   = isRoot ? 'Add Food' : 'Search Foods';
+  // Root search has no back (use ✕); non-root returns to the form via the arrow.
+  document.getElementById('nuBackBtn').style.display = isRoot ? 'none' : 'inline-block';
+
+  if (!preserve) {
+    document.getElementById('nuUsdaInput').value = '';
+    nu_usdaResults = [];
+    document.getElementById('nuUsdaResults').innerHTML = '';
+    nuUsdaSetStatus('Search the food database to auto-fill calories & macros.');
+  }
   setTimeout(function () { document.getElementById('nuUsdaInput').focus(); }, 60);
 }
 
+// Kept name for the form's "Search food database" button — opens a non-root search.
+function nuOpenUsda() { nuShowUsdaSearch(false, false); }
+
+// Return from the search view to the form (non-root back arrow).
 function nuCloseUsda() {
   var v = document.getElementById('nuUsdaView');
   if (!v || v.style.display === 'none') return false;
   if (nu_usdaAbort) { try { nu_usdaAbort.abort(); } catch (e) {} nu_usdaAbort = null; }
   if (nu_usdaTimer) { clearTimeout(nu_usdaTimer); nu_usdaTimer = null; }
-  v.style.display = 'none';
-  document.getElementById('nuAddView').style.display = 'block';
-  document.getElementById('nuBackBtn').style.display = 'none';
-  document.getElementById('nuModalTitle').textContent =
-    document.getElementById('nuFoodId').value ? 'Edit Food' : 'Add Food';
+  nuShowForm(nu_formBackTo === 'search');
   return true;
 }
 
-// Single back-button dispatcher — closes whichever sub-panel is open.
+// Manual-entry fallback — for custom foods or when USDA has no match. Opens the
+// form blank (no carried provenance) so the user types their own macros.
+function nuManualEntry() {
+  nu_pendingSource = null;
+  if (nu_usdaAbort) { try { nu_usdaAbort.abort(); } catch (e) {} nu_usdaAbort = null; }
+  if (nu_usdaTimer) { clearTimeout(nu_usdaTimer); nu_usdaTimer = null; }
+  document.getElementById('nuName').value     = '';
+  document.getElementById('nuCalories').value = '';
+  document.getElementById('nuProtein').value  = '';
+  document.getElementById('nuCarbs').value    = '';
+  document.getElementById('nuFat').value       = '';
+  document.getElementById('nuServings').value = 1;
+  if (!nu_recentLoaded) { nu_recentLoaded = true; nuLoadRecent(); }
+  nu_formBackTo = 'search';            // back arrow returns to the search results
+  nuShowForm(true);
+  setTimeout(function () { document.getElementById('nuName').focus(); }, 60);
+}
+
+// Single back-button dispatcher — context-aware across the three sub-panels.
 function nuModalBack() {
-  if (nuCloseUsda()) return;
-  nuCloseSearch();
+  var usda = document.getElementById('nuUsdaView');
+  if (usda && usda.style.display !== 'none') { nuCloseUsda(); return; }
+  var saved = document.getElementById('nuSearchView');
+  if (saved && saved.style.display !== 'none') { nuCloseSearch(); return; }
+  // Form is showing — return to the search results it came from.
+  if (nu_formBackTo === 'search') nuShowUsdaSearch(nu_usdaIsRoot, true);
 }
 
 function nuUsdaSetStatus(msg, kind) {
@@ -641,8 +692,9 @@ function nuRenderUsdaResults() {
   }).join('');
 }
 
-// Selecting a USDA result prefills the existing Add form (1 serving) and stashes
-// the per-serving provenance so the save writes source='usda' + metadata.
+// Selecting a USDA result moves to the detail step: name + macros auto-filled
+// (per serving), provenance stashed, and a serving line shown. The user only sets
+// meal + quantity; the live total recalculates as quantity changes.
 function nuPickUsda(i) {
   var f = nu_usdaResults[i];
   if (!f) return;
@@ -653,15 +705,48 @@ function nuPickUsda(i) {
   document.getElementById('nuCarbs').value    = f.carbs;
   document.getElementById('nuFat').value       = f.fat;
   document.getElementById('nuServings').value = 1;
-  nuCloseUsda();
-  document.getElementById('nuServings').focus();
+
+  // This food is specific — hide the recent-foods quick-add on the detail step.
+  var recentWrap = document.getElementById('nuRecentWrap');
+  if (recentWrap) recentWrap.style.display = 'none';
+
+  // Show the source serving (e.g. "Per serving: 1 cup") so quantity is meaningful.
+  var srcLine = document.getElementById('nuServingNote');
+  if (srcLine) {
+    srcLine.textContent = 'Per serving: ' + (f.serving_description || '1 serving') +
+      (f.brand ? ' · ' + f.brand : '');
+    srcLine.style.display = 'block';
+  }
+
+  nu_formBackTo = 'search';            // back arrow returns to the search results
+  nuShowForm(true);
+  nuUpdateTotalPreview();
+  setTimeout(function () { document.getElementById('nuServings').focus(); }, 60);
 }
 
-// Clears carried USDA provenance the moment the user hand-edits the food name.
+// Live total = per-serving inputs × quantity. Keeps the detail step auto-updating
+// as the user changes quantity (and reflects manual edits too).
+function nuUpdateTotalPreview() {
+  var el = document.getElementById('nuTotalPreview');
+  if (!el) return;
+  var sv = parseFloat(document.getElementById('nuServings').value);
+  if (!sv || sv <= 0) sv = 1;
+  var cal = parseFloat(document.getElementById('nuCalories').value) || 0;
+  var p   = parseFloat(document.getElementById('nuProtein').value)  || 0;
+  var c   = parseFloat(document.getElementById('nuCarbs').value)    || 0;
+  var fa  = parseFloat(document.getElementById('nuFat').value)      || 0;
+  el.innerHTML = 'Total: <strong>' + nuRound(cal * sv) + ' kcal</strong>' +
+    ' · P ' + nuRound1(p * sv) + ' · C ' + nuRound1(c * sv) + ' · F ' + nuRound1(fa * sv);
+}
+
+// Clears carried USDA provenance the moment the user hand-edits the food name,
+// and refreshes the live total (a hand-edit makes it a custom/manual food).
 function nuNameEdited() {
   if (nu_pendingSource &&
       document.getElementById('nuName').value !== nu_pendingSource.name) {
     nu_pendingSource = null;
+    var srcLine = document.getElementById('nuServingNote');
+    if (srcLine) srcLine.style.display = 'none';
   }
 }
 
@@ -692,35 +777,37 @@ function nuModalMarkup() {
           '<label class="field-label">Food</label>' +
           '<input type="text" id="nuName" maxlength="80" placeholder="e.g. Chicken breast, 6 oz" oninput="nuNameEdited()">' +
         '</div>' +
+        '<div class="nu-serving-note" id="nuServingNote" style="display:none;"></div>' +
         '<div class="nu-row">' +
           '<div class="field-group">' +
             '<label class="field-label">Meal</label>' +
             '<select id="nuMeal">' + mealOpts + '</select>' +
           '</div>' +
           '<div class="field-group">' +
-            '<label class="field-label">Servings</label>' +
-            '<input type="number" id="nuServings" inputmode="decimal" step="0.25" min="0" value="1">' +
+            '<label class="field-label">Quantity</label>' +
+            '<input type="number" id="nuServings" inputmode="decimal" step="0.25" min="0" value="1" oninput="nuUpdateTotalPreview()">' +
           '</div>' +
         '</div>' +
-        '<div class="field-hint">Macros are per serving.</div>' +
+        '<div class="field-hint">Values below are per serving — quantity scales them.</div>' +
         '<div class="nu-row nu-row-4">' +
           '<div class="field-group">' +
             '<label class="field-label">Calories</label>' +
-            '<input type="number" id="nuCalories" inputmode="numeric" step="1" min="0" placeholder="0">' +
+            '<input type="number" id="nuCalories" inputmode="numeric" step="1" min="0" placeholder="0" oninput="nuUpdateTotalPreview()">' +
           '</div>' +
           '<div class="field-group">' +
             '<label class="field-label">Protein (g)</label>' +
-            '<input type="number" id="nuProtein" inputmode="decimal" step="0.1" min="0" placeholder="0">' +
+            '<input type="number" id="nuProtein" inputmode="decimal" step="0.1" min="0" placeholder="0" oninput="nuUpdateTotalPreview()">' +
           '</div>' +
           '<div class="field-group">' +
             '<label class="field-label">Carbs (g)</label>' +
-            '<input type="number" id="nuCarbs" inputmode="decimal" step="0.1" min="0" placeholder="0">' +
+            '<input type="number" id="nuCarbs" inputmode="decimal" step="0.1" min="0" placeholder="0" oninput="nuUpdateTotalPreview()">' +
           '</div>' +
           '<div class="field-group">' +
             '<label class="field-label">Fat (g)</label>' +
-            '<input type="number" id="nuFat" inputmode="decimal" step="0.1" min="0" placeholder="0">' +
+            '<input type="number" id="nuFat" inputmode="decimal" step="0.1" min="0" placeholder="0" oninput="nuUpdateTotalPreview()">' +
           '</div>' +
         '</div>' +
+        '<div class="nu-total-preview" id="nuTotalPreview"></div>' +
         '<button class="btn-calc" id="nuSaveBtn" onclick="nuSave()">Save Food</button>' +
         '<button class="btn-delete-log" id="nuDeleteBtn" style="display:none;" onclick="nuDeleteFromModal()">Delete Entry</button>' +
       '</div>' +
@@ -732,6 +819,7 @@ function nuModalMarkup() {
         '<input type="text" class="nu-search-input" id="nuUsdaInput" maxlength="80" autocomplete="off" placeholder="Search foods (e.g. chicken breast)…" oninput="nuUsdaInputChanged()">' +
         '<div class="nu-usda-status" id="nuUsdaStatus"></div>' +
         '<div class="nu-usda-list" id="nuUsdaResults"></div>' +
+        '<button type="button" class="nu-usda-manual" onclick="nuManualEntry()">Can\'t find it? Enter food manually →</button>' +
       '</div>' +
     '</div>' +
   '</div>';
