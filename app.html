@@ -1553,8 +1553,15 @@
   function selectDashWorkout(key) {
     if (activeScheduleKeys.indexOf(key) < 0) return;
     selectedSessionKey = key;
+    // Only the recommended "Next up" session is a progression workout. Any other
+    // session the user picks here is an OPTIONAL one-off: it logs to history and
+    // feeds per-exercise progression, but must NEVER advance current_index. The
+    // active program only advances after completing the intended progression
+    // workout (Tier 2.2 rule — the next programmed workout stays next until it's
+    // the one actually completed).
+    var mode = (key === recommendedSessionKey) ? 'progression' : 'optional';
     var btn = document.getElementById('btnStartWorkout');
-    btn.href = 'workout.html?program=' + activeProgramSlug + '&session=' + key + '&mode=progression';
+    btn.href = 'workout.html?program=' + activeProgramSlug + '&session=' + key + '&mode=' + mode;
     btn.textContent = 'Start Workout';
     // Close the dropdown after selection
     document.getElementById('workoutDropdown').classList.remove('open');
