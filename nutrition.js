@@ -83,30 +83,61 @@ async function nuFetchRecentFoods(userId, limit) {
 // Upsert the reusable food definition (per-serving defaults). Returns its id, or
 // null on failure — a null food_id is fine, the log still stores its own snapshot.
 // `src` (optional) carries USDA provenance so a saved food remembers its origin.
+//
+// Identity differs by source:
+//   • USDA foods → (user_id, source='usda', usda_fdc_id). Never name alone, so the
+//     same FDC id maps to ONE record that barcode/voice/photo/AI can all reuse.
+//   • Manual foods → (user_id, name), the existing behavior.
+// USDA uses select-then-write (not ON CONFLICT) so the partial unique index works
+// without tripping the "no matching constraint" pitfall.
 async function nuUpsertFood(userId, food, src) {
   try {
-    var row = {
-      user_id: userId,
-      name: food.name,
+    var base = {
       default_calories: food.calories,
       default_protein: food.protein,
       default_carbs: food.carbs,
       default_fat: food.fat,
       updated_at: new Date().toISOString(),
     };
-    // Only stamp source columns on a fresh USDA pick; manual saves leave them at
-    // their defaults so we never overwrite a food's provenance with 'manual'.
-    if (src) {
-      row.source              = 'usda';
-      row.brand               = src.brand || null;
-      row.usda_fdc_id         = src.usda_fdc_id != null ? String(src.usda_fdc_id) : null;
-      row.serving_description = src.serving_description || null;
-      row.default_fiber       = src.fiber != null ? src.fiber : null;
-      row.default_sugar       = src.sugar != null ? src.sugar : null;
+
+    if (src && src.usda_fdc_id != null) {
+      var fdc = String(src.usda_fdc_id);
+      var payload = Object.assign({}, base, {
+        name: food.name,
+        source: 'usda',
+        brand: src.brand || null,
+        usda_fdc_id: fdc,
+        serving_description: src.serving_description || null,
+        default_fiber: src.fiber != null ? src.fiber : null,
+        default_sugar: src.sugar != null ? src.sugar : null,
+      });
+
+      // Reuse the existing record for this FDC id if we already have one.
+      var found = await supabaseClient
+        .from('foods')
+        .select('id')
+        .eq('user_id', userId).eq('source', 'usda').eq('usda_fdc_id', fdc)
+        .limit(1).maybeSingle();
+      if (found.error) throw found.error;
+
+      if (found.data && found.data.id) {
+        var upd = await supabaseClient
+          .from('foods').update(payload).eq('id', found.data.id).select('id').single();
+        if (upd.error) throw upd.error;
+        return upd.data ? upd.data.id : found.data.id;
+      }
+      var ins = await supabaseClient
+        .from('foods').insert(Object.assign({ user_id: userId }, payload)).select('id').single();
+      if (ins.error) throw ins.error;
+      return ins.data ? ins.data.id : null;
     }
+
+    // Manual food: identity by name (existing behavior). Leave source columns at
+    // their defaults so we never stamp a manual save over real provenance.
+    var manual = Object.assign({ user_id: userId, name: food.name }, base);
     var res = await supabaseClient
       .from('foods')
-      .upsert(row, { onConflict: 'user_id,name' }) // matches the plain unique index on (user_id, name)
+      .upsert(manual, { onConflict: 'user_id,name' }) // matches the plain unique index on (user_id, name)
       .select('id')
       .single();
     if (res.error) throw res.error;
