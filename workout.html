@@ -852,6 +852,19 @@
     exerciseLibrary = merged;
   }
 
+  // Resolve a name to a stable GLOBAL library exercise id (exercises.id) so we
+  // can stamp it on logged workout_exercises. Returns null for free-typed names
+  // and user-created customs (their id belongs to user_exercises, not the
+  // exercises FK target) — those stay name-only until promoted.
+  function libraryExerciseId(name) {
+    if (!name) return null;
+    var lc = name.toLowerCase();
+    var hit = exerciseLibrary.find(function(e) {
+      return !e.user_created && e.name && e.name.toLowerCase() === lc;
+    });
+    return hit ? hit.id : null;
+  }
+
   // Persist a manually typed exercise to the user's library so it's reusable.
   // Skips anything already in the merged library (global or user) — no dupes.
   // Non-fatal: a failure here still lets the exercise be added to this workout.
@@ -1285,7 +1298,8 @@
     var orderIndex = exercises.length;
     var { data, error } = await supabaseClient
       .from('workout_exercises')
-      .insert({ workout_id: currentWorkout.id, exercise_name: name, order_index: orderIndex })
+      .insert({ workout_id: currentWorkout.id, exercise_name: name, order_index: orderIndex,
+                exercise_id: libraryExerciseId(name) })
       .select().single();
     if (error) { showToast('Error adding exercise.'); return; }
     var ex = { id: data.id, name: name, order_index: orderIndex, last_perf: null, last_weight: null, last_reps: null, sets: [], history: [] };
@@ -1669,7 +1683,7 @@
         var ex = exList[i];
         var { data: we } = await supabaseClient
           .from('workout_exercises')
-          .insert({ workout_id: workout.id, exercise_name: ex.name, order_index: i })
+          .insert({ workout_id: workout.id, exercise_name: ex.name, order_index: i, exercise_id: libraryExerciseId(ex.name) })
           .select().single();
         if (!we) continue;
         var newEx = { id: we.id, name: ex.name, order_index: i, last_perf: null, last_weight: null, last_reps: null, sets: [],
@@ -2026,7 +2040,7 @@
       var ex = exList[i];
       var { data: we } = await supabaseClient
         .from('workout_exercises')
-        .insert({ workout_id: workout.id, exercise_name: ex.name, order_index: i })
+        .insert({ workout_id: workout.id, exercise_name: ex.name, order_index: i, exercise_id: libraryExerciseId(ex.name) })
         .select().single();
       if (!we) continue;
       var newEx = { id: we.id, name: ex.name, order_index: i, last_perf: null, last_weight: null, last_reps: null,
