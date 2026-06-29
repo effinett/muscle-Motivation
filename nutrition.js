@@ -578,17 +578,29 @@ function nuScalePer100(n, g) {
   };
 }
 
-// Build the serving-size dropdown options for a normalized USDA food, using ONLY
-// data already in the search payload (Phase 3.1.2 — proxy is not touched, so no
-// USDA foodPortions list). Weight-accurate only:
+// Build the serving-size dropdown options for a normalized USDA food.
+//   • USDA household portions (Phase 3.1.4 — from the detail endpoint; only when a
+//     real gramWeight is provided) — e.g. "1 large (50 g)", "1 cup (158 g)".
 //   • manufacturer serving (when USDA provided one)
 //   • 100 g and 1 oz + custom grams (only for weight-based foods; never for ml,
 //     where there is no reliable gram weight to convert)
 // Each option carries the PER-UNIT macros so quantity simply multiplies them.
-function nuBuildServingOptions(f) {
+// `portions` is optional and additive — absent ⇒ exactly the Phase 3.1.2 options.
+function nuBuildServingOptions(f, portions) {
   var opts = [];
   var per100 = f.raw && f.raw.nutrients ? f.raw.nutrients : null;
   var weightBased = per100 && f.serving_unit !== 'ml';
+
+  // Accurate household servings first (gram-weighted, straight from USDA).
+  if (per100 && portions && portions.length) {
+    portions.forEach(function (p, idx) {
+      var g = +p.gramWeight;
+      if (!(g > 0)) return;                       // only real gram weights — never fabricate
+      opts.push({ key: 'p' + idx, label: p.label + ' (' + nuRound(g) + ' g)',
+        perUnit: nuScalePer100(per100, g), grams: g, amount: p.amount || 1, unit: 'serving',
+        description: p.label });
+    });
+  }
 
   if (f.has_serving) {
     // The food's own serving. Recompute from per-100 g when grams are known so it
@@ -764,11 +776,30 @@ function nuRenderUsdaResults() {
 // ✓USDA header, a serving dropdown (built from the payload), a quantity stepper,
 // and a big live macro readout. The user only picks serving + quantity.
 var nu_servingOptions = [];
+var nu_servingTouched = false;   // true once the user changes the serving select
+var nu_detailCache = {};         // fdcId → trimmed portions[] (session cache)
+
+// Render the serving <select> from nu_servingOptions, selecting `selectedKey`.
+function nuRenderServingSelect(selectedKey) {
+  var sel = document.getElementById('nuServingSelect');
+  if (!sel) return;
+  sel.innerHTML = nu_servingOptions.map(function (o) {
+    return '<option value="' + o.key + '">' + nuEsc(o.label) + '</option>';
+  }).join('');
+  if (selectedKey != null) sel.value = selectedKey;
+}
+
+// User changed the serving — mark it touched so a late portions fetch won't override.
+function nuServingChanged(key) {
+  nu_servingTouched = true;
+  nuApplyServing(key);
+}
 
 function nuPickUsda(i) {
   var f = nu_usdaResults[i];
   if (!f) return;
   nu_pendingSource = f;
+  nu_servingTouched = false;
   document.getElementById('nuName').value = f.name;      // logged name keeps the brand suffix
 
   // Card header.
@@ -777,14 +808,11 @@ function nuPickUsda(i) {
   bEl.textContent = f.brand || '';
   bEl.style.display = f.brand ? 'inline-block' : 'none';
 
-  // Serving dropdown — accurate options only (manufacturer serving, 100 g, 1 oz, custom).
+  // Open instantly with the Phase 3.1.2 options (manufacturer serving, 100 g, 1 oz,
+  // custom). True USDA household portions are merged in by the async fetch below.
   nu_servingOptions = nuBuildServingOptions(f);
-  var sel = document.getElementById('nuServingSelect');
-  sel.innerHTML = nu_servingOptions.map(function (o) {
-    return '<option value="' + o.key + '">' + nuEsc(o.label) + '</option>';
-  }).join('');
   var def = f.has_serving ? 'serving' : (nu_servingOptions[0] && nu_servingOptions[0].key);
-  sel.value = def;
+  nuRenderServingSelect(def);
   document.getElementById('nuCustomGrams').value = '';
   document.getElementById('nuServings').value = 1;
 
@@ -792,6 +820,56 @@ function nuPickUsda(i) {
   nuShowForm(true);                    // switches the form into USDA-card mode
   nuApplyServing(def);                 // fills hidden inputs + readout for the default serving
   setTimeout(function () { document.getElementById('nuServingSelect').focus(); }, 60);
+
+  // Non-blocking: enrich the dropdown with real household servings when they arrive.
+  if (f.usda_fdc_id != null) nuLoadPortions(f);
+}
+
+// Fetch USDA detail portions (cached, abortable) and merge them into the serving
+// dropdown. Purely additive — any failure leaves the 3.1.2 options in place.
+async function nuLoadPortions(f) {
+  var portions = await nuFetchUsdaDetail(f.usda_fdc_id);
+  if (nu_pendingSource !== f) return;          // user moved on — stale result
+  if (!portions || !portions.length) return;   // graceful fallback: keep base options
+
+  var sel = document.getElementById('nuServingSelect');
+  var prevKey = sel ? sel.value : null;
+  nu_servingOptions = nuBuildServingOptions(f, portions);
+
+  if (!nu_servingTouched) {
+    // Default to the primary USDA household serving (egg → 1 large, etc.).
+    var def = nu_servingOptions[0] && nu_servingOptions[0].key;
+    nuRenderServingSelect(def);
+    nuApplyServing(def);
+  } else {
+    // Respect the user's choice; keep it selected if it still exists.
+    var keep = nu_servingOptions.some(function (o) { return o.key === prevKey; }) ? prevKey : (sel && sel.value);
+    nuRenderServingSelect(keep);
+  }
+}
+
+// GET trimmed USDA portions for an fdcId. Cached per session; ~3.5s timeout; any
+// error/empty returns [] so the caller silently keeps the base serving options.
+async function nuFetchUsdaDetail(fdcId) {
+  if (nu_detailCache[fdcId]) return nu_detailCache[fdcId];
+  try {
+    var s = await supabaseClient.auth.getSession();
+    var token = s.data.session && s.data.session.access_token;
+    if (!token) return [];
+    var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, 3500) : null;
+    var res = await fetch('/api/usda-food?fdcId=' + encodeURIComponent(fdcId), {
+      headers: { Authorization: 'Bearer ' + token }, signal: ctrl ? ctrl.signal : undefined,
+    });
+    if (timer) clearTimeout(timer);
+    if (!res.ok) return [];
+    var data = await res.json();
+    var portions = (data && data.portions) || [];
+    nu_detailCache[fdcId] = portions;          // cache even [] to avoid refetching
+    return portions;
+  } catch (e) {
+    return [];                                  // network/abort → silent fallback
+  }
 }
 
 // Apply a chosen serving: compute its PER-UNIT macros, fill the (hidden) macro
@@ -916,7 +994,7 @@ function nuModalMarkup() {
         // USDA pick only — serving-size dropdown (+ optional custom grams)
         '<div class="field-group" id="nuServingRow" style="display:none;">' +
           '<label class="field-label">Serving</label>' +
-          '<select id="nuServingSelect" onchange="nuApplyServing(this.value)"></select>' +
+          '<select id="nuServingSelect" onchange="nuServingChanged(this.value)"></select>' +
           '<input type="number" id="nuCustomGrams" class="nu-custom-grams" style="display:none;" inputmode="decimal" step="1" min="1" placeholder="grams" oninput="nuApplyServing(\'custom\')">' +
         '</div>' +
         // common — meal + quantity stepper
