@@ -152,6 +152,27 @@ const WHOLE_FOOD_CATEGORIES = new Set([
   'sausages and luncheon meats',
 ]);
 
+// Canonical food preference. For a base-food search, reward the normal base food
+// (raw/cooked/whole cuts) and penalize compound/processed/recipe foods that merely
+// contain the word. INTENT-AWARE: a term is only applied when the user did NOT
+// search it — so "orange juice", "rice flour", "egg whites", "salmon nuggets" still
+// rank their literal food. Extend either list with plain phrases; no code changes.
+const POSITIVE_TERMS = [
+  'raw', 'cooked', 'boiled', 'baked', 'roasted', 'grilled', 'whole', 'large', 'medium',
+  'fresh', 'with skin', 'boneless', 'skinless', 'breast', 'ground', 'fillet',
+  'white rice', 'brown rice', 'jasmine', 'basmati', 'rolled oats', 'steel cut oats',
+  'old fashioned oats',
+];
+const NEGATIVE_TERMS = [
+  'salad', 'substitute', 'dried', 'powder', 'flour', 'peel', 'juice', 'crackers',
+  'chips', 'pancakes', 'buns', 'gnocchi', 'breaded', 'nuggets', 'spread', 'meatless',
+  'taco', 'nachos', 'restaurant', 'baby food', 'babyfood', 'cereal', 'granola', 'bar',
+  'muffin', 'cake', 'vinegar', 'oil', 'bran', 'mix', 'flavored', 'deli', 'sliced',
+  'luncheon',
+];
+// Base-prep descriptors that mark the unprocessed whole food (subset of positives).
+const BASE_PREP_TERMS = ['raw', 'cooked', 'boiled', 'baked', 'roasted', 'grilled', 'fresh', 'whole', 'fillet'];
+
 // ── Relevance scoring ──────────────────────────────────────────────────────
 // USDA's own ordering buries branded products under generic/SR foods (and a
 // COMBINED dataType query returns zero branded at all). We instead query Branded
@@ -176,6 +197,37 @@ function stem(t) {
   return t;
 }
 function stemTokens(toks) { return toks.map(stem); }
+
+// Pre-stem the canonical term lists once (each term → array of stems).
+const POSITIVE_STEMS = POSITIVE_TERMS.map(function (t) { return stemTokens(t.split(/\s+/)); });
+const NEGATIVE_STEMS = NEGATIVE_TERMS.map(function (t) { return stemTokens(t.split(/\s+/)); });
+const BASE_PREP_STEMS = BASE_PREP_TERMS.map(function (t) { return stemTokens(t.split(/\s+/)); });
+function termInStems(termStems, stemSet) { return termStems.every(function (st) { return stemSet.has(st); }); }
+function termInQuery(termStems, qStems) { return termStems.every(function (st) { return qStems.indexOf(st) >= 0; }); }
+// Any term from `list` present in the food but NOT in the query.
+function hasUnqueriedTerm(list, foodStemSet, qStems) {
+  for (var i = 0; i < list.length; i++) {
+    if (termInQuery(list[i], qStems)) continue;
+    if (termInStems(list[i], foodStemSet)) return true;
+  }
+  return false;
+}
+
+// Intent-aware canonical adjustment: + for base-food descriptors, − for processed/
+// compound ones — but ONLY for terms the user did not type. Capped so it reorders
+// within match quality, never overpowering brand recognition or whole-food category.
+function canonicalAdjust(foodStemSet, qStems) {
+  var pos = 0, neg = 0, i;
+  for (i = 0; i < POSITIVE_STEMS.length; i++) {
+    if (termInQuery(POSITIVE_STEMS[i], qStems)) continue;       // user searched it → neutral
+    if (termInStems(POSITIVE_STEMS[i], foodStemSet)) pos++;
+  }
+  for (i = 0; i < NEGATIVE_STEMS.length; i++) {
+    if (termInQuery(NEGATIVE_STEMS[i], qStems)) continue;       // user searched it → neutral
+    if (termInStems(NEGATIVE_STEMS[i], foodStemSet)) neg++;
+  }
+  return Math.min(pos, 2) * 100 - Math.min(neg, 3) * 200;       // +0..+200, −0..−600
+}
 
 // Is the brand a recognizable national brand? Single-word config entries must
 // match a whole brand token; multi-word entries match as a normalized substring.
@@ -232,19 +284,36 @@ function scoreFood(f, qLower, toks, qStems, freqMap) {
   s += present * 40;                                          // partial token credit
   if (toks.length && desc.indexOf(toks[0]) === 0) s += 80;    // food name starts with 1st word
 
+  const foodStemSet = new Set(stemTokens(hay.split(/\s+/)));
+  // Processed/compound = carries a negative term the user did not search (e.g. salad,
+  // spread, nuggets, deli). Such foods don't get the whole-food canonical/base boosts.
+  const processed = hasUnqueriedTerm(NEGATIVE_STEMS, foodStemSet, qStems);
+
   if (isBranded) {
     if (brandRecognized(f.brand)) s += 900;                   // recognized national brand (curated)
     // Low-weight popularity proxy: a brand with many products in the pool is likely
     // a larger catalog. Capped so it nudges unlisted brands, never overrides above.
     const freq = (freqMap && f.brand) ? (freqMap[f.brand.toLowerCase()] || 0) : 0;
     if (freq > 1) s += Math.min(freq - 1, 5) * 25;            // +25..+125
-  } else {
+  } else if (isWholeCategory(f)) {
     // Whole-food relevance from USDA category (algorithmic, not a food list).
-    if (isWholeCategory(f)) {
-      s += 400;
+    s += 400;
+    if (!processed) {
       if (isCanonicalGeneric(f, qStems)) s += 300;            // the canonical raw food (e.g. "Bananas, raw")
+      // BASE-FOOD bonus: the unprocessed whole food — every query word present and a
+      // base descriptor (raw/cooked/whole/fillet…). Lifts it over recipe/processed
+      // items that merely match the text better (USDA names raw foods awkwardly:
+      // "Fish, salmon…", "Chicken, …, breast"). Strictly gated → only ever promotes
+      // THE base food a user means; never branded or processed items.
+      const matchAllStems = qStems.length > 0 && qStems.every(function (st) { return foodStemSet.has(st); });
+      if (matchAllStems && hasUnqueriedTerm(BASE_PREP_STEMS, foodStemSet, qStems)) s += 1500;
     }
   }
+
+  // Canonical food preference (both groups): favor base foods, demote processed/
+  // compound ones — but only for terms the user did not search.
+  s += canonicalAdjust(foodStemSet, qStems);
+
   f._present = present;                                       // stash for filtering
   return s;
 }
