@@ -74,6 +74,7 @@ function trimFood(f) {
     fdcId: f.fdcId,
     description: f.description || '',
     dataType: f.dataType || '',
+    foodCategory: f.foodCategory || '',     // USDA category (generic) — drives whole-food ranking
     brand: f.brandName || f.brandOwner || '',
     servingSize: f.servingSize != null ? +f.servingSize : null,
     servingSizeUnit: f.servingSizeUnit || '',
@@ -130,35 +131,51 @@ const KNOWN_BRANDS = [
   'great value', 'market pantry', 'simple truth', '365', 'good gather', 'trader joes',
 ];
 
-// Basic whole foods. When the query is one of these, generic USDA entries (a raw
-// banana, a chicken breast) usually beat branded products, so the generic group is
-// shown first. Stored as singular stems; add foods by editing this list.
-const WHOLE_FOODS = new Set([
-  'egg', 'banana', 'apple', 'orange', 'pear', 'peach', 'grape', 'mango', 'pineapple',
-  'watermelon', 'strawberry', 'blueberry', 'raspberry', 'cherry', 'lemon', 'lime',
-  'chicken', 'turkey', 'beef', 'steak', 'pork', 'lamb', 'bacon',
-  'salmon', 'tuna', 'cod', 'tilapia', 'shrimp', 'fish',
-  'rice', 'oat', 'oatmeal', 'quinoa', 'potato', 'lentil', 'bean', 'chickpea',
-  'broccoli', 'spinach', 'carrot', 'tomato', 'onion', 'pepper', 'cucumber', 'lettuce',
-  'avocado', 'asparagus', 'cauliflower', 'zucchini', 'kale', 'mushroom', 'celery',
-  'cabbage', 'corn', 'pea', 'garlic', 'almond', 'walnut', 'cashew', 'peanut',
+// Whole-food USDA categories — produce, raw meat/fish, grains, legumes, nuts.
+// A GENERIC result in one of these is an unprocessed whole food, so such searches
+// lead with generic USDA entries. This is the scalable replacement for a per-food
+// list: every fruit/vegetable/cut/grain is covered by its category automatically.
+// USDA's category taxonomy is small and stable; extend here only if a category is
+// missing. (Dairy/Baked/Snacks/Sweets/Beverages are intentionally NOT here — those
+// aisles are brand-driven; egg lands generic-first via the brand-strength fallback.)
+const WHOLE_FOOD_CATEGORIES = new Set([
+  'fruits and fruit juices',
+  'vegetables and vegetable products',
+  'legumes and legume products',
+  'nut and seed products',
+  'cereal grains and pasta',
+  'finfish and shellfish products',
+  'beef products',
+  'pork products',
+  'poultry products',
+  'lamb, veal, and game products',
+  'sausages and luncheon meats',
 ]);
 
 // ── Relevance scoring ──────────────────────────────────────────────────────
 // USDA's own ordering buries branded products under generic/SR foods (and a
 // COMBINED dataType query returns zero branded at all). We instead query Branded
 // and generic separately, re-rank each by match quality + brand recognition +
-// whole-food relevance, and order the two groups by query intent.
+// whole-food (category) relevance, and order the two groups by query intent.
 function tokenize(q) {
   return q.toLowerCase().trim().split(/\s+/).filter(Boolean);
 }
 
-// Crude singular stem so "eggs"→"egg", "oats"→"oat" (leaves short words alone).
+// Rule-based singularizer (not a word list): handles regular English plurals so
+// potatoes→potato, tomatoes→tomato, berries→berry, loaves→loaf, eggs→egg. Applied
+// to BOTH the query and any compared text, so even an imperfect stem (asparagus→
+// asparagu) still matches because both sides stem identically. Consistency > purity.
 function stem(t) {
   t = t.replace(/[^a-z0-9]/gi, '').toLowerCase();
-  if (t.length > 3 && t.charAt(t.length - 1) === 's' && t.slice(-2) !== 'ss') return t.slice(0, -1);
+  if (t.length <= 3) return t;
+  if (/ies$/.test(t)) return t.slice(0, -3) + 'y';                 // berries → berry
+  if (/ves$/.test(t)) return t.slice(0, -3) + 'f';                 // loaves → loaf, leaves → leaf
+  if (/(?:ses|xes|zes|ches|shes|oes)$/.test(t)) return t.slice(0, -2); // potatoes→potato, dishes→dish, boxes→box
+  if (/ss$/.test(t)) return t;                                     // glass, molasses — leave alone
+  if (/s$/.test(t)) return t.slice(0, -1);                          // apples → apple
   return t;
 }
+function stemTokens(toks) { return toks.map(stem); }
 
 // Is the brand a recognizable national brand? Single-word config entries must
 // match a whole brand token; multi-word entries match as a normalized substring.
@@ -173,19 +190,33 @@ function brandRecognized(brand) {
   return false;
 }
 
-// Does the query name a basic whole food? Short queries only (whole-food searches
-// are 1–3 words), matched on stems so "eggs"/"bananas" count.
-function isWholeFoodQuery(toks) {
-  if (!toks.length || toks.length > 3) return false;
-  for (const t of toks) if (WHOLE_FOODS.has(stem(t))) return true;
-  return false;
+// A generic food in a whole-food USDA category (banana, chicken breast, potato).
+function isWholeCategory(f) {
+  return WHOLE_FOOD_CATEGORIES.has((f.foodCategory || '').toLowerCase());
+}
+
+// Every query token present somewhere in the brand+description (stem-aware).
+function matchesAll(f, qStems) {
+  const hayStems = stemTokens(((f.brand || '') + ' ' + (f.description || '')).toLowerCase().split(/\s+/));
+  return qStems.every(function (t) { return hayStems.indexOf(t) >= 0; });
+}
+
+// Canonical generic: the query essentially IS the food's principal name (the part
+// before the first comma), stem-aware — e.g. "bananas" ↔ "Bananas, raw". Algorithmic,
+// no list. Only meaningful for whole-food categories (so "milk" doesn't out-rank brands).
+function isCanonicalGeneric(f, qStems) {
+  const principal = (f.description || '').split(',')[0];
+  const pStems = stemTokens(principal.toLowerCase().split(/\s+/).filter(Boolean));
+  if (!pStems.length || pStems.length > 3) return false;
+  return qStems.every(function (t) { return pStems.indexOf(t) >= 0; });
 }
 
 // Score one trimmed food against the query. Higher = more relevant.
 // Match-quality signals (exact phrase, starts-with, brand/all/partial tokens) PLUS
-// consumer signals: a recognized national brand (branded) or a full whole-food
-// match (generic) gets a large boost so the obvious pick rises to the top.
-function scoreFood(f, qLower, toks, isWhole) {
+// consumer signals: recognized national brand + a low-weight brand-frequency nudge
+// (branded), or whole-food-category + canonical-name relevance (generic). qStems is
+// the singularized query; freqMap counts how often each brand appears in the pool.
+function scoreFood(f, qLower, toks, qStems, freqMap) {
   const desc = (f.description || '').toLowerCase();
   const brand = (f.brand || '').toLowerCase();
   const hay = (brand + ' ' + desc).trim();
@@ -201,12 +232,18 @@ function scoreFood(f, qLower, toks, isWhole) {
   s += present * 40;                                          // partial token credit
   if (toks.length && desc.indexOf(toks[0]) === 0) s += 80;    // food name starts with 1st word
 
-  // Consumer-relevance boosts.
-  if (isBranded && brandRecognized(f.brand)) s += 900;        // recognizable national brand
-                                                              // (must beat an obscure exact-name match)
-  if (!isBranded && isWhole && toks.length && present === toks.length) {
-    s += 700;                                                 // generic that fully matches a whole-food query
-    if (desc.split(',')[0].trim().split(/\s+/).length <= 2) s += 150; // …with a simple, canonical name
+  if (isBranded) {
+    if (brandRecognized(f.brand)) s += 900;                   // recognized national brand (curated)
+    // Low-weight popularity proxy: a brand with many products in the pool is likely
+    // a larger catalog. Capped so it nudges unlisted brands, never overrides above.
+    const freq = (freqMap && f.brand) ? (freqMap[f.brand.toLowerCase()] || 0) : 0;
+    if (freq > 1) s += Math.min(freq - 1, 5) * 25;            // +25..+125
+  } else {
+    // Whole-food relevance from USDA category (algorithmic, not a food list).
+    if (isWholeCategory(f)) {
+      s += 400;
+      if (isCanonicalGeneric(f, qStems)) s += 300;            // the canonical raw food (e.g. "Bananas, raw")
+    }
   }
   f._present = present;                                       // stash for filtering
   return s;
@@ -215,10 +252,10 @@ function scoreFood(f, qLower, toks, isWhole) {
 // Rank a pool of trimmed foods. `strict` (branded) keeps only items matching ALL
 // query words so a brand query stays precise; generic keeps anything matching at
 // least one word so plain foods (e.g. "Peanut butter, creamy") still surface.
-function rankPool(pool, qLower, toks, group, strict, cap, isWhole) {
+function rankPool(pool, qLower, toks, group, strict, cap, qStems, freqMap) {
   const scored = [];
   for (const f of pool) {
-    const score = scoreFood(f, qLower, toks, isWhole);
+    const score = scoreFood(f, qLower, toks, qStems, freqMap);
     const phrase = qLower && (f.brand + ' ' + f.description).toLowerCase().indexOf(qLower) >= 0;
     const keep = strict ? (f._present === toks.length || phrase) : (f._present >= 1);
     delete f._present;          // internal only — keep it out of raw_source_data
@@ -298,14 +335,32 @@ module.exports = async (req, res) => {
 
     const qLower = q.toLowerCase();
     const toks = tokenize(q);
-    const isWhole = isWholeFoodQuery(toks);
-    const rankedBranded = rankPool(branded, qLower, toks, 'branded', true, 12, isWhole);
-    const rankedGeneric = rankPool(generic, qLower, toks, 'generic', false, 8, isWhole);
+    const qStems = stemTokens(toks);
 
-    // Group ORDER is intent-driven: whole-food searches (egg, banana, chicken
-    // breast) lead with generic USDA foods; everything else leads with branded.
-    // Both groups are always returned; the client renders headers off `group`.
-    const foods = isWhole
+    // Brand-frequency map over the branded pool (low-weight popularity proxy).
+    const freqMap = {};
+    branded.forEach(function (f) {
+      if (f.brand) { const k = f.brand.toLowerCase(); freqMap[k] = (freqMap[k] || 0) + 1; }
+    });
+
+    const rankedBranded = rankPool(branded, qLower, toks, 'branded', true, 12, qStems, freqMap);
+    const rankedGeneric = rankPool(generic, qLower, toks, 'generic', false, 8, qStems, freqMap);
+
+    // Group ORDER is emergent, not a per-food flag:
+    //   • lead with GENERIC when a whole-food-category result solidly matches the
+    //     query (produce, raw meat/fish, grains…) — covers any such food via its
+    //     USDA category, no list — OR when the top generic simply out-scores the top
+    //     branded (handles egg: whole food, no recognized brand → generic wins).
+    //   • otherwise lead with BRANDED (the brand-driven aisles: dairy, bakery, bars).
+    const genericByCategory = rankedGeneric.some(function (g) {
+      return isWholeCategory(g) && matchesAll(g, qStems);
+    });
+    const topG = rankedGeneric.length ? rankedGeneric[0].score : 0;
+    const topB = rankedBranded.length ? rankedBranded[0].score : 0;
+    const genericFirst = rankedGeneric.length > 0 && (genericByCategory || topG >= topB);
+
+    // Both groups always returned; the client renders headers off `group`.
+    const foods = genericFirst
       ? rankedGeneric.concat(rankedBranded)
       : rankedBranded.concat(rankedGeneric);
 
@@ -314,7 +369,7 @@ module.exports = async (req, res) => {
     const body = {
       foods,
       counts: { branded: rankedBranded.length, generic: rankedGeneric.length },
-      wholeFood: isWhole,
+      genericFirst: genericFirst,
     };
     if (USING_DEMO) body.warning = 'Using DEMO_KEY (rate-limited, dev only).';
     return res.status(200).json(body);
