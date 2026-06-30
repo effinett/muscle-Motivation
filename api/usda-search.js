@@ -189,6 +189,37 @@ const PREFERRED_CUT_TERMS = [
   'sirloin', 'ribeye', 'loin', 'round', 'chuck', 'brisket',
 ];
 
+// Brand aliases — common ways people type a brand. Maps a typed token to the
+// canonical brand phrase used for brand-intent detection. Extend freely.
+const BRAND_ALIASES = { coke: 'coca cola', cocacola: 'coca cola', cococola: 'coca cola' };
+
+// Food-specific intent maps. When the query IS one of these base foods, strongly
+// prefer the forms people overwhelmingly mean and strongly penalize derivatives —
+// far beyond the generic word lists. Intent-aware: a prefer/penalize term is only
+// applied when the user did NOT type it. Edit these maps to tune a food; no code.
+const FOOD_INTENT = {
+  'peanut butter': {
+    prefer:   ['creamy', 'natural', 'organic', 'smooth', 'crunchy'],
+    penalize: ['candy', 'coating', 'cereal', 'dessert', 'cup', 'cups', 'cookie', 'ice cream'],
+  },
+  rice: {
+    prefer:   ['white', 'brown', 'jasmine', 'basmati', 'cooked', 'long grain'],
+    penalize: ['crackers', 'cakes', 'flour', 'pilaf', 'pudding', 'mix', 'snack', 'cereal', 'vinegar', 'bran'],
+  },
+  chicken: {
+    prefer:   ['breast', 'tenderloin', 'thigh', 'drumstick', 'wing', 'whole', 'ground'],
+    penalize: ['feet', 'spread', 'broth', 'bratwurst', 'salad', 'nuggets', 'canned', 'sausage', 'patty', 'patties'],
+  },
+  waffle: {
+    prefer:   ['plain', 'belgian', 'frozen', 'homemade', 'buttermilk'],
+    penalize: ['fries', 'fry', 'bowl', 'cone', 'cereal', 'crunch'],
+  },
+  egg: {
+    prefer:   ['whole', 'large', 'white', 'yolk'],
+    penalize: ['substitute', 'replacer', 'salad', 'mayonnaise', 'noodles', 'makers', 'maker'],
+  },
+};
+
 // ── Relevance scoring ──────────────────────────────────────────────────────
 // USDA's own ordering buries branded products under generic/SR foods (and a
 // COMBINED dataType query returns zero branded at all). We instead query Branded
@@ -219,6 +250,49 @@ const POSITIVE_STEMS = POSITIVE_TERMS.map(function (t) { return stemTokens(t.spl
 const NEGATIVE_STEMS = NEGATIVE_TERMS.map(function (t) { return stemTokens(t.split(/\s+/)); });
 const BASE_PREP_STEMS = BASE_PREP_TERMS.map(function (t) { return stemTokens(t.split(/\s+/)); });
 const PREFERRED_CUT_STEMS = PREFERRED_CUT_TERMS.map(function (t) { return stemTokens(t.split(/\s+/)); });
+
+// Single brand tokens (split from KNOWN_BRANDS) used to detect a brand in the query.
+const KNOWN_BRAND_TOKENS = new Set();
+KNOWN_BRANDS.forEach(function (b) {
+  b.split(/\s+/).forEach(function (w) { if (w.length >= 3) KNOWN_BRAND_TOKENS.add(w); });
+});
+
+// Pre-stem the food-intent maps once: { keyStems, prefer:[[stems]], penalize:[[stems]] },
+// longest key first so "peanut butter" wins over a single-word key.
+const FOOD_INTENT_LIST = Object.keys(FOOD_INTENT).map(function (k) {
+  return {
+    keyStems: stemTokens(k.split(/\s+/)),
+    prefer:   FOOD_INTENT[k].prefer.map(function (t) { return stemTokens(t.split(/\s+/)); }),
+    penalize: FOOD_INTENT[k].penalize.map(function (t) { return stemTokens(t.split(/\s+/)); }),
+  };
+}).sort(function (a, b) { return b.keyStems.length - a.keyStems.length; });
+
+// The brand tokens present in the query (alias-aware): e.g. "coke" → ['coca','cola'].
+function queryBrandTokens(toks) {
+  const out = [];
+  toks.forEach(function (t) {
+    const norm = t.replace(/[^a-z0-9]/g, '').toLowerCase();
+    const words = (BRAND_ALIASES[norm] || norm).split(/\s+/);
+    words.forEach(function (w) { if (KNOWN_BRAND_TOKENS.has(w)) out.push(w); });
+  });
+  return out;
+}
+
+// The food-intent map whose key is fully present in the query, if any.
+function pickFoodIntent(qStems) {
+  for (let i = 0; i < FOOD_INTENT_LIST.length; i++) {
+    const it = FOOD_INTENT_LIST[i];
+    if (it.keyStems.every(function (s) { return qStems.indexOf(s) >= 0; })) return it;
+  }
+  return null;
+}
+
+// Does a branded food's brand contain one of the query's brand tokens?
+function brandMatchesIntent(brand, brandIntent) {
+  if (!brandIntent || !brandIntent.length) return false;
+  const fbt = brand.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  return brandIntent.some(function (bt) { return fbt.indexOf(bt) >= 0; });
+}
 function termInStems(termStems, stemSet) { return termStems.every(function (st) { return stemSet.has(st); }); }
 function termInQuery(termStems, qStems) { return termStems.every(function (st) { return qStems.indexOf(st) >= 0; }); }
 // Any term from `list` present in the food but NOT in the query.
@@ -250,7 +324,8 @@ function canonicalAdjust(foodStemSet, qStems) {
 // match a whole brand token; multi-word entries match as a normalized substring.
 function brandRecognized(brand) {
   if (!brand) return false;
-  const toks = brand.toLowerCase().split(/\s+/).map(function (t) { return t.replace(/[^a-z0-9]/g, ''); }).filter(Boolean);
+  // Split on any non-alphanumeric so hyphenated brands match (Coca-Cola → coca cola).
+  const toks = brand.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
   const flat = toks.join(' ');
   for (const b of KNOWN_BRANDS) {
     if (b.indexOf(' ') >= 0) { if (flat.indexOf(b) >= 0) return true; }
@@ -285,7 +360,8 @@ function isCanonicalGeneric(f, qStems) {
 // consumer signals: recognized national brand + a low-weight brand-frequency nudge
 // (branded), or whole-food-category + canonical-name relevance (generic). qStems is
 // the singularized query; freqMap counts how often each brand appears in the pool.
-function scoreFood(f, qLower, toks, qStems, freqMap) {
+function scoreFood(f, qLower, toks, qStems, ctx) {
+  const freqMap = ctx.freqMap, brandIntent = ctx.brandIntent, intent = ctx.intent;
   const desc = (f.description || '').toLowerCase();
   const brand = (f.brand || '').toLowerCase();
   const hay = (brand + ' ' + desc).trim();
@@ -303,11 +379,24 @@ function scoreFood(f, qLower, toks, qStems, freqMap) {
 
   const foodStemSet = new Set(stemTokens(hay.split(/\s+/)));
   // Processed/compound = carries a negative term the user did not search (e.g. salad,
-  // spread, nuggets, deli). Such foods don't get the whole-food canonical/base boosts.
-  const processed = hasUnqueriedTerm(NEGATIVE_STEMS, foodStemSet, qStems);
+  // spread, nuggets, deli) OR a food-specific intent penalty (e.g. waffle fries for
+  // "waffle"). Such foods don't get the whole-food canonical/base boosts.
+  const intentPenalized = intent ? hasUnqueriedTerm(intent.penalize, foodStemSet, qStems) : false;
+  const intentPreferred = intent ? hasUnqueriedTerm(intent.prefer, foodStemSet, qStems) : false;
+  let processed = hasUnqueriedTerm(NEGATIVE_STEMS, foodStemSet, qStems) || intentPenalized;
 
   if (isBranded) {
     if (brandRecognized(f.brand)) s += 900;                   // recognized national brand (curated)
+    // BRAND INTENT: the user typed a brand (Kirkland, Fairlife, Coke…) and this
+    // product is that brand → make it dominant over generic text matches. The
+    // product whose description also carries the brand word (Coca-Cola Classic)
+    // outranks sibling brands under the same owner (Sprite).
+    if (brandMatchesIntent(brand, brandIntent)) {
+      s += 1500;
+      let descHits = 0;
+      brandIntent.forEach(function (bt) { if (desc.indexOf(bt) >= 0) descHits++; });
+      s += Math.min(descHits, 2) * 250;
+    }
     // Low-weight popularity proxy: a brand with many products in the pool is likely
     // a larger catalog. Capped so it nudges unlisted brands, never overrides above.
     const freq = (freqMap && f.brand) ? (freqMap[f.brand.toLowerCase()] || 0) : 0;
@@ -335,6 +424,12 @@ function scoreFood(f, qLower, toks, qStems, freqMap) {
   // (chicken breast, salmon fillet, beef sirloin) over obscure parts/derivatives.
   if (!processed && hasUnqueriedTerm(PREFERRED_CUT_STEMS, foodStemSet, qStems)) s += 250;
 
+  // Food-specific intent (rice/chicken/waffle/egg/peanut butter): strong prefer for
+  // the intended form, strong penalty for derivatives — enough to beat a derivative's
+  // better text match (e.g. "Waffle Cut Fries" starting with the query word).
+  if (intentPreferred) s += 600;
+  if (intentPenalized) s -= 1100;
+
   f._present = present;                                       // stash for filtering
   return s;
 }
@@ -342,12 +437,15 @@ function scoreFood(f, qLower, toks, qStems, freqMap) {
 // Rank a pool of trimmed foods. `strict` (branded) keeps only items matching ALL
 // query words so a brand query stays precise; generic keeps anything matching at
 // least one word so plain foods (e.g. "Peanut butter, creamy") still surface.
-function rankPool(pool, qLower, toks, group, strict, cap, qStems, freqMap) {
+function rankPool(pool, qLower, toks, group, strict, cap, qStems, ctx) {
   const scored = [];
   for (const f of pool) {
-    const score = scoreFood(f, qLower, toks, qStems, freqMap);
+    const score = scoreFood(f, qLower, toks, qStems, ctx);
     const phrase = qLower && (f.brand + ' ' + f.description).toLowerCase().indexOf(qLower) >= 0;
-    const keep = strict ? (f._present === toks.length || phrase) : (f._present >= 1);
+    // Brand-intent foods are kept even if the typed token isn't literally in the text
+    // (e.g. "coke" → "Coca-Cola"), so brand-alias searches still return the brand.
+    const brandHit = ctx.brandIntent.length > 0 && brandMatchesIntent((f.brand || '').toLowerCase(), ctx.brandIntent);
+    const keep = brandHit || (strict ? (f._present === toks.length || phrase) : (f._present >= 1));
     delete f._present;          // internal only — keep it out of raw_source_data
     if (!keep) continue;
     f.group = group;
@@ -433,8 +531,12 @@ module.exports = async (req, res) => {
       if (f.brand) { const k = f.brand.toLowerCase(); freqMap[k] = (freqMap[k] || 0) + 1; }
     });
 
-    const rankedBranded = rankPool(branded, qLower, toks, 'branded', true, 12, qStems, freqMap);
-    const rankedGeneric = rankPool(generic, qLower, toks, 'generic', false, 8, qStems, freqMap);
+    // Shared scoring context: brand-intent tokens (query named a brand) + the active
+    // food-intent map (query IS a base food). Computed once per request.
+    const ctx = { freqMap, brandIntent: queryBrandTokens(toks), intent: pickFoodIntent(qStems) };
+
+    const rankedBranded = rankPool(branded, qLower, toks, 'branded', true, 12, qStems, ctx);
+    const rankedGeneric = rankPool(generic, qLower, toks, 'generic', false, 8, qStems, ctx);
 
     // Group ORDER is emergent, not a per-food flag:
     //   • lead with GENERIC when a whole-food-category result solidly matches the
