@@ -164,15 +164,30 @@ const POSITIVE_TERMS = [
   'white rice', 'brown rice', 'jasmine', 'basmati', 'rolled oats', 'steel cut oats',
   'old fashioned oats',
 ];
+// Derivative / processed / recipe descriptors. A food carrying one of these (that
+// the user did NOT type) ranks below the base food — egg salad, apple pie, waffle
+// cone, rice cakes, chicken feet, egg makers, etc. Add words here, not in code.
 const NEGATIVE_TERMS = [
   'salad', 'substitute', 'dried', 'powder', 'flour', 'peel', 'juice', 'crackers',
   'chips', 'pancakes', 'buns', 'gnocchi', 'breaded', 'nuggets', 'spread', 'meatless',
   'taco', 'nachos', 'restaurant', 'baby food', 'babyfood', 'cereal', 'granola', 'bar',
   'muffin', 'cake', 'vinegar', 'oil', 'bran', 'mix', 'flavored', 'deli', 'sliced',
   'luncheon',
+  // Phase 3.1.2 — more derivatives surfaced in live testing
+  'patties', 'patty', 'fries', 'pie', 'cookies', 'cookie', 'dessert', 'bowl', 'cone',
+  'dip', 'sauce', 'bratwurst', 'coating', 'mayonnaise', 'makers', 'maker', 'feet',
+  'fritter', 'concentrate', 'pudding', 'jerky', 'sausage', 'soup', 'wrap', 'roll',
+  'pizza', 'sandwich', 'smoothie',
 ];
 // Base-prep descriptors that mark the unprocessed whole food (subset of positives).
 const BASE_PREP_TERMS = ['raw', 'cooked', 'boiled', 'baked', 'roasted', 'grilled', 'fresh', 'whole', 'fillet'];
+// Preferred cuts/types people overwhelmingly intend (chicken breast, beef sirloin,
+// salmon fillet). A food carrying one — that the user did not type — is lifted over
+// obscure parts/forms (chicken breast over chicken feet). Configurable, not in code.
+const PREFERRED_CUT_TERMS = [
+  'breast', 'thigh', 'tenderloin', 'drumstick', 'wing', 'fillet', 'filet',
+  'sirloin', 'ribeye', 'loin', 'round', 'chuck', 'brisket',
+];
 
 // ── Relevance scoring ──────────────────────────────────────────────────────
 // USDA's own ordering buries branded products under generic/SR foods (and a
@@ -203,6 +218,7 @@ function stemTokens(toks) { return toks.map(stem); }
 const POSITIVE_STEMS = POSITIVE_TERMS.map(function (t) { return stemTokens(t.split(/\s+/)); });
 const NEGATIVE_STEMS = NEGATIVE_TERMS.map(function (t) { return stemTokens(t.split(/\s+/)); });
 const BASE_PREP_STEMS = BASE_PREP_TERMS.map(function (t) { return stemTokens(t.split(/\s+/)); });
+const PREFERRED_CUT_STEMS = PREFERRED_CUT_TERMS.map(function (t) { return stemTokens(t.split(/\s+/)); });
 function termInStems(termStems, stemSet) { return termStems.every(function (st) { return stemSet.has(st); }); }
 function termInQuery(termStems, qStems) { return termStems.every(function (st) { return qStems.indexOf(st) >= 0; }); }
 // Any term from `list` present in the food but NOT in the query.
@@ -314,6 +330,10 @@ function scoreFood(f, qLower, toks, qStems, freqMap) {
   // Canonical food preference (both groups): favor base foods, demote processed/
   // compound ones — but only for terms the user did not search.
   s += canonicalAdjust(foodStemSet, qStems);
+
+  // Preferred cut/type the user did not type — lifts the common form people mean
+  // (chicken breast, salmon fillet, beef sirloin) over obscure parts/derivatives.
+  if (!processed && hasUnqueriedTerm(PREFERRED_CUT_STEMS, foodStemSet, qStems)) s += 250;
 
   f._present = present;                                       // stash for filtering
   return s;
