@@ -984,11 +984,11 @@ function nuUpdateTotalPreview() {
   function set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
   set('nuRoCal', t.calories); set('nuRoPro', t.protein + 'g'); set('nuRoCarb', t.carbs + 'g'); set('nuRoFat', t.fat + 'g');
 
-  // USDA detail view also shows fiber + sugar (0 when USDA has no data).
+  // Second row inside the card: fiber + sugar (USDA only; 0 when USDA has no data).
   var micros = document.getElementById('nuMicros');
   if (micros) {
     if (src) {
-      micros.innerHTML = 'Fiber <strong>' + t.fiber + ' g</strong> · Sugar <strong>' + t.sugar + ' g</strong>';
+      set('nuRoFiber', t.fiber + 'g'); set('nuRoSugar', t.sugar + 'g');
       micros.style.display = 'block';
     } else {
       micros.style.display = 'none';
@@ -1086,15 +1086,23 @@ function nuModalMarkup() {
           '</div>' +
           '<div class="nu-total-preview" id="nuTotalPreview"></div>' +
         '</div>' +
-        // USDA pick only — large live macro readout (the chosen serving × quantity)
+        // USDA pick only — live nutrition card (chosen serving × quantity).
+        // Primary macros up top; fiber + sugar on a quieter second row inside the card.
         '<div class="nu-readout" id="nuMacroReadout" style="display:none;">' +
-          '<div class="nu-readout-cell"><div class="nu-readout-num" id="nuRoCal">0</div><div class="nu-readout-lab">Calories</div></div>' +
-          '<div class="nu-readout-cell"><div class="nu-readout-num" id="nuRoPro">0g</div><div class="nu-readout-lab">Protein</div></div>' +
-          '<div class="nu-readout-cell"><div class="nu-readout-num" id="nuRoCarb">0g</div><div class="nu-readout-lab">Carbs</div></div>' +
-          '<div class="nu-readout-cell"><div class="nu-readout-num" id="nuRoFat">0g</div><div class="nu-readout-lab">Fat</div></div>' +
+          '<div class="nu-readout-row">' +
+            '<div class="nu-readout-cell cal"><div class="nu-readout-num" id="nuRoCal">0</div><div class="nu-readout-lab">Calories</div></div>' +
+            '<div class="nu-readout-cell"><div class="nu-readout-num" id="nuRoPro">0g</div><div class="nu-readout-lab">Protein</div></div>' +
+            '<div class="nu-readout-cell"><div class="nu-readout-num" id="nuRoCarb">0g</div><div class="nu-readout-lab">Carbs</div></div>' +
+            '<div class="nu-readout-cell"><div class="nu-readout-num" id="nuRoFat">0g</div><div class="nu-readout-lab">Fat</div></div>' +
+          '</div>' +
+          '<div class="nu-readout-sub" id="nuMicros" style="display:none;">' +
+            '<div class="nu-readout-divider"></div>' +
+            '<div class="nu-readout-row nu-readout-row-2">' +
+              '<div class="nu-readout-cell nu-readout-cell-sm"><div class="nu-readout-num" id="nuRoFiber">0g</div><div class="nu-readout-lab">Fiber</div></div>' +
+              '<div class="nu-readout-cell nu-readout-cell-sm"><div class="nu-readout-num" id="nuRoSugar">0g</div><div class="nu-readout-lab">Sugar</div></div>' +
+            '</div>' +
+          '</div>' +
         '</div>' +
-        // USDA pick only — fiber + sugar (shown when available, 0 otherwise)
-        '<div class="nu-micros" id="nuMicros" style="display:none;"></div>' +
         '<button class="btn-calc" id="nuSaveBtn" onclick="nuSave()">Add Food</button>' +
         '<button class="btn-delete-log" id="nuDeleteBtn" style="display:none;" onclick="nuDeleteFromModal()">Delete Entry</button>' +
       '</div>' +
