@@ -914,16 +914,19 @@ function nuApplyServing(key) {
   nuUpdateTotalPreview();
 }
 
-// Quantity stepper. Buttons move by whole units (the common case); typing still
-// allows any decimal (0.25 etc). Clamped above zero.
-function nuQtyStep(delta) {
+// Quantity stepper — one centralized 0.25 step. `dir` is a direction (+1 / −1),
+// so − then + (or + then −) always returns to the previous value. Rounded to 2dp
+// to avoid float drift; never below the 0.25 minimum. Typing still allows decimals.
+var NU_SERVING_STEP = 0.25;
+var NU_SERVING_MIN  = 0.25;
+function nuQtyStep(dir) {
   var el = document.getElementById('nuServings');
   var v = parseFloat(el.value);
   if (isNaN(v)) v = 1;
-  v = Math.round((v + delta) * 100) / 100;
-  if (v < 0.25) v = 0.25;
+  v = Math.round((v + dir * NU_SERVING_STEP) * 100) / 100;
+  if (v < NU_SERVING_MIN) v = NU_SERVING_MIN;
   el.value = v;
-  nuUpdateTotalPreview();
+  nuUpdateTotalPreview();          // live macro refresh from the new serving state
 }
 
 // Live nutrition = per-unit inputs × quantity. Updates BOTH the manual preview
