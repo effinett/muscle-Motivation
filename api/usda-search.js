@@ -76,6 +76,7 @@ function trimFood(f) {
     dataType: f.dataType || '',
     foodCategory: f.foodCategory || '',     // USDA category (generic) — drives whole-food ranking
     brand: f.brandName || f.brandOwner || '',
+    gtinUpc: f.gtinUpc || '',               // branded barcode (GTIN/UPC) — for future barcode lookup
     servingSize: f.servingSize != null ? +f.servingSize : null,
     servingSizeUnit: f.servingSizeUnit || '',
     householdServing: f.householdServingFullText || '',

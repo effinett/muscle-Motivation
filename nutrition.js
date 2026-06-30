@@ -41,6 +41,22 @@ function nuFmtDateLong(dateStr) {
 function nuRound(n) { return Math.round((+n || 0)); }
 function nuRound1(n) { return Math.round((+n || 0) * 10) / 10; }
 
+// SHARED macro scaling — the ONE place per-serving macros are multiplied by a
+// quantity. Used by the live detail readout AND the save payload so the displayed
+// and stored values can never diverge. Calories round to whole; grams to 1 dp.
+function nuScaleMacros(base, qty) {
+  base = base || {};
+  var q = +qty || 1;
+  return {
+    calories: nuRound((+base.calories || 0) * q),
+    protein:  nuRound1((+base.protein || 0) * q),
+    carbs:    nuRound1((+base.carbs   || 0) * q),
+    fat:      nuRound1((+base.fat     || 0) * q),
+    fiber:    nuRound1((+base.fiber   || 0) * q),
+    sugar:    nuRound1((+base.sugar   || 0) * q),
+  };
+}
+
 var NU_MEALS = ['breakfast', 'lunch', 'dinner', 'snack'];
 var NU_MEAL_LABELS = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', snack: 'Snacks' };
 
@@ -158,12 +174,20 @@ async function nuUpsertFood(userId, food, src) {
 // a USDA-logged food's macros never erases where it came from.
 async function nuSaveLog(userId, entry) {
   var servings = entry.servings != null ? +entry.servings : 1;
-  var perCal = +entry.calories || 0, perP = +entry.protein || 0, perC = +entry.carbs || 0, perF = +entry.fat || 0;
   var src = entry.src || null;
+
+  // Per-serving base (fiber/sugar only exist on a USDA source). Scaled with the SAME
+  // shared function the live readout uses, so saved values == displayed values.
+  var perUnit = {
+    calories: +entry.calories || 0, protein: +entry.protein || 0,
+    carbs:    +entry.carbs    || 0, fat:     +entry.fat     || 0,
+    fiber:    src ? (+src.fiber || 0) : 0, sugar: src ? (+src.sugar || 0) : 0,
+  };
+  var total = nuScaleMacros(perUnit, servings);
 
   // Keep a reusable food definition in sync (best-effort; null is acceptable).
   var foodId = await nuUpsertFood(userId, {
-    name: entry.name, calories: perCal, protein: perP, carbs: perC, fat: perF,
+    name: entry.name, calories: perUnit.calories, protein: perUnit.protein, carbs: perUnit.carbs, fat: perUnit.fat,
   }, src);
 
   var row = {
@@ -173,10 +197,10 @@ async function nuSaveLog(userId, entry) {
     date: entry.date,
     meal: entry.meal,
     servings: servings,
-    calories: nuRound1(perCal * servings),
-    protein: nuRound1(perP * servings),
-    carbs: nuRound1(perC * servings),
-    fat: nuRound1(perF * servings),
+    calories: total.calories,
+    protein: total.protein,
+    carbs: total.carbs,
+    fat: total.fat,
     updated_at: new Date().toISOString(),
   };
 
@@ -189,9 +213,11 @@ async function nuSaveLog(userId, entry) {
     row.brand               = src.brand || null;
     row.serving_description = src.serving_description || null;
     row.serving_amount      = src.serving_amount != null ? src.serving_amount : null;
+    row.serving_unit        = src.serving_unit || null;
     row.grams               = src.grams != null ? nuRound1(src.grams * servings) : null;
-    row.fiber               = src.fiber != null ? nuRound1(src.fiber * servings) : null;
-    row.sugar               = src.sugar != null ? nuRound1(src.sugar * servings) : null;
+    row.fiber               = total.fiber;
+    row.sugar               = total.sugar;
+    row.gtin_upc            = src.gtin_upc || null;
     row.raw_source_data     = src.raw || null;
   }
 
@@ -549,6 +575,7 @@ function nuNormalizeUsdaFood(f) {
     brand: f.brand || '',
     group: f.group || 'generic',          // 'branded' | 'generic' (from the proxy ranking)
     has_serving: size > 0,                // did USDA give a real manufacturer serving?
+    gtin_upc: f.gtinUpc || '',            // branded barcode (for future barcode lookup)
     serving_description: servingDesc,
     serving_amount: servingAmount,
     serving_unit: servingUnit,
@@ -832,6 +859,9 @@ async function nuLoadPortions(f) {
   if (nu_pendingSource !== f) return;          // user moved on — stale result
   if (!portions || !portions.length) return;   // graceful fallback: keep base options
 
+  // Persist the fuller detail (household portions) into the saved raw payload.
+  if (f.raw) f.raw.portions = portions;
+
   var sel = document.getElementById('nuServingSelect');
   var prevKey = sel ? sel.value : null;
   nu_servingOptions = nuBuildServingOptions(f, portions);
@@ -934,18 +964,36 @@ function nuQtyStep(dir) {
 function nuUpdateTotalPreview() {
   var sv = parseFloat(document.getElementById('nuServings').value);
   if (!sv || sv <= 0) sv = 1;
-  var cal = parseFloat(document.getElementById('nuCalories').value) || 0;
-  var p   = parseFloat(document.getElementById('nuProtein').value)  || 0;
-  var c   = parseFloat(document.getElementById('nuCarbs').value)    || 0;
-  var fa  = parseFloat(document.getElementById('nuFat').value)      || 0;
-  var tCal = nuRound(cal * sv), tP = nuRound1(p * sv), tC = nuRound1(c * sv), tF = nuRound1(fa * sv);
+  var src = nu_pendingSource;
+  // Base per serving: macros from the (hidden) inputs; fiber/sugar from the USDA
+  // source when present. Scaled with the SAME function the save path uses.
+  var base = {
+    calories: parseFloat(document.getElementById('nuCalories').value) || 0,
+    protein:  parseFloat(document.getElementById('nuProtein').value)  || 0,
+    carbs:    parseFloat(document.getElementById('nuCarbs').value)    || 0,
+    fat:      parseFloat(document.getElementById('nuFat').value)      || 0,
+    fiber:    src ? (+src.fiber || 0) : 0,
+    sugar:    src ? (+src.sugar || 0) : 0,
+  };
+  var t = nuScaleMacros(base, sv);
 
   var prev = document.getElementById('nuTotalPreview');
-  if (prev) prev.innerHTML = 'Total: <strong>' + tCal + ' kcal</strong>' +
-    ' · P ' + tP + ' · C ' + tC + ' · F ' + tF;
+  if (prev) prev.innerHTML = 'Total: <strong>' + t.calories + ' kcal</strong>' +
+    ' · P ' + t.protein + ' · C ' + t.carbs + ' · F ' + t.fat;
 
   function set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
-  set('nuRoCal', tCal); set('nuRoPro', tP + 'g'); set('nuRoCarb', tC + 'g'); set('nuRoFat', tF + 'g');
+  set('nuRoCal', t.calories); set('nuRoPro', t.protein + 'g'); set('nuRoCarb', t.carbs + 'g'); set('nuRoFat', t.fat + 'g');
+
+  // USDA detail view also shows fiber + sugar (0 when USDA has no data).
+  var micros = document.getElementById('nuMicros');
+  if (micros) {
+    if (src) {
+      micros.innerHTML = 'Fiber <strong>' + t.fiber + ' g</strong> · Sugar <strong>' + t.sugar + ' g</strong>';
+      micros.style.display = 'block';
+    } else {
+      micros.style.display = 'none';
+    }
+  }
 }
 
 // Clears carried USDA provenance the moment the user hand-edits the food name
@@ -1045,6 +1093,8 @@ function nuModalMarkup() {
           '<div class="nu-readout-cell"><div class="nu-readout-num" id="nuRoCarb">0g</div><div class="nu-readout-lab">Carbs</div></div>' +
           '<div class="nu-readout-cell"><div class="nu-readout-num" id="nuRoFat">0g</div><div class="nu-readout-lab">Fat</div></div>' +
         '</div>' +
+        // USDA pick only — fiber + sugar (shown when available, 0 otherwise)
+        '<div class="nu-micros" id="nuMicros" style="display:none;"></div>' +
         '<button class="btn-calc" id="nuSaveBtn" onclick="nuSave()">Add Food</button>' +
         '<button class="btn-delete-log" id="nuDeleteBtn" style="display:none;" onclick="nuDeleteFromModal()">Delete Entry</button>' +
       '</div>' +
