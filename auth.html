@@ -133,6 +133,20 @@
   cursor: pointer;
 }
 
+/* Live signup password requirements checklist */
+.pw-reqs { list-style:none; margin:10px 0 0; padding:0; }
+.pw-reqs li {
+  position:relative; padding-left:20px; margin:3px 0;
+  font-size:12px; color:var(--grey); line-height:1.6;
+  transition:color var(--transition);
+}
+.pw-reqs li::before {
+  content:'○'; position:absolute; left:0; font-size:11px; color:var(--grey);
+}
+.pw-reqs li.met { color:#4dff9e; }
+.pw-reqs li.met::before { content:'✓'; color:#4dff9e; }
+.pw-reqs li.optional { color:#6f6f6f; }
+
   .divider {
     display:flex; align-items:center; gap:12px;
     margin:18px 0; color:var(--grey); font-size:12px;
@@ -308,8 +322,9 @@
   <div class="password-wrap">
     <input type="password"
            id="signupPassword"
-           placeholder="Min. 8 characters"
-           autocomplete="new-password">
+           placeholder="Min. 10 characters"
+           autocomplete="new-password"
+           oninput="updatePasswordReqs()">
 
     <button type="button"
             class="toggle-password"
@@ -317,6 +332,13 @@
       Show
     </button>
   </div>
+  <ul class="pw-reqs" id="pwReqs" aria-live="polite">
+    <li id="pwreq-len">At least 10 characters</li>
+    <li id="pwreq-upper">One uppercase letter</li>
+    <li id="pwreq-lower">One lowercase letter</li>
+    <li id="pwreq-num">One number</li>
+    <li id="pwreq-sym" class="optional">One symbol (optional)</li>
+  </ul>
 </div>
         <button class="btn-primary" id="signupBtn" onclick="handleSignup()">Create My Account</button>
         <p class="auth-footer">Already a member? <a href="#" onclick="switchTab('login')">Sign in</a></p>
@@ -401,16 +423,34 @@
     setLoading('loginBtn', false, 'Sign In');
   }
 
-  // Password policy — MUST mirror the Supabase Auth setting exactly (min 10 chars;
-  // lowercase, uppercase, number, and symbol). Returns a user-friendly error
-  // string, or null when the password is acceptable.
+  // Password policy — enforced entirely client-side (the Supabase dashboard for
+  // this project does not expose a server password policy). Required: at least
+  // 10 chars, one uppercase, one lowercase, one number. A symbol is encouraged
+  // but OPTIONAL. Returns a user-friendly error string, or null when acceptable.
   function passwordPolicyError(pw) {
     if (pw.length < 10)         return 'Password must be at least 10 characters.';
     if (!/[a-z]/.test(pw))      return 'Password must include a lowercase letter.';
     if (!/[A-Z]/.test(pw))      return 'Password must include an uppercase letter.';
     if (!/[0-9]/.test(pw))      return 'Password must include a number.';
-    if (!/[^A-Za-z0-9]/.test(pw)) return 'Password must include a symbol (e.g. ! ? # $).';
     return null;
+  }
+
+  // Live signup validation — reflects each rule's met/unmet state as the user
+  // types (bound to the signup password field's oninput). The symbol row is
+  // optional, so it lights up as a bonus but never blocks submission.
+  function updatePasswordReqs() {
+    var pw = document.getElementById('signupPassword').value;
+    var checks = {
+      len:   pw.length >= 10,
+      upper: /[A-Z]/.test(pw),
+      lower: /[a-z]/.test(pw),
+      num:   /[0-9]/.test(pw),
+      sym:   /[^A-Za-z0-9]/.test(pw),
+    };
+    Object.keys(checks).forEach(function (k) {
+      var el = document.getElementById('pwreq-' + k);
+      if (el) el.classList.toggle('met', checks[k]);
+    });
   }
 
   // Have I Been Pwned — Pwned Passwords k-anonymity check. The raw password NEVER
