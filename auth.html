@@ -401,14 +401,69 @@
     setLoading('loginBtn', false, 'Sign In');
   }
 
+  // Password policy — MUST mirror the Supabase Auth setting exactly (min 10 chars;
+  // lowercase, uppercase, number, and symbol). Returns a user-friendly error
+  // string, or null when the password is acceptable.
+  function passwordPolicyError(pw) {
+    if (pw.length < 10)         return 'Password must be at least 10 characters.';
+    if (!/[a-z]/.test(pw))      return 'Password must include a lowercase letter.';
+    if (!/[A-Z]/.test(pw))      return 'Password must include an uppercase letter.';
+    if (!/[0-9]/.test(pw))      return 'Password must include a number.';
+    if (!/[^A-Za-z0-9]/.test(pw)) return 'Password must include a symbol (e.g. ! ? # $).';
+    return null;
+  }
+
+  // Have I Been Pwned — Pwned Passwords k-anonymity check. The raw password NEVER
+  // leaves the browser: we SHA-1 it locally, send only the first 5 hex chars of the
+  // hash, and compare the returned suffixes here. Returns true only on a CONFIRMED
+  // breach match. FAILS OPEN — any error, timeout, or missing crypto returns false
+  // so signup is never blocked by the check being unavailable.
+  async function isPasswordPwned(pw) {
+    try {
+      if (!(window.crypto && crypto.subtle)) return false;   // insecure context → skip
+      const buf   = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(pw));
+      const hash  = Array.from(new Uint8Array(buf))
+        .map(function (b) { return b.toString(16).padStart(2, '0'); }).join('').toUpperCase();
+      const prefix = hash.slice(0, 5), suffix = hash.slice(5);
+
+      const ctrl  = new AbortController();
+      const timer = setTimeout(function () { ctrl.abort(); }, 2500);
+      const res   = await fetch('https://api.pwnedpasswords.com/range/' + prefix, {
+        signal: ctrl.signal,
+        headers: { 'Add-Padding': 'true' },   // padded response hides the real match count
+      });
+      clearTimeout(timer);
+      if (!res.ok) return false;               // fail open
+
+      const lines = (await res.text()).split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const parts = lines[i].split(':');
+        if ((parts[0] || '').trim().toUpperCase() === suffix) {
+          // Padding entries carry a count of 0; a real breach hit is > 0.
+          return parseInt((parts[1] || '0').trim(), 10) > 0;
+        }
+      }
+      return false;
+    } catch (e) {
+      return false;                            // fail open on timeout / network / abort
+    }
+  }
+
   // Email signup
   async function handleSignup() {
     const name     = document.getElementById('signupName').value.trim();
     const email    = document.getElementById('signupEmail').value.trim();
     const password = document.getElementById('signupPassword').value;
     if (!name || !email || !password) return showMsg('Please fill in all fields.');
-    if (password.length < 8) return showMsg('Password must be at least 8 characters.');
+    const pwErr = passwordPolicyError(password);
+    if (pwErr) return showMsg(pwErr);
     setLoading('signupBtn', true, 'Create My Account');
+    // Breach check runs after the policy passes. Only a confirmed match blocks;
+    // an unreachable service falls through (isPasswordPwned fails open).
+    if (await isPasswordPwned(password)) {
+      setLoading('signupBtn', false, 'Create My Account');
+      return showMsg('That password has appeared in a known data breach. Please choose a different one.');
+    }
     try {
       const { data, error } = await supabaseClient.auth.signUp({
         email, password,
