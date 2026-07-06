@@ -137,9 +137,12 @@ const KNOWN_BRANDS = [
 // lead with generic USDA entries. This is the scalable replacement for a per-food
 // list: every fruit/vegetable/cut/grain is covered by its category automatically.
 // USDA's category taxonomy is small and stable; extend here only if a category is
-// missing. (Dairy/Baked/Snacks/Sweets/Beverages are intentionally NOT here — those
-// aisles are brand-driven; egg lands generic-first via the brand-strength fallback.)
+// missing. (Baked/Snacks/Sweets/Beverages are intentionally NOT here — those
+// aisles are brand-driven. Dairy & Egg IS here: typing a generic dairy food —
+// egg, milk, yogurt, cheese — must lead with the generic food per the product
+// rule; a typed brand (Chobani, Fairlife) still wins via brand intent.)
 const WHOLE_FOOD_CATEGORIES = new Set([
+  'dairy and egg products',
   'fruits and fruit juices',
   'vegetables and vegetable products',
   'legumes and legume products',
@@ -178,6 +181,9 @@ const NEGATIVE_TERMS = [
   'dip', 'sauce', 'bratwurst', 'coating', 'mayonnaise', 'makers', 'maker', 'feet',
   'fritter', 'concentrate', 'pudding', 'jerky', 'sausage', 'soup', 'wrap', 'roll',
   'pizza', 'sandwich', 'smoothie',
+  // Final quality pass — derivative aisles that beat base foods in live testing
+  'candy', 'ice cream', 'syrup', 'drink', 'topping', 'filling', 'glaze',
+  'noodles', 'bites', 'fried',
 ];
 // Base-prep descriptors that mark the unprocessed whole food (subset of positives).
 const BASE_PREP_TERMS = ['raw', 'cooked', 'boiled', 'baked', 'roasted', 'grilled', 'fresh', 'whole', 'fillet'];
@@ -190,8 +196,40 @@ const PREFERRED_CUT_TERMS = [
 ];
 
 // Brand aliases — common ways people type a brand. Maps a typed token to the
-// canonical brand phrase used for brand-intent detection. Extend freely.
-const BRAND_ALIASES = { coke: 'coca cola', cocacola: 'coca cola', cococola: 'coca cola' };
+// canonical brand phrase used for brand-intent detection AND for the upstream
+// USDA query (so "coke" actually fetches Coca-Cola products). Extend freely.
+const BRAND_ALIASES = {
+  coke: 'coca cola', cocacola: 'coca cola', cococola: 'coca cola', coca: 'coca cola',
+};
+
+// Typeahead vocabulary — the generic foods people most commonly search. When a
+// SINGLE-token query (≥3 chars) is a strict prefix of an entry, the query is
+// completed to that entry before hitting USDA ("blueb" → "blueberries"), so
+// partial typing predicts the obvious food. This is one GLOBAL mechanism, not
+// per-food ranking hacks: add/reorder entries to tune, no code changes. ORDER
+// RESOLVES COLLISIONS — the first entry matching the prefix wins ("chi" →
+// chicken before chickpeas). A token exactly equal to an entry never expands.
+const COMMON_FOODS = [
+  // proteins
+  'chicken', 'chickpeas', 'egg', 'eggs', 'salmon', 'steak', 'shrimp', 'turkey',
+  'tuna', 'tilapia', 'beef', 'ground beef', 'pork', 'bacon', 'ham', 'fish', 'tofu',
+  // dairy
+  'yogurt', 'greek yogurt', 'milk', 'cheese', 'cottage cheese', 'butter', 'cream',
+  // fruits
+  'banana', 'bananas', 'apple', 'apples', 'blueberries', 'blueberry', 'blackberries',
+  'strawberries', 'strawberry', 'raspberries', 'orange', 'oranges', 'grapes', 'mango',
+  'watermelon', 'waffle', 'pineapple', 'peach', 'pear', 'cherries', 'avocado', 'lemon',
+  // vegetables
+  'broccoli', 'brussels sprouts', 'spinach', 'carrots', 'cauliflower', 'cucumber',
+  'lettuce', 'tomato', 'onion', 'peppers', 'potato', 'sweet potato', 'kale',
+  'zucchini', 'asparagus', 'mushrooms', 'green beans', 'corn', 'celery',
+  // grains / carbs
+  'rice', 'oats', 'oatmeal', 'bread', 'pasta', 'quinoa', 'tortilla', 'bagel',
+  'cereal', 'pancakes', 'granola',
+  // nuts / fats / other staples
+  'peanut butter', 'peanuts', 'almonds', 'almond butter', 'walnuts', 'cashews',
+  'protein', 'honey', 'hummus', 'olive oil', 'beans', 'lentils',
+];
 
 // Food-specific intent maps. When the query IS one of these base foods, strongly
 // prefer the forms people overwhelmingly mean and strongly penalize derivatives —
@@ -212,10 +250,11 @@ const FOOD_INTENT = {
   },
   waffle: {
     prefer:   ['plain', 'belgian', 'frozen', 'homemade', 'buttermilk'],
-    penalize: ['fries', 'fry', 'bowl', 'cone', 'cereal', 'crunch'],
+    penalize: ['fries', 'fry', 'fried', 'bowl', 'cone', 'cereal', 'crunch'],
   },
   egg: {
-    prefer:   ['whole', 'large', 'white', 'yolk'],
+    // 'whole'/'large' only — listing white/yolk here tied them with the whole egg
+    prefer:   ['whole', 'large'],
     penalize: ['substitute', 'replacer', 'salad', 'mayonnaise', 'noodles', 'makers', 'maker'],
   },
 };
@@ -227,6 +266,46 @@ const FOOD_INTENT = {
 // whole-food (category) relevance, and order the two groups by query intent.
 function tokenize(q) {
   return q.toLowerCase().trim().split(/\s+/).filter(Boolean);
+}
+
+// Rewrite the raw query BEFORE it hits USDA (and before scoring):
+//   1. brand aliases — every token runs through BRAND_ALIASES ("coke"/"coca"/
+//      "coca-cola" → "coca cola") so the upstream fetch actually returns the brand;
+//   2. typeahead — a single partial token (≥3 chars, strict prefix of a
+//      COMMON_FOODS entry, not itself an entry) completes to the obvious food
+//      ("blueb" → "blueberries", "chick" → "chicken", "yog" → "yogurt").
+// Multi-word queries never prefix-expand (only alias-map), so explicit queries
+// like "waffle fries" or "chicken brea(st)" are left exactly as typed.
+function expandQuery(q) {
+  const rawToks = tokenize(q);
+  let changed = false;
+
+  // 1. alias mapping, token by token (alias may expand to multiple words)
+  let toks = [];
+  rawToks.forEach(function (t) {
+    const norm = t.replace(/[^a-z0-9]/g, '');
+    const alias = BRAND_ALIASES[norm];
+    if (alias) { toks = toks.concat(alias.split(/\s+/)); changed = true; }
+    else toks.push(t);
+  });
+
+  // 2. single-token prefix completion against the common-foods vocabulary
+  if (toks.length === 1 && toks[0].length >= 3) {
+    const t = toks[0].replace(/[^a-z0-9]/g, '');
+    const exact = COMMON_FOODS.indexOf(t) >= 0;   // full word typed → respect it
+    if (t.length >= 3 && !exact) {
+      for (let i = 0; i < COMMON_FOODS.length; i++) {
+        if (COMMON_FOODS[i].indexOf(t) === 0) {   // first (highest-priority) prefix hit
+          toks = COMMON_FOODS[i].split(/\s+/);
+          changed = true;
+          break;
+        }
+      }
+    }
+  }
+
+  const eq = toks.join(' ');
+  return { query: eq || q, expanded: changed && eq !== q.toLowerCase().trim() };
 }
 
 // Rule-based singularizer (not a word list): handles regular English plurals so
@@ -457,6 +536,59 @@ function rankPool(pool, qLower, toks, group, strict, cap, qStems, ctx) {
   return scored.slice(0, cap);
 }
 
+// Core ranking: trimmed pools + the EFFECTIVE (alias/prefix-expanded) query →
+// the response body the client renders. Pure (no I/O), so the offline harness
+// can run the EXACT production ranking against captured USDA pools.
+function buildResponse(effQuery, branded, generic) {
+  const qLower = effQuery.toLowerCase();
+  const toks = tokenize(effQuery);
+  const qStems = stemTokens(toks);
+
+  // Brand-frequency map over the branded pool (low-weight popularity proxy).
+  const freqMap = {};
+  branded.forEach(function (f) {
+    if (f.brand) { const k = f.brand.toLowerCase(); freqMap[k] = (freqMap[k] || 0) + 1; }
+  });
+
+  // Shared scoring context: brand-intent tokens (query named a brand) + the active
+  // food-intent map (query IS a base food). Computed once per request.
+  const ctx = { freqMap, brandIntent: queryBrandTokens(toks), intent: pickFoodIntent(qStems) };
+
+  const rankedBranded = rankPool(branded, qLower, toks, 'branded', true, 12, qStems, ctx);
+  const rankedGeneric = rankPool(generic, qLower, toks, 'generic', false, 8, qStems, ctx);
+
+  // Group ORDER is emergent, not a per-food flag:
+  //   • BRAND INTENT wins outright: the user named a brand and the pool has its
+  //     products → branded leads (Fairlife protein, Kirkland eggs, coke). Without
+  //     this, generic whole-category matches (protein isolates…) hijacked the top.
+  //   • otherwise lead with GENERIC when a whole-food-category result solidly
+  //     matches the query (produce, raw meat/fish, grains…) — covers any such food
+  //     via its USDA category, no list — OR when the top generic simply out-scores
+  //     the top branded (handles egg: whole food, no recognized brand → generic wins).
+  //   • otherwise lead with BRANDED (the brand-driven aisles: dairy, bakery, bars).
+  const brandIntentHit = ctx.brandIntent.length > 0 && rankedBranded.some(function (b) {
+    return brandMatchesIntent((b.brand || '').toLowerCase(), ctx.brandIntent);
+  });
+  const genericByCategory = rankedGeneric.some(function (g) {
+    return isWholeCategory(g) && matchesAll(g, qStems);
+  });
+  const topG = rankedGeneric.length ? rankedGeneric[0].score : 0;
+  const topB = rankedBranded.length ? rankedBranded[0].score : 0;
+  const genericFirst = !brandIntentHit &&
+    rankedGeneric.length > 0 && (genericByCategory || topG >= topB);
+
+  // Both groups always returned; the client renders headers off `group`.
+  const foods = genericFirst
+    ? rankedGeneric.concat(rankedBranded)
+    : rankedBranded.concat(rankedGeneric);
+
+  return {
+    foods,
+    counts: { branded: rankedBranded.length, generic: rankedGeneric.length },
+    genericFirst: genericFirst,
+  };
+}
+
 module.exports = async (req, res) => {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
@@ -478,12 +610,17 @@ module.exports = async (req, res) => {
     const q = (req.query.q || '').toString().trim();
     if (q.length < 2) return res.status(200).json({ foods: [] }); // mirror client guard
 
+    // Alias + typeahead expansion — USDA is queried with the EFFECTIVE query
+    // ("blueb" → "blueberries", "coke" → "coca cola"), and scoring uses it too.
+    const eq = expandQuery(q);
+    const effQuery = eq.query;
+
     // Query Branded and generic SEPARATELY. A combined dataType query returns the
     // top generic hits only (USDA never interleaves branded), so branded products
     // would never appear. Fetched in parallel; one failing doesn't sink the other.
     function typeUrl(dataType, pageSize) {
       return `${USDA_ENDPOINT}?api_key=${encodeURIComponent(EFFECTIVE_KEY)}` +
-        `&query=${encodeURIComponent(q)}` +
+        `&query=${encodeURIComponent(effQuery)}` +
         `&dataType=${encodeURIComponent(dataType)}` +
         `&pageSize=${pageSize}&pageNumber=1`;
     }
@@ -501,7 +638,9 @@ module.exports = async (req, res) => {
     // receives a small, clean list regardless of pool size.
     const [brandedRes, genericRes] = await Promise.allSettled([
       fetchType('Branded', 200),
-      fetchType('Foundation,SR Legacy', 15),
+      // 50 (not 15): USDA's own relevance buries staple cuts — "chicken" didn't
+      // surface breast, "rice" didn't surface plain cooked rice, inside the top 25.
+      fetchType('Foundation,SR Legacy', 50),
     ]);
 
     // If BOTH calls failed, surface the error (mirror the old single-call behavior).
@@ -521,48 +660,11 @@ module.exports = async (req, res) => {
     const branded = brandedRes.status === 'fulfilled' ? brandedRes.value : [];
     const generic = genericRes.status === 'fulfilled' ? genericRes.value : [];
 
-    const qLower = q.toLowerCase();
-    const toks = tokenize(q);
-    const qStems = stemTokens(toks);
-
-    // Brand-frequency map over the branded pool (low-weight popularity proxy).
-    const freqMap = {};
-    branded.forEach(function (f) {
-      if (f.brand) { const k = f.brand.toLowerCase(); freqMap[k] = (freqMap[k] || 0) + 1; }
-    });
-
-    // Shared scoring context: brand-intent tokens (query named a brand) + the active
-    // food-intent map (query IS a base food). Computed once per request.
-    const ctx = { freqMap, brandIntent: queryBrandTokens(toks), intent: pickFoodIntent(qStems) };
-
-    const rankedBranded = rankPool(branded, qLower, toks, 'branded', true, 12, qStems, ctx);
-    const rankedGeneric = rankPool(generic, qLower, toks, 'generic', false, 8, qStems, ctx);
-
-    // Group ORDER is emergent, not a per-food flag:
-    //   • lead with GENERIC when a whole-food-category result solidly matches the
-    //     query (produce, raw meat/fish, grains…) — covers any such food via its
-    //     USDA category, no list — OR when the top generic simply out-scores the top
-    //     branded (handles egg: whole food, no recognized brand → generic wins).
-    //   • otherwise lead with BRANDED (the brand-driven aisles: dairy, bakery, bars).
-    const genericByCategory = rankedGeneric.some(function (g) {
-      return isWholeCategory(g) && matchesAll(g, qStems);
-    });
-    const topG = rankedGeneric.length ? rankedGeneric[0].score : 0;
-    const topB = rankedBranded.length ? rankedBranded[0].score : 0;
-    const genericFirst = rankedGeneric.length > 0 && (genericByCategory || topG >= topB);
-
-    // Both groups always returned; the client renders headers off `group`.
-    const foods = genericFirst
-      ? rankedGeneric.concat(rankedBranded)
-      : rankedBranded.concat(rankedGeneric);
+    const body = buildResponse(effQuery, branded, generic);
 
     // Short CDN cache: identical queries are common while typing.
     res.setHeader('Cache-Control', 'private, max-age=60');
-    const body = {
-      foods,
-      counts: { branded: rankedBranded.length, generic: rankedGeneric.length },
-      genericFirst: genericFirst,
-    };
+    if (eq.expanded) body.expandedQuery = effQuery;   // transparency for the client/debugging
     if (USING_DEMO) body.warning = 'Using DEMO_KEY (rate-limited, dev only).';
     return res.status(200).json(body);
   } catch (err) {
@@ -570,3 +672,7 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: 'Search failed. Try again.' });
   }
 };
+
+// Exposed for the offline ranking harness (never used by the route itself):
+// captured USDA pools → trimFood → buildResponse reproduces production output.
+module.exports._internals = { trimFood, expandQuery, buildResponse };

@@ -575,6 +575,7 @@ function nuNormalizeUsdaFood(f) {
     brand: f.brand || '',
     group: f.group || 'generic',          // 'branded' | 'generic' (from the proxy ranking)
     has_serving: size > 0,                // did USDA give a real manufacturer serving?
+    is_liquid: size > 0 && unit === 'ml', // stable flag: USDA measures this food in ml
     gtin_upc: f.gtinUpc || '',            // branded barcode (for future barcode lookup)
     serving_description: servingDesc,
     serving_amount: servingAmount,
@@ -616,7 +617,9 @@ function nuScalePer100(n, g) {
 function nuBuildServingOptions(f, portions) {
   var opts = [];
   var per100 = f.raw && f.raw.nutrients ? f.raw.nutrients : null;
-  var weightBased = per100 && f.serving_unit !== 'ml';
+  // is_liquid is set once at normalize time — serving_unit mutates as the user
+  // switches servings, so it can't be trusted to classify the food here.
+  var weightBased = per100 && !f.is_liquid;
 
   // Accurate household servings first (gram-weighted, straight from USDA).
   if (per100 && portions && portions.length) {
@@ -643,7 +646,19 @@ function nuBuildServingOptions(f, portions) {
       grams: 100, amount: 100, unit: 'g', description: '100 g' });
     opts.push({ key: 'oz', label: '1 oz (28 g)', perUnit: nuScalePer100(per100, 28.3495),
       grams: 28.3495, amount: 1, unit: 'oz', description: '1 oz (28 g)' });
+    opts.push({ key: 'lb', label: '1 lb (454 g)', perUnit: nuScalePer100(per100, 453.592),
+      grams: 453.592, amount: 1, unit: 'lb', description: '1 lb (454 g)' });
     opts.push({ key: 'custom', label: 'Custom grams…', custom: true });
+  } else if (per100 && f.is_liquid) {
+    // Liquids: USDA nutrients are per 100 ml here (normalizer scaled by ml serving
+    // size). Volume options only — never a fabricated gram weight (grams: null).
+    opts.push({ key: '100ml', label: '100 ml', perUnit: nuScalePer100(per100, 100),
+      grams: null, amount: 100, unit: 'ml', description: '100 ml' });
+    opts.push({ key: 'floz', label: '1 fl oz (30 ml)', perUnit: nuScalePer100(per100, 29.5735),
+      grams: null, amount: 1, unit: 'fl oz', description: '1 fl oz (30 ml)' });
+    opts.push({ key: 'cupml', label: '1 cup (240 ml)', perUnit: nuScalePer100(per100, 240),
+      grams: null, amount: 1, unit: 'cup', description: '1 cup (240 ml)' });
+    opts.push({ key: 'custom', label: 'Custom ml…', custom: true });
   }
   if (!opts.length) {
     // Last resort (e.g. ml food with no serving): log the per-serving values as-is.
@@ -912,11 +927,18 @@ function nuApplyServing(key) {
   var pu, grams, amount, unit, desc;
 
   if (key === 'custom') {
-    if (customEl) customEl.style.display = 'block';
+    // Unit follows the food: grams for weight foods, ml for liquids (per-100
+    // basis matches — nutrients are per 100 g or per 100 ml respectively).
+    var isMl = !!nu_pendingSource.is_liquid;
+    if (customEl) {
+      customEl.style.display = 'block';
+      customEl.placeholder = isMl ? 'ml' : 'grams';
+    }
     var g = parseFloat(customEl && customEl.value);
     if (!g || g <= 0) g = 100;
     pu = nuScalePer100(per100, g);
-    grams = g; amount = g; unit = 'g'; desc = nuRound1(g) + ' g';
+    grams = isMl ? null : g; amount = g; unit = isMl ? 'ml' : 'g';
+    desc = nuRound1(g) + (isMl ? ' ml' : ' g');
   } else {
     if (customEl) customEl.style.display = 'none';
     var opt = null;
