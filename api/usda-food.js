@@ -39,7 +39,8 @@ function portionLabel(p) {
   const pd = (p.portionDescription || '').trim();
   if (pd && pd.toLowerCase() !== 'quantity not specified') return pd;
   const amt = p.amount != null ? p.amount : 1;
-  const unitName = p.measureUnit && p.measureUnit.name;
+  let unitName = p.measureUnit && p.measureUnit.name;
+  if (unitName === 'RACC') unitName = 'serving';   // USDA jargon (Reference Amount Customarily Consumed)
   const unit = (unitName && unitName !== 'undetermined') ? unitName : '';
   const mod = (p.modifier || '').trim();
   const label = (String(amt) + (unit ? ' ' + unit : '') + (mod ? (unit ? ', ' : ' ') + mod : '')).trim();

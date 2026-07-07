@@ -249,6 +249,7 @@ const FOOD_INTENT = {
     prefer:   ['white', 'brown', 'jasmine', 'basmati', 'cooked', 'long grain'],
     penalize: ['crackers', 'cakes', 'flour', 'pilaf', 'pudding', 'mix', 'snack', 'cereal', 'vinegar', 'bran'],
     supplement: 'white rice cooked',
+    top: 'cooked',           // people log cooked rice — break the raw/cooked tie
   },
   chicken: {
     prefer:   ['breast', 'tenderloin', 'thigh', 'drumstick', 'wing', 'whole', 'ground'],
@@ -296,6 +297,9 @@ function expandQuery(q) {
     if (alias) { toks = toks.concat(alias.split(/\s+/)); changed = true; }
     else toks.push(t);
   });
+  // Dedupe (alias expansion can double a word: "coca cola" → coca cola cola).
+  const deduped = toks.filter(function (t, i) { return toks.indexOf(t) === i; });
+  if (deduped.length !== toks.length) { toks = deduped; changed = true; }
 
   // 2. single-token prefix completion against the common-foods vocabulary
   if (toks.length === 1 && toks[0].length >= 3) {
@@ -338,11 +342,8 @@ const NEGATIVE_STEMS = NEGATIVE_TERMS.map(function (t) { return stemTokens(t.spl
 const BASE_PREP_STEMS = BASE_PREP_TERMS.map(function (t) { return stemTokens(t.split(/\s+/)); });
 const PREFERRED_CUT_STEMS = PREFERRED_CUT_TERMS.map(function (t) { return stemTokens(t.split(/\s+/)); });
 
-// Single brand tokens (split from KNOWN_BRANDS) used to detect a brand in the query.
-const KNOWN_BRAND_TOKENS = new Set();
-KNOWN_BRANDS.forEach(function (b) {
-  b.split(/\s+/).forEach(function (w) { if (w.length >= 3) KNOWN_BRAND_TOKENS.add(w); });
-});
+// Pre-split KNOWN_BRANDS into word arrays for full-entry matching.
+const KNOWN_BRAND_ENTRIES = KNOWN_BRANDS.map(function (b) { return b.split(/\s+/); });
 
 // Pre-stem the food-intent maps once: { keyStems, prefer:[[stems]], penalize:[[stems]] },
 // longest key first so "peanut butter" wins over a single-word key.
@@ -352,6 +353,7 @@ const FOOD_INTENT_LIST = Object.keys(FOOD_INTENT).map(function (k) {
     prefer:   FOOD_INTENT[k].prefer.map(function (t) { return stemTokens(t.split(/\s+/)); }),
     penalize: FOOD_INTENT[k].penalize.map(function (t) { return stemTokens(t.split(/\s+/)); }),
     supplement: FOOD_INTENT[k].supplement || null,
+    top: FOOD_INTENT[k].top ? [stemTokens(FOOD_INTENT[k].top.split(/\s+/))] : null,
   };
 }).sort(function (a, b) { return b.keyStems.length - a.keyStems.length; });
 
@@ -364,21 +366,43 @@ function supplementFor(effQuery) {
   return intent.keyStems.length === qStems.length ? intent.supplement : null;
 }
 
-// Merge a supplemental generic pool into the primary one (dedupe by fdcId).
+// Merge a supplemental pool into the primary one (dedupe by fdcId).
 function mergeGeneric(primary, supplement) {
   const seen = new Set(primary.map(function (f) { return f.fdcId; }));
   return primary.concat((supplement || []).filter(function (f) { return !seen.has(f.fdcId); }));
 }
 
-// The brand tokens present in the query (alias-aware): e.g. "coke" → ['coca','cola'].
-function queryBrandTokens(toks) {
-  const out = [];
+// Brand-scoped supplemental BRANDED query, using USDA's Elasticsearch field
+// syntax. USDA's own relevance for "kirkland peanut butter" returns 200 items
+// with ZERO Kirkland peanut butter (likewise Fairlife shakes, Quest bars) — the
+// pool must be supplemented; ranking can't surface what isn't fetched.
+// "kirkland peanut butter" → "+brandName:kirkland +peanut +butter".
+function brandSupplementQuery(effQuery) {
+  const toks = tokenize(effQuery);
+  const entries = queryBrandEntries(toks);
+  if (!entries.length) return null;
+  const bw = entries[0];                               // most specific matched brand
+  const brandWords = new Set([].concat.apply([], entries));
+  const rest = toks.map(function (t) { return t.replace(/[^a-z0-9]/g, ''); })
+    .filter(function (t) { return t && !brandWords.has(t); });
+  return bw.map(function (w) { return '+brandName:' + w; }).join(' ') +
+    rest.map(function (w) { return ' +' + w; }).join('');
+}
+
+// The KNOWN_BRANDS entries FULLY present in the query (alias-aware), most
+// specific first. Full-entry matching is what keeps generic words safe: "quest
+// bar" matches the entry 'quest' but NOT 'pro bar', so bar/protein/milk alone
+// never become brand intent (previously any single brand token did — "quest
+// bar" wrongly boosted every "…Bar…" brand like Clif Bar and Company).
+function queryBrandEntries(toks) {
+  const words = [];
   toks.forEach(function (t) {
     const norm = t.replace(/[^a-z0-9]/g, '').toLowerCase();
-    const words = (BRAND_ALIASES[norm] || norm).split(/\s+/);
-    words.forEach(function (w) { if (KNOWN_BRAND_TOKENS.has(w)) out.push(w); });
+    (BRAND_ALIASES[norm] || norm).split(/\s+/).forEach(function (w) { words.push(w); });
   });
-  return out;
+  return KNOWN_BRAND_ENTRIES.filter(function (bw) {
+    return bw.every(function (w) { return words.indexOf(w) >= 0; });
+  }).sort(function (a, b) { return b.length - a.length; });
 }
 
 // The food-intent map whose key is fully present in the query, if any.
@@ -390,11 +414,13 @@ function pickFoodIntent(qStems) {
   return null;
 }
 
-// Does a branded food's brand contain one of the query's brand tokens?
+// Does a branded food's brand contain ALL words of one matched brand entry?
 function brandMatchesIntent(brand, brandIntent) {
   if (!brandIntent || !brandIntent.length) return false;
   const fbt = brand.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
-  return brandIntent.some(function (bt) { return fbt.indexOf(bt) >= 0; });
+  return brandIntent.some(function (entry) {
+    return entry.every(function (w) { return fbt.indexOf(w) >= 0; });
+  });
 }
 function termInStems(termStems, stemSet) { return termStems.every(function (st) { return stemSet.has(st); }); }
 function termInQuery(termStems, qStems) { return termStems.every(function (st) { return qStems.indexOf(st) >= 0; }); }
@@ -497,7 +523,9 @@ function scoreFood(f, qLower, toks, qStems, ctx) {
     if (brandMatchesIntent(brand, brandIntent)) {
       s += 1500;
       let descHits = 0;
-      brandIntent.forEach(function (bt) { if (desc.indexOf(bt) >= 0) descHits++; });
+      brandIntent.forEach(function (entry) {
+        entry.forEach(function (bt) { if (desc.indexOf(bt) >= 0) descHits++; });
+      });
       s += Math.min(descHits, 2) * 250;
     }
     // Low-weight popularity proxy: a brand with many products in the pool is likely
@@ -532,6 +560,8 @@ function scoreFood(f, qLower, toks, qStems, ctx) {
   // better text match (e.g. "Waffle Cut Fries" starting with the query word).
   if (intentPreferred) s += 600;
   if (intentPenalized) s -= 1100;
+  // `top` breaks ties among equally-preferred forms (rice: cooked over raw).
+  if (!processed && intent && intent.top && hasUnqueriedTerm(intent.top, foodStemSet, qStems)) s += 300;
 
   f._present = present;                                       // stash for filtering
   return s;
@@ -576,7 +606,7 @@ function buildResponse(effQuery, branded, generic) {
 
   // Shared scoring context: brand-intent tokens (query named a brand) + the active
   // food-intent map (query IS a base food). Computed once per request.
-  const ctx = { freqMap, brandIntent: queryBrandTokens(toks), intent: pickFoodIntent(qStems) };
+  const ctx = { freqMap, brandIntent: queryBrandEntries(toks), intent: pickFoodIntent(qStems) };
 
   const rankedBranded = rankPool(branded, qLower, toks, 'branded', true, 12, qStems, ctx);
   const rankedGeneric = rankPool(generic, qLower, toks, 'generic', false, 8, qStems, ctx);
@@ -660,15 +690,20 @@ module.exports = async (req, res) => {
     // organic PB inside the top 50 — so we cast a wide net and let our scorer float
     // the brand+food match to the top. We trim + score + cap, so the client still
     // receives a small, clean list regardless of pool size.
-    // A third, small generic fetch fires only when the query IS a FOOD_INTENT base
-    // food whose obvious form USDA's relevance buries (chicken → chicken breast).
+    // Two small supplemental fetches fire only when needed:
+    //   • generic: query IS a FOOD_INTENT base food whose obvious form USDA's
+    //     relevance buries (chicken → chicken breast).
+    //   • branded: query names a known brand — USDA's relevance may return ZERO
+    //     of that brand's matching products, so fetch them brand-scoped.
     const supQ = supplementFor(effQuery);
-    const [brandedRes, genericRes, supRes] = await Promise.allSettled([
+    const brandSupQ = brandSupplementQuery(effQuery);
+    const [brandedRes, genericRes, supRes, brandSupRes] = await Promise.allSettled([
       fetchType(effQuery, 'Branded', 200),
       // 50 (not 15): USDA's own relevance buries staple cuts — "chicken" didn't
       // surface breast, "rice" didn't surface plain cooked rice, inside the top 25.
       fetchType(effQuery, 'Foundation,SR Legacy', 50),
       supQ ? fetchType(supQ, 'Foundation,SR Legacy', 25) : Promise.resolve([]),
+      brandSupQ ? fetchType(brandSupQ, 'Branded', 50) : Promise.resolve([]),
     ]);
 
     // If BOTH calls failed, surface the error (mirror the old single-call behavior).
@@ -685,7 +720,9 @@ module.exports = async (req, res) => {
       return res.status(502).json({ error: 'Food database is unavailable right now.' });
     }
 
-    const branded = brandedRes.status === 'fulfilled' ? brandedRes.value : [];
+    const branded = mergeGeneric(
+      brandedRes.status === 'fulfilled' ? brandedRes.value : [],
+      brandSupRes.status === 'fulfilled' ? brandSupRes.value : []);
     const generic = mergeGeneric(
       genericRes.status === 'fulfilled' ? genericRes.value : [],
       supRes.status === 'fulfilled' ? supRes.value : []);
@@ -705,4 +742,6 @@ module.exports = async (req, res) => {
 
 // Exposed for the offline ranking harness (never used by the route itself):
 // captured USDA pools → trimFood → buildResponse reproduces production output.
-module.exports._internals = { trimFood, expandQuery, buildResponse, supplementFor, mergeGeneric };
+module.exports._internals = {
+  trimFood, expandQuery, buildResponse, supplementFor, mergeGeneric, brandSupplementQuery,
+};

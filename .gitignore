@@ -1,0 +1,6 @@
+# Secrets — never commit keys (USDA, Stripe, Supabase service keys live in Vercel env)
+.env
+.env.*
+
+# OS noise
+.DS_Store
