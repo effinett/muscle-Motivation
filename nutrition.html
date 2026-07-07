@@ -150,6 +150,18 @@
 
     .no-target-note { font-size: 12px; color: var(--text-muted); padding: 4px 2px 14px; }
 
+    /* Quick add: Recent + Favorites chip rows (same chip look as the modal) */
+    .qa-chips {
+      display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px;
+      -webkit-overflow-scrolling: touch; scrollbar-width: none;
+    }
+    .qa-chips::-webkit-scrollbar { height: 0; }
+    .nu-chip-cal {
+      font-size: 11px; color: var(--text-muted); font-weight: 600;
+      flex-shrink: 0; white-space: nowrap;
+    }
+    .qa-empty { font-size: 12px; color: var(--text-muted); padding: 2px 2px 6px; }
+
     /* ── Shared modal (mirrors app.html / weight-history.html) ─────────── */
     .modal-overlay {
       display: none; position: fixed; inset: 0; z-index: 200;
@@ -163,7 +175,15 @@
       max-height: 90vh; overflow-y: auto;
     }
     .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
-    .modal-title { font-family: 'Bebas Neue', sans-serif; font-size: 24px; letter-spacing: 1.5px; }
+    .modal-title { font-family: 'Bebas Neue', sans-serif; font-size: 24px; letter-spacing: 1.5px; flex: 1; }
+    /* Favorite star (modal header, form view only) — ☆ not saved / ★ saved */
+    .nu-fav {
+      background: none; border: none; cursor: pointer;
+      font-size: 22px; line-height: 1; padding: 4px 6px;
+      color: var(--text-muted); transition: color .2s;
+    }
+    .nu-fav:hover { color: var(--text-2); }
+    .nu-fav.on { color: var(--red); }
     .modal-close {
       background: none; border: none; color: var(--text-muted);
       font-size: 18px; cursor: pointer; padding: 4px 8px; transition: color 0.2s;
@@ -474,6 +494,12 @@
     <div class="section-label">Daily Totals</div>
     <div id="totalsWrap"></div>
 
+    <!-- Quick add: recently logged + favorited foods -->
+    <div class="section-label">Recent</div>
+    <div class="qa-chips" id="recentChips"><div class="qa-empty">No recent foods yet.</div></div>
+    <div class="section-label">Favorites</div>
+    <div class="qa-chips" id="favChips"><div class="qa-empty">No favorites yet.</div></div>
+
     <!-- Meals -->
     <div id="mealsWrap"></div>
   </div>
@@ -596,6 +622,63 @@
     nuOpenModal({ meal: meal, date: currentDate });
   }
 
+  /* ── quick add: Recent + Favorites chips (Phase 3.3) ─────────────── */
+  var recentItems = [];   // per-serving items for nuOpenModalWithFood
+  var favItems = [];
+
+  // Chips carry no meal context — suggest one from the time of day (still
+  // editable in the form before saving).
+  function suggestMeal() {
+    var h = new Date().getHours();
+    if (h < 11) return 'breakfast';
+    if (h < 15) return 'lunch';
+    if (h < 21) return 'dinner';
+    return 'snack';
+  }
+
+  function renderChips(elId, items, pickFn, emptyMsg) {
+    var el = document.getElementById(elId);
+    if (!el) return;
+    if (!items.length) {
+      el.innerHTML = '<div class="qa-empty">' + emptyMsg + '</div>';
+      return;
+    }
+    el.innerHTML = items.map(function (it, i) {
+      return '<button type="button" class="nu-chip" onclick="' + pickFn + '(' + i + ')">' +
+          '<span class="nu-chip-name">' + nuEsc(nuShortLabel(it.name)) + '</span>' +
+          '<span class="nu-chip-cal">' + nuRound(it.calories) + ' kcal</span>' +
+        '</button>';
+    }).join('');
+  }
+
+  async function loadRecentChips() {
+    recentItems = await nuFetchRecentLogged(currentUserId, 10);
+    renderChips('recentChips', recentItems, 'pickRecent', 'No recent foods yet.');
+  }
+
+  async function loadFavChips() {
+    var favs = await nuLoadFavorites();
+    favItems = favs.map(function (f) {
+      return {
+        name: f.food_name,
+        calories: +f.calories  || 0, protein: +f.protein_g || 0,
+        carbs:    +f.carbs_g   || 0, fat:     +f.fat_g     || 0,
+        raw_food: f.raw_food || null,
+      };
+    });
+    renderChips('favChips', favItems, 'pickFav', 'No favorites yet.');
+  }
+
+  function pickRecent(i) {
+    if (recentItems[i]) nuOpenModalWithFood(recentItems[i], { date: currentDate, meal: suggestMeal() });
+  }
+  function pickFav(i) {
+    if (favItems[i]) nuOpenModalWithFood(favItems[i], { date: currentDate, meal: suggestMeal() });
+  }
+
+  // Star toggled inside the modal → nu_favorites cache is already updated.
+  window.onFavoritesChanged = loadFavChips;
+
   function editEntry(el) {
     var id = el.getAttribute('data-id');
     var log = currentLogs.filter(function (l) { return l.id === id; })[0];
@@ -616,8 +699,12 @@
     renderMeals();
   }
 
-  // Shared modal calls this after a successful save/delete.
-  window.onFoodSaved = refresh;
+  // Shared modal calls this after a successful save/delete. Recents come from
+  // logging history, so they refresh here too — no extra save action needed.
+  window.onFoodSaved = async function () {
+    await refresh();
+    loadRecentChips();
+  };
 
   window.addEventListener('load', function () {
     (async () => {
@@ -631,6 +718,8 @@
 
         renderDateLabel();
         await refresh();
+        loadRecentChips();
+        loadFavChips();
         lucide.createIcons();
       } catch (err) {
         console.error('Nutrition page error:', err);
