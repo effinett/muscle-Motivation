@@ -669,6 +669,58 @@ function nuBuildServingOptions(f, portions) {
   return opts;
 }
 
+/* ── ONE serving-selection rule, shared by the search LIST and detail card ──
+ * The list must preview EXACTLY the serving the card defaults to:
+ *   • generic food with USDA household portions → first (most natural) portion
+ *   • food with a manufacturer serving          → that serving
+ *   • otherwise                                 → 100 g
+ * Portions come from the same /api/usda-food cache in both places; nothing is
+ * ever fabricated — no portions means both places honestly show 100 g.
+ * ─────────────────────────────────────────────────────────────────────────── */
+function nuDefaultServingKey(f, opts, portions) {
+  if (!f.has_serving && portions && portions.length && opts.length) return opts[0].key;
+  if (f.has_serving) return 'serving';
+  return opts[0] && opts[0].key;
+}
+
+// Mutate a normalized USDA food so its result row previews its true default
+// serving: generic + cached portions → portion label + macros for that portion
+// (same nuScalePer100 math the card uses). Idempotent; returns true if applied.
+function nuApplyDefaultPortion(f) {
+  var portions = f.usda_fdc_id != null ? nu_detailCache[f.usda_fdc_id] : null;
+  if (f.has_serving || !portions || !portions.length) return false;
+  var p = portions[0];
+  var g = +p.gramWeight;
+  var per100 = f.raw && f.raw.nutrients;
+  if (!(g > 0) || !per100) return false;
+  var pu = nuScalePer100(per100, g);
+  f.serving_description = p.label + ' (' + nuRound(g) + ' g)';
+  f.serving_amount = p.amount || 1;
+  f.serving_unit = 'serving';
+  f.grams = g;
+  f.calories = pu.calories; f.protein = pu.protein; f.carbs = pu.carbs;
+  f.fat = pu.fat; f.fiber = pu.fiber; f.sugar = pu.sugar;
+  if (f.raw) f.raw.portions = portions;      // keep saved raw payload in sync
+  return true;
+}
+
+// Prefetch household portions for the generic rows of the current result set so
+// each row previews its real default serving. Uses the SAME fetch + session
+// cache as the card, so tapping a row opens with identical data. Stale-guarded
+// by nu_usdaSeq; failures leave the honest 100 g row.
+function nuPrefetchPortions() {
+  var seq = nu_usdaSeq, dirty = false;
+  nu_usdaResults.forEach(function (f) {
+    if (f.has_serving || f.usda_fdc_id == null) return;
+    if (nu_detailCache[f.usda_fdc_id]) { dirty = nuApplyDefaultPortion(f) || dirty; return; }
+    nuFetchUsdaDetail(f.usda_fdc_id).then(function () {
+      if (seq !== nu_usdaSeq) return;          // a newer search superseded us
+      if (nuApplyDefaultPortion(f)) nuRenderUsdaResults();
+    });
+  });
+  if (dirty) nuRenderUsdaResults();
+}
+
 /* ── USDA search view — the DEFAULT path for a new entry ───────────────────── */
 // isRoot: true when search is the modal's root (new Add Food) so there's no back
 //   arrow — the user reaches the form by picking a result or "enter manually".
@@ -775,6 +827,7 @@ async function nuRunUsdaSearch(q) {
     }
     nuUsdaSetStatus('');
     nuRenderUsdaResults();
+    nuPrefetchPortions();   // rows update to their true default household serving
   } catch (err) {
     if (err && err.name === 'AbortError') return;         // stale request — ignore
     if (seq !== nu_usdaSeq) return;
@@ -850,10 +903,12 @@ function nuPickUsda(i) {
   bEl.textContent = f.brand || '';
   bEl.style.display = f.brand ? 'inline-block' : 'none';
 
-  // Open instantly with the Phase 3.1.2 options (manufacturer serving, 100 g, 1 oz,
-  // custom). True USDA household portions are merged in by the async fetch below.
-  nu_servingOptions = nuBuildServingOptions(f);
-  var def = f.has_serving ? 'serving' : (nu_servingOptions[0] && nu_servingOptions[0].key);
+  // Same serving rule as the search list (nuDefaultServingKey). Portions already
+  // cached by the row prefetch apply synchronously, so the card opens showing
+  // exactly what the row previewed; otherwise the async fetch merges them in.
+  var cachedPortions = f.usda_fdc_id != null ? nu_detailCache[f.usda_fdc_id] : null;
+  nu_servingOptions = nuBuildServingOptions(f, cachedPortions);
+  var def = nuDefaultServingKey(f, nu_servingOptions, cachedPortions);
   nuRenderServingSelect(def);
   document.getElementById('nuCustomGrams').value = '';
   document.getElementById('nuServings').value = 1;
@@ -864,7 +919,7 @@ function nuPickUsda(i) {
   setTimeout(function () { document.getElementById('nuServingSelect').focus(); }, 60);
 
   // Non-blocking: enrich the dropdown with real household servings when they arrive.
-  if (f.usda_fdc_id != null) nuLoadPortions(f);
+  if (f.usda_fdc_id != null && !cachedPortions) nuLoadPortions(f);
 }
 
 // Fetch USDA detail portions (cached, abortable) and merge them into the serving
@@ -881,9 +936,11 @@ async function nuLoadPortions(f) {
   var prevKey = sel ? sel.value : null;
   nu_servingOptions = nuBuildServingOptions(f, portions);
 
-  if (!nu_servingTouched) {
-    // Default to the primary USDA household serving (egg → 1 large, etc.).
-    var def = nu_servingOptions[0] && nu_servingOptions[0].key;
+  if (!nu_servingTouched && !f.has_serving) {
+    // Generic food: default to the primary USDA household serving (egg →
+    // 1 large). Foods with a manufacturer serving KEEP it as the default —
+    // that's what their search row previewed (portions stay in the dropdown).
+    var def = nuDefaultServingKey(f, nu_servingOptions, portions);
     nuRenderServingSelect(def);
     nuApplyServing(def);
   } else {

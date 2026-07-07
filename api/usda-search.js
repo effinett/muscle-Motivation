@@ -243,7 +243,29 @@ const COMMON_FOODS = [
 const FOOD_INTENT = {
   'peanut butter': {
     prefer:   ['creamy', 'natural', 'organic', 'smooth', 'crunchy'],
-    penalize: ['candy', 'coating', 'cereal', 'dessert', 'cup', 'cups', 'cookie', 'ice cream'],
+    penalize: ['candy', 'coating', 'cereal', 'dessert', 'cup', 'cups', 'cookie', 'ice cream',
+               'reduced fat', 'fortified'],
+    // SR "smooth style" carries the real 2-tbsp household portion; the otherwise
+    // tying Foundation "creamy" has NO portions and would default to 100 g.
+    top: 'smooth',
+  },
+  milk: {
+    prefer:   ['whole'],
+    penalize: ['buttermilk', 'goat', 'sheep', 'human', 'condensed', 'evaporated', 'dry',
+               'powdered', 'chocolate', 'eggnog', 'imitation', 'shake', 'canned'],
+    // "Milk, whole, 3.25%…" is buried below USDA's top 50 for "milk", and even
+    // "whole milk" returns cheese/yogurt first — this phrasing surfaces it at #1.
+    supplement: 'milk whole 3.25',
+  },
+  bread: {
+    prefer:   ['white', 'wheat', 'whole wheat'],
+    penalize: ['dulce', 'dessert', 'stuffing'],
+  },
+  salmon: {
+    // 'canned' stays salmon-specific (NOT global): canned IS the common form
+    // people mean for tuna, so a global penalty would hurt that search.
+    prefer:   ['fillet', 'raw', 'grilled'],
+    penalize: ['canned', 'smoked', 'jerky', 'lox'],
   },
   rice: {
     prefer:   ['white', 'brown', 'jasmine', 'basmati', 'cooked', 'long grain'],
@@ -484,6 +506,18 @@ function isCanonicalGeneric(f, qStems) {
   return qStems.every(function (t) { return pStems.indexOf(t) >= 0; });
 }
 
+// EXACT principal-name match: the query IS this food's name, word for word
+// ("honey" ↔ "Honey", "milk" ↔ "Milk, whole…"). Stricter than isCanonicalGeneric
+// (same length, not subset) and category-independent — staples in non-whole
+// categories (honey → Sweets) must beat whole-category foods that merely
+// contain the word (Ham, honey, smoked, cooked).
+function isPrincipalExact(f, qStems) {
+  const principal = (f.description || '').split(',')[0];
+  const pStems = stemTokens(principal.toLowerCase().split(/\s+/).filter(Boolean));
+  if (!pStems.length || pStems.length !== qStems.length) return false;
+  return qStems.every(function (t) { return pStems.indexOf(t) >= 0; });
+}
+
 // Score one trimmed food against the query. Higher = more relevant.
 // Match-quality signals (exact phrase, starts-with, brand/all/partial tokens) PLUS
 // consumer signals: recognized national brand + a low-weight brand-frequency nudge
@@ -532,19 +566,28 @@ function scoreFood(f, qLower, toks, qStems, ctx) {
     // a larger catalog. Capped so it nudges unlisted brands, never overrides above.
     const freq = (freqMap && f.brand) ? (freqMap[f.brand.toLowerCase()] || 0) : 0;
     if (freq > 1) s += Math.min(freq - 1, 5) * 25;            // +25..+125
-  } else if (isWholeCategory(f)) {
-    // Whole-food relevance from USDA category (algorithmic, not a food list).
-    s += 400;
-    if (!processed) {
-      if (isCanonicalGeneric(f, qStems)) s += 300;            // the canonical raw food (e.g. "Bananas, raw")
-      // BASE-FOOD bonus: the unprocessed whole food — every query word present and a
-      // base descriptor (raw/cooked/whole/fillet…). Lifts it over recipe/processed
-      // items that merely match the text better (USDA names raw foods awkwardly:
-      // "Fish, salmon…", "Chicken, …, breast"). Strictly gated → only ever promotes
-      // THE base food a user means; never branded or processed items.
-      const matchAllStems = qStems.length > 0 && qStems.every(function (st) { return foodStemSet.has(st); });
-      if (matchAllStems && hasUnqueriedTerm(BASE_PREP_STEMS, foodStemSet, qStems)) s += 1500;
+  } else {
+    // EXACT principal name (query IS the food, any category): honey → "Honey"
+    // must beat "Ham, honey, smoked, cooked" despite ham's whole-food category.
+    if (!processed && isPrincipalExact(f, qStems)) s += 2000;
+    if (isWholeCategory(f)) {
+      // Whole-food relevance from USDA category (algorithmic, not a food list).
+      s += 400;
+      if (!processed) {
+        if (isCanonicalGeneric(f, qStems)) s += 300;          // the canonical raw food (e.g. "Bananas, raw")
+        // BASE-FOOD bonus: the unprocessed whole food — every query word present and a
+        // base descriptor (raw/cooked/whole/fillet…). Lifts it over recipe/processed
+        // items that merely match the text better (USDA names raw foods awkwardly:
+        // "Fish, salmon…", "Chicken, …, breast"). Strictly gated → only ever promotes
+        // THE base food a user means; never branded or processed items.
+        const matchAllStems = qStems.length > 0 && qStems.every(function (st) { return foodStemSet.has(st); });
+        if (matchAllStems && hasUnqueriedTerm(BASE_PREP_STEMS, foodStemSet, qStems)) s += 1500;
+      }
     }
+    // Completely empty macro panel (no kcal, protein, carbs, or fat) = a data
+    // gap in USDA (some Foundation search rows) — useless to log, so demote.
+    const n = f.nutrients || {};
+    if (!(+n.kcal) && !(+n.protein) && !(+n.carbs) && !(+n.fat)) s -= 1500;
   }
 
   // Canonical food preference (both groups): favor base foods, demote processed/
@@ -585,8 +628,13 @@ function rankPool(pool, qLower, toks, group, strict, cap, qStems, ctx) {
     f.score = score;
     scored.push(f);
   }
-  // Highest score first; tie-break toward the shorter (less cluttered) name.
-  scored.sort((a, b) => (b.score - a.score) || (a.description.length - b.description.length));
+  // Highest score first; tie-break toward the shorter (less cluttered) name;
+  // final tie-break prefers SR Legacy — identically-named Foundation/SR twins
+  // ("Milk, whole, 3.25%…") differ in that SR carries the household measures
+  // (1 cup) while Foundation often has none, so SR makes the better default.
+  const dtRank = (f) => (f.dataType === 'SR Legacy' ? 0 : 1);
+  scored.sort((a, b) => (b.score - a.score) ||
+    (a.description.length - b.description.length) || (dtRank(a) - dtRank(b)));
   return scored.slice(0, cap);
 }
 
