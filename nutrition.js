@@ -274,6 +274,8 @@ function nuOpenModal(prefill) {
   document.getElementById('nuSearchView').style.display = 'none';
   var usdaView = document.getElementById('nuUsdaView');
   if (usdaView) usdaView.style.display = 'none';
+  var scanView = document.getElementById('nuScanView');
+  if (scanView) { nuStopScanner(); scanView.style.display = 'none'; }
   document.getElementById('nuAddView').style.display    = 'none';
   nuUpdateTotalPreview();
 
@@ -323,6 +325,7 @@ function nuSetMode(isUsda) {
 
 function nuCloseModal(e) {
   if (e && e.target !== document.getElementById('foodModal')) return;
+  nuStopScanner();                  // never leave the camera running behind a closed modal
   document.getElementById('foodModal').classList.remove('open');
 }
 
@@ -554,6 +557,10 @@ function nuNormalizeUsdaFood(f) {
   var per100 = f.nutrients || {};
   var size = +f.servingSize;
   var unit = (f.servingSizeUnit || '').toLowerCase();
+  // USDA branded data mixes plain units with UNECE codes — many records say
+  // 'GRM'/'MLT' where others say 'g'/'ml'. Same measure, so map them across.
+  if (unit === 'grm') unit = 'g';
+  if (unit === 'mlt') unit = 'ml';
   var factor, grams, servingAmount, servingUnit, servingDesc;
 
   if (size > 0 && (unit === 'g' || unit === 'gram' || unit === 'grams' || unit === 'ml')) {
@@ -774,8 +781,10 @@ function nuManualEntry() {
   setTimeout(function () { document.getElementById('nuName').focus(); }, 60);
 }
 
-// Single back-button dispatcher — context-aware across the three sub-panels.
+// Single back-button dispatcher — context-aware across the modal's sub-panels.
 function nuModalBack() {
+  var scan = document.getElementById('nuScanView');
+  if (scan && scan.style.display !== 'none') { nuCloseScanner(); return; }
   var usda = document.getElementById('nuUsdaView');
   if (usda && usda.style.display !== 'none') { nuCloseUsda(); return; }
   var saved = document.getElementById('nuSearchView');
@@ -974,6 +983,219 @@ async function nuFetchUsdaDetail(fdcId) {
   }
 }
 
+/* ── Barcode scanner (Phase 3.2) ────────────────────────────────────────────
+ * Scans a packaged food's UPC/EAN and feeds the matched USDA branded food into
+ * the EXISTING flow: /api/usda-barcode returns the same trimmed shape as
+ * search, so nuNormalizeUsdaFood → nuPickUsda → serving card → nuSave all run
+ * unchanged. Engine: native BarcodeDetector where available, else ZXing UMD
+ * lazy-loaded from jsdelivr (SRI-pinned). Structured so later phases (QR,
+ * label/receipt scanning) can add engines/formats without reshaping the flow.
+ * ─────────────────────────────────────────────────────────────────────────── */
+var NU_SCAN_FORMATS  = ['ean_13', 'ean_8', 'upc_a', 'upc_e']; // retail barcodes only (QR later)
+var NU_SCAN_COOLDOWN = 2000;      // ms before the same code may trigger again
+var NU_ZXING_SRC = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js';
+var NU_ZXING_SRI = 'sha384-BzBxP10ZE72aitqj5UMmUsbKFliP/DZqA8Wq+BNNhlIJDGoEd1tpkMYXOg9+n6sB';
+
+var nu_scanStream  = null;        // getUserMedia stream (native-detector path)
+var nu_scanTimer   = null;        // native detect-loop interval
+var nu_scanReader  = null;        // ZXing reader (fallback path — owns its stream)
+var nu_scanBusy    = false;       // a lookup is in flight — pause detections
+var nu_scanTried   = {};          // per-session codes already looked up and not found
+var nu_lastScan    = { code: null, at: 0 };
+var nu_zxingLoad   = null;        // cached ZXing script-load promise
+
+function nuScanSetStatus(msg, kind) {
+  var el = document.getElementById('nuScanStatus');
+  if (!el) return;
+  el.className = 'nu-scan-status' + (kind ? ' ' + kind : '');
+  el.textContent = msg || '';
+}
+
+// Open the scanner sub-view (from the USDA search view) and start the camera.
+function nuOpenScanner() {
+  if (nu_usdaAbort) { try { nu_usdaAbort.abort(); } catch (e) {} nu_usdaAbort = null; }
+  if (nu_usdaTimer) { clearTimeout(nu_usdaTimer); nu_usdaTimer = null; }
+  document.getElementById('nuUsdaView').style.display = 'none';
+  document.getElementById('nuScanView').style.display = 'block';
+  document.getElementById('nuModalTitle').textContent = 'Scan Barcode';
+  document.getElementById('nuBackBtn').style.display  = 'inline-block';
+  document.getElementById('nuScanSearchBtn').style.display = 'none';
+  document.getElementById('nuScanCode').value = '';
+  nu_scanTried = {};
+  nu_lastScan = { code: null, at: 0 };
+  nuScanSetStatus('Starting camera…');
+  nuStartCamera();
+}
+
+// Stop the scanner and return to the USDA search (preserving its results).
+function nuCloseScanner() {
+  nuStopScanner();
+  document.getElementById('nuScanView').style.display = 'none';
+  nuShowUsdaSearch(nu_usdaIsRoot, true);
+}
+
+// "Search manually instead" — back to the USDA search with the input focused.
+function nuScanToSearch() {
+  nuCloseScanner();
+  setTimeout(function () { document.getElementById('nuUsdaInput').focus(); }, 80);
+}
+
+// Start live scanning. Native BarcodeDetector runs on our own camera stream;
+// otherwise ZXing manages the (rear) camera itself. Camera failure NEVER blocks
+// the flow — manual barcode entry and the search stay available.
+async function nuStartCamera() {
+  var video = document.getElementById('nuScanVideo');
+  if (!video) return;
+  var hasCamera = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  if (!hasCamera) {
+    nuScanSetStatus('Camera not supported on this device — type the barcode below.', 'error');
+    return;
+  }
+  // The permission prompt can outlive the scan view (user backs out / closes the
+  // modal while it's up) — anything acquired after that must be released at once.
+  function scanGone() {
+    var v = document.getElementById('nuScanView');
+    return !v || v.style.display === 'none';
+  }
+  try {
+    if (typeof window.BarcodeDetector !== 'undefined') {
+      var detector = new window.BarcodeDetector({ formats: NU_SCAN_FORMATS });
+      nu_scanStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }, audio: false,
+      });
+      if (scanGone()) { nuStopScanner(); return; }
+      video.srcObject = nu_scanStream;
+      await video.play().catch(function () {});
+      nuScanSetStatus('Point your camera at the barcode.');
+      nu_scanTimer = setInterval(async function () {
+        if (nu_scanBusy || !nu_scanStream || video.readyState < 2) return;
+        try {
+          var codes = await detector.detect(video);
+          if (codes && codes.length) nuScanHit(codes[0].rawValue);
+        } catch (e) { /* per-frame detect errors are non-fatal */ }
+      }, 250);
+    } else {
+      await nuLoadZxing();
+      if (scanGone()) return;
+      var hints = new Map();
+      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+        ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+        ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E,
+      ]);
+      nu_scanReader = new ZXing.BrowserMultiFormatReader(hints);
+      // undefined deviceId → ZXing requests the environment (rear) camera.
+      await nu_scanReader.decodeFromVideoDevice(undefined, video, function (result) {
+        if (result && !nu_scanBusy) nuScanHit(result.getText());
+      });
+      nuScanSetStatus('Point your camera at the barcode.');
+    }
+  } catch (err) {
+    nuStopScanner();
+    var name = err && err.name;
+    if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+      nuScanSetStatus('Camera access denied — allow camera in your browser, or type the barcode below.', 'error');
+    } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+      nuScanSetStatus('No camera found — type the barcode below.', 'error');
+    } else {
+      console.error('nuStartCamera error:', err);
+      nuScanSetStatus('Couldn’t start the camera — type the barcode below.', 'error');
+    }
+  }
+}
+
+// Stop camera tracks / detect loop / ZXing reader. Safe to call repeatedly.
+function nuStopScanner() {
+  if (nu_scanTimer) { clearInterval(nu_scanTimer); nu_scanTimer = null; }
+  if (nu_scanStream) {
+    try { nu_scanStream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
+    nu_scanStream = null;
+  }
+  if (nu_scanReader) {
+    try { nu_scanReader.reset(); } catch (e) {}      // stops ZXing's own stream
+    nu_scanReader = null;
+  }
+  var video = document.getElementById('nuScanVideo');
+  if (video) video.srcObject = null;
+}
+
+// Lazy, SRI-pinned ZXing loader (CSP already allows cdn.jsdelivr.net scripts).
+function nuLoadZxing() {
+  if (typeof window.ZXing !== 'undefined') return Promise.resolve();
+  if (nu_zxingLoad) return nu_zxingLoad;
+  nu_zxingLoad = new Promise(function (resolve, reject) {
+    var s = document.createElement('script');
+    s.src = NU_ZXING_SRC;
+    s.integrity = NU_ZXING_SRI;
+    s.crossOrigin = 'anonymous';
+    s.onload = resolve;
+    s.onerror = function () { nu_zxingLoad = null; reject(new Error('scanner load failed')); };
+    document.head.appendChild(s);
+  });
+  return nu_zxingLoad;
+}
+
+// A code was detected in frame. Debounce: ignore while a lookup is in flight,
+// within the cooldown for the same code, or after this code already came back
+// not-found this session (the same barcode stays in frame for many frames).
+function nuScanHit(raw) {
+  var code = String(raw || '').replace(/\D/g, '');
+  if (code.length < 8 || code.length > 14) return;
+  var now = Date.now();
+  if (nu_scanBusy) return;
+  if (nu_scanTried[code]) return;
+  if (nu_lastScan.code === code && now - nu_lastScan.at < NU_SCAN_COOLDOWN) return;
+  nu_lastScan = { code: code, at: now };
+  nuBarcodeLookup(code);
+}
+
+// Manual barcode entry fallback (works even when the camera never started).
+function nuManualBarcode() {
+  var code = document.getElementById('nuScanCode').value.replace(/\D/g, '');
+  if (code.length < 8 || code.length > 14) {
+    nuScanSetStatus('Enter the 8–14 digit barcode number.', 'error');
+    return;
+  }
+  if (!nu_scanBusy) nuBarcodeLookup(code);
+}
+
+// Look the code up through the server proxy. Success stops the camera and opens
+// the EXISTING selected-food card (nuPickUsda) with the matched food.
+async function nuBarcodeLookup(code) {
+  nu_scanBusy = true;
+  nuScanSetStatus('Looking up ' + code + '…', 'loading');
+  try {
+    var s = await supabaseClient.auth.getSession();
+    var token = s.data.session && s.data.session.access_token;
+    if (!token) throw new Error('Not authenticated');
+    var res = await fetch('/api/usda-barcode?code=' + encodeURIComponent(code), {
+      headers: { Authorization: 'Bearer ' + token },
+    });
+    if (!res.ok) {
+      var msg = 'Lookup failed. Try again.';
+      try { var j = await res.json(); if (j && j.error) msg = j.error; } catch (e) {}
+      throw new Error(msg);
+    }
+    var data = await res.json();
+    if (!data || !data.food) {
+      nu_scanTried[code] = true;                  // don't re-hit USDA while it stays in frame
+      nuScanSetStatus('Food not found. Search manually instead.', 'error');
+      document.getElementById('nuScanSearchBtn').style.display = 'block';
+      return;
+    }
+    // Matched — stop the camera, hand the food to the normal USDA pick flow.
+    nuStopScanner();
+    document.getElementById('nuScanView').style.display = 'none';
+    nu_usdaResults = [nuNormalizeUsdaFood(data.food)];
+    nuRenderUsdaResults();                        // back arrow lands on this result
+    nuPickUsda(0);
+  } catch (err) {
+    console.error('nuBarcodeLookup error:', err);
+    nuScanSetStatus(err && err.message ? err.message : 'Lookup failed. Try again.', 'error');
+  } finally {
+    nu_scanBusy = false;
+  }
+}
+
 // Apply a chosen serving: compute its PER-UNIT macros, fill the (hidden) macro
 // inputs so nuSave is unchanged, sync the USDA provenance to the chosen serving,
 // and refresh the live readout. 'custom' reveals a grams field.
@@ -1095,7 +1317,7 @@ function nuModalMarkup() {
       '<div class="modal-header">' +
         '<button class="nu-back" id="nuBackBtn" style="display:none;" onclick="nuModalBack()" title="Back">←</button>' +
         '<div class="modal-title" id="nuModalTitle">Add Food</div>' +
-        '<button class="modal-close" onclick="document.getElementById(\'foodModal\').classList.remove(\'open\')">✕</button>' +
+        '<button class="modal-close" onclick="nuStopScanner();document.getElementById(\'foodModal\').classList.remove(\'open\')">✕</button>' +
       '</div>' +
       '<div id="nuAddView">' +
         '<input type="hidden" id="nuFoodId">' +
@@ -1191,9 +1413,27 @@ function nuModalMarkup() {
       '</div>' +
       '<div id="nuUsdaView" style="display:none;">' +
         '<input type="text" class="nu-search-input" id="nuUsdaInput" maxlength="80" autocomplete="off" placeholder="Search foods (e.g. chicken breast)…" oninput="nuUsdaInputChanged()">' +
+        '<button type="button" class="nu-dbsearch nu-scan-btn" onclick="nuOpenScanner()">' +
+          '<span class="nu-dbsearch-ico">📷</span>' +
+          '<span>Scan a barcode</span>' +
+        '</button>' +
         '<div class="nu-usda-status" id="nuUsdaStatus"></div>' +
         '<div class="nu-usda-list" id="nuUsdaResults"></div>' +
         '<button type="button" class="nu-usda-manual" onclick="nuManualEntry()">Can\'t find it? Enter food manually →</button>' +
+      '</div>' +
+      '<div id="nuScanView" style="display:none;">' +
+        '<div class="nu-scan-frame">' +
+          '<video id="nuScanVideo" playsinline muted autoplay></video>' +
+        '</div>' +
+        '<div class="nu-scan-status" id="nuScanStatus"></div>' +
+        '<button type="button" class="nu-usda-manual" id="nuScanSearchBtn" style="display:none;" onclick="nuScanToSearch()">Search manually instead →</button>' +
+        '<div class="field-group nu-scan-manual">' +
+          '<label class="field-label">Or type the barcode number</label>' +
+          '<div class="nu-scan-manual-row">' +
+            '<input type="text" id="nuScanCode" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="e.g. 016000275287" onkeydown="if(event.key===\'Enter\')nuManualBarcode()">' +
+            '<button type="button" class="nu-scan-lookup" onclick="nuManualBarcode()">Look up</button>' +
+          '</div>' +
+        '</div>' +
       '</div>' +
     '</div>' +
   '</div>';
