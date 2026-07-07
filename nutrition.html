@@ -157,10 +157,6 @@
     }
     .qa-chips::-webkit-scrollbar { height: 0; }
     .qa-chips .nu-chip { min-height: 40px; }   /* thumb-friendly page targets */
-    .nu-chip-cal {
-      font-size: 11px; color: var(--text-muted); font-weight: 600;
-      flex-shrink: 0; white-space: nowrap;
-    }
     .qa-empty { font-size: 12px; color: var(--text-muted); padding: 2px 2px 6px; }
 
     /* ── Shared modal (mirrors app.html / weight-history.html) ─────────── */
@@ -497,9 +493,9 @@
 
     <!-- Quick add: recently logged + favorited foods -->
     <div class="section-label">Recent</div>
-    <div class="qa-chips" id="recentChips"><div class="qa-empty">No recent foods yet.</div></div>
+    <div class="qa-chips" id="recentChips"><div class="qa-empty">Loading&hellip;</div></div>
     <div class="section-label">Favorites</div>
-    <div class="qa-chips" id="favChips"><div class="qa-empty">No favorites yet.</div></div>
+    <div class="qa-chips" id="favChips"><div class="qa-empty">Loading&hellip;</div></div>
 
     <!-- Meals -->
     <div id="mealsWrap"></div>
@@ -645,13 +641,15 @@
       return;
     }
     el.innerHTML = items.map(function (it, i) {
-      // Chips show a shortened label — title/aria carry the full food name.
+      // Name-only chips (matches the modal's saved-food chips). The kcal shown
+      // here was per-serving and could mismatch what the user remembers logging
+      // (fractional servings) — exact macros appear in the card on tap anyway.
+      // Title/aria still carry the full name + calories.
       var full = nuEsc(it.name);
       return '<button type="button" class="nu-chip" title="' + full + '"' +
           ' aria-label="' + full + ', ' + nuRound(it.calories) + ' calories"' +
           ' onclick="' + pickFn + '(' + i + ')">' +
           '<span class="nu-chip-name">' + nuEsc(nuShortLabel(it.name)) + '</span>' +
-          '<span class="nu-chip-cal">' + nuRound(it.calories) + ' kcal</span>' +
         '</button>';
     }).join('');
   }
@@ -669,9 +667,16 @@
         calories: +f.calories  || 0, protein: +f.protein_g || 0,
         carbs:    +f.carbs_g   || 0, fat:     +f.fat_g     || 0,
         raw_food: f.raw_food || null,
+        // USDA identity — keeps the star on 'usda:<fdcId>' even when the
+        // favorite has no raw payload and opens the plain form.
+        usda_fdc_id: f.fdc_id != null ? f.fdc_id : null,
+        brand: f.brand_name || null, gtin_upc: f.gtin_upc || null,
+        serving_unit: f.serving_unit || null,
+        serving_amount: f.serving_qty != null ? f.serving_qty : null,
       };
     });
-    renderChips('favChips', favItems, 'pickFav', 'No favorites yet.');
+    renderChips('favChips', favItems, 'pickFav',
+      'No favorites yet — tap ☆ while logging a food to save it here.');
   }
 
   function pickRecent(i) {

@@ -1367,7 +1367,8 @@ async function nuToggleFavorite() {
       // Favorited from an edited log entry — pull the stored USDA payload so the
       // favorite reopens the full serving card. Best effort: null raw_food just
       // means the favorite opens the prefilled manual form instead.
-      if (!cand.raw_food && nu_editSource && nuFoodKey(nu_editSource) === cand.food_key) {
+      if (!cand.raw_food && nu_editSource && nu_editSource.log_id &&
+          nuFoodKey(nu_editSource) === cand.food_key) {
         try {
           var rawRes = await supabaseClient
             .from('food_logs')
@@ -1405,7 +1406,7 @@ async function nuFetchRecentLogged(userId, limit) {
   try {
     var res = await supabaseClient
       .from('food_logs')
-      .select('name, brand, source, usda_fdc_id, servings, calories, protein, carbs, fat, raw_source_data')
+      .select('name, brand, source, usda_fdc_id, gtin_upc, serving_amount, serving_unit, servings, calories, protein, carbs, fat, raw_source_data')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(60);
@@ -1424,6 +1425,12 @@ async function nuFetchRecentLogged(userId, limit) {
         carbs:    nuRound1((+l.carbs    || 0) / div),
         fat:      nuRound1((+l.fat      || 0) / div),
         raw_food: l.raw_source_data || null,
+        // USDA identity — keeps the star on 'usda:<fdcId>' even when the log
+        // has no raw payload and reopens as the plain form.
+        usda_fdc_id: l.usda_fdc_id != null ? l.usda_fdc_id : null,
+        brand: l.brand || null, gtin_upc: l.gtin_upc || null,
+        serving_unit: l.serving_unit || null,
+        serving_amount: l.serving_amount != null ? l.serving_amount : null,
       });
     });
     return out.slice(0, limit || 10);
@@ -1465,6 +1472,18 @@ function nuOpenModalWithFood(item, opts) {
     return;
   }
   // Manual/custom food → plain form, per-serving macros prefilled, quantity 1.
+  // A USDA food without a raw payload can't rebuild the serving card, but its
+  // identity still matters: the star must keep the 'usda:<fdcId>' key, or
+  // re-starring here would create a duplicate 'custom:' favorite. Same
+  // name-intact rule as edit mode (nu_editSource).
+  if (item && item.usda_fdc_id != null) {
+    nu_editSource = {
+      log_id: null, name: item.name || '',
+      usda_fdc_id: item.usda_fdc_id, brand: item.brand || null,
+      gtin_upc: item.gtin_upc || null, serving_unit: item.serving_unit || null,
+      serving_amount: item.serving_amount != null ? item.serving_amount : null,
+    };
+  }
   document.getElementById('nuName').value     = item.name || '';
   document.getElementById('nuCalories').value = item.calories != null ? item.calories : '';
   document.getElementById('nuProtein').value  = item.protein  != null ? item.protein  : '';
