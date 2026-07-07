@@ -235,6 +235,11 @@ const COMMON_FOODS = [
 // prefer the forms people overwhelmingly mean and strongly penalize derivatives —
 // far beyond the generic word lists. Intent-aware: a prefer/penalize term is only
 // applied when the user did NOT type it. Edit these maps to tune a food; no code.
+//
+// `supplement`: a second, small generic USDA query merged into the pool when the
+// user's query IS exactly this base food. USDA's own relevance buries the obvious
+// cut/form — "chicken" returns no raw breast in its top 50 of 402, "rice" no plain
+// cooked white rice in 50 of 141 — so ranking alone can never surface them.
 const FOOD_INTENT = {
   'peanut butter': {
     prefer:   ['creamy', 'natural', 'organic', 'smooth', 'crunchy'],
@@ -243,10 +248,13 @@ const FOOD_INTENT = {
   rice: {
     prefer:   ['white', 'brown', 'jasmine', 'basmati', 'cooked', 'long grain'],
     penalize: ['crackers', 'cakes', 'flour', 'pilaf', 'pudding', 'mix', 'snack', 'cereal', 'vinegar', 'bran'],
+    supplement: 'white rice cooked',
   },
   chicken: {
     prefer:   ['breast', 'tenderloin', 'thigh', 'drumstick', 'wing', 'whole', 'ground'],
-    penalize: ['feet', 'spread', 'broth', 'bratwurst', 'salad', 'nuggets', 'canned', 'sausage', 'patty', 'patties'],
+    penalize: ['feet', 'spread', 'broth', 'bratwurst', 'salad', 'nuggets', 'canned', 'sausage', 'patty', 'patties',
+               'giblets', 'gizzard', 'liver', 'heart', 'neck', 'back', 'tail', 'paws'],
+    supplement: 'chicken breast',
   },
   waffle: {
     prefer:   ['plain', 'belgian', 'frozen', 'homemade', 'buttermilk'],
@@ -343,8 +351,24 @@ const FOOD_INTENT_LIST = Object.keys(FOOD_INTENT).map(function (k) {
     keyStems: stemTokens(k.split(/\s+/)),
     prefer:   FOOD_INTENT[k].prefer.map(function (t) { return stemTokens(t.split(/\s+/)); }),
     penalize: FOOD_INTENT[k].penalize.map(function (t) { return stemTokens(t.split(/\s+/)); }),
+    supplement: FOOD_INTENT[k].supplement || null,
   };
 }).sort(function (a, b) { return b.keyStems.length - a.keyStems.length; });
+
+// The supplemental generic query for this search, if any: fires only when the
+// query IS exactly the intent's base food ("chicken", not "chicken broth").
+function supplementFor(effQuery) {
+  const qStems = stemTokens(tokenize(effQuery));
+  const intent = pickFoodIntent(qStems);
+  if (!intent || !intent.supplement) return null;
+  return intent.keyStems.length === qStems.length ? intent.supplement : null;
+}
+
+// Merge a supplemental generic pool into the primary one (dedupe by fdcId).
+function mergeGeneric(primary, supplement) {
+  const seen = new Set(primary.map(function (f) { return f.fdcId; }));
+  return primary.concat((supplement || []).filter(function (f) { return !seen.has(f.fdcId); }));
+}
 
 // The brand tokens present in the query (alias-aware): e.g. "coke" → ['coca','cola'].
 function queryBrandTokens(toks) {
@@ -618,14 +642,14 @@ module.exports = async (req, res) => {
     // Query Branded and generic SEPARATELY. A combined dataType query returns the
     // top generic hits only (USDA never interleaves branded), so branded products
     // would never appear. Fetched in parallel; one failing doesn't sink the other.
-    function typeUrl(dataType, pageSize) {
+    function typeUrl(query, dataType, pageSize) {
       return `${USDA_ENDPOINT}?api_key=${encodeURIComponent(EFFECTIVE_KEY)}` +
-        `&query=${encodeURIComponent(effQuery)}` +
+        `&query=${encodeURIComponent(query)}` +
         `&dataType=${encodeURIComponent(dataType)}` +
         `&pageSize=${pageSize}&pageNumber=1`;
     }
-    async function fetchType(dataType, pageSize) {
-      const r = await fetch(typeUrl(dataType, pageSize));
+    async function fetchType(query, dataType, pageSize) {
+      const r = await fetch(typeUrl(query, dataType, pageSize));
       if (!r.ok) { const e = new Error('upstream'); e.status = r.status; throw e; }
       const d = await r.json();
       return Array.isArray(d.foods) ? d.foods.map(trimFood) : [];
@@ -636,11 +660,15 @@ module.exports = async (req, res) => {
     // organic PB inside the top 50 — so we cast a wide net and let our scorer float
     // the brand+food match to the top. We trim + score + cap, so the client still
     // receives a small, clean list regardless of pool size.
-    const [brandedRes, genericRes] = await Promise.allSettled([
-      fetchType('Branded', 200),
+    // A third, small generic fetch fires only when the query IS a FOOD_INTENT base
+    // food whose obvious form USDA's relevance buries (chicken → chicken breast).
+    const supQ = supplementFor(effQuery);
+    const [brandedRes, genericRes, supRes] = await Promise.allSettled([
+      fetchType(effQuery, 'Branded', 200),
       // 50 (not 15): USDA's own relevance buries staple cuts — "chicken" didn't
       // surface breast, "rice" didn't surface plain cooked rice, inside the top 25.
-      fetchType('Foundation,SR Legacy', 50),
+      fetchType(effQuery, 'Foundation,SR Legacy', 50),
+      supQ ? fetchType(supQ, 'Foundation,SR Legacy', 25) : Promise.resolve([]),
     ]);
 
     // If BOTH calls failed, surface the error (mirror the old single-call behavior).
@@ -658,7 +686,9 @@ module.exports = async (req, res) => {
     }
 
     const branded = brandedRes.status === 'fulfilled' ? brandedRes.value : [];
-    const generic = genericRes.status === 'fulfilled' ? genericRes.value : [];
+    const generic = mergeGeneric(
+      genericRes.status === 'fulfilled' ? genericRes.value : [],
+      supRes.status === 'fulfilled' ? supRes.value : []);
 
     const body = buildResponse(effQuery, branded, generic);
 
@@ -675,4 +705,4 @@ module.exports = async (req, res) => {
 
 // Exposed for the offline ranking harness (never used by the route itself):
 // captured USDA pools → trimFood → buildResponse reproduces production output.
-module.exports._internals = { trimFood, expandQuery, buildResponse };
+module.exports._internals = { trimFood, expandQuery, buildResponse, supplementFor, mergeGeneric };
