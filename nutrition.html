@@ -156,6 +156,7 @@
       -webkit-overflow-scrolling: touch; scrollbar-width: none;
     }
     .qa-chips::-webkit-scrollbar { height: 0; }
+    .qa-chips .nu-chip { min-height: 40px; }   /* thumb-friendly page targets */
     .nu-chip-cal {
       font-size: 11px; color: var(--text-muted); font-weight: 600;
       flex-shrink: 0; white-space: nowrap;
@@ -644,7 +645,11 @@
       return;
     }
     el.innerHTML = items.map(function (it, i) {
-      return '<button type="button" class="nu-chip" onclick="' + pickFn + '(' + i + ')">' +
+      // Chips show a shortened label — title/aria carry the full food name.
+      var full = nuEsc(it.name);
+      return '<button type="button" class="nu-chip" title="' + full + '"' +
+          ' aria-label="' + full + ', ' + nuRound(it.calories) + ' calories"' +
+          ' onclick="' + pickFn + '(' + i + ')">' +
           '<span class="nu-chip-name">' + nuEsc(nuShortLabel(it.name)) + '</span>' +
           '<span class="nu-chip-cal">' + nuRound(it.calories) + ' kcal</span>' +
         '</button>';
@@ -687,6 +692,9 @@
         id: log.id, name: log.name, meal: log.meal, servings: log.servings,
         date: currentDate,
         calories: log.calories, protein: log.protein, carbs: log.carbs, fat: log.fat,
+        // USDA identity — lets the favorite star keep 'usda:<fdcId>' in edit mode
+        source: log.source, usda_fdc_id: log.usda_fdc_id, brand: log.brand,
+        gtin_upc: log.gtin_upc, serving_amount: log.serving_amount, serving_unit: log.serving_unit,
       });
     }
   }

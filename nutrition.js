@@ -65,7 +65,9 @@ async function nuFetchLogs(userId, date) {
   try {
     var res = await supabaseClient
       .from('food_logs')
-      .select('id, food_id, name, date, meal, servings, calories, protein, carbs, fat')
+      // Identity columns (source…serving_unit) ride along so edit mode can keep a
+      // USDA food's identity for favorites — cheap text columns, no raw payload.
+      .select('id, food_id, name, date, meal, servings, calories, protein, carbs, fat, source, usda_fdc_id, brand, gtin_upc, serving_amount, serving_unit')
       .eq('user_id', userId)
       .eq('date', date)
       .order('created_at', { ascending: true });
@@ -269,14 +271,18 @@ function nuOpenModal(prefill) {
   document.getElementById('nuDeleteBtn').style.display = prefill.id ? 'block' : 'none';
 
   // Reset transient state and hide every sub-panel before choosing a start view.
-  nu_pendingSource = null;                // fresh open = no carried USDA provenance
-  nu_formBackTo = null;
-  document.getElementById('nuSearchView').style.display = 'none';
-  var usdaView = document.getElementById('nuUsdaView');
-  if (usdaView) usdaView.style.display = 'none';
-  var scanView = document.getElementById('nuScanView');
-  if (scanView) { nuStopScanner(); scanView.style.display = 'none'; }
-  document.getElementById('nuAddView').style.display    = 'none';
+  nuResetModalState();
+  // Editing a USDA-logged entry: remember its identity for FAVORITES only.
+  // nuSave's provenance rules are untouched — a plain edit still never rewrites
+  // the log's source columns (nu_pendingSource stays null).
+  if (prefill.id && prefill.source === 'usda' && prefill.usda_fdc_id != null) {
+    nu_editSource = {
+      log_id: prefill.id, name: prefill.name || '',
+      usda_fdc_id: prefill.usda_fdc_id, brand: prefill.brand || null,
+      gtin_upc: prefill.gtin_upc || null, serving_unit: prefill.serving_unit || null,
+      serving_amount: prefill.serving_amount != null ? prefill.serving_amount : null,
+    };
+  }
   nuUpdateTotalPreview();
 
   document.getElementById('foodModal').classList.add('open');
@@ -1221,12 +1227,34 @@ function nuFoodKey(o) {
   return name ? 'custom:' + name : null;
 }
 
-var nu_favorites = null;   // favorite rows (newest first); null until first load
-var nu_favKeys   = {};     // food_key → true, for O(1) star state
-var nu_favBusy   = false;  // one toggle in flight at a time
+var nu_favorites  = null;  // favorite rows (newest first); null until first load
+var nu_favKeys    = {};    // food_key → true, for O(1) star state
+var nu_favBusy    = false; // one toggle in flight at a time
+var nu_favLoad    = null;  // in-flight first load (concurrent callers share it)
+var nu_editSource = null;  // USDA identity of the log being edited — favorites only
+
+// Shared modal reset: clear carried state and hide every sub-panel. Used by
+// BOTH modal entry points (nuOpenModal, nuOpenModalWithFood) so they can't drift.
+function nuResetModalState() {
+  nu_pendingSource = null;
+  nu_editSource = null;
+  nu_formBackTo = null;
+  document.getElementById('nuSearchView').style.display = 'none';
+  var usdaView = document.getElementById('nuUsdaView');
+  if (usdaView) usdaView.style.display = 'none';
+  var scanView = document.getElementById('nuScanView');
+  if (scanView) { nuStopScanner(); scanView.style.display = 'none'; }
+  document.getElementById('nuAddView').style.display = 'none';
+}
 
 async function nuLoadFavorites(force) {
   if (nu_favorites && !force) return nu_favorites;
+  if (nu_favLoad) return nu_favLoad;      // first load in flight — share it
+  nu_favLoad = nuRunFavoritesLoad();
+  try { return await nu_favLoad; } finally { nu_favLoad = null; }
+}
+
+async function nuRunFavoritesLoad() {
   try {
     var s = await supabaseClient.auth.getSession();
     var uid = s.data.session && s.data.session.user && s.data.session.user.id;
@@ -1252,10 +1280,11 @@ async function nuLoadFavorites(force) {
 // are the currently selected serving's per-unit values; the raw payload lets the
 // card rebuild every serving option regardless.
 function nuFavCandidate() {
+  function num(id) { var v = parseFloat(document.getElementById(id).value); return isNaN(v) ? null : v; }
   var f = nu_pendingSource;
   if (f && f.usda_fdc_id != null) {
     return {
-      food_key: 'usda:' + String(f.usda_fdc_id),
+      food_key: nuFoodKey(f),
       food_name: f.name,
       brand_name: f.brand || null,
       source: 'usda',
@@ -1268,10 +1297,27 @@ function nuFavCandidate() {
     };
   }
   var name = document.getElementById('nuName').value.trim();
+  // Editing a USDA-logged entry: keep the food's USDA identity as long as the
+  // name is untouched — the SAME rule nuSave uses for provenance. A renamed
+  // entry is a different food, so it falls through to the custom key.
+  if (nu_editSource && name && name === nu_editSource.name) {
+    return {
+      food_key: nuFoodKey(nu_editSource),
+      food_name: name,
+      brand_name: nu_editSource.brand,
+      source: 'usda',
+      fdc_id: parseInt(nu_editSource.usda_fdc_id, 10) || null,
+      gtin_upc: nu_editSource.gtin_upc,
+      serving_unit: nu_editSource.serving_unit,
+      serving_qty: nu_editSource.serving_amount,
+      calories: num('nuCalories'), protein_g: num('nuProtein'),
+      carbs_g: num('nuCarbs'), fat_g: num('nuFat'),
+      raw_food: null,     // attached at toggle time from the log row (best effort)
+    };
+  }
   if (!name) return null;
-  function num(id) { var v = parseFloat(document.getElementById(id).value); return isNaN(v) ? null : v; }
   return {
-    food_key: 'custom:' + name.toLowerCase(),
+    food_key: nuFoodKey({ name: name }),
     food_name: name, brand_name: null, source: 'custom',
     fdc_id: null, gtin_upc: null, serving_unit: null, serving_qty: null,
     calories: num('nuCalories'), protein_g: num('nuProtein'),
@@ -1293,6 +1339,8 @@ function nuSyncFavBtn() {
   btn.textContent = on ? '★' : '☆';
   btn.classList.toggle('on', on);
   btn.title = on ? 'Remove from favorites' : 'Save to favorites';
+  btn.setAttribute('aria-label', btn.title);
+  btn.setAttribute('aria-pressed', on ? 'true' : 'false');
   // First open: favorites may not be loaded yet — refresh the star when they land.
   if (!nu_favorites) nuLoadFavorites().then(function () { nuSyncFavBtn(); });
 }
@@ -1316,6 +1364,21 @@ async function nuToggleFavorite() {
       nu_favorites = nu_favorites.filter(function (x) { return x.food_key !== cand.food_key; });
       showToast('Removed from favorites.');
     } else {
+      // Favorited from an edited log entry — pull the stored USDA payload so the
+      // favorite reopens the full serving card. Best effort: null raw_food just
+      // means the favorite opens the prefilled manual form instead.
+      if (!cand.raw_food && nu_editSource && nuFoodKey(nu_editSource) === cand.food_key) {
+        try {
+          var rawRes = await supabaseClient
+            .from('food_logs')
+            .select('raw_source_data')
+            .eq('id', nu_editSource.log_id)
+            .maybeSingle();
+          if (!rawRes.error && rawRes.data && rawRes.data.raw_source_data) {
+            cand.raw_food = rawRes.data.raw_source_data;
+          }
+        } catch (rawErr) { /* non-fatal */ }
+      }
       var ins = await supabaseClient
         .from('user_food_favorites')
         .upsert(Object.assign({ user_id: uid }, cand), { onConflict: 'user_id,food_key' })
@@ -1383,15 +1446,8 @@ function nuOpenModalWithFood(item, opts) {
   document.getElementById('nuModalTitle').textContent = 'Add Food';
   document.getElementById('nuDeleteBtn').style.display = 'none';
   document.getElementById('nuRecentWrap').style.display = 'none';
-  nu_pendingSource = null;
-  nu_formBackTo = null;
   nu_recentLoaded = false;
-  document.getElementById('nuSearchView').style.display = 'none';
-  var usdaView = document.getElementById('nuUsdaView');
-  if (usdaView) usdaView.style.display = 'none';
-  var scanView = document.getElementById('nuScanView');
-  if (scanView) { nuStopScanner(); scanView.style.display = 'none'; }
-  document.getElementById('nuAddView').style.display = 'none';
+  nuResetModalState();
   document.getElementById('foodModal').classList.add('open');
 
   var raw = item && item.raw_food;
