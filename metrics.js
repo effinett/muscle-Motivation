@@ -240,6 +240,20 @@ function msStats(logs, siteKey) {
   return { count: desc.length, current: current, change30: change30 };
 }
 
+/* Node (AI-coach route / offline tests): export the PURE helpers only.
+   Guarded so browsers never see `module`. In Node, wl* helpers come from
+   requiring weight.js (browser gets them from script order). */
+if (typeof module !== 'undefined' && module.exports) {
+  var _wlNode = require('./weight.js');
+  if (typeof wlToday === 'undefined') {
+    var wlToday = _wlNode.wlToday, wlParseDate = _wlNode.wlParseDate, wlRound1 = _wlNode.wlRound1;
+  }
+  module.exports = {
+    MS_SITES: MS_SITES,
+    bfStats: bfStats, msStats: msStats, msSiteSeries: msSiteSeries,
+  };
+}
+
 /* ── measurements: shared Log / Edit modal ─────────────────────────────── */
 // Requires msModalMarkup() mounted, showToast(msg), optional window.onMeasurementsSaved().
 function msFillForm(row) {

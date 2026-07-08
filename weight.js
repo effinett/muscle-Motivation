@@ -252,6 +252,16 @@ async function wlSave() {
   }
 }
 
+/* Node (AI-coach route / offline tests): export the PURE helpers only.
+   Guarded so browsers never see `module`. */
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    wlEsc: wlEsc, wlToday: wlToday, wlParseDate: wlParseDate,
+    wlFmtDate: wlFmtDate, wlRound1: wlRound1,
+    wlStats: wlStats, wlChangeStr: wlChangeStr, wlChartSVG: wlChartSVG,
+  };
+}
+
 // Reusable modal markup (kept identical on every page that logs weight).
 function wlModalMarkup() {
   return '' +
