@@ -1606,6 +1606,138 @@ function nuNameEdited() {
 }
 
 // Reusable modal markup (kept identical on every page that logs food).
+/* ── saved meals (Phase 3.4) ───────────────────────────────────────────── */
+// A saved meal snapshots one logged meal so the whole thing re-logs in two
+// taps. items = array of per-food snapshots with PER-SERVING macros plus the
+// serving count and USDA identity (+ raw_food when the log kept one):
+//   { food_key, name, servings, calories, protein, carbs, fat, source,
+//     usda_fdc_id, brand, gtin_upc, serving_amount, serving_unit,
+//     serving_description, grams, fiber, sugar, raw_food }
+// Re-adding replays each item through the untouched nuSaveLog path, so
+// identity/provenance rules stay exactly the ones single foods use.
+
+async function nuFetchSavedMeals() {
+  try {
+    var s = await supabaseClient.auth.getSession();
+    var uid = s.data.session && s.data.session.user && s.data.session.user.id;
+    if (!uid) return [];
+    var res = await supabaseClient
+      .from('saved_meals')
+      .select('id, name, items, updated_at')
+      .eq('user_id', uid)
+      .order('updated_at', { ascending: false });
+    if (res.error) throw res.error;
+    return res.data || [];
+  } catch (e) {
+    console.error('nuFetchSavedMeals error:', e);
+    return [];
+  }
+}
+
+// Snapshot one meal's log rows into items. One extra query pulls the columns
+// nuFetchLogs deliberately skips (raw payload, fiber, sugar, grams, serving
+// description) — best effort: on failure the items still save without them.
+async function nuSnapshotMealItems(rows) {
+  var extras = {};
+  try {
+    var res = await supabaseClient
+      .from('food_logs')
+      .select('id, fiber, sugar, grams, serving_description, raw_source_data')
+      .in('id', rows.map(function (r) { return r.id; }));
+    if (!res.error) (res.data || []).forEach(function (x) { extras[x.id] = x; });
+  } catch (e) { console.error('nuSnapshotMealItems extras error:', e); }
+  return rows.map(function (l) {
+    var div = (+l.servings > 0) ? +l.servings : 1;
+    var ex = extras[l.id] || {};
+    return {
+      food_key: nuFoodKey({ usda_fdc_id: l.usda_fdc_id, name: l.name }),
+      name: l.name,
+      servings: div,
+      calories: nuRound1((+l.calories || 0) / div),
+      protein:  nuRound1((+l.protein  || 0) / div),
+      carbs:    nuRound1((+l.carbs    || 0) / div),
+      fat:      nuRound1((+l.fat      || 0) / div),
+      source: l.source || null,
+      usda_fdc_id: l.usda_fdc_id != null ? l.usda_fdc_id : null,
+      brand: l.brand || null,
+      gtin_upc: l.gtin_upc || null,
+      serving_amount: l.serving_amount != null ? l.serving_amount : null,
+      serving_unit: l.serving_unit || null,
+      serving_description: ex.serving_description || null,
+      grams: ex.grams != null ? nuRound1((+ex.grams || 0) / div) : null,
+      fiber: ex.fiber != null ? nuRound1((+ex.fiber || 0) / div) : null,
+      sugar: ex.sugar != null ? nuRound1((+ex.sugar || 0) / div) : null,
+      raw_food: ex.raw_source_data || null,
+    };
+  });
+}
+
+// Insert-or-update by name (plain unique user_id,name) — re-saving an existing
+// name replaces its items, which is v1's "edit saved meal".
+async function nuUpsertSavedMeal(name, items) {
+  var s = await supabaseClient.auth.getSession();
+  var uid = s.data.session && s.data.session.user && s.data.session.user.id;
+  if (!uid) throw new Error('Not authenticated');
+  var res = await supabaseClient
+    .from('saved_meals')
+    .upsert(
+      { user_id: uid, name: name, items: items, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id,name' })
+    .select('id').single();
+  if (res.error) throw res.error;
+  return res.data;
+}
+
+async function nuDeleteSavedMeal(id) {
+  var res = await supabaseClient.from('saved_meals').delete().eq('id', id);
+  if (res.error) throw res.error;
+}
+
+function nuSavedMealTotals(items) {
+  return (items || []).reduce(function (t, it) {
+    var q = (+it.servings > 0) ? +it.servings : 1;
+    t.calories += (+it.calories || 0) * q;
+    t.protein  += (+it.protein  || 0) * q;
+    return t;
+  }, { calories: 0, protein: 0 });
+}
+
+// Log every item of a saved meal into `meal` on `date`. USDA items rebuild the
+// same src shape nuSave passes, so nuSaveLog stamps identity + provenance (and
+// re-attaches raw_source_data) exactly as if each food were picked by hand.
+async function nuLogSavedMeal(savedMeal, meal, date) {
+  var s = await supabaseClient.auth.getSession();
+  var uid = s.data.session && s.data.session.user && s.data.session.user.id;
+  if (!uid) throw new Error('Not authenticated');
+  var items = (savedMeal && savedMeal.items) || [];
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    var src = null;
+    if (it.usda_fdc_id != null) {
+      src = {
+        name: it.name, usda_fdc_id: it.usda_fdc_id,
+        brand: it.brand || null, gtin_upc: it.gtin_upc || null,
+        serving_amount: it.serving_amount != null ? it.serving_amount : null,
+        serving_unit: it.serving_unit || null,
+        serving_description: it.serving_description || null,
+        grams: it.grams != null ? it.grams : null,
+        fiber: +it.fiber || 0, sugar: +it.sugar || 0,
+        calories: it.calories, protein: it.protein, carbs: it.carbs, fat: it.fat,
+        raw: it.raw_food || null,
+      };
+    }
+    var res = await nuSaveLog(uid, {
+      id: null, name: it.name, meal: meal, date: date,
+      servings: (+it.servings > 0) ? +it.servings : 1,
+      calories: +it.calories || 0, protein: +it.protein || 0,
+      carbs: +it.carbs || 0, fat: +it.fat || 0,
+      src: src,
+    });
+    if (res.error) throw res.error;
+  }
+  return items.length;
+}
+
 function nuModalMarkup() {
   var mealOpts = NU_MEALS.map(function (m) {
     return '<option value="' + m + '">' + NU_MEAL_LABELS[m] + '</option>';

@@ -159,6 +159,18 @@
     .qa-chips .nu-chip { min-height: 40px; }   /* thumb-friendly page targets */
     .qa-empty { font-size: 12px; color: var(--text-muted); padding: 2px 2px 6px; }
 
+    /* Saved meals: meal-head actions + the two small sheets */
+    .meal-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .sm-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 12px; max-height: 38vh; overflow-y: auto; }
+    .sm-item {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      background: var(--surface-2); border: 1px solid var(--border-2);
+      border-radius: 10px; padding: 9px 12px;
+    }
+    .sm-item-name { font-size: 13px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sm-item-kcal { font-size: 12px; color: var(--text-muted); font-weight: 600; flex-shrink: 0; }
+    .sm-totals { font-size: 12px; color: var(--text-2); margin-bottom: 16px; }
+
     /* ── Shared modal (mirrors app.html / weight-history.html) ─────────── */
     .modal-overlay {
       display: none; position: fixed; inset: 0; z-index: 200;
@@ -491,11 +503,14 @@
     <div class="section-label">Daily Totals</div>
     <div id="totalsWrap"></div>
 
-    <!-- Quick add: recently logged + favorited foods -->
-    <div class="section-label">Recent</div>
-    <div class="qa-chips" id="recentChips"><div class="qa-empty">Loading&hellip;</div></div>
+    <!-- Quick add: saved meals + favorited + recently logged foods.
+         Meals first — the highest-intent shortcut gets the top row. -->
+    <div class="section-label">Saved Meals</div>
+    <div class="qa-chips" id="mealChips"><div class="qa-empty">Loading&hellip;</div></div>
     <div class="section-label">Favorites</div>
     <div class="qa-chips" id="favChips"><div class="qa-empty">Loading&hellip;</div></div>
+    <div class="section-label">Recent</div>
+    <div class="qa-chips" id="recentChips"><div class="qa-empty">Loading&hellip;</div></div>
 
     <!-- Meals -->
     <div id="mealsWrap"></div>
@@ -504,6 +519,46 @@
 
 <!-- Add / Edit Food Modal (markup injected by nutrition.js) -->
 <div id="foodModalMount"></div>
+
+<!-- Save Meal (name prompt) -->
+<div class="modal-overlay" id="saveMealModal" onclick="if(event.target===this)closeSaveMeal()">
+  <div class="modal-box" style="max-width: 380px;">
+    <div class="modal-header">
+      <div class="modal-title">Save Meal</div>
+      <button class="modal-close" onclick="closeSaveMeal()">✕</button>
+    </div>
+    <div class="field-group">
+      <label class="field-label" for="saveMealName">Meal name</label>
+      <input type="text" id="saveMealName" maxlength="60" autocomplete="off"
+             onkeydown="if(event.key==='Enter')confirmSaveMeal()">
+    </div>
+    <div class="field-hint" id="saveMealHint"></div>
+    <button class="btn-calc" id="saveMealBtn" onclick="confirmSaveMeal()">Save Meal</button>
+  </div>
+</div>
+
+<!-- Saved-meal sheet: re-add the whole meal in two taps, or delete it -->
+<div class="modal-overlay" id="mealSheet" onclick="if(event.target===this)closeMealSheet()">
+  <div class="modal-box" style="max-width: 420px;">
+    <div class="modal-header">
+      <div class="modal-title" id="mealSheetTitle">Meal</div>
+      <button class="modal-close" onclick="closeMealSheet()">✕</button>
+    </div>
+    <div class="sm-list" id="mealSheetItems"></div>
+    <div class="sm-totals" id="mealSheetTotals"></div>
+    <div class="field-group">
+      <label class="field-label" for="mealSheetSlot">Add to</label>
+      <select id="mealSheetSlot">
+        <option value="breakfast">Breakfast</option>
+        <option value="lunch">Lunch</option>
+        <option value="dinner">Dinner</option>
+        <option value="snack">Snacks</option>
+      </select>
+    </div>
+    <button class="btn-calc" id="mealSheetAddBtn" onclick="confirmAddMeal()">Add to Log</button>
+    <button class="btn-delete-log" id="mealSheetDeleteBtn" onclick="deleteSavedMeal()">Delete Saved Meal</button>
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 
@@ -606,7 +661,10 @@
         '<div class="meal-head">' +
           '<div><span class="meal-title">' + NU_MEAL_LABELS[meal] + '</span>' +
             (kcal ? ' <span class="meal-kcal">' + nuRound(kcal) + ' kcal</span>' : '') + '</div>' +
-          '<button class="add-food-btn" onclick="addToMeal(\'' + meal + '\')"><i data-lucide="plus"></i> Add food</button>' +
+          '<div class="meal-actions">' +
+            (rows.length ? '<button class="add-food-btn" onclick="saveMealPrompt(\'' + meal + '\')" title="Save this meal to re-add later"><i data-lucide="bookmark"></i> Save meal</button>' : '') +
+            '<button class="add-food-btn" onclick="addToMeal(\'' + meal + '\')"><i data-lucide="plus"></i> Add food</button>' +
+          '</div>' +
         '</div>' +
         inner +
       '</div>';
@@ -689,6 +747,121 @@
   // Star toggled inside the modal → nu_favorites cache is already updated.
   window.onFavoritesChanged = loadFavChips;
 
+  /* ── saved meals: save a logged meal, re-add it in two taps ──────────── */
+  var savedMeals = [];        // saved_meals rows, newest first
+  var sheetMeal = null;       // saved meal open in the sheet
+  var pendingSaveMeal = null; // meal key ('breakfast'…) being saved
+
+  async function loadMealChips() {
+    savedMeals = await nuFetchSavedMeals();
+    var chipItems = savedMeals.map(function (m) {
+      return { name: m.name, calories: nuSavedMealTotals(m.items).calories };
+    });
+    renderChips('mealChips', chipItems, 'pickMeal',
+      'No saved meals yet — log some foods, then tap “Save meal”.');
+  }
+
+  function pickMeal(i) {
+    var m = savedMeals[i];
+    if (!m || !(m.items || []).length) return;
+    sheetMeal = m;
+    document.getElementById('mealSheetTitle').textContent = m.name;
+    document.getElementById('mealSheetItems').innerHTML = m.items.map(function (it) {
+      var q = (+it.servings > 0) ? +it.servings : 1;
+      var qty = q === 1 ? '' : nuRound1(q) + '× ';
+      return '<div class="sm-item">' +
+        '<div class="sm-item-name">' + nuEsc(qty + it.name) + '</div>' +
+        '<div class="sm-item-kcal">' + nuRound((+it.calories || 0) * q) + ' kcal</div>' +
+      '</div>';
+    }).join('');
+    var tot = nuSavedMealTotals(m.items);
+    document.getElementById('mealSheetTotals').textContent =
+      m.items.length + (m.items.length === 1 ? ' food · ' : ' foods · ') +
+      nuRound(tot.calories) + ' kcal · ' + nuRound(tot.protein) + ' g protein';
+    document.getElementById('mealSheetSlot').value = suggestMeal();
+    document.getElementById('mealSheet').classList.add('open');
+  }
+
+  function closeMealSheet() {
+    document.getElementById('mealSheet').classList.remove('open');
+    sheetMeal = null;
+  }
+
+  async function confirmAddMeal() {
+    if (!sheetMeal) return;
+    var btn = document.getElementById('mealSheetAddBtn');
+    btn.disabled = true;
+    try {
+      var slot = document.getElementById('mealSheetSlot').value;
+      var n = await nuLogSavedMeal(sheetMeal, slot, currentDate);
+      closeMealSheet();
+      showToast('Added ' + n + (n === 1 ? ' food' : ' foods') + ' to ' + NU_MEAL_LABELS[slot] + '.');
+      await refresh();
+      loadRecentChips();
+    } catch (e) {
+      console.error('confirmAddMeal error:', e);
+      showToast('Error adding meal — try again.');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function deleteSavedMeal() {
+    if (!sheetMeal) return;
+    var btn = document.getElementById('mealSheetDeleteBtn');
+    btn.disabled = true;
+    try {
+      await nuDeleteSavedMeal(sheetMeal.id);
+      closeMealSheet();
+      showToast('Saved meal deleted.');
+      loadMealChips();
+    } catch (e) {
+      console.error('deleteSavedMeal error:', e);
+      showToast('Error deleting — try again.');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function saveMealPrompt(meal) {
+    var rows = currentLogs.filter(function (l) { return l.meal === meal; });
+    if (!rows.length) return;
+    pendingSaveMeal = meal;
+    var input = document.getElementById('saveMealName');
+    input.value = NU_MEAL_LABELS[meal];
+    document.getElementById('saveMealHint').textContent =
+      'Saves the ' + rows.length + (rows.length === 1 ? ' food' : ' foods') +
+      ' in ' + NU_MEAL_LABELS[meal] + '. Re-saving an existing name updates it.';
+    document.getElementById('saveMealModal').classList.add('open');
+    setTimeout(function () { input.focus(); input.select(); }, 60);
+  }
+
+  function closeSaveMeal() {
+    document.getElementById('saveMealModal').classList.remove('open');
+    pendingSaveMeal = null;
+  }
+
+  async function confirmSaveMeal() {
+    var name = document.getElementById('saveMealName').value.trim();
+    if (!name) { showToast('Name the meal first.'); return; }
+    var rows = currentLogs.filter(function (l) { return l.meal === pendingSaveMeal; });
+    if (!rows.length) { closeSaveMeal(); return; }
+    var btn = document.getElementById('saveMealBtn');
+    btn.disabled = true;
+    try {
+      var items = await nuSnapshotMealItems(rows);
+      await nuUpsertSavedMeal(name, items);
+      closeSaveMeal();
+      showToast('Meal saved!');
+      loadMealChips();
+    } catch (e) {
+      console.error('confirmSaveMeal error:', e);
+      showToast('Error saving meal — try again.');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   function editEntry(el) {
     var id = el.getAttribute('data-id');
     var log = currentLogs.filter(function (l) { return l.id === id; })[0];
@@ -731,8 +904,9 @@
 
         renderDateLabel();
         await refresh();
-        loadRecentChips();
+        loadMealChips();
         loadFavChips();
+        loadRecentChips();
         lucide.createIcons();
       } catch (err) {
         console.error('Nutrition page error:', err);
