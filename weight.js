@@ -152,9 +152,14 @@ function wlChangeStr(delta) {
 }
 
 /* ── dependency-free SVG trend chart ───────────────────────────────────── */
+// Generic over the y column: opts.yField (default 'weight_lbs'), opts.ariaLabel,
+// opts.gradId (unique per chart when several render on one page). Rows must
+// carry logged_on. Existing weight callers pass no opts and are unchanged.
 function wlChartSVG(logs, opts) {
   opts = opts || {};
   var w = opts.width || 640, h = opts.height || 200, pad = 30;
+  var yField = opts.yField || 'weight_lbs';
+  var gradId = opts.gradId || 'wlgrad';
 
   var pts = (logs || []).slice().sort(function (a, b) {
     return a.logged_on < b.logged_on ? -1 : a.logged_on > b.logged_on ? 1 : 0;
@@ -162,7 +167,7 @@ function wlChartSVG(logs, opts) {
   if (pts.length < 2) return '';
 
   var xs = pts.map(function (p) { return wlParseDate(p.logged_on).getTime(); });
-  var ys = pts.map(function (p) { return +p.weight_lbs; });
+  var ys = pts.map(function (p) { return +p[yField]; });
   var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
   var minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
   if (minY === maxY) { minY -= 1; maxY += 1; }
@@ -190,11 +195,11 @@ function wlChartSVG(logs, opts) {
     '<text x="' + pad + '" y="' + (h - 8) + '" fill="#666" font-size="11" font-family="Barlow,sans-serif">' + wlEsc(wlFmtDate(pts[0].logged_on)) + '</text>' +
     '<text x="' + (w - pad) + '" y="' + (h - 8) + '" text-anchor="end" fill="#666" font-size="11" font-family="Barlow,sans-serif">' + wlEsc(wlFmtDate(pts[pts.length - 1].logged_on)) + '</text>';
 
-  return '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%;height:auto;display:block" role="img" aria-label="Weight trend">' +
-    '<defs><linearGradient id="wlgrad" x1="0" y1="0" x2="0" y2="1">' +
+  return '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%;height:auto;display:block" role="img" aria-label="' + wlEsc(opts.ariaLabel || 'Weight trend') + '">' +
+    '<defs><linearGradient id="' + wlEsc(gradId) + '" x1="0" y1="0" x2="0" y2="1">' +
     '<stop offset="0%" stop-color="rgba(177,18,27,0.32)"/>' +
     '<stop offset="100%" stop-color="rgba(177,18,27,0)"/></linearGradient></defs>' +
-    '<path d="' + area + '" fill="url(#wlgrad)"/>' +
+    '<path d="' + area + '" fill="url(#' + wlEsc(gradId) + ')"/>' +
     '<path d="' + line + '" fill="none" stroke="#B1121B" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>' +
     dots + yLabels + xLabels +
     '</svg>';

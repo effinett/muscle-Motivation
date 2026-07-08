@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Weight History — Muscle Motivation</title>
+  <title>Progress — Muscle Motivation</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -193,6 +193,30 @@
     }
     .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 
+    /* ── Body Fat + Measurements sections (Phase 4.0) ─────────────────── */
+    .metric-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 38px 0 10px; }
+    .metric-title { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 1.5px; }
+    .btn-log-sm {
+      display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+      background: transparent; border: 1px solid var(--border-2); border-radius: 8px;
+      color: var(--text-2); cursor: pointer; font-family: 'Barlow', sans-serif;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.5px; padding: 7px 12px;
+      transition: border-color .2s, color .2s;
+    }
+    .btn-log-sm:hover { border-color: var(--red-border); color: var(--text); }
+    .btn-log-sm i { width: 14px; height: 14px; }
+    .ms-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+    .field-hint { font-size: 11px; color: var(--text-muted); margin: -4px 0 12px; }
+    .ms-select {
+      padding: 9px 12px; margin-bottom: 12px;
+      background: var(--surface-2); border: 1px solid var(--border-2);
+      border-radius: 8px; color: var(--text);
+      font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 600;
+      outline: none; transition: border-color .2s;
+    }
+    .ms-select:focus { border-color: var(--red); }
+    .ms-sites { font-size: 12px; color: var(--text-2); margin-top: 3px; }
+
     @media (max-width: 480px) {
       header { padding: 0 14px; }
       .header-logo span { display: none; }
@@ -218,10 +242,11 @@
   </header>
 
   <div class="container">
-    <div class="page-title">Weight History</div>
-    <div class="page-sub">Track your trend over time. One weigh-in per day — log again to update it.</div>
+    <div class="page-title">Progress</div>
+    <div class="page-sub">Scale weight, body composition, and measurements — the full picture. One entry per day, log again to update it.</div>
     <button class="btn-log-weight" onclick="wlOpenModal()"><i data-lucide="scale"></i> Log Weight</button>
 
+    <!-- ── Weight (existing section, unchanged) ── -->
     <!-- Summary -->
     <div id="summaryWrap"></div>
 
@@ -233,11 +258,31 @@
     <div id="historyList">
       <div class="empty-state">Loading…</div>
     </div>
+
+    <!-- ── Body Fat ── -->
+    <div class="metric-bar">
+      <div class="metric-title">Body Fat</div>
+      <button class="btn-log-sm" onclick="bfOpenModal()"><i data-lucide="percent"></i> Log Body Fat</button>
+    </div>
+    <div id="bfSummaryWrap"></div>
+    <div id="bfChartWrap"></div>
+    <div id="bfHistoryList"><div class="empty-state">Loading…</div></div>
+
+    <!-- ── Measurements ── -->
+    <div class="metric-bar">
+      <div class="metric-title">Measurements</div>
+      <button class="btn-log-sm" onclick="msOpenModal()"><i data-lucide="ruler"></i> Log Measurements</button>
+    </div>
+    <select class="ms-select" id="msSiteSelect" onchange="msRender()" aria-label="Measurement site"></select>
+    <div id="msChartWrap"></div>
+    <div id="msHistoryList"><div class="empty-state">Loading…</div></div>
   </div>
 </div>
 
-<!-- Log / Edit Weight Modal (markup injected by weight.js) -->
+<!-- Log / Edit modals (markup injected by weight.js / metrics.js) -->
 <div id="weightModalMount"></div>
+<div id="bfModalMount"></div>
+<div id="msModalMount"></div>
 
 <div class="toast" id="toast"></div>
 
@@ -245,12 +290,17 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.0/dist/umd/supabase.js" integrity="sha384-3wY11tldQ5+yWqAvmTN4XtQvnjoTva0cV15O/O/O5NTtp0ivVopSzLOzsVXWZse9" crossorigin="anonymous"></script>
 <script src="supabase.js"></script>
 <script src="weight.js"></script>
+<script src="metrics.js"></script>
 <script>
   var currentUserId = null;
   var currentProfile = null;
   var currentLogs = [];
+  var bfLogs = [];
+  var msLogs = [];
 
   document.getElementById('weightModalMount').innerHTML = wlModalMarkup();
+  document.getElementById('bfModalMount').innerHTML = bfModalMarkup();
+  document.getElementById('msModalMount').innerHTML = msModalMarkup();
 
   function showToast(msg) {
     var t = document.getElementById('toast');
@@ -348,6 +398,162 @@
   // Shared modal calls this after a successful save.
   window.onWeightSaved = refresh;
 
+  /* ── Body Fat section ────────────────────────────────────────────── */
+  function fmtSignedPct(delta) {
+    if (delta == null || isNaN(delta)) return '—';
+    var r = wlRound1(delta);
+    return (r > 0 ? '+' : r < 0 ? '−' : '±') + Math.abs(r) + '%';
+  }
+
+  function bfRender() {
+    var stats = bfStats(bfLogs, currentProfile ? currentProfile.body_fat_pct : null);
+
+    var sw = document.getElementById('bfSummaryWrap');
+    if (!stats.count) {
+      sw.innerHTML = '';
+    } else {
+      var cells = [];
+      cells.push('<div class="summary-cell"><div class="summary-label">Current</div><div class="summary-val">' + wlRound1(stats.current) + ' <small>%</small></div></div>');
+      cells.push('<div class="summary-cell"><div class="summary-label">Entries</div><div class="summary-val">' + stats.count + '</div></div>');
+      if (stats.change30 != null)
+        cells.push('<div class="summary-cell"><div class="summary-label">30-Day Change</div><div class="summary-val" style="font-size:22px;">' + fmtSignedPct(stats.change30) + '</div></div>');
+      sw.innerHTML = '<div class="summary-grid">' + cells.join('') + '</div>';
+    }
+
+    var cw = document.getElementById('bfChartWrap');
+    var svg = wlChartSVG(bfLogs, { yField: 'body_fat_pct', gradId: 'bfgrad', ariaLabel: 'Body fat trend' });
+    cw.innerHTML = svg
+      ? '<div class="section-label">Trend</div><div class="chart-card">' + svg + '</div>'
+      : (bfLogs.length === 1 ? '<div class="section-label">Trend</div><div class="chart-card"><div class="chart-hint">Log one more day to see your trend line.</div></div>' : '');
+
+    var el = document.getElementById('bfHistoryList');
+    if (!bfLogs.length) {
+      el.innerHTML = '<div class="empty-state">No body fat logs yet.<br><a href="#" onclick="bfOpenModal(); return false;">Log your first →</a></div>';
+      return;
+    }
+    el.innerHTML = bfLogs.map(function (l, i) {
+      var prev = bfLogs[i + 1];
+      var delta = prev ? (+l.body_fat_pct - +prev.body_fat_pct) : null;
+      var deltaHTML = delta == null ? '' :
+        '<span class="wh-delta ' + (wlRound1(delta) === 0 ? 'same' : '') + '">' + fmtSignedPct(delta) + '</span>';
+      return '<div class="wh-row">' +
+        '<div class="wh-main">' +
+          '<div class="wh-weight">' + wlRound1(l.body_fat_pct) + ' <small>%</small></div>' +
+          '<div class="wh-date">' + wlEsc(wlFmtDateLong(l.logged_on)) + '</div>' +
+          (l.note ? '<div class="wh-note">' + wlEsc(l.note) + '</div>' : '') +
+        '</div>' +
+        '<div class="wh-right">' +
+          deltaHTML +
+          '<div class="wh-actions">' +
+            '<button class="wh-icon-btn edit" title="Edit" data-id="' + l.id + '" onclick="editBfEntry(this)"><i data-lucide="pencil"></i></button>' +
+            '<button class="wh-icon-btn del" title="Delete" data-id="' + l.id + '" onclick="deleteBfEntry(this)"><i data-lucide="trash-2"></i></button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+    lucide.createIcons();
+  }
+
+  async function bfRefresh() {
+    if (!currentUserId) return;
+    bfLogs = await bfFetchLogs(currentUserId, 365);
+    bfRender();
+  }
+
+  function editBfEntry(btn) {
+    var id = btn.getAttribute('data-id');
+    var log = bfLogs.filter(function (l) { return l.id === id; })[0];
+    if (log) bfOpenModal({ body_fat_pct: +log.body_fat_pct, logged_on: log.logged_on, note: log.note || '' });
+  }
+
+  async function deleteBfEntry(btn) {
+    var id = btn.getAttribute('data-id');
+    if (!id) return;
+    if (!confirm('Delete this body fat log? This cannot be undone.')) return;
+    var res = await bfDelete(id);
+    if (res.error) { console.error('deleteBfEntry', res.error); showToast('Error deleting — try again.'); return; }
+    await bfSyncProfileBodyFat(currentUserId); // re-point profile at next most recent
+    showToast('Body fat log deleted.');
+    await bfRefresh();
+  }
+
+  window.onBodyFatSaved = bfRefresh;
+
+  /* ── Measurements section ────────────────────────────────────────── */
+  function msSelectedSite() {
+    var sel = document.getElementById('msSiteSelect');
+    return sel.value || 'waist_in';
+  }
+
+  function msRender() {
+    var site = msSelectedSite();
+    var siteLabel = MS_SITES.filter(function (s) { return s.key === site; })[0].label;
+    var series = msSiteSeries(msLogs, site);
+
+    var cw = document.getElementById('msChartWrap');
+    var svg = wlChartSVG(series, { yField: site, gradId: 'msgrad', ariaLabel: siteLabel + ' trend' });
+    cw.innerHTML = svg
+      ? '<div class="chart-card">' + svg + '</div>'
+      : '<div class="chart-card"><div class="chart-hint">' +
+          (series.length === 1
+            ? 'Log ' + wlEsc(siteLabel) + ' one more day to see your trend line.'
+            : 'No ' + wlEsc(siteLabel) + ' entries yet.') +
+        '</div></div>';
+
+    var el = document.getElementById('msHistoryList');
+    if (!msLogs.length) {
+      el.innerHTML = '<div class="empty-state">No measurements yet.<br><a href="#" onclick="msOpenModal(); return false;">Log your first →</a></div>';
+      return;
+    }
+    el.innerHTML = msLogs.map(function (l) {
+      var sites = MS_SITES.filter(function (s) { return l[s.key] != null; })
+        .map(function (s) { return s.label + ' ' + wlRound1(l[s.key]); }).join(' · ');
+      return '<div class="wh-row">' +
+        '<div class="wh-main">' +
+          '<div class="wh-date" style="margin-top:0;">' + wlEsc(wlFmtDateLong(l.logged_on)) + '</div>' +
+          '<div class="ms-sites">' + wlEsc(sites) + ' <small>in</small></div>' +
+          (l.note ? '<div class="wh-note">' + wlEsc(l.note) + '</div>' : '') +
+        '</div>' +
+        '<div class="wh-right">' +
+          '<div class="wh-actions">' +
+            '<button class="wh-icon-btn edit" title="Edit" data-id="' + l.id + '" onclick="editMsEntry(this)"><i data-lucide="pencil"></i></button>' +
+            '<button class="wh-icon-btn del" title="Delete" data-id="' + l.id + '" onclick="deleteMsEntry(this)"><i data-lucide="trash-2"></i></button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+    lucide.createIcons();
+  }
+
+  async function msRefresh() {
+    if (!currentUserId) return;
+    msLogs = await msFetchLogs(currentUserId, 365);
+    msRender();
+  }
+
+  function editMsEntry(btn) {
+    var id = btn.getAttribute('data-id');
+    var log = msLogs.filter(function (l) { return l.id === id; })[0];
+    if (log) msOpenModal(log);
+  }
+
+  async function deleteMsEntry(btn) {
+    var id = btn.getAttribute('data-id');
+    if (!id) return;
+    if (!confirm('Delete this measurement entry? This cannot be undone.')) return;
+    var res = await msDelete(id);
+    if (res.error) { console.error('deleteMsEntry', res.error); showToast('Error deleting — try again.'); return; }
+    showToast('Measurement entry deleted.');
+    await msRefresh();
+  }
+
+  window.onMeasurementsSaved = msRefresh;
+
+  // Site dropdown options come from the one MS_SITES vocabulary.
+  document.getElementById('msSiteSelect').innerHTML = MS_SITES.map(function (s) {
+    return '<option value="' + s.key + '">' + s.label + '</option>';
+  }).join('');
+
   window.addEventListener('load', function () {
     (async () => {
       try {
@@ -359,9 +565,11 @@
         document.getElementById('appContent').style.display = 'block';
 
         await refresh();
+        bfRefresh();
+        msRefresh();
         lucide.createIcons();
       } catch (err) {
-        console.error('Weight history page error:', err);
+        console.error('Progress page error:', err);
         window.location.href = 'auth.html';
       }
     })();

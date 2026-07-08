@@ -159,6 +159,23 @@
     .qa-chips .nu-chip { min-height: 40px; }   /* thumb-friendly page targets */
     .qa-empty { font-size: 12px; color: var(--text-muted); padding: 2px 2px 6px; }
 
+    /* Copy Yesterday (shown only when today is empty and yesterday isn't) */
+    .copy-yday {
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      width: 100%; margin: 2px 0 6px; padding: 12px 16px; cursor: pointer;
+      background: transparent; border: 1px dashed var(--border-3);
+      border-radius: 12px; color: var(--text); text-align: center;
+      font-family: 'Barlow', sans-serif; transition: border-color .2s, background .2s;
+    }
+    .copy-yday:hover { border-color: var(--red-border); background: var(--surface-1); }
+    .copy-yday:disabled { opacity: 0.5; cursor: default; }
+    .copy-yday-title {
+      display: inline-flex; align-items: center; gap: 7px;
+      font-size: 13px; font-weight: 700; letter-spacing: 0.5px;
+    }
+    .copy-yday-title i { width: 15px; height: 15px; }
+    .copy-yday-sub { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+
     /* Saved meals: meal-head actions + the two small sheets */
     .meal-actions { display: flex; gap: 8px; flex-shrink: 0; }
     .sm-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 12px; max-height: 38vh; overflow-y: auto; }
@@ -502,6 +519,9 @@
     <!-- Daily totals -->
     <div class="section-label">Daily Totals</div>
     <div id="totalsWrap"></div>
+
+    <!-- Copy Yesterday (rendered only when today is empty + yesterday has food) -->
+    <div id="copyYdayWrap"></div>
 
     <!-- Quick add: saved meals + favorited + recently logged foods.
          Meals first — the highest-intent shortcut gets the top row. -->
@@ -877,12 +897,61 @@
     }
   }
 
+  /* ── copy yesterday (Phase 4.0 rider) ────────────────────────────── */
+  var ydayLogs = [];   // yesterday's rows when the button is showing
+
+  function nuYesterday() {
+    var d = nuParseDate(nuToday());
+    d.setDate(d.getDate() - 1);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  }
+
+  // Shown ONLY when viewing today, today is empty, and yesterday has entries.
+  async function renderCopyYesterday() {
+    var wrap = document.getElementById('copyYdayWrap');
+    if (currentDate !== nuToday() || currentLogs.length) { wrap.innerHTML = ''; return; }
+    ydayLogs = await nuFetchLogs(currentUserId, nuYesterday());
+    if (currentLogs.length || !ydayLogs.length) { wrap.innerHTML = ''; return; }
+    var t = nuDayTotals(ydayLogs);
+    wrap.innerHTML = '<button type="button" class="copy-yday" id="copyYdayBtn" onclick="copyYesterday()">' +
+      '<span class="copy-yday-title"><i data-lucide="copy"></i> Copy Yesterday</span>' +
+      '<span class="copy-yday-sub">Yesterday: ' + nuRound(t.calories).toLocaleString('en-US') +
+        ' kcal • ' + nuRound(t.protein) + 'g protein</span>' +
+    '</button>';
+    lucide.createIcons();
+  }
+
+  // Replays yesterday meal-by-meal through the SAME snapshot → nuSaveLog path
+  // saved meals use — identity, provenance and raw payloads carry over.
+  async function copyYesterday() {
+    var btn = document.getElementById('copyYdayBtn');
+    if (!btn || !ydayLogs.length) return;
+    btn.disabled = true;
+    try {
+      var total = 0;
+      for (var i = 0; i < NU_MEALS.length; i++) {
+        var rows = ydayLogs.filter(function (l) { return l.meal === NU_MEALS[i]; });
+        if (!rows.length) continue;
+        var items = await nuSnapshotMealItems(rows);
+        total += await nuLogSavedMeal({ items: items }, NU_MEALS[i], currentDate);
+      }
+      showToast('Copied yesterday — ' + total + (total === 1 ? ' food' : ' foods') + ' added.');
+      await refresh();
+      loadRecentChips();
+    } catch (e) {
+      console.error('copyYesterday error:', e);
+      showToast('Error copying — try again.');
+      if (btn) btn.disabled = false;
+    }
+  }
+
   /* ── refresh ─────────────────────────────────────────────────────── */
   async function refresh() {
     if (!currentUserId) return;
     currentLogs = await nuFetchLogs(currentUserId, currentDate);
     renderTotals();
     renderMeals();
+    renderCopyYesterday();
   }
 
   // Shared modal calls this after a successful save/delete. Recents come from
