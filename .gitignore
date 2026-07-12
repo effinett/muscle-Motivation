@@ -2,5 +2,8 @@
 .env
 .env.*
 
+# Dependencies — restored by `npm install`; Vercel installs its own copy
+node_modules/
+
 # OS noise
 .DS_Store

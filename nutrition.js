@@ -1870,3 +1870,135 @@ function nuModalMarkup() {
     '</div>' +
   '</div>';
 }
+
+/* ── Phase 4.2: natural-language quick log (AI parse → USDA match) ──────────
+ * "2 eggs and toast with peanut butter" → /api/ai-food-parse returns
+ * structured items (search query + quantity/unit ONLY — never nutrition), and
+ * each item is resolved through the SAME pipeline as a hand-picked food:
+ * nuUsdaSearch → nuNormalizeUsdaFood → portions from nu_detailCache →
+ * nuBuildServingOptions. Logging replays nuSaveLog with the exact src shape
+ * nuLogSavedMeal uses, so identity/provenance/foods-dedupe stay shared.
+ * Self-contained section — nothing above this line changed.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+// POST the raw text to the parse route (auth mirrors nuUsdaSearch).
+async function nuAiParse(text) {
+  var s = await supabaseClient.auth.getSession();
+  var token = s.data.session && s.data.session.access_token;
+  if (!token) throw new Error('Not authenticated');
+  var res = await fetch('/api/ai-food-parse', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ text: text }),
+  });
+  var data = null;
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok) {
+    var err = new Error((data && data.error) || 'AI logging failed.');
+    err.status = res.status;
+    throw err;
+  }
+  return data; // { items, meal, remaining }
+}
+
+// Pick the serving option that matches what the user said, using the SAME
+// option list the food card builds. Priority:
+//   1. explicit weight ("6 oz" → 170 g) — weight foods only, never ml→g
+//   2. the household word they used ("slice", "cup") found in an option label
+//   3. the card's own default (nuDefaultServingKey — portion/serving/100 g)
+function nuAiChooseServing(f, opts, portions, parsed) {
+  var per100 = f.raw && f.raw.nutrients ? f.raw.nutrients : null;
+  if (+parsed.grams > 0 && per100 && !f.is_liquid) {
+    var g = +parsed.grams;
+    return { perUnit: nuScalePer100(per100, g), grams: g, amount: g, unit: 'g',
+             description: nuRound(g) + ' g' };
+  }
+  if (parsed.unit) {
+    // ≥2 chars so a bare 'g' can't substring-match every label.
+    var u = String(parsed.unit).toLowerCase().replace(/s$/, '');
+    if (u.length >= 2) {
+      for (var i = 0; i < opts.length; i++) {
+        if (opts[i].custom) continue;
+        if (String(opts[i].label || '').toLowerCase().indexOf(u) !== -1) return opts[i];
+      }
+    }
+  }
+  var key = nuDefaultServingKey(f, opts, portions);
+  for (var j = 0; j < opts.length; j++) if (opts[j].key === key) return opts[j];
+  return opts[0];
+}
+
+// Resolve one parsed item to a concrete USDA food + per-serving macros.
+// Never throws — a failed search/match returns { unmatched: true } so the
+// review sheet can offer manual entry without sinking the other items.
+async function nuAiResolveItem(parsed) {
+  var foods = [];
+  try { foods = await nuUsdaSearch(parsed.query); } catch (e) {}
+  if (!foods || !foods.length) return { parsed: parsed, unmatched: true };
+
+  var f = nuNormalizeUsdaFood(foods[0]);
+  var portions = [];
+  if (f.usda_fdc_id != null) {
+    try { portions = await nuFetchUsdaDetail(f.usda_fdc_id); } catch (e) { portions = []; }
+  }
+  if (f.raw && portions.length) f.raw.portions = portions; // same raw enrichment as the card path
+
+  var opts = nuBuildServingOptions(f, portions);
+  var sv = nuAiChooseServing(f, opts, portions, parsed);
+  return {
+    parsed: parsed, food: f, unmatched: false,
+    servings: (+parsed.quantity > 0) ? +parsed.quantity : 1,
+    perUnit: sv.perUnit,
+    serving_description: sv.description || null,
+    serving_amount: sv.amount != null ? sv.amount : null,
+    serving_unit: sv.unit || null,
+    grams: sv.grams != null ? sv.grams : null,
+  };
+}
+
+// Sheet totals (matched items only) — same shape as nuSavedMealTotals.
+function nuAiTotals(items) {
+  return (items || []).reduce(function (t, it) {
+    if (it.unmatched) return t;
+    var q = (+it.servings > 0) ? +it.servings : 1;
+    t.calories += (+it.perUnit.calories || 0) * q;
+    t.protein  += (+it.perUnit.protein  || 0) * q;
+    return t;
+  }, { calories: 0, protein: 0 });
+}
+
+// Log every CONFIRMED item into `meal` on `date`. Rebuilds the same src shape
+// nuSave passes for a hand-picked USDA food (see nuLogSavedMeal), so nuSaveLog
+// stamps identity + provenance identically. Returns the number logged.
+async function nuAiLogItems(items, meal, date) {
+  var s = await supabaseClient.auth.getSession();
+  var uid = s.data.session && s.data.session.user && s.data.session.user.id;
+  if (!uid) throw new Error('Not authenticated');
+  var count = 0;
+  for (var i = 0; i < (items || []).length; i++) {
+    var it = items[i];
+    if (it.unmatched) continue;
+    var f = it.food, pu = it.perUnit || {};
+    var src = {
+      name: f.name, usda_fdc_id: f.usda_fdc_id,
+      brand: f.brand || null, gtin_upc: f.gtin_upc || null,
+      serving_amount: it.serving_amount != null ? it.serving_amount : null,
+      serving_unit: it.serving_unit || null,
+      serving_description: it.serving_description || null,
+      grams: it.grams != null ? it.grams : null,
+      fiber: +pu.fiber || 0, sugar: +pu.sugar || 0,
+      calories: pu.calories, protein: pu.protein, carbs: pu.carbs, fat: pu.fat,
+      raw: f.raw || null,
+    };
+    var res = await nuSaveLog(uid, {
+      id: null, name: f.name, meal: meal, date: date,
+      servings: (+it.servings > 0) ? +it.servings : 1,
+      calories: +pu.calories || 0, protein: +pu.protein || 0,
+      carbs: +pu.carbs || 0, fat: +pu.fat || 0,
+      src: src,
+    });
+    if (res.error) throw res.error;
+    count++;
+  }
+  return count;
+}

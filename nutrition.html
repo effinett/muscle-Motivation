@@ -176,6 +176,61 @@
     .copy-yday-title i { width: 15px; height: 15px; }
     .copy-yday-sub { font-size: 12px; color: var(--text-muted); font-weight: 600; }
 
+    /* Quick Log (Phase 4.2) — describe a meal, AI splits it, USDA prices it */
+    .ai-log-row { display: flex; gap: 8px; margin: 2px 0 6px; }
+    .ai-log-row input {
+      flex: 1; min-width: 0; padding: 11px 14px;
+      background: var(--surface-2); border: 1px solid var(--border-2);
+      border-radius: 10px; color: var(--text);
+      font-family: 'Barlow', sans-serif; font-size: 14px;
+      appearance: none; outline: none; transition: border-color .2s;
+    }
+    .ai-log-row input:focus { border-color: var(--red); }
+    .ai-log-btn {
+      flex-shrink: 0; padding: 0 20px; cursor: pointer;
+      background: var(--red); border: none; border-radius: 10px; color: #fff;
+      font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 700;
+      letter-spacing: 1px; text-transform: uppercase; transition: opacity .2s;
+    }
+    .ai-log-btn:hover { opacity: 0.85; }
+    .ai-log-btn:disabled { opacity: 0.5; cursor: default; }
+    .ai-log-hint { font-size: 12px; color: var(--text-muted); padding: 0 2px 8px; }
+    /* review sheet — sits UNDER the food modal (z 200) so "Add manually" stacks */
+    #aiSheet { z-index: 190; }
+    .ai-sheet-src { font-size: 12px; color: var(--text-muted); font-style: italic; margin: -10px 0 14px; }
+    .ai-item { flex-direction: column; align-items: stretch; }
+    .ai-item-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .ai-item-brand { color: var(--text-muted); font-weight: 600; font-size: 12px; }
+    .ai-item-x {
+      background: none; border: none; color: var(--text-muted); cursor: pointer;
+      font-size: 14px; padding: 2px 6px; flex-shrink: 0; transition: color .2s;
+    }
+    .ai-item-x:hover { color: var(--text); }
+    .ai-item-bottom { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; }
+    .ai-item-sub {
+      font-size: 12px; color: var(--text-muted); font-weight: 600;
+      min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .ai-mini-stepper { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .ai-mini-step {
+      width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+      background: var(--surface-3); border: 1px solid var(--border-2);
+      border-radius: 7px; color: var(--text); font-size: 17px; line-height: 1;
+      cursor: pointer; user-select: none; transition: border-color .2s;
+    }
+    .ai-mini-step:hover { border-color: var(--red-border); }
+    .ai-mini-qty { min-width: 28px; text-align: center; font-size: 13px; font-weight: 700; }
+    .ai-unmatched { border-style: dashed; }
+    .ai-unmatched-label {
+      font-size: 13px; color: var(--text-muted);
+      min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .ai-manual-btn {
+      background: none; border: none; color: var(--red); cursor: pointer;
+      font-family: 'Barlow', sans-serif; font-size: 12px; font-weight: 700;
+      padding: 2px 0; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+
     /* Saved meals: meal-head actions + the two small sheets */
     .meal-actions { display: flex; gap: 8px; flex-shrink: 0; }
     .sm-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 12px; max-height: 38vh; overflow-y: auto; }
@@ -523,6 +578,15 @@
     <!-- Copy Yesterday (rendered only when today is empty + yesterday has food) -->
     <div id="copyYdayWrap"></div>
 
+    <!-- Quick Log (Phase 4.2): plain-English entry → AI split → USDA-verified review -->
+    <div class="section-label">Quick Log</div>
+    <form class="ai-log-row" onsubmit="aiQuickLog(event)">
+      <input type="text" id="aiLogInput" maxlength="300" autocomplete="off"
+             placeholder="Describe what you ate&hellip;">
+      <button type="submit" class="ai-log-btn" id="aiLogBtn">Log</button>
+    </form>
+    <div class="ai-log-hint" id="aiLogHint">e.g. &ldquo;2 eggs, toast with peanut butter&rdquo;</div>
+
     <!-- Quick add: saved meals + favorited + recently logged foods.
          Meals first — the highest-intent shortcut gets the top row. -->
     <div class="section-label">Saved Meals</div>
@@ -577,6 +641,29 @@
     </div>
     <button class="btn-calc" id="mealSheetAddBtn" onclick="confirmAddMeal()">Add to Log</button>
     <button class="btn-delete-log" id="mealSheetDeleteBtn" onclick="deleteSavedMeal()">Delete Saved Meal</button>
+  </div>
+</div>
+
+<!-- Quick Log review sheet — nothing saves until ADD TO LOG (CLAUDE.md §11) -->
+<div class="modal-overlay" id="aiSheet" onclick="if(event.target===this)closeAiSheet()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title">Review &amp; Add</div>
+      <button class="modal-close" onclick="closeAiSheet()">✕</button>
+    </div>
+    <div class="ai-sheet-src" id="aiSheetSrc"></div>
+    <div class="sm-list" id="aiSheetItems"></div>
+    <div class="sm-totals" id="aiSheetTotals"></div>
+    <div class="field-group">
+      <label class="field-label">Meal</label>
+      <select id="aiSheetMeal">
+        <option value="breakfast">Breakfast</option>
+        <option value="lunch">Lunch</option>
+        <option value="dinner">Dinner</option>
+        <option value="snack">Snacks</option>
+      </select>
+    </div>
+    <button class="btn-calc" id="aiSheetAddBtn" onclick="confirmAiAdd()">Add to Log</button>
   </div>
 </div>
 
@@ -942,6 +1029,135 @@
       console.error('copyYesterday error:', e);
       showToast('Error copying — try again.');
       if (btn) btn.disabled = false;
+    }
+  }
+
+  /* ── Quick Log (Phase 4.2): AI parse → USDA match → confirm sheet ── */
+  var aiItems = [];    // resolved items shown in the review sheet
+  var aiBusy = false;
+
+  async function aiQuickLog(ev) {
+    if (ev) ev.preventDefault();
+    if (aiBusy) return;
+    var input = document.getElementById('aiLogInput');
+    var text = (input.value || '').trim();
+    if (text.length < 2) { showToast('Describe what you ate first.'); return; }
+    var btn = document.getElementById('aiLogBtn');
+    aiBusy = true; btn.disabled = true; btn.textContent = '…';
+    try {
+      var parsed = await nuAiParse(text);
+      if (!parsed.items || !parsed.items.length) {
+        showToast("Couldn't find foods in that — try naming them directly.");
+        return;
+      }
+      aiItems = await Promise.all(parsed.items.map(nuAiResolveItem));
+      document.getElementById('aiSheetSrc').textContent = '“' + text + '”';
+      document.getElementById('aiSheetMeal').value = parsed.meal || suggestMeal();
+      renderAiSheet();
+      document.getElementById('aiSheet').classList.add('open');
+      input.value = '';
+      if (parsed.remaining <= 5) {
+        document.getElementById('aiLogHint').textContent =
+          parsed.remaining + ' AI ' + (parsed.remaining === 1 ? 'log' : 'logs') + ' left today.';
+      }
+    } catch (e) {
+      console.error('aiQuickLog error:', e);
+      showToast(e.message || 'AI logging failed — try again.');
+    } finally {
+      aiBusy = false; btn.disabled = false; btn.textContent = 'Log';
+    }
+  }
+
+  function renderAiSheet() {
+    var list = document.getElementById('aiSheetItems');
+    list.innerHTML = aiItems.map(function (it, i) {
+      if (it.unmatched) {
+        return '<div class="sm-item ai-item ai-unmatched">' +
+          '<div class="ai-item-top">' +
+            '<div class="ai-unmatched-label">“' + nuEsc(it.parsed.text || it.parsed.query) + '” — no match</div>' +
+            '<button type="button" class="ai-item-x" onclick="aiRemove(' + i + ')" aria-label="Remove">✕</button>' +
+          '</div>' +
+          '<div class="ai-item-bottom">' +
+            '<button type="button" class="ai-manual-btn" onclick="aiAddManually(' + i + ')">Search &amp; add manually →</button>' +
+          '</div>' +
+        '</div>';
+      }
+      var total = nuScaleMacros(it.perUnit, it.servings);
+      return '<div class="sm-item ai-item">' +
+        '<div class="ai-item-top">' +
+          '<div class="sm-item-name">' + nuEsc(it.food.description || it.food.name) +
+            (it.food.brand ? ' <span class="ai-item-brand">' + nuEsc(it.food.brand) + '</span>' : '') +
+            ' <span class="nu-verified-sm">✓ USDA</span></div>' +
+          '<button type="button" class="ai-item-x" onclick="aiRemove(' + i + ')" aria-label="Remove">✕</button>' +
+        '</div>' +
+        '<div class="ai-item-bottom">' +
+          '<div class="ai-item-sub">' + nuEsc(it.serving_description || '1 serving') + ' · ' +
+            nuRound(total.calories) + ' kcal · P ' + nuRound(total.protein) + '</div>' +
+          '<div class="ai-mini-stepper">' +
+            '<button type="button" class="ai-mini-step" onclick="aiQtyStep(' + i + ',-1)" aria-label="Decrease quantity">−</button>' +
+            '<span class="ai-mini-qty">' + nuRound1(it.servings) + '</span>' +
+            '<button type="button" class="ai-mini-step" onclick="aiQtyStep(' + i + ',1)" aria-label="Increase quantity">+</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    var matched = aiItems.filter(function (it) { return !it.unmatched; });
+    var tot = nuAiTotals(aiItems);
+    document.getElementById('aiSheetTotals').textContent =
+      matched.length + (matched.length === 1 ? ' food · ' : ' foods · ') +
+      nuRound(tot.calories) + ' kcal · ' + nuRound(tot.protein) + ' g protein';
+    document.getElementById('aiSheetAddBtn').disabled = !matched.length;
+  }
+
+  function aiQtyStep(i, d) {
+    var it = aiItems[i];
+    if (!it || it.unmatched) return;
+    it.servings = Math.max(0.25, nuRound1((+it.servings || 1) + d));
+    renderAiSheet();
+  }
+
+  function aiRemove(i) {
+    aiItems.splice(i, 1);
+    if (!aiItems.length) { closeAiSheet(); return; }
+    renderAiSheet();
+  }
+
+  // Unmatched item → the food modal's USDA search, pre-run with the user's
+  // words (the sheet stays open underneath; #aiSheet sits at z-index 190).
+  function aiAddManually(i) {
+    var it = aiItems[i];
+    if (!it) return;
+    var meal = document.getElementById('aiSheetMeal').value;
+    aiItems.splice(i, 1);
+    if (!aiItems.length) closeAiSheet(); else renderAiSheet();
+    nuOpenModal({ meal: meal, date: currentDate });
+    var inp = document.getElementById('nuUsdaInput');
+    inp.value = it.parsed.query || it.parsed.text || '';
+    if (inp.value) nuUsdaInputChanged();
+  }
+
+  function closeAiSheet() {
+    document.getElementById('aiSheet').classList.remove('open');
+    aiItems = [];
+  }
+
+  async function confirmAiAdd() {
+    var matched = aiItems.filter(function (it) { return !it.unmatched; });
+    if (!matched.length) return;
+    var btn = document.getElementById('aiSheetAddBtn');
+    btn.disabled = true;
+    try {
+      var meal = document.getElementById('aiSheetMeal').value;
+      var n = await nuAiLogItems(matched, meal, currentDate);
+      closeAiSheet();
+      showToast('Added ' + n + (n === 1 ? ' food' : ' foods') + ' to ' + NU_MEAL_LABELS[meal] + '.');
+      await refresh();
+      loadRecentChips();
+    } catch (e) {
+      console.error('confirmAiAdd error:', e);
+      showToast('Error adding — try again.');
+      btn.disabled = false;
     }
   }
 
