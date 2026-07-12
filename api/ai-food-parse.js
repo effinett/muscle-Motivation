@@ -100,6 +100,7 @@ Rules:
 - Split the text into distinct foods. "toast with peanut butter" is two foods: toast and peanut butter. A named dish the database would have as one entry stays one item ("caesar salad").
 - Only list foods the person actually mentioned. Never add, guess, or estimate anything — and never output calories or nutrients; the database provides those.
 - "query": the shortest search term that identifies the food ("egg", "white rice", "peanut butter"). Keep brand names the person used ("quest bar", "coke"). Drop quantities and measure words from the query.
+- "brand": the brand name the person actually said ("quest", "fairlife", "coca cola"), null when they named no brand. Never guess a brand they didn't say.
 - "quantity": how many of the unit the person ate. 1 when unspecified. "half a bagel" is 0.5.
 - "unit": the measure word the person actually said ("slice", "cup", "tbsp", "scoop", "oz", "g"), exactly one word, singular. null when they gave a bare count ("2 eggs") or no measure at all.
 - "grams": the weight in grams ONLY when the person stated an explicit weight (6 oz = 170, 1 lb = 454, 100g = 100). null otherwise — never guess weights.
@@ -119,10 +120,11 @@ const PARSE_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['text', 'query', 'quantity', 'unit', 'grams'],
+        required: ['text', 'query', 'brand', 'quantity', 'unit', 'grams'],
         properties: {
           text:     { type: 'string' },
           query:    { type: 'string' },
+          brand:    { anyOf: [{ type: 'string' }, { type: 'null' }] },
           quantity: { type: 'number' },
           unit:     { anyOf: [{ type: 'string' }, { type: 'null' }] },
           grams:    { anyOf: [{ type: 'number' }, { type: 'null' }] },
@@ -165,6 +167,7 @@ async function parseFoods(text) {
   const items = (parsed.items || []).slice(0, MAX_ITEMS).map((it) => ({
     text: String(it.text || '').slice(0, 120),
     query: String(it.query || '').slice(0, 80),
+    brand: it.brand ? String(it.brand).toLowerCase().slice(0, 40) : null,
     quantity: (+it.quantity > 0) ? +it.quantity : 1,
     unit: it.unit ? String(it.unit).toLowerCase().slice(0, 20) : null,
     grams: (+it.grams > 0) ? +it.grams : null,

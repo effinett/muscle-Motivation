@@ -1928,15 +1928,22 @@ function nuAiChooseServing(f, opts, portions, parsed) {
   return opts[0];
 }
 
-// Resolve one parsed item to a concrete USDA food + per-serving macros.
-// Never throws — a failed search/match returns { unmatched: true } so the
-// review sheet can offer manual entry without sinking the other items.
-async function nuAiResolveItem(parsed) {
-  var foods = [];
-  try { foods = await nuUsdaSearch(parsed.query); } catch (e) {}
-  if (!foods || !foods.length) return { parsed: parsed, unmatched: true };
+// Confidence rule for auto-selecting the top search hit. The proxy's ranking
+// already encodes it: a GENERIC lead means the canonical-food scoring was
+// solid ("chicken" → breast); a BRANDED lead without the user naming that
+// brand means a crowded guess ("protein bar", "cereal") — never auto-pick one
+// brand for them. Naming the brand ("quest bar") restores confidence.
+function nuAiIsConfident(parsed, topFood) {
+  if ((topFood.group || 'generic') !== 'branded') return true;
+  var b = (parsed.brand || '').toLowerCase().split(' ')[0];
+  if (b && String(topFood.brand || '').toLowerCase().indexOf(b) !== -1) return true;
+  return false;
+}
 
-  var f = nuNormalizeUsdaFood(foods[0]);
+// Turn one trimmed search food + the parsed quantity/unit into a resolved
+// review-sheet item (portions + serving options exactly like the food card).
+async function nuAiResolveFood(rawFood, parsed) {
+  var f = nuNormalizeUsdaFood(rawFood);
   var portions = [];
   if (f.usda_fdc_id != null) {
     try { portions = await nuFetchUsdaDetail(f.usda_fdc_id); } catch (e) { portions = []; }
@@ -1956,10 +1963,37 @@ async function nuAiResolveItem(parsed) {
   };
 }
 
-// Sheet totals (matched items only) — same shape as nuSavedMealTotals.
+// Resolve one parsed item. Never throws — a failed search returns
+// { unmatched: true } and an ambiguous one returns { needsChoice: true } with
+// the top candidates, so the review sheet can ask instead of guessing.
+async function nuAiResolveItem(parsed) {
+  var foods = [];
+  try { foods = await nuUsdaSearch(parsed.query); } catch (e) {}
+  if (!foods || !foods.length) return { parsed: parsed, unmatched: true };
+
+  if (!nuAiIsConfident(parsed, foods[0])) {
+    return {
+      parsed: parsed, needsChoice: true,
+      // keep the trimmed payloads: picking one replays the normal resolve path
+      choices: foods.slice(0, 4).map(function (rf) {
+        return { raw: rf, name: rf.description || '', brand: rf.brand || '' };
+      }),
+    };
+  }
+  return nuAiResolveFood(foods[0], parsed);
+}
+
+// The user picked candidate `ci` for an ambiguous item → full resolve.
+async function nuAiResolveChoice(item, ci) {
+  var c = item.choices && item.choices[ci];
+  if (!c) return item;
+  return nuAiResolveFood(c.raw, item.parsed);
+}
+
+// Sheet totals (resolved items only) — same shape as nuSavedMealTotals.
 function nuAiTotals(items) {
   return (items || []).reduce(function (t, it) {
-    if (it.unmatched) return t;
+    if (it.unmatched || it.needsChoice) return t;
     var q = (+it.servings > 0) ? +it.servings : 1;
     t.calories += (+it.perUnit.calories || 0) * q;
     t.protein  += (+it.perUnit.protein  || 0) * q;
@@ -1977,7 +2011,7 @@ async function nuAiLogItems(items, meal, date) {
   var count = 0;
   for (var i = 0; i < (items || []).length; i++) {
     var it = items[i];
-    if (it.unmatched) continue;
+    if (it.unmatched || it.needsChoice) continue;
     var f = it.food, pu = it.perUnit || {};
     var src = {
       name: f.name, usda_fdc_id: f.usda_fdc_id,

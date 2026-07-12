@@ -230,6 +230,20 @@
       font-family: 'Barlow', sans-serif; font-size: 12px; font-weight: 700;
       padding: 2px 0; text-transform: uppercase; letter-spacing: 0.5px;
     }
+    /* ambiguous-match candidate buttons ("which one?") */
+    .ai-choice {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      width: 100%; margin-top: 6px; padding: 9px 12px; cursor: pointer; text-align: left;
+      background: var(--surface-3); border: 1px solid var(--border-2);
+      border-radius: 8px; color: var(--text);
+      font-family: 'Barlow', sans-serif; transition: border-color .2s;
+    }
+    .ai-choice:hover { border-color: var(--red-border); }
+    .ai-choice-name {
+      font-size: 13px; font-weight: 600; min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .ai-choice-brand { font-size: 11px; color: var(--text-muted); font-weight: 700; flex-shrink: 0; }
 
     /* Saved meals: meal-head actions + the two small sheets */
     .meal-actions { display: flex; gap: 8px; flex-shrink: 0; }
@@ -1082,6 +1096,24 @@
           '</div>' +
         '</div>';
       }
+      if (it.needsChoice) {
+        // Ambiguous match ("protein bar", "cereal") — ask, never guess a brand.
+        return '<div class="sm-item ai-item ai-unmatched">' +
+          '<div class="ai-item-top">' +
+            '<div class="ai-unmatched-label">“' + nuEsc(it.parsed.text || it.parsed.query) + '” — which one?</div>' +
+            '<button type="button" class="ai-item-x" onclick="aiRemove(' + i + ')" aria-label="Remove">✕</button>' +
+          '</div>' +
+          it.choices.map(function (c, ci) {
+            return '<button type="button" class="ai-choice" onclick="aiChoose(' + i + ',' + ci + ')">' +
+              '<span class="ai-choice-name">' + nuEsc(c.name) + '</span>' +
+              (c.brand ? '<span class="ai-choice-brand">' + nuEsc(c.brand) + '</span>' : '') +
+            '</button>';
+          }).join('') +
+          '<div class="ai-item-bottom">' +
+            '<button type="button" class="ai-manual-btn" onclick="aiAddManually(' + i + ')">Search manually →</button>' +
+          '</div>' +
+        '</div>';
+      }
       var total = nuScaleMacros(it.perUnit, it.servings);
       return '<div class="sm-item ai-item">' +
         '<div class="ai-item-top">' +
@@ -1102,12 +1134,25 @@
       '</div>';
     }).join('');
 
-    var matched = aiItems.filter(function (it) { return !it.unmatched; });
+    var matched = aiItems.filter(function (it) { return !it.unmatched && !it.needsChoice; });
     var tot = nuAiTotals(aiItems);
     document.getElementById('aiSheetTotals').textContent =
       matched.length + (matched.length === 1 ? ' food · ' : ' foods · ') +
       nuRound(tot.calories) + ' kcal · ' + nuRound(tot.protein) + ' g protein';
     document.getElementById('aiSheetAddBtn').disabled = !matched.length;
+  }
+
+  // Ambiguous item: the user tapped one of the candidates → full resolve.
+  async function aiChoose(i, ci) {
+    var it = aiItems[i];
+    if (!it || !it.needsChoice) return;
+    try {
+      aiItems[i] = await nuAiResolveChoice(it, ci);
+      renderAiSheet();
+    } catch (e) {
+      console.error('aiChoose error:', e);
+      showToast('Error loading that food — try another.');
+    }
   }
 
   function aiQtyStep(i, d) {
@@ -1143,7 +1188,7 @@
   }
 
   async function confirmAiAdd() {
-    var matched = aiItems.filter(function (it) { return !it.unmatched; });
+    var matched = aiItems.filter(function (it) { return !it.unmatched && !it.needsChoice; });
     if (!matched.length) return;
     var btn = document.getElementById('aiSheetAddBtn');
     btn.disabled = true;
