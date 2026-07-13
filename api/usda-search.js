@@ -220,6 +220,14 @@ const TERM_REWRITES = {
   toasted: { to: 'bread', unless: ['french', 'melba', 'texas', 'avocado', 'cinnamon', 'crunch'] },
 };
 
+// Phrase-level shorthand people type that USDA text never contains. Applied to
+// the normalized query string BEFORE tokenization (nText has already collapsed
+// punctuation, so "pb&j" arrives as "pb j"). Ordered — most specific first.
+const PHRASE_REWRITES = [
+  [/\bpb\s*j\b|\bpbj\b/g, 'peanut butter jelly'],
+  [/\bpb\b/g, 'peanut butter'],
+];
+
 // Typeahead vocabulary — the generic foods people most commonly search. When a
 // SINGLE-token query (≥3 chars) is a strict prefix of an entry, the query is
 // completed to that entry before hitting USDA ("blueb" → "blueberries"), so
@@ -263,7 +271,7 @@ const COMMON_FOODS = [
 const FOOD_INTENT = {
   'peanut butter': {
     prefer:   ['creamy', 'natural', 'organic', 'smooth', 'crunchy'],
-    penalize: ['candy', 'coating', 'cereal', 'dessert', 'cup', 'cups', 'cookie', 'ice cream',
+    penalize: ['candy', 'coating', 'cereal', 'oatmeal', 'dessert', 'cup', 'cups', 'cookie', 'ice cream',
                'reduced fat', 'fortified'],
     // SR "smooth style" carries the real 2-tbsp household portion; the otherwise
     // tying Foundation "creamy" has NO portions and would default to 100 g.
@@ -280,6 +288,15 @@ const FOOD_INTENT = {
   bread: {
     prefer:   ['white', 'wheat', 'whole wheat'],
     penalize: ['dulce', 'dessert', 'stuffing', 'pita', 'naan'],
+  },
+  jelly: {
+    // "jelly" — alone or next to bread/toast/sandwich/peanut butter — means the
+    // fruit spread, never the candy aisle. Intent-aware as always: an explicit
+    // "jelly beans" query typed the word, so the penalty doesn't apply there.
+    prefer:   ['grape', 'strawberry', 'jam', 'preserves'],
+    penalize: ['beans', 'bean', 'belly', 'gummy', 'gummies', 'donut', 'doughnut', 'roll'],
+    // USDA's generic entry is "Jellies"; its relevance for "jelly" buries it.
+    supplement: 'jelly jams preserves',
   },
   salmon: {
     // 'canned' stays salmon-specific (NOT global): canned IS the common form
@@ -345,7 +362,7 @@ const UNIT_WORDS = new Set([
   'teaspoon', 'teaspoons', 'slice', 'slices', 'piece', 'pieces', 'serving', 'servings',
   'scoop', 'scoops', 'glass', 'bowl',
 ]);
-const STOP_WORDS = new Set(['a', 'an', 'the', 'of', 'some', 'my']);
+const STOP_WORDS = new Set(['a', 'an', 'the', 'of', 'some', 'my', 'and', 'with']);
 function isQuantityToken(t) {
   return /^\d+([./]\d+)?$/.test(t) || /^\d+(\.\d+)?(g|kg|oz|lb|lbs|ml|l)$/.test(t);
 }
@@ -489,8 +506,11 @@ function completeEntry(toks) {
 // of input (typos, compounds, prefixes), never on individual foods.
 function expandQuery(q) {
   const original = nText(q);
-  let toks = original.split(/\s+/).filter(Boolean);
-  let changed = false;
+  // phrase shorthand ("pb j"/"pbj" → peanut butter jelly) before tokenization
+  let phrased = original;
+  PHRASE_REWRITES.forEach(function (pr) { phrased = phrased.replace(pr[0], pr[1]); });
+  let toks = phrased.split(/\s+/).filter(Boolean);
+  let changed = phrased !== original;
 
   // quantities/units/stopwords — "2 eggs", "100g chicken", "cup of rice"
   const kept = stripMeasurements(toks);

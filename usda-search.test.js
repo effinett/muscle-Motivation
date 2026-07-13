@@ -45,6 +45,14 @@ test('toast normalizes to bread, modifiers preserved', () => {
   assert.strictEqual(expandQuery('toasted bread').query, 'bread'); // rewrite + dedupe
 });
 
+test('pb&j shorthand and connector words normalize', () => {
+  assert.strictEqual(expandQuery('peanut butter and jelly').query, 'peanut butter jelly');
+  assert.strictEqual(expandQuery('pb&j').query, 'peanut butter jelly');
+  assert.strictEqual(expandQuery('pbj sandwich').query, 'peanut butter jelly sandwich');
+  assert.strictEqual(expandQuery('pb toast').query, 'peanut butter bread');
+  assert.strictEqual(expandQuery('toast with butter').query, 'bread butter');
+});
+
 test('distinct toast products are NOT rewritten', () => {
   assert.strictEqual(expandQuery('melba toast').query, 'melba toast');
   assert.strictEqual(expandQuery('french toast').query, 'french toast');
@@ -94,4 +102,30 @@ test('live: "toast with butter" never resolves to a dry toast product', { skip: 
 test('live: explicit "melba toast" still matches melba toast', { skip: !HAS_KEY }, async () => {
   const f = await top('melba toast');
   assert.match(f.description, /melba/i, 'got: ' + f.description);
+});
+
+// "jelly" means the fruit spread, never the candy aisle (Phase 4.2 live testing).
+const CANDY = /jelly bean|belly|gummy|gummi|candies|candy/i;
+
+test('live: "jelly" → fruit spread, not jelly beans', { skip: !HAS_KEY }, async () => {
+  const f = await top('jelly');
+  assert.match(f.description + ' ' + (f.brand || ''), /jell|jam|preserve/i, 'got: ' + f.description);
+  assert.doesNotMatch(f.description + ' ' + (f.brand || ''), CANDY, 'got: ' + f.description);
+});
+
+test('live: "grape jelly" → grape jelly spread', { skip: !HAS_KEY }, async () => {
+  const f = await top('grape jelly');
+  assert.match(f.description, /grape/i, 'got: ' + f.description);
+  assert.doesNotMatch(f.description + ' ' + (f.brand || ''), CANDY, 'got: ' + f.description);
+});
+
+test('live: "peanut butter and jelly" never resolves to candy', { skip: !HAS_KEY }, async () => {
+  const f = await top('peanut butter and jelly');
+  assert.doesNotMatch(f.description + ' ' + (f.brand || ''), CANDY, 'got: ' + f.description);
+  assert.match(f.description, /peanut|jelly|jam/i, 'got: ' + f.description);
+});
+
+test('live: explicit "jelly beans" still matches jelly beans', { skip: !HAS_KEY }, async () => {
+  const f = await top('jelly beans');
+  assert.match(f.description + ' ' + (f.brand || ''), /jelly bean|belly/i, 'got: ' + f.description);
 });
