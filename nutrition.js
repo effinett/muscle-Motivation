@@ -2242,24 +2242,8 @@ function nuAiDisplayName(name) {
   return out || full;
 }
 
-// Small category → emoji hint for review-sheet rows. One exception inside
-// the dairy/egg category (eggs and milk share it).
-var NU_CATEGORY_EMOJI = {
-  'fruits and fruit juices': '🍎', 'vegetables and vegetable products': '🥦',
-  'poultry products': '🍗', 'beef products': '🥩', 'pork products': '🥓',
-  'lamb, veal, and game products': '🥩', 'finfish and shellfish products': '🐟',
-  'dairy and egg products': '🥛', 'nut and seed products': '🥜',
-  'cereal grains and pasta': '🍚', 'baked products': '🍞', 'sweets': '🍬',
-  'beverages': '🥤', 'fast foods': '🍔', 'legumes and legume products': '🫘',
-  'breakfast cereals': '🥣', 'soups, sauces, and gravies': '🥣',
-  'fats and oils': '🧈', 'snacks': '🍿', 'restaurant foods': '🍽️',
-  'spices and herbs': '🌿', 'meals, entrees, and side dishes': '🍽️',
-};
-function nuFoodEmoji(category, name) {
-  var cat = String(category || '').toLowerCase();
-  if (cat === 'dairy and egg products' && /\begg/i.test(String(name || ''))) return '🥚';
-  return NU_CATEGORY_EMOJI[cat] || '';
-}
+// (Category emoji hints were tried here and removed — Effi prefers clean
+// text-only rows in the review sheet.)
 
 // Sheet totals (resolved items only) — same shape as nuSavedMealTotals.
 function nuAiTotals(items) {

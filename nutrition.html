@@ -1117,9 +1117,8 @@
             var meta = [];
             if (c.brand) meta.push(nuEsc(c.brand));
             if (c.kcal != null) meta.push(nuRound(c.kcal) + ' kcal/100g');
-            var cem = nuFoodEmoji(c.raw && c.raw.foodCategory, c.name);
             return '<button type="button" class="ai-choice" title="' + nuEsc(c.name) + '" onclick="aiChoose(' + i + ',' + ci + ')">' +
-              '<span class="ai-choice-name">' + (cem ? cem + ' ' : '') + nuEsc(nuAiDisplayName(c.name)) + '</span>' +
+              '<span class="ai-choice-name">' + nuEsc(nuAiDisplayName(c.name)) + '</span>' +
               (meta.length ? '<span class="ai-choice-brand">' + meta.join(' · ') + '</span>' : '') +
             '</button>';
           }).join('') +
@@ -1130,7 +1129,6 @@
       }
       var total = nuScaleMacros(it.perUnit, it.servings);
       var fullName = it.food.description || it.food.name;
-      var em = nuFoodEmoji(it.food.raw && it.food.raw.foodCategory, fullName);
       var sub = ['✓ USDA'];
       if (it.food.brand) sub.push(nuEsc(it.food.brand));
       sub.push(nuEsc(it.serving_description || '1 serving'));
@@ -1138,7 +1136,7 @@
       sub.push('P ' + nuRound(total.protein));
       return '<div class="sm-item ai-item">' +
         '<div class="ai-item-top">' +
-          '<div class="ai-item-name" title="' + nuEsc(fullName) + '">' + (em ? em + ' ' : '') + nuEsc(nuAiDisplayName(fullName)) + '</div>' +
+          '<div class="ai-item-name" title="' + nuEsc(fullName) + '">' + nuEsc(nuAiDisplayName(fullName)) + '</div>' +
           '<button type="button" class="ai-item-x" onclick="aiRemove(' + i + ')" aria-label="Remove">✕</button>' +
         '</div>' +
         (it.unitUnresolved
