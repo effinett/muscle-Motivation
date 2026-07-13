@@ -1111,9 +1111,14 @@
             '<button type="button" class="ai-item-x" onclick="aiRemove(' + i + ')" aria-label="Remove">✕</button>' +
           '</div>' +
           it.choices.map(function (c, ci) {
+            // brand + per-100g kcal on the right — same-named options (dry vs
+            // cooked basis) must explain WHY they're being offered
+            var meta = [];
+            if (c.brand) meta.push(nuEsc(c.brand));
+            if (c.kcal != null) meta.push(nuRound(c.kcal) + ' kcal/100g');
             return '<button type="button" class="ai-choice" title="' + nuEsc(c.name) + '" onclick="aiChoose(' + i + ',' + ci + ')">' +
               '<span class="ai-choice-name">' + nuEsc(nuAiDisplayName(c.name)) + '</span>' +
-              (c.brand ? '<span class="ai-choice-brand">' + nuEsc(c.brand) + '</span>' : '') +
+              (meta.length ? '<span class="ai-choice-brand">' + meta.join(' · ') + '</span>' : '') +
             '</button>';
           }).join('') +
           '<div class="ai-item-bottom">' +

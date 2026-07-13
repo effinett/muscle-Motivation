@@ -1985,22 +1985,78 @@ async function nuAiResolveFood(rawFood, parsed) {
   };
 }
 
+// Are these candidates the SAME food, nutritionally? Compared on the uniform
+// per-100g panels the proxy returns. Tolerances are tight enough that real
+// differences keep the chooser: dry vs cooked rice (~360 vs ~130 kcal),
+// Cheerios vs Froot Loops (sugar), Quest vs Barebells (kcal/fat) all still
+// ask — but four near-identical jasmine rices collapse to one.
+function nuAiChoicesAlike(foods) {
+  if (foods.length < 2) return true;
+  function spreadOk(key, absTol, relTol) {
+    var vals = foods.map(function (f) { return +((f.nutrients || {})[key]) || 0; });
+    var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
+    return (max - min) <= Math.max(absTol, ((min + max) / 2) * relTol);
+  }
+  return spreadOk('kcal', 30, 0.15) && spreadOk('protein', 2.5, 0.2) &&
+         spreadOk('carbs', 5, 0.2) && spreadOk('fat', 2.5, 0.2) &&
+         spreadOk('sugar', 5, 0.25);
+}
+
+// Order-free name signature: unique singularized tokens, sorted. "JASMINE
+// RICE" and "JASMINE RICE, JASMINE" are the same name; "QUEST CHOCOLATE CHIP"
+// and "QUEST COOKIES & CREAM" are not (flavors are a real choice).
+function nuAiNameSig(desc) {
+  var seen = {}, out = [];
+  String(desc || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).forEach(function (t) {
+    if (!t) return;
+    var s = t.replace(/s$/, '');
+    if (s && !seen[s]) { seen[s] = 1; out.push(s); }
+  });
+  return out.sort().join(' ');
+}
+
+// Collapse TRUE duplicates: same name signature AND nutritionally alike.
+// Four interchangeable jasmine rices become one option; a cooked-basis panel
+// or a different flavor survives as its own option.
+function nuAiDedupeChoices(cands) {
+  var kept = [];
+  cands.forEach(function (c) {
+    var dup = kept.some(function (k) {
+      return nuAiNameSig(k.description) === nuAiNameSig(c.description) &&
+             nuAiChoicesAlike([k, c]);
+    });
+    if (!dup) kept.push(c);
+  });
+  return kept;
+}
+
 // Resolve one parsed item. Never throws — a failed search returns
 // { unmatched: true } and an ambiguous one returns { needsChoice: true } with
-// the top candidates, so the review sheet can ask instead of guessing.
+// the distinct candidates, so the review sheet can ask instead of guessing.
 async function nuAiResolveItem(parsed) {
   var foods = [];
   try { foods = await nuUsdaSearch(parsed.query); } catch (e) {}
   if (!foods || !foods.length) return { parsed: parsed, unmatched: true };
 
   if (!nuAiIsConfident(parsed, foods[0])) {
-    return {
-      parsed: parsed, needsChoice: true,
-      // keep the trimmed payloads: picking one replays the normal resolve path
-      choices: foods.slice(0, 4).map(function (rf) {
-        return { raw: rf, name: rf.description || '', brand: rf.brand || '' };
-      }),
-    };
+    // Duplicates collapse first ("jasmine rice" → 4 identical products = ONE
+    // option = no interruption). Restaurant-dish categories skip the dedupe —
+    // a McDonald's and a homemade double cheeseburger can tie nutritionally
+    // and still deserve the "where from?" ask.
+    var candidates = foods.slice(0, 4);
+    var askCat = NU_ASK_CATEGORIES[String(foods[0].foodCategory || '').toLowerCase()];
+    var options = askCat ? candidates : nuAiDedupeChoices(candidates);
+    if (askCat || options.length > 1) {
+      return {
+        parsed: parsed, needsChoice: true,
+        // keep the trimmed payloads: picking one replays the normal resolve
+        // path. kcal (per 100 g/ml) lets same-named options explain themselves.
+        choices: options.map(function (rf) {
+          return { raw: rf, name: rf.description || '', brand: rf.brand || '',
+                   kcal: (rf.nutrients || {}).kcal };
+        }),
+      };
+    }
   }
   return nuAiResolveFood(foods[0], parsed);
 }
