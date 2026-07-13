@@ -1901,11 +1901,19 @@ async function nuAiParse(text) {
   return data; // { items, meal, remaining }
 }
 
+// Colloquial hand measures → DETERMINISTIC gram estimates. These are fixed
+// conversions applied here, never weights the model invents — the same phrase
+// always produces the same grams, and the serving label carries "~" so the
+// user sees it's an estimate. "handful of almonds" must never silently
+// become 100 g. Weight foods only (a handful of milk isn't a measure).
+var NU_APPROX_UNITS = { 'handful': 28, 'small handful': 20, 'large handful': 40 };
+
 // Pick the serving option that matches what the user said, using the SAME
 // option list the food card builds. Priority:
 //   1. explicit weight ("6 oz" → 170 g) — weight foods only, never ml→g
-//   2. the household word they used ("slice", "cup") found in an option label
-//   3. the card's own default (nuDefaultServingKey — portion/serving/100 g)
+//   2. approximate hand measures ("handful" ≈ 28 g) — fixed table above
+//   3. the household word they used ("slice", "cup") found in an option label
+//   4. the card's own default (nuDefaultServingKey — portion/serving/100 g)
 function nuAiChooseServing(f, opts, portions, parsed) {
   var per100 = f.raw && f.raw.nutrients ? f.raw.nutrients : null;
   if (+parsed.grams > 0 && per100 && !f.is_liquid) {
@@ -1914,8 +1922,14 @@ function nuAiChooseServing(f, opts, portions, parsed) {
              description: nuRound(g) + ' g' };
   }
   if (parsed.unit) {
+    var uFull = String(parsed.unit).toLowerCase().trim().replace(/s$/, '');
+    var approx = NU_APPROX_UNITS[uFull];
+    if (approx && per100 && !f.is_liquid) {
+      return { perUnit: nuScalePer100(per100, approx), grams: approx, amount: approx, unit: 'g',
+               description: uFull + ' (~' + approx + ' g)' };
+    }
     // ≥2 chars so a bare 'g' can't substring-match every label.
-    var u = String(parsed.unit).toLowerCase().replace(/s$/, '');
+    var u = uFull.split(' ').pop();
     if (u.length >= 2) {
       for (var i = 0; i < opts.length; i++) {
         if (opts[i].custom) continue;

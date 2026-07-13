@@ -102,7 +102,7 @@ Rules:
 - "query": the shortest search term that identifies the food ("egg", "white rice", "peanut butter"). Keep brand names the person used ("quest bar", "coke"). Drop quantities and measure words from the query.
 - "brand": the brand name the person actually said ("quest", "fairlife", "coca cola"), null when they named no brand. Never guess a brand they didn't say.
 - "quantity": how many of the unit the person ate. 1 when unspecified. "half a bagel" is 0.5.
-- "unit": the measure word the person actually said ("slice", "cup", "tbsp", "scoop", "oz", "g"), exactly one word, singular. null when they gave a bare count ("2 eggs") or no measure at all.
+- "unit": the measure word the person actually said ("slice", "cup", "tbsp", "scoop", "oz", "g"), exactly one word, singular. EXCEPTION — approximate hand measures keep their size word as a two-word unit: "handful", "small handful", "large handful". null when they gave a bare count ("2 eggs") or no measure at all.
 - "grams": the weight in grams ONLY when the person stated an explicit weight (6 oz = 170, 1 lb = 454, 100g = 100). null otherwise — never guess weights.
 - "meal": breakfast, lunch, dinner, or snack ONLY when the text says so ("for breakfast", "as a snack"); otherwise null.
 - At most ${MAX_ITEMS} items.

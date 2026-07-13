@@ -360,7 +360,7 @@ const UNIT_WORDS = new Set([
   'g', 'gram', 'grams', 'kg', 'oz', 'ounce', 'ounces', 'lb', 'lbs', 'pound', 'pounds',
   'ml', 'l', 'liter', 'liters', 'cup', 'cups', 'tbsp', 'tsp', 'tablespoon', 'tablespoons',
   'teaspoon', 'teaspoons', 'slice', 'slices', 'piece', 'pieces', 'serving', 'servings',
-  'scoop', 'scoops', 'glass', 'bowl',
+  'scoop', 'scoops', 'glass', 'bowl', 'handful', 'handfuls',
 ]);
 const STOP_WORDS = new Set(['a', 'an', 'the', 'of', 'some', 'my', 'and', 'with']);
 function isQuantityToken(t) {
