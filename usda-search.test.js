@@ -129,3 +129,29 @@ test('live: explicit "jelly beans" still matches jelly beans', { skip: !HAS_KEY 
   const f = await top('jelly beans');
   assert.match(f.description + ' ' + (f.brand || ''), /jelly bean|belly/i, 'got: ' + f.description);
 });
+
+// Burger queries must offer REAL burgers (fast-food/restaurant entries), never
+// dinner kits, seasoning, buns, or sauces — and the top hit's Fast Foods
+// category is what triggers the client's "where from?" chooser.
+const BURGER_JUNK = /helper|macaroni|dinner|kit\b|pasta|seasoning|marinade|\bbuns\b|sauce|relish|pickles/i;
+
+test('live: "double cheeseburger" → real burgers, Fast Foods category', { skip: !HAS_KEY }, async () => {
+  const out = await searchFoods('double cheeseburger');
+  const top4 = out.body.foods.slice(0, 4);
+  top4.forEach((f) => assert.doesNotMatch(f.description, BURGER_JUNK, 'got: ' + f.description));
+  assert.ok(top4.some((f) => /fast foods|mcdonald/i.test(f.description)),
+    'expected fast-food entries, got: ' + top4.map((f) => f.description).join(' | '));
+  assert.match(out.body.foods[0].foodCategory || '', /fast foods/i, 'top category drives the chooser');
+});
+
+test('live: "hamburger" → fast-food burgers, not buns/pickles', { skip: !HAS_KEY }, async () => {
+  const out = await searchFoods('hamburger');
+  const top4 = out.body.foods.slice(0, 4);
+  top4.forEach((f) => assert.doesNotMatch(f.description, BURGER_JUNK, 'got: ' + f.description));
+  assert.ok(top4.some((f) => /hamburger/i.test(f.description)));
+});
+
+test('live: "chicken" ranking unchanged by Fast Foods category addition', { skip: !HAS_KEY }, async () => {
+  const f = await top('chicken');
+  assert.match(f.description, /chicken.*breast|breast.*chicken/i, 'got: ' + f.description);
+});

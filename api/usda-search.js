@@ -155,6 +155,12 @@ const WHOLE_FOOD_CATEGORIES = new Set([
   'poultry products',
   'lamb, veal, and game products',
   'sausages and luncheon meats',
+  // Prepared-dish queries ("double cheeseburger", "fries"): USDA's canonical
+  // entries live in the Fast Foods category (Fast foods…, McDONALD'S…,
+  // BURGER KING…). Without this, branded accessory products (HAMBURGER BUNS,
+  // BURGER SAUCE, dinner kits) lead purely on phrase-match bonuses. Typed
+  // brands still override via brand intent.
+  'fast foods',
 ]);
 
 // Canonical food preference. For a base-food search, reward the normal base food
@@ -268,7 +274,26 @@ const COMMON_FOODS = [
 // user's query IS exactly this base food. USDA's own relevance buries the obvious
 // cut/form — "chicken" returns no raw breast in its top 50 of 402, "rice" no plain
 // cooked white rice in 50 of 141 — so ranking alone can never surface them.
+// Burger-family intent, shared by cheeseburger/hamburger/burger keys below.
+// "double cheeseburger" must offer REAL burgers — SR's fast-food/restaurant
+// entries (Fast foods…, McDONALD'S…, BURGER KING…) and actual burger products —
+// never dinner-kit/seasoning/frozen-meal derivatives that merely contain the
+// word. The client shows a "which one?" chooser for the Fast Foods category,
+// so ranking's job is getting the right candidates into the top 4.
+// NOTE: restaurant names deliberately NOT in prefer — boosting "burger king"
+// wholesale surfaced BK onion rings/hash browns for "burger". Preferring the
+// burger words themselves lifts actual burgers from every restaurant instead.
+const BURGER_PREFER = ['fast foods', 'hamburger', 'cheeseburger', 'beef', 'patty'];
+const BURGER_PENALIZE = [
+  'helper', 'macaroni', 'pasta', 'dinner', 'entree', 'kit', 'kits', 'skillet',
+  'seasoning', 'seasoned', 'marinade', 'meal', 'meals', 'soup', 'dip', 'pizza',
+  'crumbles', 'relish', 'bites',
+];
+
 const FOOD_INTENT = {
+  cheeseburger: { prefer: BURGER_PREFER, penalize: BURGER_PENALIZE, supplement: 'fast foods cheeseburger' },
+  hamburger:    { prefer: BURGER_PREFER, penalize: BURGER_PENALIZE, supplement: 'fast foods hamburger' },
+  burger:       { prefer: BURGER_PREFER, penalize: BURGER_PENALIZE, supplement: 'fast foods hamburger' },
   'peanut butter': {
     prefer:   ['creamy', 'natural', 'organic', 'smooth', 'crunchy'],
     penalize: ['candy', 'coating', 'cereal', 'oatmeal', 'dessert', 'cup', 'cups', 'cookie', 'ice cream',

@@ -1942,12 +1942,20 @@ function nuAiChooseServing(f, opts, portions, parsed) {
   return opts[0];
 }
 
+// Restaurant/prepared-dish categories where "where from?" matters more than
+// any single top hit — a double cheeseburger varies hugely between homemade,
+// McDonald's, and Five Guys, so the review sheet always asks instead of
+// auto-picking one (ask-never-guess rule).
+var NU_ASK_CATEGORIES = { 'fast foods': 1, 'restaurant foods': 1 };
+
 // Confidence rule for auto-selecting the top search hit. The proxy's ranking
 // already encodes it: a GENERIC lead means the canonical-food scoring was
 // solid ("chicken" → breast); a BRANDED lead without the user naming that
 // brand means a crowded guess ("protein bar", "cereal") — never auto-pick one
-// brand for them. Naming the brand ("quest bar") restores confidence.
+// brand for them. Naming the brand ("quest bar") restores confidence. And a
+// restaurant-dish category is never confident, whoever leads.
 function nuAiIsConfident(parsed, topFood) {
+  if (NU_ASK_CATEGORIES[String(topFood.foodCategory || '').toLowerCase()]) return false;
   if ((topFood.group || 'generic') !== 'branded') return true;
   var b = (parsed.brand || '').toLowerCase().split(' ')[0];
   if (b && String(topFood.brand || '').toLowerCase().indexOf(b) !== -1) return true;
