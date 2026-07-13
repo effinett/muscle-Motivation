@@ -199,8 +199,14 @@
     #aiSheet { z-index: 190; }
     .ai-sheet-src { font-size: 12px; color: var(--text-muted); font-style: italic; margin: -10px 0 14px; }
     .ai-item { flex-direction: column; align-items: stretch; }
-    .ai-item-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-    .ai-item-brand { color: var(--text-muted); font-weight: 600; font-size: 12px; }
+    .ai-item-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+    /* Row title: max two lines, ellipsis — full USDA name lives in title="" and
+       in the food picker. Never lets a long name push the card wider. */
+    .ai-item-name {
+      font-size: 13px; font-weight: 600; min-width: 0; line-height: 1.35;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden; overflow-wrap: anywhere;
+    }
     .ai-item-x {
       background: none; border: none; color: var(--text-muted); cursor: pointer;
       font-size: 14px; padding: 2px 6px; flex-shrink: 0; transition: color .2s;
@@ -240,8 +246,9 @@
     }
     .ai-choice:hover { border-color: var(--red-border); }
     .ai-choice-name {
-      font-size: 13px; font-weight: 600; min-width: 0;
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-size: 13px; font-weight: 600; min-width: 0; line-height: 1.35;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden; overflow-wrap: anywhere;
     }
     .ai-choice-brand { font-size: 11px; color: var(--text-muted); font-weight: 700; flex-shrink: 0; }
 
@@ -1104,8 +1111,8 @@
             '<button type="button" class="ai-item-x" onclick="aiRemove(' + i + ')" aria-label="Remove">✕</button>' +
           '</div>' +
           it.choices.map(function (c, ci) {
-            return '<button type="button" class="ai-choice" onclick="aiChoose(' + i + ',' + ci + ')">' +
-              '<span class="ai-choice-name">' + nuEsc(c.name) + '</span>' +
+            return '<button type="button" class="ai-choice" title="' + nuEsc(c.name) + '" onclick="aiChoose(' + i + ',' + ci + ')">' +
+              '<span class="ai-choice-name">' + nuEsc(nuAiDisplayName(c.name)) + '</span>' +
               (c.brand ? '<span class="ai-choice-brand">' + nuEsc(c.brand) + '</span>' : '') +
             '</button>';
           }).join('') +
@@ -1115,16 +1122,19 @@
         '</div>';
       }
       var total = nuScaleMacros(it.perUnit, it.servings);
+      var fullName = it.food.description || it.food.name;
+      var sub = ['✓ USDA'];
+      if (it.food.brand) sub.push(nuEsc(it.food.brand));
+      sub.push(nuEsc(it.serving_description || '1 serving'));
+      sub.push(nuRound(total.calories) + ' kcal');
+      sub.push('P ' + nuRound(total.protein));
       return '<div class="sm-item ai-item">' +
         '<div class="ai-item-top">' +
-          '<div class="sm-item-name">' + nuEsc(it.food.description || it.food.name) +
-            (it.food.brand ? ' <span class="ai-item-brand">' + nuEsc(it.food.brand) + '</span>' : '') +
-            ' <span class="nu-verified-sm">✓ USDA</span></div>' +
+          '<div class="ai-item-name" title="' + nuEsc(fullName) + '">' + nuEsc(nuAiDisplayName(fullName)) + '</div>' +
           '<button type="button" class="ai-item-x" onclick="aiRemove(' + i + ')" aria-label="Remove">✕</button>' +
         '</div>' +
         '<div class="ai-item-bottom">' +
-          '<div class="ai-item-sub">' + nuEsc(it.serving_description || '1 serving') + ' · ' +
-            nuRound(total.calories) + ' kcal · P ' + nuRound(total.protein) + '</div>' +
+          '<div class="ai-item-sub"><span class="nu-verified-sm">' + sub[0] + '</span> · ' + sub.slice(1).join(' · ') + '</div>' +
           '<div class="ai-mini-stepper">' +
             '<button type="button" class="ai-mini-step" onclick="aiQtyStep(' + i + ',-1)" aria-label="Decrease quantity">−</button>' +
             '<span class="ai-mini-qty">' + nuRound1(it.servings) + '</span>' +

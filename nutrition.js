@@ -1990,6 +1990,23 @@ async function nuAiResolveChoice(item, ci) {
   return nuAiResolveFood(c.raw, item.parsed);
 }
 
+// Display title for a USDA name in compact rows. USDA descriptions are long
+// comma-segmented phrases ("Chicken fried, steak fries, salt added in
+// processing, frozen, oven-heated") — keep leading segments while they fit a
+// row title (~40 chars), so identity survives and CSS line-clamp only has to
+// catch the rare pathological case. Full name goes in the title attribute and
+// is always visible in the food picker/card.
+function nuAiDisplayName(name) {
+  var segs = String(name == null ? '' : name).split(',');
+  var out = (segs[0] || '').trim();
+  for (var i = 1; i < segs.length; i++) {
+    var next = out + ', ' + segs[i].trim();
+    if (next.length > 40) break;
+    out = next;
+  }
+  return out || String(name || '');
+}
+
 // Sheet totals (resolved items only) — same shape as nuSavedMealTotals.
 function nuAiTotals(items) {
   return (items || []).reduce(function (t, it) {
