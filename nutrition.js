@@ -1917,9 +1917,12 @@ var NU_APPROX_UNITS = { 'handful': 28, 'small handful': 20, 'large handful': 40 
 function nuAiChooseServing(f, opts, portions, parsed) {
   var per100 = f.raw && f.raw.nutrients ? f.raw.nutrients : null;
   if (+parsed.grams > 0 && per100 && !f.is_liquid) {
+    // grams is the TOTAL stated weight ("6 oz" → quantity 6, unit oz,
+    // grams 170) — wholeQuantity tells the resolver NOT to multiply by
+    // quantity again, or 6 oz of chicken would log as 6 × 170 g.
     var g = +parsed.grams;
     return { perUnit: nuScalePer100(per100, g), grams: g, amount: g, unit: 'g',
-             description: nuRound(g) + ' g' };
+             description: nuRound(g) + ' g', wholeQuantity: true };
   }
   if (parsed.unit) {
     var uFull = String(parsed.unit).toLowerCase().trim().replace(/s$/, '');
@@ -1976,7 +1979,7 @@ async function nuAiResolveFood(rawFood, parsed) {
   var sv = nuAiChooseServing(f, opts, portions, parsed);
   return {
     parsed: parsed, food: f, unmatched: false,
-    servings: (+parsed.quantity > 0) ? +parsed.quantity : 1,
+    servings: sv.wholeQuantity ? 1 : ((+parsed.quantity > 0) ? +parsed.quantity : 1),
     perUnit: sv.perUnit,
     serving_description: sv.description || null,
     serving_amount: sv.amount != null ? sv.amount : null,
