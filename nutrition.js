@@ -1908,6 +1908,27 @@ async function nuAiParse(text) {
 // become 100 g. Weight foods only (a handful of milk isn't a measure).
 var NU_APPROX_UNITS = { 'handful': 28, 'small handful': 20, 'large handful': 40 };
 
+// Universal VOLUME units for liquids (per-100ml panels): a tbsp is 15 ml for
+// every liquid — this is unit conversion, not a fabricated weight. Used only
+// when no real USDA portion matched. cup/fl-oz already exist as options.
+var NU_VOLUME_ML = { tsp: 5, teaspoon: 5, tbsp: 15, tablespoon: 15 };
+
+// Leading count in a serving label: "2 tbsp (32 g)" → 2, "0.5 cup" → 0.5,
+// "1/2 cup" → 0.5, "1 large" → 1. The user's quantity is in THEIR unit, so
+// servings = quantity ÷ this count — "1/2 cup oats" on a "0.5 cup" serving is
+// ONE serving, and "1 tbsp peanut butter" on a "2 tbsp" portion is HALF.
+function nuAiLabelCount(opt) {
+  var m = String(opt.description || opt.label || '').match(/^(\d+\s*\/\s*\d+|\d+(?:\.\d+)?)/);
+  if (!m) return 1;
+  var t = m[1];
+  if (t.indexOf('/') >= 0) {
+    var p = t.split('/');
+    var v = (+p[0]) / (+p[1]);
+    return v > 0 ? v : 1;
+  }
+  return (+t > 0) ? +t : 1;
+}
+
 // Pick the serving option that matches what the user said, using the SAME
 // option list the food card builds. Priority:
 //   1. explicit weight ("6 oz" → 170 g) — weight foods only, never ml→g
@@ -1931,13 +1952,23 @@ function nuAiChooseServing(f, opts, portions, parsed) {
       return { perUnit: nuScalePer100(per100, approx), grams: approx, amount: approx, unit: 'g',
                description: uFull + ' (~' + approx + ' g)' };
     }
-    // ≥2 chars so a bare 'g' can't substring-match every label.
+    // ≥2 chars so a bare 'g' can't substring-match every label. A matched
+    // option carries unitCount so the resolver can divide the user's
+    // quantity by the label's own count ("1/2 cup" serving ≠ half of it).
     var u = uFull.split(' ').pop();
     if (u.length >= 2) {
       for (var i = 0; i < opts.length; i++) {
         if (opts[i].custom) continue;
-        if (String(opts[i].label || '').toLowerCase().indexOf(u) !== -1) return opts[i];
+        if (String(opts[i].label || '').toLowerCase().indexOf(u) !== -1) {
+          return Object.assign({ unitCount: nuAiLabelCount(opts[i]) }, opts[i]);
+        }
       }
+    }
+    // Liquids: tsp/tbsp are pure volume conversions (per-100ml panel × ml).
+    var ml = NU_VOLUME_ML[u];
+    if (ml && per100 && f.is_liquid) {
+      return { perUnit: nuScalePer100(per100, ml), grams: null, amount: ml, unit: 'ml',
+               description: '1 ' + u + ' (' + ml + ' ml)' };
     }
   }
   var key = nuDefaultServingKey(f, opts, portions);
@@ -1977,9 +2008,13 @@ async function nuAiResolveFood(rawFood, parsed) {
 
   var opts = nuBuildServingOptions(f, portions);
   var sv = nuAiChooseServing(f, opts, portions, parsed);
+  var qty = (+parsed.quantity > 0) ? +parsed.quantity : 1;
+  // The label's own count divides the quantity ("1 tbsp" of a "2 tbsp"
+  // portion = 0.5 servings); stated total weights always mean ONE serving.
+  var servings = sv.wholeQuantity ? 1 : qty / (sv.unitCount > 0 ? sv.unitCount : 1);
   return {
     parsed: parsed, food: f, unmatched: false,
-    servings: sv.wholeQuantity ? 1 : ((+parsed.quantity > 0) ? +parsed.quantity : 1),
+    servings: Math.round(servings * 100) / 100,
     perUnit: sv.perUnit,
     serving_description: sv.description || null,
     serving_amount: sv.amount != null ? sv.amount : null,
@@ -2008,12 +2043,16 @@ function nuAiChoicesAlike(foods) {
 // Order-free name signature: unique singularized tokens, sorted. "JASMINE
 // RICE" and "JASMINE RICE, JASMINE" are the same name; "QUEST CHOCOLATE CHIP"
 // and "QUEST COOKIES & CREAM" are not (flavors are a real choice).
+// Marketing filler that doesn't distinguish foods — "PURE MAPLE SYRUP",
+// "ORGANIC MAPLE SYRUP", and "MAPLE SYRUP" are the same name.
+var NU_SIG_FILLER = { pure: 1, organic: 1, natural: 1, original: 1, premium: 1, classic: 1, real: 1, '100': 1 };
+
 function nuAiNameSig(desc) {
   var seen = {}, out = [];
   String(desc || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).forEach(function (t) {
-    if (!t) return;
+    if (!t || NU_SIG_FILLER[t]) return;
     var s = t.replace(/s$/, '');
-    if (s && !seen[s]) { seen[s] = 1; out.push(s); }
+    if (s && !seen[s] && !NU_SIG_FILLER[s]) { seen[s] = 1; out.push(s); }
   });
   return out.sort().join(' ');
 }

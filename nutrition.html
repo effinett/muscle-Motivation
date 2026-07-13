@@ -1144,7 +1144,7 @@
           '<div class="ai-item-sub"><span class="nu-verified-sm">' + sub[0] + '</span> · ' + sub.slice(1).join(' · ') + '</div>' +
           '<div class="ai-mini-stepper">' +
             '<button type="button" class="ai-mini-step" onclick="aiQtyStep(' + i + ',-1)" aria-label="Decrease quantity">−</button>' +
-            '<span class="ai-mini-qty">' + nuRound1(it.servings) + '</span>' +
+            '<span class="ai-mini-qty">' + (Math.round(it.servings * 100) / 100) + '</span>' +
             '<button type="button" class="ai-mini-step" onclick="aiQtyStep(' + i + ',1)" aria-label="Increase quantity">+</button>' +
           '</div>' +
         '</div>' +
@@ -1172,10 +1172,15 @@
     }
   }
 
+  // Quarter steps at or below 1 (1 → 0.75 → 0.5 → 0.25), whole steps above
+  // (1 → 2 → 3). Values stay exact quarters — never display-rounded, which is
+  // what made 0.25 read as "0.3".
   function aiQtyStep(i, d) {
     var it = aiItems[i];
-    if (!it || it.unmatched) return;
-    it.servings = Math.max(0.25, nuRound1((+it.servings || 1) + d));
+    if (!it || it.unmatched || it.needsChoice) return;
+    var cur = +it.servings || 1;
+    var step = (d < 0 ? cur <= 1 : cur < 1) ? 0.25 : 1;
+    it.servings = Math.max(0.25, Math.round((cur + d * step) * 100) / 100);
     renderAiSheet();
   }
 
