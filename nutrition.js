@@ -2071,21 +2071,128 @@ async function nuAiResolveChoice(item, ci) {
   return nuAiResolveFood(c.raw, item.parsed);
 }
 
-// Display title for a USDA name in compact rows. USDA descriptions are long
-// comma-segmented phrases ("Chicken fried, steak fries, salt added in
-// processing, frozen, oven-heated") — keep leading segments while they fit a
-// row title (~40 chars), so identity survives and CSS line-clamp only has to
-// catch the rare pathological case. Full name goes in the title attribute and
-// is always visible in the food picker/card.
+/* ── Friendly display names (P7) ───────────────────────────────────────────
+ * "Apples, fuji, with skin, raw" reads as "Fuji Apple"; "Chicken, broilers
+ * or fryers, breast, meat only, cooked" as "Chicken Breast". DISPLAY ONLY:
+ * the full USDA description keeps living in title="", the food picker, and
+ * everything saved — identity/provenance are untouched. Class-based segment
+ * rules over USDA's comma grammar, never per-food strings.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+// Whole segments that carry no identity in a row title: prep states,
+// packaging, data-source qualifiers, percentages. Matched per segment.
+var NU_NAME_NOISE = [
+  /^(raw|cooked|fresh|frozen|canned|dried|drained|prepared|unprepared|heated|oven-heated|microwaved)$/,
+  /^(boiled|hard-boiled|soft-boiled|scrambled|poached|braised|broiled|grilled|roasted|baked|toasted|steamed|stewed|pan-fried)$/,
+  /^(whole|plain|regular|solids?|liquids?|year round average|all commercial varieties|commercially prepared|restaurant-prepared|ready-to-serve|ready-to-eat|shelf stable)$/,
+  /^(enriched|unenriched|fortified|salted|unsalted|sweetened|unsweetened|pasteurized|homogenized)$/,
+  /^(with|without|no|includes|from|made|contains)\b/,   // "with skin", "without salt", "includes foods for…"
+  /\badded\b/,                                          // "salt added in processing", "vitamin D added"
+  /\d+(\.\d+)?\s*%/,                                    // "3.25% milkfat", "85% lean"
+  /\bstyle$/,                                           // "smooth style", "chunk style"
+  /^(meat only|meat and skin|skin removed|boneless|skinless|bone-in|skin-on)$/,
+  /^(broilers?|fryers?|roasters?|broilers? or fryers?)\b/,
+  /\b(separable|trimmed to)\b/,                         // beef retail-cut boilerplate
+];
+
+// Category-echo principals USDA prefixes entries with ("Fast foods,
+// cheeseburger…", "Nuts, almonds", "Fish, salmon…") — drop while a real
+// name remains behind them.
+var NU_NAME_DROP = {
+  'fast foods': 1, 'fish': 1, 'nuts': 1, 'seeds': 1, 'beverages': 1,
+  'snacks': 1, 'candies': 1, 'school lunch': 1, 'restaurant': 1,
+  'game meat': 1, 'crustaceans': 1, 'mollusks': 1, 'cereals ready-to-eat': 1,
+};
+
+// Cuts/parts read AFTER the food ("Chicken Breast"); other single-word
+// qualifiers are varieties that read BEFORE it ("Fuji Apple", "White Bread").
+var NU_NAME_CUTS = {
+  breast: 1, thigh: 1, wing: 1, wings: 1, drumstick: 1, leg: 1, loin: 1,
+  tenderloin: 1, fillet: 1, filet: 1, flank: 1, brisket: 1, rib: 1, ribs: 1,
+  shank: 1, chuck: 1, round: 1, sirloin: 1, ribeye: 1, rump: 1, shoulder: 1,
+  belly: 1, steak: 1,
+};
+
+// USDA pluralizes list entries ("Apples, fuji") — singularize the principal
+// when a variety precedes it, except foods whose name IS plural.
+var NU_NAME_KEEP_PLURAL = {
+  oats: 1, grits: 1, greens: 1, beans: 1, peas: 1, lentils: 1, fries: 1,
+  almonds: 1, walnuts: 1, cashews: 1, peanuts: 1, pistachios: 1, pecans: 1,
+  chips: 1, sprouts: 1, noodles: 1, berries: 1, blueberries: 1, strawberries: 1,
+  raspberries: 1, blackberries: 1, cherries: 1, grapes: 1,
+};
+
+function nuNameSingular(seg) {
+  return seg.replace(/([A-Za-z]+)$/, function (t) {
+    if (t.length <= 3 || NU_NAME_KEEP_PLURAL[t.toLowerCase()]) return t;
+    if (/ies$/i.test(t)) return t.slice(0, -3) + (t === t.toUpperCase() ? 'Y' : 'y');
+    if (/oes$/i.test(t)) return t.slice(0, -2);
+    if (/(ss|us|is)$/i.test(t)) return t;               // hummus, couscous, molasses
+    if (/s$/i.test(t)) return t.slice(0, -1);
+    return t;
+  });
+}
+
+// Title-case a phrase: ALLCAPS and lowercase words normalize; hyphen parts
+// capitalize ("whole-wheat" → "Whole-Wheat"); Mc names keep their camel.
+function nuTitleCase(s) {
+  return s.split(' ').map(function (w) {
+    if (!w) return w;
+    // normalize ALLCAPS and shouting-mostly words (McDONALD'S); leave true mixed case
+    if (w !== w.toUpperCase() && w !== w.toLowerCase() && !/[A-Z]{3,}/.test(w)) return w;
+    return w.toLowerCase().split('-').map(function (p) {
+      p = p.replace(/^mc(\w)/, function (m, c) { return 'mc' + c.toUpperCase(); });
+      return p.charAt(0).toUpperCase() + p.slice(1);
+    }).join('-');
+  }).join(' ');
+}
+
+// Friendly row title. Full name is preserved by every caller in title="".
 function nuAiDisplayName(name) {
-  var segs = String(name == null ? '' : name).split(',');
-  var out = (segs[0] || '').trim();
-  for (var i = 1; i < segs.length; i++) {
-    var next = out + ', ' + segs[i].trim();
-    if (next.length > 40) break;
-    out = next;
-  }
-  return out || String(name || '');
+  var full = String(name == null ? '' : name).trim();
+  var segs = full.split(/[,;]/).map(function (s) { return s.trim(); }).filter(Boolean);
+
+  var kept = segs.filter(function (s) {
+    var ls = s.toLowerCase();
+    for (var i = 0; i < NU_NAME_NOISE.length; i++) if (NU_NAME_NOISE[i].test(ls)) return false;
+    return true;
+  });
+  if (!kept.length) kept = [segs[0] || full];
+  while (kept.length > 1 && NU_NAME_DROP[kept[0].toLowerCase()]) kept.shift();
+
+  var principal = kept[0];
+  var before = [], after = [];
+  kept.slice(1, 3).forEach(function (q) {
+    var lq = q.toLowerCase();
+    if (NU_NAME_CUTS[lq]) after.push(q);
+    else if (lq.indexOf(' ') === -1) before.push(q);    // single-word variety → in front
+    else after.push(q);                                 // multi-word detail keeps USDA order
+  });
+  if (before.length) principal = nuNameSingular(principal);
+
+  var out = nuTitleCase(before.concat([principal]).concat(after).join(' '));
+  // word-boundary length cap; the CSS two-line clamp is the backstop
+  if (out.length > 44) out = out.slice(0, 44).replace(/\s+\S*$/, '');
+  return out || full;
+}
+
+// Small category → emoji hint for review-sheet rows. One exception inside
+// the dairy/egg category (eggs and milk share it).
+var NU_CATEGORY_EMOJI = {
+  'fruits and fruit juices': '🍎', 'vegetables and vegetable products': '🥦',
+  'poultry products': '🍗', 'beef products': '🥩', 'pork products': '🥓',
+  'lamb, veal, and game products': '🥩', 'finfish and shellfish products': '🐟',
+  'dairy and egg products': '🥛', 'nut and seed products': '🥜',
+  'cereal grains and pasta': '🍚', 'baked products': '🍞', 'sweets': '🍬',
+  'beverages': '🥤', 'fast foods': '🍔', 'legumes and legume products': '🫘',
+  'breakfast cereals': '🥣', 'soups, sauces, and gravies': '🥣',
+  'fats and oils': '🧈', 'snacks': '🍿', 'restaurant foods': '🍽️',
+  'spices and herbs': '🌿', 'meals, entrees, and side dishes': '🍽️',
+};
+function nuFoodEmoji(category, name) {
+  var cat = String(category || '').toLowerCase();
+  if (cat === 'dairy and egg products' && /\begg/i.test(String(name || ''))) return '🥚';
+  return NU_CATEGORY_EMOJI[cat] || '';
 }
 
 // Sheet totals (resolved items only) — same shape as nuSavedMealTotals.
