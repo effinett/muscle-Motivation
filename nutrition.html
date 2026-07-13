@@ -775,9 +775,21 @@
         inner = rows.map(function (l) {
           var sv = (+l.servings === 1) ? '' : (nuRound1(l.servings) + '× · ');
           var macros = 'P ' + nuRound(l.protein) + ' · C ' + nuRound(l.carbs) + ' · F ' + nuRound(l.fat);
+          // DISPLAY-ONLY friendly name for USDA rows (same transform as the
+          // quick-log sheet); manual entries keep the user's own words. The
+          // saved name/identity are untouched — editEntry reads the log row.
+          var disp = l.name;
+          if (l.source === 'usda') {
+            var base = String(l.name || '');
+            if (l.brand) {
+              var suf = ' (' + l.brand + ')';
+              if (base.slice(-suf.length) === suf) base = base.slice(0, -suf.length);
+            }
+            disp = nuAiDisplayName(base);
+          }
           return '<div class="food-row" data-id="' + l.id + '" onclick="editEntry(this)">' +
             '<div class="food-main">' +
-              '<div class="food-name">' + nuEsc(l.name) + '</div>' +
+              '<div class="food-name" title="' + nuEsc(l.name) + '">' + nuEsc(disp) + '</div>' +
               '<div class="food-sub">' + sv + macros + '</div>' +
             '</div>' +
             '<div class="food-right">' +
