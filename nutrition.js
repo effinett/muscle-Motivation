@@ -2118,6 +2118,15 @@ async function nuAiResolveItem(parsed) {
       if (alt.matchedUnit) { resolved = alt; break; }
     }
   }
+  if (parsed.unit && !resolved.matchedUnit) {
+    // No record could express the user's measure. Their quantity is
+    // denominated in THEIR unit, not in servings — applying it to a
+    // mismatched serving silently halves or doubles the food ("half a cup"
+    // × a half-cup serving = a quarter cup). Log ONE default serving and
+    // flag the row so the user can adjust with the true size in view.
+    resolved.servings = 1;
+    resolved.unitUnresolved = true;
+  }
   return resolved;
 }
 
