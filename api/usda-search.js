@@ -185,6 +185,9 @@ const NEGATIVE_TERMS = [
   // Final quality pass — derivative aisles that beat base foods in live testing
   'candy', 'ice cream', 'syrup', 'drink', 'topping', 'filling', 'glaze',
   'noodles', 'bites', 'fried', 'tofu', 'diet',
+  // Phase 4.2 live testing — dry/crisp toast products must never outrank bread
+  // for a bread-intent query (intent-aware: typing "melba toast" still works)
+  'melba', 'crispbread', 'rusk', 'rusks', 'zwieback', 'croutons', 'crouton',
 ];
 // Base-prep descriptors that mark the unprocessed whole food (subset of positives).
 const BASE_PREP_TERMS = ['raw', 'cooked', 'boiled', 'baked', 'roasted', 'grilled', 'fresh', 'whole', 'fillet'];
@@ -201,6 +204,20 @@ const PREFERRED_CUT_TERMS = [
 // USDA query (so "coke" actually fetches Coca-Cola products). Extend freely.
 const BRAND_ALIASES = {
   coke: 'coca cola', cocacola: 'coca cola', cococola: 'coca cola', coca: 'coca cola',
+};
+
+// Cooking-form rewrites — a preparation word people use as a food noun maps to
+// the base food it IS: "toast" is sliced bread, and toasting doesn't change the
+// base-food identity. Modifiers pass through untouched ("whole wheat toast" →
+// "whole wheat bread", "sourdough toast" → "sourdough bread"), so this is one
+// GLOBAL query-normalization rule, not a per-food result. EXCEPTIONS: when any
+// context word marks a DISTINCT product ("french toast", "melba toast", "texas
+// toast", "cinnamon toast crunch"), the query is left alone — those are their
+// own foods and must still match literally. Add a rewrite or an exception word
+// to tune; no code changes.
+const TERM_REWRITES = {
+  toast:   { to: 'bread', unless: ['french', 'melba', 'texas', 'avocado', 'cinnamon', 'crunch'] },
+  toasted: { to: 'bread', unless: ['french', 'melba', 'texas', 'avocado', 'cinnamon', 'crunch'] },
 };
 
 // Typeahead vocabulary — the generic foods people most commonly search. When a
@@ -375,6 +392,11 @@ const DICT_WORDS = (function () {
   KNOWN_BRANDS.forEach(add);
   Object.keys(BRAND_ALIASES).forEach(add);
   Object.keys(BRAND_ALIASES).forEach(function (k) { add(BRAND_ALIASES[k]); });
+  Object.keys(TERM_REWRITES).forEach(add);
+  Object.keys(TERM_REWRITES).forEach(function (k) {
+    add(TERM_REWRITES[k].to);
+    (TERM_REWRITES[k].unless || []).forEach(add);
+  });
   return out;
 })();
 const DICT_SET = new Set(DICT_WORDS);
@@ -482,6 +504,19 @@ function expandQuery(q) {
     else aliased.push(t);
   });
   toks = aliased;
+
+  // cooking-form rewrites ("whole wheat toast" → "whole wheat bread") unless a
+  // context word marks a distinct product (french/melba/texas toast, cereal)
+  let rewritten = [];
+  toks.forEach(function (t) {
+    const rw = TERM_REWRITES[t];
+    if (rw && !toks.some(function (o) { return rw.unless.indexOf(o) !== -1; })) {
+      rewritten.push(rw.to); changed = true;
+    } else {
+      rewritten.push(t);
+    }
+  });
+  toks = rewritten;
 
   // compound splitting ("peanutbutter" → peanut butter). Spell correction is
   // deliberately NOT applied here: a legitimate word could sit at edit
