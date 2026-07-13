@@ -224,6 +224,10 @@ const BRAND_ALIASES = {
 const TERM_REWRITES = {
   toast:   { to: 'bread', unless: ['french', 'melba', 'texas', 'avocado', 'cinnamon', 'crunch'] },
   toasted: { to: 'bread', unless: ['french', 'melba', 'texas', 'avocado', 'cinnamon', 'crunch'] },
+  // "oatmeal" IS oats (USDA files the generic under "oats"; typed literally it
+  // drowns in oatmeal-bread/-cookie products) — except when a product word
+  // marks a derivative the user actually named.
+  oatmeal: { to: 'oats', unless: ['bread', 'cookie', 'cookies', 'muffin', 'raisin', 'crisp', 'stout', 'cream'] },
 };
 
 // Phrase-level shorthand people type that USDA text never contains. Applied to
@@ -322,6 +326,22 @@ const FOOD_INTENT = {
     penalize: ['beans', 'bean', 'belly', 'gummy', 'gummies', 'donut', 'doughnut', 'roll'],
     // USDA's generic entry is "Jellies"; its relevance for "jelly" buries it.
     supplement: 'jelly jams preserves',
+  },
+  oats: {
+    // People logging "oats"/"oatmeal" mean rolled oats (½-cup servings), not
+    // raw groats whose 1-cup portion weighs twice as much.
+    prefer:   ['rolled', 'old fashioned', 'quick'],
+    penalize: ['bran', 'groats'],
+    supplement: 'oats old fashioned rolled dry',
+  },
+  yogurt: {
+    // "greek yogurt" must not land on fruit/flavored cups — plain is the base
+    // food; flavors rank only when the user names them.
+    prefer:   ['plain', 'greek'],
+    penalize: ['fruit', 'vanilla', 'strawberry', 'blueberry', 'peach', 'cherry', 'honey',
+               'flavored', 'drink', 'frozen', 'parfait', 'dressing', 'tzatziki', 'covered',
+               'pretzels', 'raisins', 'smoothie'],
+    supplement: 'yogurt greek plain whole milk',
   },
   salmon: {
     // 'canned' stays salmon-specific (NOT global): canned IS the common form
@@ -812,6 +832,14 @@ function scoreFood(f, qLower, toks, qStems, ctx) {
   const hay = (brand + ' ' + desc).trim();
   const isBranded = f.dataType === 'Branded';
   let s = 0;
+  // Physical bound: nothing edible exceeds ~900 kcal/100g (pure fat). Branded
+  // rows above it are label-data errors (kJ mislabeled as kcal, per-serving
+  // values in the per-100g field) — demote them below everything legitimate.
+  if (f.nutrients && +f.nutrients.kcal > 950) s -= 2000;
+  // USDA's food-distribution-program entries duplicate cleaner SR/Foundation
+  // foods but carry institutional portion data (bulk cup weights) — rank the
+  // consumer entry first.
+  if (/includes foods for usda/i.test(f.description || '')) s -= 400;
   // Phrase matching is word-order-insensitive for two-word queries: USDA names
   // generics inverted ("Cheese, cheddar", "Oil, olive"), so "cheddar cheese"
   // must hit them as strongly as the literal order.

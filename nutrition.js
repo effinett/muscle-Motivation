@@ -1943,14 +1943,14 @@ function nuAiChooseServing(f, opts, portions, parsed) {
     // quantity again, or 6 oz of chicken would log as 6 × 170 g.
     var g = +parsed.grams;
     return { perUnit: nuScalePer100(per100, g), grams: g, amount: g, unit: 'g',
-             description: nuRound(g) + ' g', wholeQuantity: true };
+             description: nuRound(g) + ' g', wholeQuantity: true, matchedUnit: true };
   }
   if (parsed.unit) {
     var uFull = String(parsed.unit).toLowerCase().trim().replace(/s$/, '');
     var approx = NU_APPROX_UNITS[uFull];
     if (approx && per100 && !f.is_liquid) {
       return { perUnit: nuScalePer100(per100, approx), grams: approx, amount: approx, unit: 'g',
-               description: uFull + ' (~' + approx + ' g)' };
+               description: uFull + ' (~' + approx + ' g)', matchedUnit: true };
     }
     // ≥2 chars so a bare 'g' can't substring-match every label. A matched
     // option carries unitCount so the resolver can divide the user's
@@ -1960,7 +1960,7 @@ function nuAiChooseServing(f, opts, portions, parsed) {
       for (var i = 0; i < opts.length; i++) {
         if (opts[i].custom) continue;
         if (String(opts[i].label || '').toLowerCase().indexOf(u) !== -1) {
-          return Object.assign({ unitCount: nuAiLabelCount(opts[i]) }, opts[i]);
+          return Object.assign({ unitCount: nuAiLabelCount(opts[i]), matchedUnit: true }, opts[i]);
         }
       }
     }
@@ -1968,7 +1968,7 @@ function nuAiChooseServing(f, opts, portions, parsed) {
     var ml = NU_VOLUME_ML[u];
     if (ml && per100 && f.is_liquid) {
       return { perUnit: nuScalePer100(per100, ml), grams: null, amount: ml, unit: 'ml',
-               description: '1 ' + u + ' (' + ml + ' ml)' };
+               description: '1 ' + u + ' (' + ml + ' ml)', matchedUnit: true };
     }
   }
   var key = nuDefaultServingKey(f, opts, portions);
@@ -2014,6 +2014,7 @@ async function nuAiResolveFood(rawFood, parsed) {
   var servings = sv.wholeQuantity ? 1 : qty / (sv.unitCount > 0 ? sv.unitCount : 1);
   return {
     parsed: parsed, food: f, unmatched: false,
+    matchedUnit: !!sv.matchedUnit,
     servings: Math.round(servings * 100) / 100,
     perUnit: sv.perUnit,
     serving_description: sv.description || null,
@@ -2100,7 +2101,24 @@ async function nuAiResolveItem(parsed) {
       };
     }
   }
-  return nuAiResolveFood(foods[0], parsed);
+  // Resolve the top hit — but if the user gave a measure this food can't
+  // express ("1/2 cup" of an oats entry with no cup portion), try the next
+  // candidates for one that CAN. Guarded: an alternative must be
+  // NUTRITIONALLY ALIKE to the top hit — the same food in a different data
+  // representation — so the retry can never drift from dry oats to a cooked
+  // entry just because the cooked one knows what a cup is.
+  var resolved = await nuAiResolveFood(foods[0], parsed);
+  if (parsed.unit && !resolved.matchedUnit) {
+    // 8-deep scan: the same food's household-measure twin often sits mid-list
+    // (Quaker Quick Oats' "0.5 cup" behind two Foundation entries). The alike
+    // gate keeps this cheap — only same-food candidates fetch portions.
+    for (var ci = 1; ci < Math.min(foods.length, 8); ci++) {
+      if (!nuAiChoicesAlike([foods[0], foods[ci]])) continue;
+      var alt = await nuAiResolveFood(foods[ci], parsed);
+      if (alt.matchedUnit) { resolved = alt; break; }
+    }
+  }
+  return resolved;
 }
 
 // The user picked candidate `ci` for an ambiguous item → full resolve.

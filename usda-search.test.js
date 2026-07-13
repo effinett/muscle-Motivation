@@ -53,6 +53,12 @@ test('pb&j shorthand and connector words normalize', () => {
   assert.strictEqual(expandQuery('toast with butter').query, 'bread butter');
 });
 
+test('oatmeal normalizes to oats; derivative products stay literal', () => {
+  assert.strictEqual(expandQuery('oatmeal').query, 'oats');
+  assert.strictEqual(expandQuery('oatmeal bread').query, 'oatmeal bread');
+  assert.strictEqual(expandQuery('oatmeal cookies').query, 'oatmeal cookies');
+});
+
 test('distinct toast products are NOT rewritten', () => {
   assert.strictEqual(expandQuery('melba toast').query, 'melba toast');
   assert.strictEqual(expandQuery('french toast').query, 'french toast');
@@ -154,4 +160,17 @@ test('live: "hamburger" → fast-food burgers, not buns/pickles', { skip: !HAS_K
 test('live: "chicken" ranking unchanged by Fast Foods category addition', { skip: !HAS_KEY }, async () => {
   const f = await top('chicken');
   assert.match(f.description, /chicken.*breast|breast.*chicken/i, 'got: ' + f.description);
+});
+
+test('live: "oats" and "oatmeal" lead with rolled oats, not bread/groats', { skip: !HAS_KEY }, async () => {
+  for (const q of ['oats', 'oatmeal']) {
+    const f = await top(q);
+    assert.match(f.description, /oats.*rolled|rolled.*oats/i, q + ' got: ' + f.description);
+  }
+});
+
+test('live: "greek yogurt" → plain, not fruit/flavored', { skip: !HAS_KEY }, async () => {
+  const f = await top('greek yogurt');
+  assert.match(f.description, /greek/i, 'got: ' + f.description);
+  assert.doesNotMatch(f.description, /fruit|vanilla|strawberry|honey|flavored/i, 'got: ' + f.description);
 });
