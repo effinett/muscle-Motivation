@@ -1913,6 +1913,35 @@ var NU_APPROX_UNITS = { 'handful': 28, 'small handful': 20, 'large handful': 40 
 // when no real USDA portion matched. cup/fl-oz already exist as options.
 var NU_VOLUME_ML = { tsp: 5, teaspoon: 5, tbsp: 15, tablespoon: 15 };
 
+// Verified cup weights for semi-solid families whose Foundation/SR records
+// carry NO cup portion at all. yogurt: 245 g/cup per USDA FNDDS (fdcIds
+// 2705418–2705424 — identical for Greek/regular and every fat level; SR
+// 171284/170886/170887 concur for regular). LAST resort by construction:
+// applied only after the matched food's own portions AND the alike-candidate
+// retry both fail (Effi-approved 2026-07-13; do not extend without new
+// verified values).
+var NU_CUP_GRAMS = { yogurt: 245 };
+
+// The table serving for a matched food, or null when it doesn't apply:
+// cup units only, weight-based foods only, and the matched USDA description
+// must START with the family word — keyed on what the food IS, never on
+// what the user typed.
+function nuAiCupServing(f, parsed) {
+  var u = String(parsed.unit || '').toLowerCase().trim().replace(/s$/, '');
+  if (u !== 'cup') return null;
+  var per100 = f.raw && f.raw.nutrients ? f.raw.nutrients : null;
+  if (!per100 || f.is_liquid) return null;
+  var name = String(f.description || f.name || '').toLowerCase();
+  for (var k in NU_CUP_GRAMS) {
+    if (name.indexOf(k) === 0) {
+      var g = NU_CUP_GRAMS[k];
+      return { perUnit: nuScalePer100(per100, g), grams: g, amount: g, unit: 'g',
+               description: '1 cup (~' + g + ' g)' };
+    }
+  }
+  return null;
+}
+
 // Leading count in a serving label: "2 tbsp (32 g)" → 2, "0.5 cup" → 0.5,
 // "1/2 cup" → 0.5, "1 large" → 1. The user's quantity is in THEIR unit, so
 // servings = quantity ÷ this count — "1/2 cup oats" on a "0.5 cup" serving is
@@ -2119,6 +2148,21 @@ async function nuAiResolveItem(parsed) {
     }
   }
   if (parsed.unit && !resolved.matchedUnit) {
+    // Third rung: the verified cup table (yogurt 245 g/cup) — only reached
+    // when the matched food's own portions AND the alike retry both failed,
+    // so a native USDA cup always wins over the table.
+    var cup = nuAiCupServing(resolved.food, parsed);
+    if (cup) {
+      var cq = (+parsed.quantity > 0) ? +parsed.quantity : 1;
+      resolved.perUnit = cup.perUnit;
+      resolved.serving_description = cup.description;
+      resolved.serving_amount = cup.amount;
+      resolved.serving_unit = cup.unit;
+      resolved.grams = cup.grams;
+      resolved.matchedUnit = true;
+      resolved.servings = Math.round(cq * 100) / 100;   // fractional cups multiply
+      return resolved;
+    }
     // No record could express the user's measure. Their quantity is
     // denominated in THEIR unit, not in servings — applying it to a
     // mismatched serving silently halves or doubles the food ("half a cup"
