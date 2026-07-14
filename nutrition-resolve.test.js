@@ -184,8 +184,11 @@ global.fetch = async (url) => {
   throw new Error('unexpected fetch ' + u);
 };
 
-vm.runInThisContext(fs.readFileSync(path.join(__dirname, 'nutrition.js'), 'utf8'),
-  { filename: 'nutrition.js' });
+// Phase 4.2.1a: the shared core loads before nutrition.js, same order as the
+// pages (nutrition.html, app.html).
+['food-core.js', 'nutrition.js'].forEach(function (f) {
+  vm.runInThisContext(fs.readFileSync(path.join(__dirname, f), 'utf8'), { filename: f });
+});
 
 function item(overrides) {
   return Object.assign({ text: '', query: '', brand: null, quantity: 1, unit: null, grams: null }, overrides);
@@ -396,6 +399,51 @@ test('nuAiLogItems replays the saved-meal src shape; skips unresolved', async ()
 
   const tot = nuAiTotals([egg, toast, un]);
   assert.strictEqual(Math.round(tot.calories), 78 * 2 + 73 * 2);
+});
+
+/* ── persisted-format pins (Phase 4.2.1a — locked BEFORE extraction) ──── */
+// user_food_favorites.food_key and saved-meal items store nuFoodKey output;
+// any format change orphans existing rows. Pin the exact strings.
+test('nuFoodKey persisted formats: usda:<fdcId> and custom:<name>', () => {
+  assert.strictEqual(nuFoodKey({ usda_fdc_id: 171287 }), 'usda:171287');
+  assert.strictEqual(nuFoodKey({ usda_fdc_id: '999002', name: 'ignored' }), 'usda:999002',
+    'USDA identity wins over name');
+  assert.strictEqual(nuFoodKey({ name: '  Chicken Breast ' }), 'custom:chicken breast',
+    'custom keys trim + lowercase');
+  assert.strictEqual(nuFoodKey({ usda_fdc_id: '', name: 'Oats' }), 'custom:oats',
+    'empty fdc id falls through to the name');
+  assert.strictEqual(nuFoodKey({ name: '' }), null);
+  assert.strictEqual(nuFoodKey(null), null);
+});
+
+// nuNormalizeUsdaFood output feeds nu_pendingSource → nuSaveLog src columns and
+// reopens favorites/recents from raw_food — pin the persisted fields.
+test('nuNormalizeUsdaFood persisted fields are pinned', () => {
+  const milk = nuNormalizeUsdaFood(MILK);           // 240 MLT serving → ml liquid
+  assert.strictEqual(milk.name, 'Whole Milk (FairLife)', 'logged name keeps the brand suffix');
+  assert.strictEqual(milk.usda_fdc_id, 999001);
+  assert.strictEqual(milk.is_liquid, true);
+  assert.strictEqual(milk.has_serving, true);
+  assert.strictEqual(milk.serving_amount, 240);
+  assert.strictEqual(milk.serving_unit, 'ml', 'UNECE MLT maps to ml');
+  assert.strictEqual(milk.serving_description, '1 cup');
+  assert.strictEqual(milk.grams, null, 'ml has no fabricated gram weight');
+  assert.strictEqual(milk.calories, 146);           // 61/100ml × 240
+
+  const egg = nuNormalizeUsdaFood(EGG);             // no serving → honest 100 g basis
+  assert.strictEqual(egg.name, 'Egg, whole, cooked, hard-boiled');
+  assert.strictEqual(egg.has_serving, false);
+  assert.strictEqual(egg.serving_description, '100 g');
+  assert.strictEqual(egg.serving_amount, 100);
+  assert.strictEqual(egg.serving_unit, 'g');
+  assert.strictEqual(egg.grams, 100);
+  assert.strictEqual(egg.calories, 155);
+
+  const bar = nuNormalizeUsdaFood(QUEST_CC);        // 60 g manufacturer serving
+  assert.strictEqual(bar.serving_description, '1 bar');
+  assert.strictEqual(bar.grams, 60);
+  assert.strictEqual(bar.calories, 190);            // 317/100g × 60
+  assert.strictEqual(bar.raw, QUEST_CC, 'raw payload rides along for provenance');
 });
 
 test('friendly display names: USDA grammar → human names', () => {
