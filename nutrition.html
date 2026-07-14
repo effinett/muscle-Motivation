@@ -910,8 +910,20 @@
     document.getElementById('mealSheetItems').innerHTML = m.items.map(function (it) {
       var q = (+it.servings > 0) ? +it.servings : 1;
       var qty = q === 1 ? '' : nuRound1(q) + '× ';
+      // DISPLAY-ONLY friendly name for USDA items (same rule as the meal
+      // rows); snapshot names/identity are untouched — re-adding replays the
+      // stored items verbatim.
+      var disp = it.name;
+      if (it.usda_fdc_id != null) {
+        var base = String(it.name || '');
+        if (it.brand) {
+          var suf = ' (' + it.brand + ')';
+          if (base.slice(-suf.length) === suf) base = base.slice(0, -suf.length);
+        }
+        disp = nuAiDisplayName(base);
+      }
       return '<div class="sm-item">' +
-        '<div class="sm-item-name">' + nuEsc(qty + it.name) + '</div>' +
+        '<div class="sm-item-name" title="' + nuEsc(it.name) + '">' + nuEsc(qty + disp) + '</div>' +
         '<div class="sm-item-kcal">' + nuRound((+it.calories || 0) * q) + ' kcal</div>' +
       '</div>';
     }).join('');

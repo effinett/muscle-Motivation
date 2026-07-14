@@ -39,11 +39,18 @@ All guidelines here are binding. Do not deviate without explicit instruction.
 - DDL changes must go through `apply_migration` (tracked), not `execute_sql`
 - Verify schema via `pg_proc` and `pg_indexes` directly — Supabase advisor may return stale results
 
+**AI notes (Phase 4.2 — natural-language food logging):**
+- `/api/ai-food-parse` (Vercel function) is the only server-side AI route: parses meal text into food items (search query + quantity/unit/brand ONLY — never nutrition values, per §11; macros always come from USDA)
+- Model: `claude-haiku-4-5` via `@anthropic-ai/sdk`; override with `AI_FOOD_MODEL` env var
+- Env: `ANTHROPIC_API_KEY` (required; lives in Vercel env and git-ignored `.env.local`), `AI_FOOD_DAILY_LIMIT` (default 30 parses/user/day)
+- Cost caps FAIL CLOSED: 300-char input cap, 1000-token output cap, per-user daily count in `public.ai_usage` (usage row inserted BEFORE the model call; count/insert failure blocks the request)
+- Auth: Supabase bearer token verified server-side (same pattern as the Stripe/USDA routes)
+
 **Git notes:**
 - Repo path: `~/muscle-Motivation` (home dir, not Downloads)
 - Username: `effinett`, repo: `muscle-Motivation` (capital M)
 - Use `-C /Users/effi/muscle-Motivation` flag rather than `cd`
-- Push requires token embedded in URL: `git push https://effinett:[token]@github.com/effinett/muscle-Motivation.git main`
+- Push via SSH: plain `git push origin main` works (no token needed)
 - Vercel auto-deploys on push to `main` within ~2 minutes
 
 **Vercel / Stripe debugging:**
@@ -253,7 +260,10 @@ purchases
 subscriptions
 ai_chat_messages
 admin_notes
+ai_usage
 ```
+
+- `ai_usage` (live since Phase 4.2): per-user AI request tracking for rate/cost caps — `id, user_id, route, created_at`. RLS: users may SELECT their own rows; INSERT/UPDATE/DELETE happen only through the service role in Vercel functions.
 
 ### Permissions
 | User Type | Access |
