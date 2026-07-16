@@ -481,6 +481,54 @@ test('nuNormalizeUsdaFood persisted fields are pinned', () => {
   assert.strictEqual(bar.raw, QUEST_CC, 'raw payload rides along for provenance');
 });
 
+/* ── SaveSrc contract (Phase 4.2.1c) ────────────────────────────────── */
+
+test('nuBuildSaveSrc normalization is pinned (the SaveSrc contract)', () => {
+  const src = nuBuildSaveSrc({
+    name: 'X', usda_fdc_id: 42, brand: '', gtin_upc: undefined,
+    serving_amount: undefined, serving_unit: '', serving_description: null,
+    grams: 0, fiber: undefined, sugar: '2.5',
+    calories: 100, protein: 10, carbs: 20, fat: 5, raw: null,
+  });
+  assert.deepStrictEqual(src, {
+    name: 'X', usda_fdc_id: 42, brand: null, gtin_upc: null,
+    serving_amount: null, serving_unit: null, serving_description: null,
+    grams: 0,                    // 0 g is a value, not absence — must survive
+    fiber: 0, sugar: 2.5,
+    calories: 100, protein: 10, carbs: 20, fat: 5, raw: null,
+  });
+});
+
+test('nuLogSavedMeal replays through nuBuildSaveSrc — src field-for-field', async () => {
+  const usdaItem = {
+    food_key: 'usda:999002', name: 'QUEST CHOCOLATE CHIP COOKIE DOUGH BAR (Quest Nutrition)',
+    servings: 2, calories: 190, protein: 21, carbs: 22.2, fat: 7.2,
+    source: 'usda', usda_fdc_id: 999002, brand: 'Quest Nutrition', gtin_upc: '',
+    serving_amount: 60, serving_unit: 'g', serving_description: '1 bar',
+    grams: 60, fiber: 13.8, sugar: 1.2, raw_food: QUEST_CC,
+  };
+  const manualItem = { name: 'My Shake', servings: 1, calories: 200, protein: 30,
+    carbs: 10, fat: 4, usda_fdc_id: null };
+
+  const saved = [];
+  global.nuSaveLog = async (uid, entry) => { saved.push(entry); return { data: { id: 'x' }, error: null }; };
+  const n = await nuLogSavedMeal({ items: [usdaItem, manualItem] }, 'lunch', '2026-07-16');
+  assert.strictEqual(n, 2);
+
+  // exact 15-field SaveSrc — byte-for-byte what the pre-4.2.1c literal built
+  assert.deepStrictEqual(saved[0].src, {
+    name: usdaItem.name, usda_fdc_id: 999002,
+    brand: 'Quest Nutrition', gtin_upc: null,
+    serving_amount: 60, serving_unit: 'g', serving_description: '1 bar',
+    grams: 60, fiber: 13.8, sugar: 1.2,
+    calories: 190, protein: 21, carbs: 22.2, fat: 7.2,
+    raw: QUEST_CC,
+  });
+  assert.strictEqual(saved[0].servings, 2);
+  assert.strictEqual(saved[0].meal, 'lunch');
+  assert.strictEqual(saved[1].src, null, 'manual items carry no provenance');
+});
+
 test('friendly display names: USDA grammar → human names', () => {
   assert.strictEqual(nuAiDisplayName('Apples, fuji, with skin, raw'), 'Fuji Apple');
   assert.strictEqual(nuAiDisplayName('Chicken, broilers or fryers, breast, meat only, cooked'), 'Chicken Breast');

@@ -1528,19 +1528,19 @@ async function nuLogSavedMeal(savedMeal, meal, date) {
   var items = (savedMeal && savedMeal.items) || [];
   for (var i = 0; i < items.length; i++) {
     var it = items[i];
+    // Shape shared with nuAiLogItems via the core's nuBuildSaveSrc — saved-meal
+    // items carry every canonical field flat, with the raw payload as raw_food.
     var src = null;
     if (it.usda_fdc_id != null) {
-      src = {
+      src = nuBuildSaveSrc({
         name: it.name, usda_fdc_id: it.usda_fdc_id,
-        brand: it.brand || null, gtin_upc: it.gtin_upc || null,
-        serving_amount: it.serving_amount != null ? it.serving_amount : null,
-        serving_unit: it.serving_unit || null,
-        serving_description: it.serving_description || null,
-        grams: it.grams != null ? it.grams : null,
-        fiber: +it.fiber || 0, sugar: +it.sugar || 0,
+        brand: it.brand, gtin_upc: it.gtin_upc,
+        serving_amount: it.serving_amount, serving_unit: it.serving_unit,
+        serving_description: it.serving_description, grams: it.grams,
+        fiber: it.fiber, sugar: it.sugar,
         calories: it.calories, protein: it.protein, carbs: it.carbs, fat: it.fat,
-        raw: it.raw_food || null,
-      };
+        raw: it.raw_food,
+      });
     }
     var res = await nuSaveLog(uid, {
       id: null, name: it.name, meal: meal, date: date,
@@ -1748,17 +1748,17 @@ async function nuAiLogItems(items, meal, date) {
     var it = items[i];
     if (it.unmatched || it.needsChoice) continue;
     var f = it.food, pu = it.perUnit || {};
-    var src = {
+    // Shape shared with nuLogSavedMeal via the core's nuBuildSaveSrc — identity
+    // from the resolved food, serving from the ResolvedItem, macros per-unit.
+    var src = nuBuildSaveSrc({
       name: f.name, usda_fdc_id: f.usda_fdc_id,
-      brand: f.brand || null, gtin_upc: f.gtin_upc || null,
-      serving_amount: it.serving_amount != null ? it.serving_amount : null,
-      serving_unit: it.serving_unit || null,
-      serving_description: it.serving_description || null,
-      grams: it.grams != null ? it.grams : null,
-      fiber: +pu.fiber || 0, sugar: +pu.sugar || 0,
+      brand: f.brand, gtin_upc: f.gtin_upc,
+      serving_amount: it.serving_amount, serving_unit: it.serving_unit,
+      serving_description: it.serving_description, grams: it.grams,
+      fiber: pu.fiber, sugar: pu.sugar,
       calories: pu.calories, protein: pu.protein, carbs: pu.carbs, fat: pu.fat,
-      raw: f.raw || null,
-    };
+      raw: f.raw,
+    });
     var res = await nuSaveLog(uid, {
       id: null, name: f.name, meal: meal, date: date,
       servings: (+it.servings > 0) ? +it.servings : 1,

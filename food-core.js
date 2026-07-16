@@ -508,6 +508,30 @@ function nuFoodKey(o) {
   return name ? 'custom:' + name : null;
 }
 
+/* ── SaveSrc contract (Phase 4.2.1c) ───────────────────────────────────────
+ * The ONE place the `src` provenance object nuSaveLog consumes is shaped.
+ * Input: canonical fields (identity + the chosen serving + PER-UNIT macros +
+ * the trimmed raw payload). Output: the exact 15-field SaveSrc contract —
+ * every replay path (AI quick log, saved meals, future voice/photo/coach
+ * actions) builds through here so the shape can never drift between callers.
+ * Normalization matches what the two Phase 4.2 call sites always did:
+ * ''/undefined → null for identity/serving fields, +n||0 for fiber/sugar,
+ * macros pass through untouched.
+ * ─────────────────────────────────────────────────────────────────────────── */
+function nuBuildSaveSrc(o) {
+  return {
+    name: o.name, usda_fdc_id: o.usda_fdc_id,
+    brand: o.brand || null, gtin_upc: o.gtin_upc || null,
+    serving_amount: o.serving_amount != null ? o.serving_amount : null,
+    serving_unit: o.serving_unit || null,
+    serving_description: o.serving_description || null,
+    grams: o.grams != null ? o.grams : null,
+    fiber: +o.fiber || 0, sugar: +o.sugar || 0,
+    calories: o.calories, protein: o.protein, carbs: o.carbs, fat: o.fat,
+    raw: o.raw || null,
+  };
+}
+
 /* ── display names ─────────────────────────────────────────────────────── */
 
 // Display-only chip label: drop a trailing measure ("...,6 oz") and low-info
@@ -681,6 +705,7 @@ if (typeof module !== 'undefined' && module.exports) {
     nuAiDedupeChoices: nuAiDedupeChoices,
     nuCreateResolver: nuCreateResolver,
     nuFoodKey: nuFoodKey,
+    nuBuildSaveSrc: nuBuildSaveSrc,
     NU_FILLER: NU_FILLER,
     nuShortLabel: nuShortLabel,
     nuNameSingular: nuNameSingular,
