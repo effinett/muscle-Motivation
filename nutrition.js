@@ -1722,115 +1722,16 @@ async function nuAiParse(text) {
 // nuAiChooseServing, NU_ASK_CATEGORIES, nuAiIsConfident) live in
 // food-core.js.
 
-// Turn one trimmed search food + the parsed quantity/unit into a resolved
-// review-sheet item (portions + serving options exactly like the food card).
-async function nuAiResolveFood(rawFood, parsed) {
-  var f = nuNormalizeUsdaFood(rawFood);
-  var portions = [];
-  if (f.usda_fdc_id != null) {
-    try { portions = await nuFetchUsdaDetail(f.usda_fdc_id); } catch (e) { portions = []; }
-  }
-  if (f.raw && portions.length) f.raw.portions = portions; // same raw enrichment as the card path
-
-  var opts = nuBuildServingOptions(f, portions);
-  var sv = nuAiChooseServing(f, opts, portions, parsed);
-  var qty = (+parsed.quantity > 0) ? +parsed.quantity : 1;
-  // The label's own count divides the quantity ("1 tbsp" of a "2 tbsp"
-  // portion = 0.5 servings); stated total weights always mean ONE serving.
-  var servings = sv.wholeQuantity ? 1 : qty / (sv.unitCount > 0 ? sv.unitCount : 1);
-  return {
-    parsed: parsed, food: f, unmatched: false,
-    matchedUnit: !!sv.matchedUnit,
-    servings: Math.round(servings * 100) / 100,
-    perUnit: sv.perUnit,
-    serving_description: sv.description || null,
-    serving_amount: sv.amount != null ? sv.amount : null,
-    serving_unit: sv.unit || null,
-    grams: sv.grams != null ? sv.grams : null,
-  };
-}
-
 // Chooser dedupe (nuAiChoicesAlike, NU_SIG_FILLER, nuAiNameSig,
 // nuAiDedupeChoices) lives in food-core.js.
 
-// Resolve one parsed item. Never throws — a failed search returns
-// { unmatched: true } and an ambiguous one returns { needsChoice: true } with
-// the distinct candidates, so the review sheet can ask instead of guessing.
-async function nuAiResolveItem(parsed) {
-  var foods = [];
-  try { foods = await nuUsdaSearch(parsed.query); } catch (e) {}
-  if (!foods || !foods.length) return { parsed: parsed, unmatched: true };
-
-  if (!nuAiIsConfident(parsed, foods[0])) {
-    // Duplicates collapse first ("jasmine rice" → 4 identical products = ONE
-    // option = no interruption). Restaurant-dish categories skip the dedupe —
-    // a McDonald's and a homemade double cheeseburger can tie nutritionally
-    // and still deserve the "where from?" ask.
-    var candidates = foods.slice(0, 4);
-    var askCat = NU_ASK_CATEGORIES[String(foods[0].foodCategory || '').toLowerCase()];
-    var options = askCat ? candidates : nuAiDedupeChoices(candidates);
-    if (askCat || options.length > 1) {
-      return {
-        parsed: parsed, needsChoice: true,
-        // keep the trimmed payloads: picking one replays the normal resolve
-        // path. kcal (per 100 g/ml) lets same-named options explain themselves.
-        choices: options.map(function (rf) {
-          return { raw: rf, name: rf.description || '', brand: rf.brand || '',
-                   kcal: (rf.nutrients || {}).kcal };
-        }),
-      };
-    }
-  }
-  // Resolve the top hit — but if the user gave a measure this food can't
-  // express ("1/2 cup" of an oats entry with no cup portion), try the next
-  // candidates for one that CAN. Guarded: an alternative must be
-  // NUTRITIONALLY ALIKE to the top hit — the same food in a different data
-  // representation — so the retry can never drift from dry oats to a cooked
-  // entry just because the cooked one knows what a cup is.
-  var resolved = await nuAiResolveFood(foods[0], parsed);
-  if (parsed.unit && !resolved.matchedUnit) {
-    // 8-deep scan: the same food's household-measure twin often sits mid-list
-    // (Quaker Quick Oats' "0.5 cup" behind two Foundation entries). The alike
-    // gate keeps this cheap — only same-food candidates fetch portions.
-    for (var ci = 1; ci < Math.min(foods.length, 8); ci++) {
-      if (!nuAiChoicesAlike([foods[0], foods[ci]])) continue;
-      var alt = await nuAiResolveFood(foods[ci], parsed);
-      if (alt.matchedUnit) { resolved = alt; break; }
-    }
-  }
-  if (parsed.unit && !resolved.matchedUnit) {
-    // Third rung: the verified cup table (yogurt 245 g/cup) — only reached
-    // when the matched food's own portions AND the alike retry both failed,
-    // so a native USDA cup always wins over the table.
-    var cup = nuAiCupServing(resolved.food, parsed);
-    if (cup) {
-      var cq = (+parsed.quantity > 0) ? +parsed.quantity : 1;
-      resolved.perUnit = cup.perUnit;
-      resolved.serving_description = cup.description;
-      resolved.serving_amount = cup.amount;
-      resolved.serving_unit = cup.unit;
-      resolved.grams = cup.grams;
-      resolved.matchedUnit = true;
-      resolved.servings = Math.round(cq * 100) / 100;   // fractional cups multiply
-      return resolved;
-    }
-    // No record could express the user's measure. Their quantity is
-    // denominated in THEIR unit, not in servings — applying it to a
-    // mismatched serving silently halves or doubles the food ("half a cup"
-    // × a half-cup serving = a quarter cup). Log ONE default serving and
-    // flag the row so the user can adjust with the true size in view.
-    resolved.servings = 1;
-    resolved.unitUnresolved = true;
-  }
-  return resolved;
-}
-
-// The user picked candidate `ci` for an ambiguous item → full resolve.
-async function nuAiResolveChoice(item, ci) {
-  var c = item.choices && item.choices[ci];
-  if (!c) return item;
-  return nuAiResolveFood(c.raw, item.parsed);
-}
+// The resolution pipeline itself lives in food-core.js (nuCreateResolver) —
+// this file binds the BROWSER source adapter (the authenticated proxy fetch
+// wrappers above) and keeps the original global names for every call site.
+var nu_resolver = nuCreateResolver({ search: nuUsdaSearch, portions: nuFetchUsdaDetail });
+function nuAiResolveFood(rawFood, parsed) { return nu_resolver.resolveFood(rawFood, parsed); }
+function nuAiResolveItem(parsed) { return nu_resolver.resolveItem(parsed); }
+function nuAiResolveChoice(item, ci) { return nu_resolver.resolveChoice(item, ci); }
 
 // Friendly display names (nuAiDisplayName + its tables, nuNameSingular,
 // nuTitleCase) and nuAiTotals live in food-core.js.

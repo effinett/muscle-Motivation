@@ -401,6 +401,41 @@ test('nuAiLogItems replays the saved-meal src shape; skips unresolved', async ()
   assert.strictEqual(Math.round(tot.calories), 78 * 2 + 73 * 2);
 });
 
+/* ── standalone resolver (Phase 4.2.1b) ─────────────────────────────── */
+
+// The core must run in plain Node through require() with an injected
+// adapter — no nutrition.js, no browser globals, no fetch. This is the
+// contract the 4.4 coach route and the benchmark runner build on.
+test('nuCreateResolver resolves standalone via require() + fake adapter', async () => {
+  const core = require('./food-core.js');
+  const r = core.nuCreateResolver({
+    search: async (q) => SEARCHES[q] || [],
+    portions: async (id) => PORTIONS[id] || [],
+  });
+
+  const egg = await r.resolveItem(item({ text: '2 eggs', query: 'egg', quantity: 2 }));
+  assert.strictEqual(egg.food.usda_fdc_id, 171287);
+  assert.strictEqual(egg.servings, 2);
+  assert.strictEqual(egg.perUnit.calories, 78);
+
+  const oats = await r.resolveItem(item({ query: 'rolled oats', quantity: 0.5, unit: 'cup' }));
+  assert.strictEqual(oats.food.usda_fdc_id, 999021, 'alike retry works through the adapter');
+
+  const bar = await r.resolveItem(item({ query: 'protein bar' }));
+  assert.strictEqual(bar.needsChoice, true);
+  const picked = await r.resolveChoice(bar, 2);
+  assert.strictEqual(picked.food.usda_fdc_id, 999004);
+
+  const boom = await r.resolveItem(item({ query: 'zzz' }));
+  assert.strictEqual(boom.unmatched, true);
+
+  // an adapter that throws must degrade to unmatched, never throw out
+  const broken = core.nuCreateResolver({ search: async () => { throw new Error('down'); },
+                                         portions: async () => [] });
+  const failed = await broken.resolveItem(item({ query: 'egg' }));
+  assert.strictEqual(failed.unmatched, true);
+});
+
 /* ── persisted-format pins (Phase 4.2.1a — locked BEFORE extraction) ──── */
 // user_food_favorites.food_key and saved-meal items store nuFoodKey output;
 // any format change orphans existing rows. Pin the exact strings.

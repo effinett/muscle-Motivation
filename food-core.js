@@ -369,6 +369,127 @@ function nuAiDedupeChoices(cands) {
   return kept;
 }
 
+/* ── resolution orchestrator (Phase 4.2.1b) ────────────────────────────────
+ * The full resolve pipeline behind AI logging (and any future surface),
+ * decoupled from HOW candidates are fetched. `source` is the SourceAdapter:
+ *   { search(query) → Promise<Candidate[]>,
+ *     portions(fdcId) → Promise<Portion[]> }   // [] on any failure
+ * The browser binds nuUsdaSearch/nuFetchUsdaDetail (nutrition.js); a server
+ * route or benchmark binds its own. Bodies are the Phase 4.2 production
+ * logic verbatim — only the two adapter call sites changed.
+ * ─────────────────────────────────────────────────────────────────────────── */
+function nuCreateResolver(source) {
+
+  // Turn one trimmed search food + the parsed quantity/unit into a resolved
+  // review-sheet item (portions + serving options exactly like the food card).
+  async function resolveFood(rawFood, parsed) {
+    var f = nuNormalizeUsdaFood(rawFood);
+    var portions = [];
+    if (f.usda_fdc_id != null) {
+      try { portions = await source.portions(f.usda_fdc_id); } catch (e) { portions = []; }
+    }
+    if (f.raw && portions.length) f.raw.portions = portions; // same raw enrichment as the card path
+
+    var opts = nuBuildServingOptions(f, portions);
+    var sv = nuAiChooseServing(f, opts, portions, parsed);
+    var qty = (+parsed.quantity > 0) ? +parsed.quantity : 1;
+    // The label's own count divides the quantity ("1 tbsp" of a "2 tbsp"
+    // portion = 0.5 servings); stated total weights always mean ONE serving.
+    var servings = sv.wholeQuantity ? 1 : qty / (sv.unitCount > 0 ? sv.unitCount : 1);
+    return {
+      parsed: parsed, food: f, unmatched: false,
+      matchedUnit: !!sv.matchedUnit,
+      servings: Math.round(servings * 100) / 100,
+      perUnit: sv.perUnit,
+      serving_description: sv.description || null,
+      serving_amount: sv.amount != null ? sv.amount : null,
+      serving_unit: sv.unit || null,
+      grams: sv.grams != null ? sv.grams : null,
+    };
+  }
+
+  // Resolve one parsed item. Never throws — a failed search returns
+  // { unmatched: true } and an ambiguous one returns { needsChoice: true } with
+  // the distinct candidates, so the review sheet can ask instead of guessing.
+  async function resolveItem(parsed) {
+    var foods = [];
+    try { foods = await source.search(parsed.query); } catch (e) {}
+    if (!foods || !foods.length) return { parsed: parsed, unmatched: true };
+
+    if (!nuAiIsConfident(parsed, foods[0])) {
+      // Duplicates collapse first ("jasmine rice" → 4 identical products = ONE
+      // option = no interruption). Restaurant-dish categories skip the dedupe —
+      // a McDonald's and a homemade double cheeseburger can tie nutritionally
+      // and still deserve the "where from?" ask.
+      var candidates = foods.slice(0, 4);
+      var askCat = NU_ASK_CATEGORIES[String(foods[0].foodCategory || '').toLowerCase()];
+      var options = askCat ? candidates : nuAiDedupeChoices(candidates);
+      if (askCat || options.length > 1) {
+        return {
+          parsed: parsed, needsChoice: true,
+          // keep the trimmed payloads: picking one replays the normal resolve
+          // path. kcal (per 100 g/ml) lets same-named options explain themselves.
+          choices: options.map(function (rf) {
+            return { raw: rf, name: rf.description || '', brand: rf.brand || '',
+                     kcal: (rf.nutrients || {}).kcal };
+          }),
+        };
+      }
+    }
+    // Resolve the top hit — but if the user gave a measure this food can't
+    // express ("1/2 cup" of an oats entry with no cup portion), try the next
+    // candidates for one that CAN. Guarded: an alternative must be
+    // NUTRITIONALLY ALIKE to the top hit — the same food in a different data
+    // representation — so the retry can never drift from dry oats to a cooked
+    // entry just because the cooked one knows what a cup is.
+    var resolved = await resolveFood(foods[0], parsed);
+    if (parsed.unit && !resolved.matchedUnit) {
+      // 8-deep scan: the same food's household-measure twin often sits mid-list
+      // (Quaker Quick Oats' "0.5 cup" behind two Foundation entries). The alike
+      // gate keeps this cheap — only same-food candidates fetch portions.
+      for (var ci = 1; ci < Math.min(foods.length, 8); ci++) {
+        if (!nuAiChoicesAlike([foods[0], foods[ci]])) continue;
+        var alt = await resolveFood(foods[ci], parsed);
+        if (alt.matchedUnit) { resolved = alt; break; }
+      }
+    }
+    if (parsed.unit && !resolved.matchedUnit) {
+      // Third rung: the verified cup table (yogurt 245 g/cup) — only reached
+      // when the matched food's own portions AND the alike retry both failed,
+      // so a native USDA cup always wins over the table.
+      var cup = nuAiCupServing(resolved.food, parsed);
+      if (cup) {
+        var cq = (+parsed.quantity > 0) ? +parsed.quantity : 1;
+        resolved.perUnit = cup.perUnit;
+        resolved.serving_description = cup.description;
+        resolved.serving_amount = cup.amount;
+        resolved.serving_unit = cup.unit;
+        resolved.grams = cup.grams;
+        resolved.matchedUnit = true;
+        resolved.servings = Math.round(cq * 100) / 100;   // fractional cups multiply
+        return resolved;
+      }
+      // No record could express the user's measure. Their quantity is
+      // denominated in THEIR unit, not in servings — applying it to a
+      // mismatched serving silently halves or doubles the food ("half a cup"
+      // × a half-cup serving = a quarter cup). Log ONE default serving and
+      // flag the row so the user can adjust with the true size in view.
+      resolved.servings = 1;
+      resolved.unitUnresolved = true;
+    }
+    return resolved;
+  }
+
+  // The user picked candidate `ci` for an ambiguous item → full resolve.
+  async function resolveChoice(item, ci) {
+    var c = item.choices && item.choices[ci];
+    if (!c) return item;
+    return resolveFood(c.raw, item.parsed);
+  }
+
+  return { resolveFood: resolveFood, resolveItem: resolveItem, resolveChoice: resolveChoice };
+}
+
 /* ── food identity ─────────────────────────────────────────────────────────
  * One stable identity across USDA search, barcode, and manual foods:
  *   • USDA/barcode → 'usda:<fdcId>' (barcode matches are USDA branded foods, so
@@ -558,6 +679,7 @@ if (typeof module !== 'undefined' && module.exports) {
     NU_SIG_FILLER: NU_SIG_FILLER,
     nuAiNameSig: nuAiNameSig,
     nuAiDedupeChoices: nuAiDedupeChoices,
+    nuCreateResolver: nuCreateResolver,
     nuFoodKey: nuFoodKey,
     NU_FILLER: NU_FILLER,
     nuShortLabel: nuShortLabel,
