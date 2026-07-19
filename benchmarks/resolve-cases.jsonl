@@ -1,0 +1,27 @@
+{"id":"eggs-bare-count","tier":"fixture","input":{"text":"2 eggs","query":"egg","quantity":2},"expect":{"fdcId":171287,"servings":2,"serving_description":"1 large","grams":50,"perUnit_kcal":78},"tags":["portions","quantity"]}
+{"id":"toast-slices","tier":"fixture","input":{"query":"toast","quantity":2,"unit":"slice"},"expect":{"servings":2,"serving_description":"1 slice","grams":25,"perUnit_kcal":73},"tags":["portions","unit-match"]}
+{"id":"chicken-6oz-total-weight","tier":"fixture","input":{"query":"chicken breast","quantity":6,"unit":"oz","grams":170},"expect":{"servings":1,"serving_description":"170 g","grams":170,"perUnit_kcal":204},"tags":["weights"]}
+{"id":"oats-half-cup-label-count","tier":"fixture","input":{"query":"oats","quantity":0.5,"unit":"cup"},"expect":{"servings":1,"serving_description":"0.5 cup","kcal_total":152},"tags":["unit-match","label-count"]}
+{"id":"pb-1tbsp-of-2tbsp-portion","tier":"fixture","input":{"query":"peanut butter","quantity":1,"unit":"tbsp"},"expect":{"servings":0.5,"serving_description":"2 tbsp","kcal_total":94},"tags":["unit-match","label-count"]}
+{"id":"almonds-handful","tier":"fixture","input":{"query":"almonds","unit":"handful"},"expect":{"grams":28,"serving_description":"handful (~28 g)","perUnit_kcal":162},"tags":["approx-units"]}
+{"id":"almonds-small-handful","tier":"fixture","input":{"query":"almonds","unit":"small handful"},"expect":{"grams":20,"perUnit_kcal":116},"tags":["approx-units"]}
+{"id":"almonds-2-large-handfuls","tier":"fixture","input":{"query":"almonds","quantity":2,"unit":"large handfuls"},"expect":{"grams":40,"servings":2},"tags":["approx-units","quantity"]}
+{"id":"almonds-handful-with-weight","tier":"fixture","input":{"query":"almonds","unit":"handful","grams":30},"expect":{"grams":30,"servings":1},"tags":["approx-units","weights"]}
+{"id":"syrup-tbsp-volume","tier":"fixture","input":{"query":"maple syrup","unit":"tbsp"},"expect":{"not_needsChoice":true,"serving_description":"1 tbsp (15 ml)","grams":null,"perUnit_kcal":52,"not_unitUnresolved":true},"tags":["liquids","dedupe"]}
+{"id":"rolled-oats-alike-retry","tier":"fixture","input":{"query":"rolled oats","quantity":0.5,"unit":"cup"},"expect":{"fdcId":999021,"servings":1,"serving_description":"0.5 cup"},"tags":["alike-retry"]}
+{"id":"egg-cup-unresolved","tier":"fixture","input":{"text":"half a cup of eggs","query":"egg","quantity":0.5,"unit":"cup"},"expect":{"servings":1,"unitUnresolved":true,"serving_description":"1 large"},"tags":["unresolved-units"]}
+{"id":"milk-handful-liquid-unresolved","tier":"fixture","input":{"query":"milk","brand":"fairlife","unit":"handful"},"expect":{"grams":null,"serving_description":"1 cup","unitUnresolved":true},"tags":["unresolved-units","liquids"]}
+{"id":"no-results-unmatched","tier":"fixture","input":{"query":"zzz"},"expect":{"unmatched":true},"tags":["degradation"]}
+{"id":"protein-bar-chooser","tier":"fixture","input":{"query":"protein bar"},"expect":{"needsChoice":true,"choices":3},"tags":["confidence","chooser"]}
+{"id":"quest-bar-brand-confident","tier":"fixture","input":{"query":"quest bar","brand":"quest"},"expect":{"not_needsChoice":true,"fdcId":999002},"tags":["confidence","brand-intent"]}
+{"id":"jasmine-duplicates-collapse","tier":"fixture","input":{"query":"jasmine rice"},"expect":{"not_needsChoice":true,"fdcId":999011},"tags":["dedupe"]}
+{"id":"jasmine-mixed-real-difference-asks","tier":"fixture","input":{"query":"jasmine rice mixed"},"expect":{"needsChoice":true,"choices":2},"tags":["dedupe","chooser"]}
+{"id":"burger-restaurant-always-asks","tier":"fixture","input":{"query":"double cheeseburger"},"expect":{"needsChoice":true},"tags":["confidence","restaurant"]}
+{"id":"yogurt-cup-table-nonfat","tier":"fixture","input":{"query":"greek yogurt nonfat","unit":"cup"},"expect":{"serving_description":"1 cup (~245 g)","grams":245,"servings":1,"not_unitUnresolved":true,"kcal_total":145},"tags":["cup-table"]}
+{"id":"yogurt-half-cup-table-whole","tier":"fixture","input":{"query":"greek yogurt whole milk","quantity":0.5,"unit":"cup"},"expect":{"serving_description":"1 cup (~245 g)","servings":0.5,"kcal_total":119},"tags":["cup-table"]}
+{"id":"yogurt-native-cup-beats-table","tier":"fixture","input":{"query":"plain yogurt","unit":"cup"},"expect":{"fdcId":171284,"serving_description":"1 cup (8 fl oz)","grams":245,"servings":1},"tags":["cup-table","alike-retry"]}
+{"id":"hummus-cup-no-table-flag","tier":"fixture","input":{"query":"hummus","unit":"cup"},"expect":{"unitUnresolved":true,"servings":1},"tags":["cup-table","unresolved-units"]}
+{"id":"live-egg-sanity","tier":"live","input":{"text":"2 eggs","query":"egg","quantity":2},"expect":{"not_needsChoice":true,"group":"generic","description_regex":"^Egg","servings":2},"tags":["live-sanity"]}
+{"id":"live-chicken-6oz","tier":"live","input":{"query":"chicken breast","quantity":6,"unit":"oz","grams":170},"expect":{"servings":1,"grams":170,"description_regex":"Chicken"},"tags":["live-sanity","weights"]}
+{"id":"live-jelly-never-candy","tier":"live","input":{"query":"jelly"},"expect":{"top_not_regex":"bean|gummy|belly"},"tags":["live-sanity","ranking"]}
+{"id":"live-jasmine-rice-generic-leads","tier":"live","input":{"query":"jasmine rice"},"expect":{"not_needsChoice":true,"group":"generic","description_regex":"jasmine"},"known_fail":true,"tags":["ranking","4.2.2"],"notes":"Effi, Checkpoint 2 smoke 2026-07-16: manual search favors branded entries / generic white rice over generic jasmine rice. 4.2.2 Candidate Reranking target — flip known_fail off when fixed."}

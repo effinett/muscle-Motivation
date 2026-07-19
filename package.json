@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "bench": "node benchmarks/run-resolve.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
