@@ -195,7 +195,7 @@ provider unless a new route is explicitly built on another.
 **Node / tooling:**
 - `package.json`: `npm test` → `node --test`; `npm run bench` → `node benchmarks/run-resolve.js`.
 - Dependencies: `@anthropic-ai/sdk`, `stripe`. No build step.
-- Test files: `ai-food-parse.test.js`, `usda-search.test.js`, `nutrition-resolve.test.js`, `progression.test.js`.
+- Test files: `ai-food-parse.test.js`, `usda-search.test.js`, `nutrition-resolve.test.js`, `food-ranking.test.js`, `progression.test.js`.
 - Benchmark corpus: `benchmarks/resolve-cases.jsonl` + `benchmarks/fixtures.js`, run by `benchmarks/run-resolve.js` (two-tier runner, Phase 4.2.1d).
 
 **Supabase notes:**
@@ -262,6 +262,27 @@ future one (voice, photo, AI Coach). It runs in two runtimes:
 
 **Rule:** no feature should contain its own food logic. New food behavior goes into `food-core.js`,
 is covered by `nutrition-resolve.test.js` and the benchmark corpus, and is consumed by every surface.
+
+### Shared Food-Ranking Core — `food-ranking.js` (`Live`, Phase 4.2.2)
+
+The pure candidate-reranking intelligence behind every food search — extracted from
+`api/usda-search.js` in Phase 4.2.2. One ranking brain, one source of truth:
+
+- **The proxy (`/api/usda-search`) remains the authoritative ranking boundary** — it fetches
+  USDA pools and invokes `rankFoodCandidates(query, candidates, options)`; every surface that
+  searches for candidates (manual search, AI Quick Log, the barcode scanner's
+  "search manually instead" fallback, future voice/photo/coach) consumes the already-ordered
+  candidate contract. A direct barcode HIT is one exact product and saved-meal REPLAY uses
+  stored items — neither ranks, by design. **No surface reranks on its own**, and
+  `nuCreateResolver` deliberately trusts `foods[0]`/`foods.slice(0, n)` order.
+- Pure by contract: no network, no auth, no env — tests (`food-ranking.test.js`) and
+  benchmarks run the exact production ranking offline.
+- All score contributions are named weights in `RANK_WEIGHTS`; ranking behavior is tuned by
+  editing that table and the config term lists (brands, categories, food intents), not code.
+- **Extension seam:** `options.signals` — pure `(candidate, features, ctx) → number` passes.
+  Phases 4.2.3+ (confidence, correction memory, portion compatibility, meal context,
+  preferences) plug in there without touching candidate acquisition or creating a second
+  ranking engine.
 
 ### Other shared modules (`Live`)
 

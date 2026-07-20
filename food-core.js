@@ -377,6 +377,14 @@ function nuAiDedupeChoices(cands) {
  * The browser binds nuUsdaSearch/nuFetchUsdaDetail (nutrition.js); a server
  * route or benchmark binds its own. Bodies are the Phase 4.2 production
  * logic verbatim — only the two adapter call sites changed.
+ *
+ * ORDERED-CANDIDATE CONTRACT (Phase 4.2.2): search() must return candidates
+ * ALREADY ranked best-first — in production that is /api/usda-search, whose
+ * ordering comes from the shared ranking core (food-ranking.js
+ * rankFoodCandidates). The resolver deliberately trusts foods[0] /
+ * foods.slice(0, n) and performs NO reranking of its own — one ranking
+ * brain, every surface. An adapter that feeds raw (unranked) USDA output
+ * violates the contract: route it through rankFoodCandidates first.
  * ─────────────────────────────────────────────────────────────────────────── */
 function nuCreateResolver(source) {
 

@@ -28,7 +28,7 @@
 //               serving_description_regex?, perUnit_kcal?, kcal_total?,
 //               unmatched?, needsChoice?, choices?, not_needsChoice?,
 //               unitUnresolved?, not_unitUnresolved?, group?,
-//               description_regex?, top_not_regex? },
+//               description_regex?, top_regex?, top_not_regex? },
 //     known_fail?, tags: [...], notes? }
 
 'use strict';
@@ -92,6 +92,10 @@ function check(expect, r) {
   if (expect.needsChoice) {
     want('needsChoice', !!r.needsChoice, true);
     if (expect.choices != null && r.choices) want('choices', r.choices.length, expect.choices);
+    if (expect.top_regex && r.choices && r.choices[0] &&
+        !new RegExp(expect.top_regex, 'i').test(r.choices[0].name)) {
+      bad.push(`top choice "${r.choices[0].name}" !~ /${expect.top_regex}/i`);
+    }
     if (expect.top_not_regex && r.choices && r.choices[0] &&
         new RegExp(expect.top_not_regex, 'i').test(r.choices[0].name)) {
       bad.push(`top choice "${r.choices[0].name}" matches forbidden /${expect.top_not_regex}/i`);
