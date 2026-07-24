@@ -232,6 +232,16 @@
       font-size: 13px; color: var(--text-muted);
       min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
+    /* Clarification prompts are full questions — they wrap instead of truncating
+       (the single-line ai-unmatched-label clipped long brand prompts). */
+    .ai-clar-prompt {
+      font-size: 13px;
+      color: var(--text-2);
+      line-height: 1.35;
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+    }
     .ai-manual-btn {
       background: none; border: none; color: var(--red); cursor: pointer;
       font-family: 'Barlow', sans-serif; font-size: 12px; font-weight: 700;
@@ -252,6 +262,20 @@
       overflow: hidden; overflow-wrap: anywhere;
     }
     .ai-choice-brand { font-size: 11px; color: var(--text-muted); font-weight: 700; flex-shrink: 0; }
+    /* brand-correction free-text (clarification) */
+    .ai-clar-free { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .ai-clar-flabel {
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+      color: var(--text-muted);
+    }
+    .ai-clar-input {
+      flex: 1; min-width: 120px; padding: 8px 10px;
+      background: var(--surface-3); border: 1px solid var(--border-2); border-radius: 8px;
+      color: var(--text); font-family: 'Barlow', sans-serif; font-size: 13px;
+    }
+    .ai-clar-input:focus { outline: none; border-color: var(--red-border); }
+    .ai-clar-input:disabled { opacity: 0.5; }
+    .ai-clar-error { font-size: 12px; color: var(--red); margin-top: 6px; font-weight: 600; }
 
     /* Saved meals: meal-head actions + the two small sheets */
     .meal-actions { display: flex; gap: 8px; flex-shrink: 0; }
@@ -1152,6 +1176,43 @@
           '</div>' +
         '</div>';
       }
+      if (it.needsClarification) {
+        // One focused question (prompt + options come from the shared contract —
+        // never composed here). Structured options patch the request; brand
+        // clarification also offers a free-text correction.
+        var cl = it.clarification;
+        var busy = !!it._clarBusy;
+        var optButtons = (cl.options || []).map(function (o, oi) {
+          return '<button type="button" class="ai-choice" onclick="aiClarify(' + i + ',' + oi + ')"' +
+            (busy ? ' disabled' : '') + '>' +
+            '<span class="ai-choice-name">' + nuEsc(o.label) + '</span></button>';
+        }).join('');
+        var freeText = cl.allowFreeText
+          ? '<div class="ai-clar-free">' +
+              '<label class="ai-clar-flabel" for="aiClarText' + i + '">Correct brand</label>' +
+              '<input id="aiClarText' + i + '" class="ai-clar-input" type="text" autocomplete="off" ' +
+                'placeholder="Type a brand"' + (busy ? ' disabled' : '') +
+                ' onkeydown="if(event.key===\'Enter\'){event.preventDefault();aiClarifyText(' + i + ')}">' +
+              '<button type="button" class="ai-manual-btn" onclick="aiClarifyText(' + i + ')"' +
+                (busy ? ' disabled' : '') + '>Use brand →</button>' +
+            '</div>'
+          : '';
+        return '<div class="sm-item ai-item ai-unmatched ai-clar">' +
+          '<div class="ai-item-top">' +
+            '<div class="ai-clar-prompt">' + nuEsc(cl.prompt) + '</div>' +
+            '<button type="button" class="ai-item-x" onclick="aiRemove(' + i + ')" aria-label="Remove">✕</button>' +
+          '</div>' +
+          optButtons + freeText +
+          (it._clarError ? '<div class="ai-clar-error" role="alert">' + nuEsc(it._clarError) + '</div>' : '') +
+          '<div class="ai-item-bottom">' +
+            ((it.choices && it.choices.length)
+              ? '<button type="button" class="ai-manual-btn" onclick="aiClarChooser(' + i + ')"' +
+                (busy ? ' disabled' : '') + '>Pick from list →</button>' : '') +
+            '<button type="button" class="ai-manual-btn" onclick="aiAddManually(' + i + ')"' +
+              (busy ? ' disabled' : '') + '>Search manually →</button>' +
+          '</div>' +
+        '</div>';
+      }
       var total = nuScaleMacros(it.perUnit, it.servings);
       var fullName = it.food.description || it.food.name;
       var sub = ['✓ USDA'];
@@ -1180,7 +1241,9 @@
       '</div>';
     }).join('');
 
-    var matched = aiItems.filter(function (it) { return !it.unmatched && !it.needsChoice; });
+    var matched = aiItems.filter(function (it) {
+      return !it.unmatched && !it.needsChoice && !it.needsClarification;
+    });
     var tot = nuAiTotals(aiItems);
     document.getElementById('aiSheetTotals').textContent =
       matched.length + (matched.length === 1 ? ' food · ' : ' foods · ') +
@@ -1201,12 +1264,59 @@
     }
   }
 
+  // Clarification: the user picked a structured option → patch the shared request
+  // and re-enter the SAME resolver (nuAiResolveClarification). The result can be
+  // resolved, another question, a chooser, or unmatched — each replaces the item
+  // in place without disturbing the others. Per-item _clarBusy blocks double
+  // submits; a thrown error preserves the item and shows a retryable message.
+  async function aiClarify(i, oi) {
+    var it = aiItems[i];
+    if (!it || !it.needsClarification || it._clarBusy) return;
+    it._clarBusy = true; it._clarError = null; renderAiSheet();
+    try {
+      aiItems[i] = await nuAiResolveClarification(it, oi);
+    } catch (e) {
+      console.error('aiClarify error:', e);
+      it._clarBusy = false; it._clarError = 'Could not resolve that — try again.';
+    }
+    renderAiSheet();
+    var add = document.getElementById('aiSheetAddBtn');
+    if (add && !add.disabled) add.focus();
+  }
+
+  // Brand clarification free-text: empty input is rejected locally (no re-resolve).
+  async function aiClarifyText(i) {
+    var it = aiItems[i];
+    if (!it || !it.needsClarification || it._clarBusy) return;
+    var input = document.getElementById('aiClarText' + i);
+    var val = input ? String(input.value || '').trim() : '';
+    if (!val) { it._clarError = 'Enter a brand, or pick “Search all brands”.'; renderAiSheet(); return; }
+    it._clarBusy = true; it._clarError = null; renderAiSheet();
+    try {
+      aiItems[i] = await nuAiResolveClarification(it, val);
+    } catch (e) {
+      console.error('aiClarifyText error:', e);
+      it._clarBusy = false; it._clarError = 'Could not resolve that — try again.';
+    }
+    renderAiSheet();
+    var add = document.getElementById('aiSheetAddBtn');
+    if (add && !add.disabled) add.focus();
+  }
+
+  // Fallback: turn a clarification into the existing bounded chooser (same rows).
+  function aiClarChooser(i) {
+    var it = aiItems[i];
+    if (!it || !it.needsClarification || it._clarBusy) return;
+    aiItems[i] = { parsed: it.parsed, needsChoice: true, choices: it.choices || [] };
+    renderAiSheet();
+  }
+
   // Quarter steps at or below 1 (1 → 0.75 → 0.5 → 0.25), whole steps above
   // (1 → 2 → 3). Values stay exact quarters — never display-rounded, which is
   // what made 0.25 read as "0.3".
   function aiQtyStep(i, d) {
     var it = aiItems[i];
-    if (!it || it.unmatched || it.needsChoice) return;
+    if (!it || it.unmatched || it.needsChoice || it.needsClarification) return;
     var cur = +it.servings || 1;
     var step = (d < 0 ? cur <= 1 : cur < 1) ? 0.25 : 1;
     it.servings = Math.max(0.25, Math.round((cur + d * step) * 100) / 100);

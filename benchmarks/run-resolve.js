@@ -28,7 +28,14 @@
 //               serving_description_regex?, perUnit_kcal?, kcal_total?,
 //               unmatched?, needsChoice?, choices?, not_needsChoice?,
 //               unitUnresolved?, not_unitUnresolved?, group?,
-//               description_regex?, top_regex?, top_not_regex? },
+//               description_regex?, top_regex?, top_not_regex?,
+//               confidence?: { disposition?, level?, material?, ambiguity?[],
+//                              alternatives?, reason?, clarificationType?,
+//                              policy? } },  // Phase 4.2.3: asserts the shared
+//                 nuAssessConfidence verdict on the ordered pool the resolver
+//                 saw — additive, independent of the resolved fields above.
+//                 `policy` (e.g. { targetedClarification: true }) exercises the
+//                 DORMANT clarification contract; omit it for production default.
 //     known_fail?, tags: [...], notes? }
 
 'use strict';
@@ -89,6 +96,12 @@ function check(expect, r) {
     if (got !== wanted) bad.push(`${name}: got ${JSON.stringify(got)}, want ${JSON.stringify(wanted)}`);
   };
   if (expect.unmatched) { want('unmatched', !!r.unmatched, true); return bad; }
+  if (expect.needsClarification) {
+    want('needsClarification', !!r.needsClarification, true);
+    if (expect.clarificationType && r.clarification)
+      want('clarificationType', r.clarification.type, expect.clarificationType);
+    return bad;
+  }
   if (expect.needsChoice) {
     want('needsChoice', !!r.needsChoice, true);
     if (expect.choices != null && r.choices) want('choices', r.choices.length, expect.choices);
@@ -103,7 +116,7 @@ function check(expect, r) {
     return bad;
   }
   if (expect.not_needsChoice) want('not_needsChoice', !r.needsChoice, true);
-  if (r.needsChoice || r.unmatched) {
+  if (r.needsChoice || r.unmatched || r.needsClarification) {
     // resolved-field expectations can't be checked on an ask/unmatched outcome
     if (expect.top_not_regex && r.needsChoice && r.choices && r.choices[0] &&
         new RegExp(expect.top_not_regex, 'i').test(r.choices[0].name)) {
@@ -141,6 +154,28 @@ function check(expect, r) {
   return bad;
 }
 
+// Phase 4.2.3 confidence-contract check: exercise nuAssessConfidence directly on
+// the ordered pool. Additive — runs only when a case carries expect.confidence.
+function checkConfidence(want, verdict) {
+  const bad = [];
+  if (want.disposition && verdict.disposition !== want.disposition)
+    bad.push(`confidence.disposition: got ${verdict.disposition}, want ${want.disposition}`);
+  if (want.level && verdict.level !== want.level)
+    bad.push(`confidence.level: got ${verdict.level}, want ${want.level}`);
+  if ('material' in want && !!verdict.material !== !!want.material)
+    bad.push(`confidence.material: got ${verdict.material}, want ${want.material}`);
+  if (want.alternatives != null && verdict.alternatives.length !== want.alternatives)
+    bad.push(`confidence.alternatives: got ${verdict.alternatives.length}, want ${want.alternatives}`);
+  for (const a of want.ambiguity || []) if (!verdict.ambiguity.includes(a))
+    bad.push(`confidence.ambiguity missing "${a}" (got [${verdict.ambiguity}])`);
+  if (want.reason && !verdict.reasons.some((r) => r.code === want.reason))
+    bad.push(`confidence.reason "${want.reason}" not in [${verdict.reasons.map((r) => r.code)}]`);
+  if (want.clarificationType &&
+      (!verdict.clarification || verdict.clarification.type !== want.clarificationType))
+    bad.push(`confidence.clarificationType: got ${verdict.clarification && verdict.clarification.type}, want ${want.clarificationType}`);
+  return bad;
+}
+
 /* ── run ───────────────────────────────────────────────────────────────── */
 
 function normalizeInput(input) {
@@ -155,8 +190,9 @@ function normalizeInput(input) {
     catch (e) { console.error(`resolve-cases.jsonl line ${i + 1}: bad JSON — ${e.message}`); process.exit(2); }
   });
 
+  const liveSrc = HAS_KEY ? liveSource() : null;
   const fixtureResolver = core.nuCreateResolver(fixtureSource);
-  const liveResolver = HAS_KEY ? core.nuCreateResolver(liveSource()) : null;
+  const liveResolver = liveSrc ? core.nuCreateResolver(liveSrc) : null;
 
   let pass = 0, fail = 0, knownFail = 0, nowPassing = 0, skipped = 0;
   const failures = [];
@@ -168,8 +204,19 @@ function normalizeInput(input) {
 
     let mismatches;
     try {
-      const r = await resolver.resolveItem(normalizeInput(c.input));
+      const input = normalizeInput(c.input);
+      const r = await resolver.resolveItem(input);
       mismatches = check(c.expect || {}, r);
+      if (c.expect && c.expect.confidence) {
+        // Assert the shared confidence verdict on the same ordered pool the
+        // resolver saw (a second search — confidence cases are fixture-tier).
+        const source = c.tier === 'live' ? liveSrc : fixtureSource;
+        const foods = await source.search(input.query);
+        // Optional per-case policy override (e.g. { targetedClarification: true })
+        // exercises the DORMANT clarification contract; production stays default.
+        const verdict = core.nuAssessConfidence(input, foods, c.expect.confidence.policy);
+        mismatches = mismatches.concat(checkConfidence(c.expect.confidence, verdict));
+      }
     } catch (e) {
       mismatches = ['threw: ' + e.message];
     }

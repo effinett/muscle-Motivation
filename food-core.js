@@ -312,6 +312,13 @@ var NU_ASK_CATEGORIES = { 'fast foods': 1, 'restaurant foods': 1 };
 // brand means a crowded guess ("protein bar", "cereal") — never auto-pick one
 // brand for them. Naming the brand ("quest bar") restores confidence. And a
 // restaurant-dish category is never confident, whoever leads.
+//
+// COMPATIBILITY WRAPPER (Phase 4.2.3, checkpoint 2): resolveItem no longer calls
+// this — the shared nuAssessConfidence verdict now owns the interrupt decision.
+// Retained, exported, and behaviorally UNCHANGED for any external caller and for
+// the H1–H4 parity tests. Its single-food semantics (judge one top hit, not the
+// pool) differ from the verdict's, so it is intentionally NOT re-expressed as a
+// thin delegate — that would change its meaning. See the migration report.
 function nuAiIsConfident(parsed, topFood) {
   if (NU_ASK_CATEGORIES[String(topFood.foodCategory || '').toLowerCase()]) return false;
   if ((topFood.group || 'generic') !== 'branded') return true;
@@ -369,6 +376,411 @@ function nuAiDedupeChoices(cands) {
   return kept;
 }
 
+/* ── shared confidence & ambiguity contract (Phase 4.2.3, checkpoint 1) ─────
+ * nuAssessConfidence is the ONE place every surface (AI Quick Log today;
+ * Manual Search, Voice, Photo, AI Coach later) reads "should we interrupt the
+ * user, and how" from the Phase 4.2.2 ORDERED-CANDIDATE contract. It is a pure
+ * CONSUMER of ranking evidence — it never reorders candidates (ranking owns
+ * order; confidence owns interpretation).
+ *
+ * Provider-neutral BY CONTRACT: it reads only the shared ResolveRequest
+ * (request.brand, request.query) and the normalized Candidate fields
+ * (group, score, foodCategory, brand, description, nutrients) — never a
+ * USDA-specific field name. Brand intent is derived from request.brand (the
+ * shared request already carries it), NOT propagated from private ranking
+ * context, so ranking output is untouched.
+ *
+ * Verdict shape (structured evidence, NOT a synthetic 0..1 score — a numeric
+ * confidence scalar is deliberately deferred until a consumer needs it / it can
+ * be calibrated, Phase 4.2.7):
+ *   { disposition, level, candidate, alternatives, ambiguity[], reasons[],
+ *     material, evidence:{topScore,runnerUpScore,gap,scoreAvailable},
+ *     clarification }
+ *
+ * disposition — the decision model:
+ *   'auto_resolve'    (level high)   — one clear winner → resolve automatically
+ *   'choose_candidate'(level medium) — ≥2 plausible, material, distinct foods → bounded choice
+ *   'unresolved'      (level low)    — no viable candidate → safe terminal
+ *   'clarify_input'   (level low)    — a chooser fully explained by ONE dominant,
+ *       material dimension (brand / preparation / form) → one focused question
+ *       (see the clarification section below). CONSERVATIVE + ACTIVE (checkpoint 4,
+ *       policy.targetedClarification defaults ON): only ever refines an already-
+ *       interruptible choose_candidate, so it never turns an auto_resolve into an
+ *       interruption. resolveItem surfaces it as a `needsClarification` review item.
+ *   Ambiguity types: identity, brand, category, preparation, form. The PORTION
+ *   axis stays with resolveFood (unitUnresolved) — portion-basis clarification
+ *   belongs to the serving layer, not this candidate-level pass (future work).
+ *
+ * Third arg `policy` (optional) is an explicit per-call override
+ * { scoreEscalation?, targetedClarification? } for tests and future activation;
+ * omitted → the shipped NU_CONFIDENCE defaults. When scores are absent the
+ * verdict degrades to today's group-based behavior, so consumption is parity-safe.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+// Tunable confidence policy. INITIAL HYPOTHESES — the score-gap band will be
+// calibrated against benchmark score distributions in Phase 4.2.7; do not treat
+// these as settled constants. All confidence tuning happens here, not in code.
+var NU_CONFIDENCE = {
+  gapDecisive: 800,   // top-vs-runner-up score lead treated as a clear winner
+  maxAlternatives: 4, // bounded chooser set (matches foods.slice(0,4) today)
+  // Score-gap / brand-variant ESCALATIONS (a generic or matched-brand lead that
+  // today auto-resolves becoming a chooser when a materially-different runner-up
+  // is close on score). These are the ONLY verdict paths that diverge from the
+  // legacy nuAiIsConfident decision, so they ship OFF: with the flag false the
+  // verdict reproduces today's behavior exactly (Checkpoint 2 parity migration).
+  // Turned on only with benchmark calibration + approval in a later checkpoint.
+  scoreEscalation: false,
+  // Targeted clarification (Phase 4.2.3): a bounded chooser that is fully
+  // explained by ONE dominant, material dimension (brand / preparation / form)
+  // becomes a single focused question instead. A SEPARATE policy from
+  // scoreEscalation (never a catch-all). ACTIVE (checkpoint 4): it only refines
+  // an already-interruptible choose_candidate base, so no auto_resolve case is
+  // ever turned into an interruption while scoreEscalation stays false.
+  targetedClarification: true,
+};
+
+// Effective policy for one assessment: an explicit per-call override (used by
+// tests and future activation) wins over the shipped NU_CONFIDENCE defaults, so
+// production behavior never depends on mutating shared global config.
+function nuResolvePolicy(policy) {
+  return {
+    scoreEscalation: (policy && 'scoreEscalation' in policy)
+      ? !!policy.scoreEscalation : NU_CONFIDENCE.scoreEscalation,
+    targetedClarification: (policy && 'targetedClarification' in policy)
+      ? !!policy.targetedClarification : NU_CONFIDENCE.targetedClarification,
+  };
+}
+
+// Preparation STATES — a small shared, identity-level vocabulary (synonyms →
+// one canonical state), NOT a per-food table. A candidate carrying one state and
+// not another is a different preparation of the same base food. Kept compact on
+// purpose; extend a synonym here, never add food-specific logic.
+var NU_PREP_STATE = {
+  raw: 'raw', uncooked: 'raw',
+  cooked: 'cooked', boiled: 'cooked', roasted: 'cooked', grilled: 'cooked',
+  baked: 'cooked', braised: 'cooked', steamed: 'cooked', stewed: 'cooked', fried: 'cooked',
+  dry: 'dry', dried: 'dry',
+  prepared: 'prepared',
+};
+// Minimal connective stopwords stripped before comparing candidate descriptors
+// (so "canned IN water" vs "canned IN oil" distinguish on water/oil).
+var NU_DESC_STOP = { a: 1, an: 1, the: 1, of: 1, with: 1, in: 1, and: 1, or: 1, for: 1, style: 1 };
+
+var NU_DISPOSITION_LEVEL = {
+  auto_resolve: 'high', choose_candidate: 'medium', clarify_input: 'low', unresolved: 'low',
+};
+
+function nuVerdict(disposition, candidate, alternatives, ambiguity, reasons, material, evidence, clarification) {
+  return {
+    disposition: disposition,
+    level: NU_DISPOSITION_LEVEL[disposition] || 'low',
+    candidate: candidate || null,
+    alternatives: alternatives || [],
+    ambiguity: ambiguity || [],
+    reasons: reasons || [],
+    material: !!material,
+    evidence: evidence,
+    clarification: clarification || null,
+  };
+}
+
+// Score evidence from the ordered pool. scoreAvailable is false for adapters
+// that don't stamp scores (older callers, some tests) — the verdict then falls
+// back to group-based reasoning, preserving today's behavior.
+function nuConfEvidence(list) {
+  var top = list[0], next = list[1];
+  var ts = (top && typeof top.score === 'number' && isFinite(top.score)) ? top.score : null;
+  var rs = (next && typeof next.score === 'number' && isFinite(next.score)) ? next.score : null;
+  return {
+    topScore: ts,
+    runnerUpScore: rs,
+    gap: (ts != null && rs != null) ? (ts - rs) : null,
+    scoreAvailable: ts != null,
+  };
+}
+
+// Brand-intent state from the SHARED REQUEST (never re-derived from ranking
+// internals): did the user name a brand, and does the leading candidate carry
+// it? Same first-token match nuAiIsConfident uses, kept for parity.
+function nuConfBrandState(request, top) {
+  var b = String((request && request.brand) || '').toLowerCase().trim().split(' ')[0];
+  if (!b) return 'none';
+  return String((top && top.brand) || '').toLowerCase().indexOf(b) !== -1 ? 'matched' : 'mismatched';
+}
+
+// The BASE (Checkpoint 2 parity) disposition for a ≥2-distinct set: the identity/
+// brand decision nuAiIsConfident used to make. The two score-gap escalations are
+// gated by policy.scoreEscalation (ship OFF → today's auto-pick). Returned as a
+// verdict so nuAssessConfidence can inspect it before a clarification refinement.
+function nuBaseDisposition(request, top, distinct, branded, brand, material, evidence, policy) {
+  if (!branded) {
+    // Generic lead — canonical scoring resolved cleanly; today auto-picks (H2),
+    // unless a close, material runner-up escalates (gated; gap null → auto).
+    var contested = policy.scoreEscalation &&
+      material && evidence.gap != null && evidence.gap < NU_CONFIDENCE.gapDecisive;
+    return contested
+      ? nuVerdict('choose_candidate', top, distinct, ['identity'],
+          [{ code: 'close_material_runner_up', detail: 'gap ' + evidence.gap + ' < ' + NU_CONFIDENCE.gapDecisive }], true, evidence)
+      : nuVerdict('auto_resolve', top, [], [],
+          [{ code: 'generic_canonical', detail: top.description || '' }], material, evidence);
+  }
+  if (brand === 'matched') {
+    // Named brand, matched — auto-resolve unless material same-brand variants
+    // escalate (gated; today auto-resolves).
+    return (policy.scoreEscalation && material)
+      ? nuVerdict('choose_candidate', top, distinct, ['identity'],
+          [{ code: 'brand_matched_variants', detail: top.brand || '' }], true, evidence)
+      : nuVerdict('auto_resolve', top, [], [],
+          [{ code: 'brand_matched', detail: top.brand || '' }], false, evidence);
+  }
+  if (brand === 'mismatched') {
+    // User named a brand we did NOT land on → brand ambiguity.
+    return nuVerdict('choose_candidate', top, distinct, ['brand'],
+      [{ code: 'brand_requested_unmatched', detail: String(request.brand || '') }], material, evidence);
+  }
+  // No brand named + branded lead — the crowded "protein bar"/"cereal" guess
+  // (H4). Never auto-pick one brand for the user.
+  return nuVerdict('choose_candidate', top, distinct, ['identity'],
+    [{ code: 'branded_crowd', detail: top.description || '' }], material, evidence);
+}
+
+// Assess confidence for one resolution request against its ORDERED candidates.
+// Pure and deterministic; never throws on shape (missing fields degrade safely).
+function nuAssessConfidence(request, foods, policy) {
+  policy = nuResolvePolicy(policy);
+  request = request || {};
+  var list = Array.isArray(foods) ? foods : [];
+  var evidence = nuConfEvidence(list);
+
+  // (0) No candidates → safe terminal (mirrors resolveItem's unmatched).
+  if (!list.length) {
+    return nuVerdict('unresolved', null, [], ['identity'],
+      [{ code: 'no_candidates', detail: 'search returned no candidates' }], false, evidence);
+  }
+
+  var top = list[0];
+  var cat = String(top.foodCategory || '').toLowerCase();
+
+  // (1) Restaurant/prepared-dish category → always a bounded choice, whoever
+  //     leads. Material by policy (homemade vs chain differ hugely); dedupe is
+  //     deliberately skipped so nutritionally-tied dishes still ask "where from?"
+  //     (parity with resolveItem's askCat branch + nuAiIsConfident H1). A
+  //     multi-source dish is not one dominant dimension → never a clarification.
+  if (NU_ASK_CATEGORIES[cat]) {
+    return nuVerdict('choose_candidate', top, list.slice(0, NU_CONFIDENCE.maxAlternatives),
+      ['category'], [{ code: 'ask_category', detail: cat }], true, evidence);
+  }
+
+  // TRUE distinct foods: collapse near-identical products via the shared
+  // materiality dedupe (four jasmine rices → one). Same helper the chooser uses.
+  var distinct = nuAiDedupeChoices(list.slice(0, NU_CONFIDENCE.maxAlternatives));
+  var branded = (top.group || 'generic') === 'branded';
+  var brand = nuConfBrandState(request, top);
+
+  // (2) One distinct food after dedupe → no identity ambiguity → auto-resolve.
+  //     (Parity: resolveItem auto-picks when dedupe collapses to a single
+  //     option, e.g. a lone branded "milk" with no brand named.)
+  if (distinct.length <= 1) {
+    var soleCode = branded ? (brand === 'matched' ? 'brand_matched' : 'single_candidate')
+                           : 'generic_canonical';
+    return nuVerdict('auto_resolve', top, [], [],
+      [{ code: soleCode, detail: top.description || '' }], false, evidence);
+  }
+
+  // ≥2 distinct foods remain — is the disagreement nutritionally MATERIAL?
+  var material = !nuAiChoicesAlike(distinct);
+
+  // BASE disposition (the Checkpoint 2 parity decision), built but not yet
+  // returned so the clarification refinement can inspect it below.
+  var base = nuBaseDisposition(request, top, distinct, branded, brand, material, evidence, policy);
+
+  // (5) Targeted-clarification refinement (active by default; skipped when
+  //     policy.targetedClarification is disabled).
+  //     A bounded chooser fully explained by ONE dominant, material dimension is
+  //     better asked as a single focused question. Only refines a non-category
+  //     chooser — auto-resolve and category are never turned into questions.
+  if (policy.targetedClarification && base.disposition === 'choose_candidate' && base.material) {
+    var clar = nuDetectClarification(request, top, distinct, brand);
+    if (clar) {
+      return nuVerdict('clarify_input', top, distinct, [clar.type],
+        [{ code: 'targeted_clarification', detail: clar.type }], true, evidence, clar);
+    }
+  }
+  return base;
+}
+
+/* ── targeted clarification (Phase 4.2.3, checkpoint 4 — active) ────────────
+ * Deterministic detection of the ONE dominant dimension behind an ambiguous
+ * candidate set, and the surface-neutral question to resolve it. Pure: reads
+ * only the shared request + normalized candidate descriptions. No LLM, no
+ * per-food logic, no persistence. Answers re-enter the SAME resolver via a
+ * request patch (nuApplyClarification) — never a parallel resolution path.
+ *
+ * MINIMAL Clarification contract (Checkpoint 3.5): { type, target, prompt,
+ * options:[{label,patch}], allowFreeText }. Decision metadata is NOT duplicated
+ * here — the ambiguity type lives on verdict.ambiguity and the reason on
+ * verdict.reasons (one canonical location). Candidate rows are NOT embedded:
+ * a UI renders `options` + `prompt`, and falls back to verdict.alternatives for
+ * any "pick from the list" affordance — so no raw/stale candidate objects,
+ * provider-specific fields, or nutrient payloads travel inside the clarification.
+ *
+ * ELIGIBILITY is independent of scoreEscalation: clarification only refines an
+ * ALREADY-interruptible (choose_candidate) base, so it never needs the
+ * provisional gapDecisive threshold. A generic/matched-brand case that is
+ * auto-resolved today stays auto (dormant) unless scoreEscalation makes it
+ * interruptible; targetedClarification then only changes HOW it is presented.
+ *
+ * PORTION boundary: portion-basis ambiguity is intentionally NOT detected here.
+ * resolveFood/serving resolution own it (unitUnresolved); a candidate-level pass
+ * only ever reports portion uncertainty already surfaced elsewhere. Targeted
+ * portion questions belong to a later serving-layer checkpoint / Phase 4.2.5. */
+
+// Local text normalizer (food-core is loaded WITHOUT food-ranking's nText):
+// lowercase, non-alphanumerics → spaces. Both sides normalize identically.
+function nuClarNorm(s) {
+  return String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+// The ONE query-patch primitive for clarification answers: append `addition`'s
+// tokens to `query` with correct spacing, skipping any token already present
+// (case-insensitive). Deterministic and idempotent — applying the same answer
+// twice never duplicates a token ("chicken breast" + "cooked" → "chicken breast
+// cooked"; applied again → unchanged). Preserves the original query text.
+function nuPatchQuery(query, addition) {
+  var base = String(query == null ? '' : query).trim();
+  var have = {};
+  nuClarNorm(base).split(' ').forEach(function (t) { if (t) have[t] = 1; });
+  var add = nuClarNorm(addition).split(' ').filter(function (t) { return t && !have[t]; });
+  if (!add.length) return base;                 // already present → no-op (dedupe)
+  return (base ? base + ' ' : '') + add.join(' ');
+}
+
+// Distinguishing descriptor tokens per candidate: each candidate's description
+// tokens minus the stopwords, minus the query, minus the tokens SHARED by every
+// candidate. What's left is exactly what separates the candidates from each
+// other, so a clean single-dimension split is detectable.
+function nuDistinguishingTokens(distinct, request) {
+  var sets = distinct.map(function (c) {
+    var out = {};
+    nuClarNorm(c.description).split(' ').forEach(function (t) { if (t && !NU_DESC_STOP[t]) out[t] = 1; });
+    return out;
+  });
+  var shared = Object.assign({}, sets[0]);
+  for (var i = 1; i < sets.length; i++) {
+    Object.keys(shared).forEach(function (t) { if (!sets[i][t]) delete shared[t]; });
+  }
+  var q = {};
+  nuClarNorm(request.query || '').split(' ').forEach(function (t) { if (t) q[t] = 1; });
+  return sets.map(function (s) {
+    return Object.keys(s).filter(function (t) { return !shared[t] && !q[t]; }).sort();
+  });
+}
+
+// Did the user already state a preparation state in their own words?
+function nuRequestHasPrep(request) {
+  var toks = nuClarNorm((request.query || '') + ' ' + (request.text || '')).split(' ');
+  for (var i = 0; i < toks.length; i++) if (NU_PREP_STATE[toks[i]]) return true;
+  return false;
+}
+
+// Preparation dimension: every candidate is separated by exactly one prep-state
+// token and NOTHING else (non-prep distinguishing tokens are empty), and ≥2
+// distinct states appear. "raw vs cooked", "dry vs prepared".
+function nuClarifyPrep(request, distinct) {
+  if (nuRequestHasPrep(request)) return null;               // user already said it
+  var dist = nuDistinguishingTokens(distinct, request);
+  var states = {};
+  for (var i = 0; i < dist.length; i++) {
+    var prep = dist[i].filter(function (t) { return NU_PREP_STATE[t]; });
+    var nonPrep = dist[i].filter(function (t) { return !NU_PREP_STATE[t]; });
+    if (nonPrep.length || prep.length !== 1) return null;   // not a pure prep split
+    states[NU_PREP_STATE[prep[0]]] = 1;
+  }
+  var st = Object.keys(states).sort();
+  if (st.length < 2) return null;
+  return {
+    type: 'preparation', target: 'query',
+    prompt: 'Is this ' + st.join(' or ') + '?',
+    options: st.map(function (s) {
+      return { label: nuTitleCase(s), patch: { query: nuPatchQuery(request.query, s) } };
+    }),
+    allowFreeText: false,
+  };
+}
+
+// Food-form dimension: prep state is identical across candidates and each is
+// separated by exactly one non-prep token, with ≥2 distinct tokens (e.g. tuna
+// in "water" vs "oil"). One clear material distinction, deterministically named.
+function nuClarifyForm(request, distinct) {
+  var dist = nuDistinguishingTokens(distinct, request);
+  var forms = {};
+  for (var i = 0; i < dist.length; i++) {
+    if (dist[i].some(function (t) { return NU_PREP_STATE[t]; })) return null;  // prep involved → not pure form
+    if (dist[i].length !== 1) return null;                  // not a single distinguishing token
+    forms[dist[i][0]] = 1;
+  }
+  var fk = Object.keys(forms).sort();
+  if (fk.length < 2) return null;
+  return {
+    type: 'form', target: 'query',
+    prompt: 'Which one — ' + fk.join(' or ') + '?',
+    options: fk.map(function (f) {
+      return { label: nuTitleCase(f), patch: { query: nuPatchQuery(request.query, f) } };
+    }),
+    allowFreeText: false,
+  };
+}
+
+// Brand dimension: the user named a brand we did NOT land on. Its UNIQUE value
+// over the chooser is asking for information the candidate rows can't convey —
+// the named brand is absent, and a free-text correction (or clearing the brand)
+// materially changes the next resolution. It deliberately does NOT re-list the
+// candidates (that is the chooser's job / verdict.alternatives); it offers the
+// free-text correction + a "search all brands" action only.
+function nuClarifyBrand(request, top, distinct) {
+  if (!request.brand || nuConfBrandState(request, top) !== 'mismatched') return null;
+  return {
+    type: 'brand', target: 'brand',
+    prompt: 'We couldn’t find the brand “' + request.brand + '”. Type the correct brand, or search all brands.',
+    options: [{ label: 'Search all brands', patch: { brand: '' } }],
+    allowFreeText: true,
+  };
+}
+
+// The single dominant dimension behind an ambiguous set, or null when none is
+// dominant (mixed dimensions, or already-answered) → the caller keeps the
+// chooser. Loop prevention: a dimension already in request.clarified is skipped.
+function nuDetectClarification(request, top, distinct, brandState) {
+  var answered = request.clarified || [];
+  // Explicit brand intent is the dominant issue when present and unmatched.
+  if (answered.indexOf('brand') === -1) {
+    var b = nuClarifyBrand(request, top, distinct);
+    if (b) return b;
+  }
+  var prep = answered.indexOf('preparation') === -1 ? nuClarifyPrep(request, distinct) : null;
+  var form = answered.indexOf('form') === -1 ? nuClarifyForm(request, distinct) : null;
+  if (prep && form) return null;              // ≥2 competing dimensions → not dominant → chooser
+  return prep || form || null;
+}
+
+// Apply a clarification answer → a deterministic patch to the SHARED request
+// that re-enters the same resolver. `choice` is an option index (structured) or
+// a free-text string (only when allowFreeText). Records the resolved dimension
+// in `clarified` so the same dimension is never asked twice (loop prevention).
+function nuApplyClarification(request, clarification, choice) {
+  request = request || {};
+  var patch = {};
+  if (typeof choice === 'number' && clarification.options && clarification.options[choice]) {
+    patch = clarification.options[choice].patch || {};
+  } else if (typeof choice === 'string' && clarification.allowFreeText) {
+    patch[clarification.target] = choice;
+  }
+  var next = Object.assign({}, request, patch);
+  var prev = request.clarified || [];
+  next.clarified = prev.indexOf(clarification.type) === -1 ? prev.concat([clarification.type]) : prev.slice();
+  return next;
+}
+
 /* ── resolution orchestrator (Phase 4.2.1b) ────────────────────────────────
  * The full resolve pipeline behind AI logging (and any future surface),
  * decoupled from HOW candidates are fetched. `source` is the SourceAdapter:
@@ -386,6 +798,16 @@ function nuAiDedupeChoices(cands) {
  * brain, every surface. An adapter that feeds raw (unranked) USDA output
  * violates the contract: route it through rankFoodCandidates first.
  * ─────────────────────────────────────────────────────────────────────────── */
+// Trim ordered candidates into the chooser-row shape both needsChoice and the
+// clarification fallback use — one place, one shape. kcal (per 100 g/ml) lets
+// same-named options explain themselves; picking one replays the resolve path.
+function nuChoiceRows(alternatives) {
+  return (alternatives || []).map(function (rf) {
+    return { raw: rf, name: rf.description || '', brand: rf.brand || '',
+             kcal: (rf.nutrients || {}).kcal };
+  });
+}
+
 function nuCreateResolver(source) {
 
   // Turn one trimmed search food + the parsed quantity/unit into a resolved
@@ -422,29 +844,35 @@ function nuCreateResolver(source) {
   async function resolveItem(parsed) {
     var foods = [];
     try { foods = await source.search(parsed.query); } catch (e) {}
-    if (!foods || !foods.length) return { parsed: parsed, unmatched: true };
 
-    if (!nuAiIsConfident(parsed, foods[0])) {
-      // Duplicates collapse first ("jasmine rice" → 4 identical products = ONE
-      // option = no interruption). Restaurant-dish categories skip the dedupe —
-      // a McDonald's and a homemade double cheeseburger can tie nutritionally
-      // and still deserve the "where from?" ask.
-      var candidates = foods.slice(0, 4);
-      var askCat = NU_ASK_CATEGORIES[String(foods[0].foodCategory || '').toLowerCase()];
-      var options = askCat ? candidates : nuAiDedupeChoices(candidates);
-      if (askCat || options.length > 1) {
-        return {
-          parsed: parsed, needsChoice: true,
-          // keep the trimmed payloads: picking one replays the normal resolve
-          // path. kcal (per 100 g/ml) lets same-named options explain themselves.
-          choices: options.map(function (rf) {
-            return { raw: rf, name: rf.description || '', brand: rf.brand || '',
-                     kcal: (rf.nutrients || {}).kcal };
-          }),
-        };
-      }
+    // Phase 4.2.3: the shared confidence verdict — assessed on the EXACT ordered
+    // candidate array just returned (no second search) — owns the interrupt
+    // decision that nuAiIsConfident + the inline dedupe/needsChoice block used to
+    // make. The chooser set is the verdict's own bounded, deduped alternatives
+    // (restaurant categories keep the undeduped top-4, exactly as before).
+    // Parity migration: only the two shipped dispositions are acted on; the
+    // score-gap / brand-variant escalations stay dormant behind
+    // NU_CONFIDENCE.scoreEscalation, so this is byte-for-byte today's behavior.
+    // No policy override → production defaults (scoreEscalation OFF,
+    // targetedClarification ON), so the identity decision is exactly
+    // Checkpoint 2's: only an already-interruptible choose_candidate base can
+    // become a clarify_input, never an auto_resolve.
+    var verdict = nuAssessConfidence(parsed, foods);
+    if (verdict.disposition === 'unresolved') return { parsed: parsed, unmatched: true };
+    if (verdict.disposition === 'clarify_input') {
+      // Additive, provider-neutral shape: the deterministic question + a fallback
+      // chooser (same trimmed candidate rows as needsChoice) so the UI can offer
+      // "pick from the list" without re-deriving anything.
+      return {
+        parsed: parsed, needsClarification: true,
+        clarification: verdict.clarification,
+        choices: nuChoiceRows(verdict.alternatives),
+      };
     }
-    // Resolve the top hit — but if the user gave a measure this food can't
+    if (verdict.disposition === 'choose_candidate') {
+      return { parsed: parsed, needsChoice: true, choices: nuChoiceRows(verdict.alternatives) };
+    }
+    // auto_resolve → resolve the top hit — but if the user gave a measure this food can't
     // express ("1/2 cup" of an oats entry with no cup portion), try the next
     // candidates for one that CAN. Guarded: an alternative must be
     // NUTRITIONALLY ALIKE to the top hit — the same food in a different data
@@ -495,7 +923,25 @@ function nuCreateResolver(source) {
     return resolveFood(c.raw, item.parsed);
   }
 
-  return { resolveFood: resolveFood, resolveItem: resolveItem, resolveChoice: resolveChoice };
+  // The user answered a clarification (`choice` = an option index, or free text
+  // when allowFreeText) → patch the shared request and RE-ENTER resolveItem (one
+  // engine, no parallel path). Malformed/empty answers are rejected: the same
+  // clarification item is returned so the UI keeps the question visible. The
+  // patched request records the answered dimension, so re-entry can resolve,
+  // present a chooser, surface a DIFFERENT dimension, or become unmatched — but
+  // never re-ask the same dimension (loop prevention lives in nuDetectClarification).
+  async function resolveClarification(item, choice) {
+    var c = item && item.clarification;
+    if (!c) return item;
+    var valid = (typeof choice === 'number' && c.options && choice >= 0 && choice < c.options.length) ||
+                (typeof choice === 'string' && c.allowFreeText && choice.trim() !== '');
+    if (!valid) return item;                         // keep the clarification (UI shows a local error)
+    var patched = nuApplyClarification(item.parsed, c, typeof choice === 'string' ? choice.trim() : choice);
+    return resolveItem(patched);
+  }
+
+  return { resolveFood: resolveFood, resolveItem: resolveItem, resolveChoice: resolveChoice,
+    resolveClarification: resolveClarification };
 }
 
 /* ── food identity ─────────────────────────────────────────────────────────
@@ -680,7 +1126,7 @@ function nuAiDisplayName(name) {
 // Sheet totals (resolved items only) — same shape as nuSavedMealTotals.
 function nuAiTotals(items) {
   return (items || []).reduce(function (t, it) {
-    if (it.unmatched || it.needsChoice) return t;
+    if (it.unmatched || it.needsChoice || it.needsClarification) return t;
     var q = (+it.servings > 0) ? +it.servings : 1;
     t.calories += (+it.perUnit.calories || 0) * q;
     t.protein  += (+it.perUnit.protein  || 0) * q;
@@ -707,6 +1153,14 @@ if (typeof module !== 'undefined' && module.exports) {
     nuAiChooseServing: nuAiChooseServing,
     NU_ASK_CATEGORIES: NU_ASK_CATEGORIES,
     nuAiIsConfident: nuAiIsConfident,
+    NU_CONFIDENCE: NU_CONFIDENCE,
+    NU_DISPOSITION_LEVEL: NU_DISPOSITION_LEVEL,
+    NU_PREP_STATE: NU_PREP_STATE,
+    nuResolvePolicy: nuResolvePolicy,
+    nuAssessConfidence: nuAssessConfidence,
+    nuDetectClarification: nuDetectClarification,
+    nuApplyClarification: nuApplyClarification,
+    nuPatchQuery: nuPatchQuery,
     nuAiChoicesAlike: nuAiChoicesAlike,
     NU_SIG_FILLER: NU_SIG_FILLER,
     nuAiNameSig: nuAiNameSig,

@@ -1732,6 +1732,7 @@ var nu_resolver = nuCreateResolver({ search: nuUsdaSearch, portions: nuFetchUsda
 function nuAiResolveFood(rawFood, parsed) { return nu_resolver.resolveFood(rawFood, parsed); }
 function nuAiResolveItem(parsed) { return nu_resolver.resolveItem(parsed); }
 function nuAiResolveChoice(item, ci) { return nu_resolver.resolveChoice(item, ci); }
+function nuAiResolveClarification(item, choice) { return nu_resolver.resolveClarification(item, choice); }
 
 // Friendly display names (nuAiDisplayName + its tables, nuNameSingular,
 // nuTitleCase) and nuAiTotals live in food-core.js.
@@ -1746,7 +1747,7 @@ async function nuAiLogItems(items, meal, date) {
   var count = 0;
   for (var i = 0; i < (items || []).length; i++) {
     var it = items[i];
-    if (it.unmatched || it.needsChoice) continue;
+    if (it.unmatched || it.needsChoice || it.needsClarification) continue;
     var f = it.food, pu = it.perUnit || {};
     // Shape shared with nuLogSavedMeal via the core's nuBuildSaveSrc — identity
     // from the resolved food, serving from the ResolvedItem, macros per-unit.

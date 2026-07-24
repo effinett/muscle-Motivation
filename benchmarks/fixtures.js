@@ -111,7 +111,25 @@ const HUMMUS = {
   nutrients: { kcal: 229, protein: 7.4, carbs: 14.9, fat: 17.1, fiber: 5.4, sugar: 0.3 },
 };
 
+// Phase 4.2.3 clarification fixtures — same base food separated by ONE dominant,
+// material dimension (preparation / form), and an explicit brand mismatch.
+const CHK_RAW = { fdcId: 700001, description: 'Chicken breast, raw', brand: 'Kirkland', group: 'branded',
+  nutrients: { kcal: 120, protein: 22.5, carbs: 0, fat: 2.6, fiber: 0, sugar: 0 } };
+const CHK_COOKED = { fdcId: 700002, description: 'Chicken breast, cooked', brand: 'Kirkland', group: 'branded',
+  nutrients: { kcal: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0, sugar: 0 } };
+const TUNA_WATER = { fdcId: 700030, description: 'Tuna, canned in water', brand: 'StarKist', group: 'branded',
+  nutrients: { kcal: 86, protein: 19, carbs: 0, fat: 0.8, fiber: 0, sugar: 0 } };
+const TUNA_OIL = { fdcId: 700031, description: 'Tuna, canned in oil', brand: 'StarKist', group: 'branded',
+  nutrients: { kcal: 198, protein: 29, carbs: 0, fat: 8, fiber: 0, sugar: 0 } };
+const MK_A = { fdcId: 700040, description: 'Whole Milk', brand: 'Horizon', group: 'branded',
+  servingSize: 240, servingSizeUnit: 'MLT', nutrients: { kcal: 61, protein: 3.3, carbs: 4.8, fat: 3.3, fiber: 0, sugar: 5 } };
+const MK_B = { fdcId: 700041, description: 'Skim Milk', brand: 'Horizon', group: 'branded',
+  servingSize: 240, servingSizeUnit: 'MLT', nutrients: { kcal: 34, protein: 3.4, carbs: 5, fat: 0.2, fiber: 0, sugar: 5 } };
+
 const FIXTURE_SEARCHES = {
+  'chicken breast prep': [CHK_RAW, CHK_COOKED],
+  'tuna canned': [TUNA_WATER, TUNA_OIL],
+  'organic milk': [MK_A, MK_B],
   egg: [EGG], toast: [BREAD], 'chicken breast': [CHICKEN], milk: [MILK], zzz: [],
   almonds: [ALMONDS],
   'protein bar': [QUEST_CC, QUEST_CNC, BAREBELLS],
@@ -143,6 +161,7 @@ const FIXTURE_PORTIONS = {
   2259794: [{ label: '1 serving', gramWeight: 170, amount: 1 }],
   171284: [{ label: '1 cup (8 fl oz)', gramWeight: 245, amount: 1 }],
   172454: [],
+  700001: [], 700002: [], 700030: [], 700031: [], 700040: [], 700041: [],
 };
 
 module.exports = { FIXTURE_SEARCHES, FIXTURE_PORTIONS };
