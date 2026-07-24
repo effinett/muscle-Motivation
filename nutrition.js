@@ -510,6 +510,7 @@ async function nuUsdaSearch(query, signal) {
   var token = s.data.session && s.data.session.access_token;
   if (!token) throw new Error('Not authenticated');
   var headers = { Authorization: 'Bearer ' + token };
+  var hasCorrectionContext = false;
   // Session correction memory (Phase 4.2.4): attach only the corrections relevant
   // to THIS query so the server can apply them immediately (before/without the
   // persistent write landing). The server treats this as untrusted evidence and
@@ -517,13 +518,18 @@ async function nuUsdaSearch(query, signal) {
   try {
     if (typeof nmSelectRelevant === 'function' && nu_corrections.length) {
       var rel = nmSelectRelevant(nu_corrections, { query: query });
-      if (rel.length) headers['X-Correction-Context'] = nmSerializeContext(rel);
+      if (rel.length) { headers['X-Correction-Context'] = nmSerializeContext(rel); hasCorrectionContext = true; }
     }
   } catch (e) { /* correction context is best-effort */ }
-  var res = await fetch('/api/usda-search?q=' + encodeURIComponent(query), {
-    headers: headers,
-    signal: signal,
-  });
+  var opts = { headers: headers, signal: signal };
+  // A correction-context request must NEVER be answered from the browser's
+  // per-query cache: the plain (no-context) response for the same URL is cached
+  // `private, max-age=60`, so right after a correction the identical query would
+  // otherwise be served the STALE pre-correction ranking (the cache is keyed by
+  // URL and ignores this header). `no-store` bypasses that so same-session
+  // learning is immediate. Plain searches keep the short cache (common while typing).
+  if (hasCorrectionContext) opts.cache = 'no-store';
+  var res = await fetch('/api/usda-search?q=' + encodeURIComponent(query), opts);
   if (!res.ok) {
     var msg = 'Search failed.';
     try { var j = await res.json(); if (j && j.error) msg = j.error; } catch (e) {}
