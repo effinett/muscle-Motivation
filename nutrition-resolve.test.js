@@ -1040,6 +1040,29 @@ test('nuCreateResolver resolves standalone via require() + fake adapter', async 
   assert.strictEqual(failed.unmatched, true);
 });
 
+test('correction memory (4.2.4): resolver performs NO reranking — trusts source order', async () => {
+  // Server-authoritative design: rankFoodCandidates (inside /api/usda-search) is
+  // the ONLY ranking authority; correction memory enters there via options.signals.
+  // The resolver must keep trusting the ordered candidate contract (foods[0] /
+  // foods.slice) and must have NO memory input of its own.
+  const core = require('./food-core.js');
+  // nuCreateResolver takes exactly the source adapter — no memory/rerank hook.
+  assert.strictEqual(core.nuCreateResolver.length, 1);
+
+  // Whatever order the source returns is exactly what the resolver acts on: a
+  // chooser preserves source order, and index 0 is always the source's top hit.
+  const ORDER = [QUEST_CC, QUEST_CNC, BAREBELLS];
+  const r = core.nuCreateResolver({ search: async () => ORDER, portions: async () => [] });
+  const bar = await r.resolveItem(item({ query: 'protein bar' }));
+  assert.strictEqual(bar.needsChoice, true);
+  assert.strictEqual(bar.choices[0].raw.fdcId, QUEST_CC.fdcId, 'chooser top = source foods[0], never reordered');
+  // Reverse the source order → the resolver's top follows it, proving it does not
+  // impose any ranking (correction or otherwise) of its own.
+  const r2 = core.nuCreateResolver({ search: async () => ORDER.slice().reverse(), portions: async () => [] });
+  const bar2 = await r2.resolveItem(item({ query: 'protein bar' }));
+  assert.strictEqual(bar2.choices[0].raw.fdcId, BAREBELLS.fdcId, 'resolver mirrors source order exactly');
+});
+
 /* ── persisted-format pins (Phase 4.2.1a — locked BEFORE extraction) ──── */
 // user_food_favorites.food_key and saved-meal items store nuFoodKey output;
 // any format change orphans existing rows. Pin the exact strings.

@@ -719,6 +719,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.0/dist/umd/supabase.js" integrity="sha384-3wY11tldQ5+yWqAvmTN4XtQvnjoTva0cV15O/O/O5NTtp0ivVopSzLOzsVXWZse9" crossorigin="anonymous"></script>
 <script src="supabase.js"></script>
 <script src="food-core.js"></script>
+<script src="food-ranking.js"></script>
+<script src="food-memory.js"></script>
 <script src="nutrition.js"></script>
 <script>
   var currentUserId = null;
@@ -1255,6 +1257,10 @@
   async function aiChoose(i, ci) {
     var it = aiItems[i];
     if (!it || !it.needsChoice) return;
+    // Capture an explicit correction BEFORE the chooser item is replaced by the
+    // resolved one (nuRecordCorrection ignores confirming the top hit). Guarded
+    // so it can never block the actual resolve/log.
+    try { if (typeof nuRecordCorrection === 'function') nuRecordCorrection(it, ci); } catch (e) {}
     try {
       aiItems[i] = await nuAiResolveChoice(it, ci);
       renderAiSheet();

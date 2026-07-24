@@ -32,7 +32,9 @@ const path = require('node:path');
   } catch (e) { /* no .env.local — fine */ }
 })();
 
-const { expandQuery, searchFoods } = require('./api/usda-search.js')._internals;
+const _internals = require('./api/usda-search.js')._internals;
+const { expandQuery, searchFoods, buildResponse, buildCorrectionSignal, loadPersistentCorrections } = _internals;
+const foodMemory = require('./food-memory.js');
 const HAS_KEY = !!process.env.USDA_API_KEY;
 
 /* ── tier 1: query normalization (pure) ─────────────────────────────────── */
@@ -173,4 +175,128 @@ test('live: "greek yogurt" → plain, not fruit/flavored', { skip: !HAS_KEY }, a
   const f = await top('greek yogurt');
   assert.match(f.description, /greek/i, 'got: ' + f.description);
   assert.doesNotMatch(f.description, /fruit|vanilla|strawberry|honey|flavored/i, 'got: ' + f.description);
+});
+
+/* ── Correction memory: server-side ranking application (Phase 4.2.4) ─────────
+ * These stay OFFLINE (no USDA key): they exercise the ranking BOUNDARY —
+ * buildResponse + buildCorrectionSignal — which is where correction memory
+ * enters, per the server-authoritative design (the resolver never reranks). */
+
+// Fresh candidate objects per call — rankFoodCandidates stamps `score` in place,
+// so reusing objects across calls would alias scores between them.
+function fairlifePool() {
+  return [
+    { fdcId: 1, description: 'Fairlife Whole Milk', brand: 'Fairlife', dataType: 'Branded',
+      nutrients: { kcal: 60, protein: 3, carbs: 5, fat: 3 } },
+    { fdcId: 2, description: 'Fairlife Nutrition Bar', brand: 'Fairlife', dataType: 'Branded',
+      nutrients: { kcal: 350, protein: 20, carbs: 30, fat: 10 } },
+  ];
+}
+function correction(query, top, picked) {
+  return foodMemory.nmBuildCorrectionEvent({
+    request: { query }, choices: [{ raw: top }, { raw: picked }], chosenIndex: 1,
+  });
+}
+function scoreOf(resp, fdcId) { return resp.foods.find((f) => f.fdcId === fdcId).score; }
+
+test('correction signal boosts the corrected food and demotes the rejected one', () => {
+  const q = 'fairlife milk';
+  const base = buildResponse(q, fairlifePool(), []);
+  const [milk, bar] = fairlifePool();
+  const sig = foodMemory.nmCorrectionSignal([correction(q, bar, milk)], { query: q });
+  const withMem = buildResponse(q, fairlifePool(), [], { signals: [sig] });
+  assert.equal(scoreOf(withMem, 1) - scoreOf(base, 1), foodMemory.nmContribution('exact', 1)); // milk boosted
+  assert.equal(scoreOf(withMem, 2) - scoreOf(base, 2), foodMemory.NU_CORRECTION.demoteIncorrect); // bar demoted
+});
+
+test('correction cannot fabricate a candidate absent from the retrieved set', () => {
+  const q = 'fairlife milk';
+  const [milk] = fairlifePool();
+  // corrected food (fdcId 999) is NOT in the pool → ordering is unchanged
+  const ghost = { fdcId: 999, description: 'Ghost Milk', brand: 'Fairlife' };
+  const sig = foodMemory.nmCorrectionSignal([correction(q, milk, ghost)], { query: q });
+  const base = buildResponse(q, fairlifePool(), []);
+  const withMem = buildResponse(q, fairlifePool(), [], { signals: [sig] });
+  assert.deepEqual(withMem.foods.map((f) => f.fdcId), base.foods.map((f) => f.fdcId));
+  assert.ok(!withMem.foods.some((f) => f.fdcId === 999));
+});
+
+test('buildResponse with no signal reproduces exactly the pre-4.2.4 ranking', () => {
+  const q = 'fairlife milk';
+  const a = buildResponse(q, fairlifePool(), []);
+  const b = buildResponse(q, fairlifePool(), [], undefined);
+  const c = buildResponse(q, fairlifePool(), [], { signals: [] });
+  assert.deepEqual(a.foods.map((f) => [f.fdcId, f.score]), b.foods.map((f) => [f.fdcId, f.score]));
+  assert.deepEqual(a.foods.map((f) => [f.fdcId, f.score]), c.foods.map((f) => [f.fdcId, f.score]));
+});
+
+// Stub global.fetch for the persistent-lookup path (REST under the user's token).
+function withFetch(impl, run) {
+  const orig = global.fetch;
+  global.fetch = impl;
+  return Promise.resolve().then(run).finally(() => { global.fetch = orig; });
+}
+
+test('buildCorrectionSignal: session context (header) alone works when persistence is empty', async () => {
+  const q = 'fairlife milk';
+  const [milk, bar] = fairlifePool();
+  const ctx = foodMemory.nmSerializeContext([correction(q, bar, milk)]);
+  await withFetch(async () => ({ ok: true, json: async () => [] }), async () => {
+    const sig = await buildCorrectionSignal(q, { headers: { 'x-correction-context': ctx } }, 'tok');
+    assert.ok(sig, 'a session-only signal is built');
+    assert.equal(sig(milk), foodMemory.nmContribution('exact', 1));
+  });
+});
+
+test('buildCorrectionSignal: session memory still applies when the persistent lookup FAILS', async () => {
+  const q = 'fairlife milk';
+  const [milk, bar] = fairlifePool();
+  const ctx = foodMemory.nmSerializeContext([correction(q, bar, milk)]);
+  await withFetch(async () => { throw new Error('db down'); }, async () => {
+    const sig = await buildCorrectionSignal(q, { headers: { 'x-correction-context': ctx } }, 'tok');
+    assert.ok(sig, 'lookup failure degrades to session-only, never throws');
+    assert.equal(sig(milk), foodMemory.nmContribution('exact', 1));
+  });
+});
+
+test('buildCorrectionSignal: persistent memory alone works with no session context', async () => {
+  const q = 'fairlife milk';
+  const [milk] = fairlifePool();
+  const persisted = [{ status: 'active', raw_query: q, norm_query: foodMemory.nmNormQuery(q),
+    intent_key: foodMemory.nmIntentKey(q), corrected_key: 'usda:1', incorrect_key: 'usda:2',
+    reinforcement_count: 1, last_used_at: new Date().toISOString() }];
+  await withFetch(async () => ({ ok: true, json: async () => persisted }), async () => {
+    const sig = await buildCorrectionSignal(q, { headers: {} }, 'tok');
+    assert.ok(sig);
+    assert.equal(sig(milk), foodMemory.nmContribution('exact', 1));
+  });
+});
+
+test('buildCorrectionSignal: persistent + session duplicate is not double-counted', async () => {
+  const q = 'fairlife milk';
+  const [milk, bar] = fairlifePool();
+  const ctx = foodMemory.nmSerializeContext([correction(q, bar, milk)]);
+  const persisted = [{ status: 'active', raw_query: q, norm_query: foodMemory.nmNormQuery(q),
+    intent_key: foodMemory.nmIntentKey(q), corrected_key: 'usda:1', incorrect_key: 'usda:2',
+    reinforcement_count: 1, last_used_at: new Date().toISOString() }];
+  await withFetch(async () => ({ ok: true, json: async () => persisted }), async () => {
+    const sig = await buildCorrectionSignal(q, { headers: { 'x-correction-context': ctx } }, 'tok');
+    // Same correction from both sources → single exact contribution, not 2×.
+    assert.equal(sig(milk), foodMemory.nmContribution('exact', 1));
+  });
+});
+
+test('buildCorrectionSignal: no memory anywhere → null (normal ranking)', async () => {
+  await withFetch(async () => ({ ok: true, json: async () => [] }), async () => {
+    const sig = await buildCorrectionSignal('fairlife milk', { headers: {} }, 'tok');
+    assert.equal(sig, null);
+  });
+});
+
+test('buildCorrectionSignal: malformed session context is ignored safely', async () => {
+  await withFetch(async () => ({ ok: true, json: async () => [] }), async () => {
+    const sig = await buildCorrectionSignal('fairlife milk',
+      { headers: { 'x-correction-context': 'not-json-{{{' } }, 'tok');
+    assert.equal(sig, null); // dropped, no throw, falls back to normal ranking
+  });
 });

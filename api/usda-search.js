@@ -27,6 +27,7 @@
 // already set for the Stripe routes. The key is never sent to the browser.
 
 const ranking = require('../food-ranking.js');
+const memory  = require('../food-memory.js');
 
 const SUPABASE_URL      = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
@@ -111,8 +112,13 @@ function mergeGeneric(primary, supplement) {
 // query → the response body. The ranking itself lives in food-ranking.js; the
 // branded/generic pools are flattened because the shared ranker re-derives the
 // split from dataType === 'Branded' (exactly how the pools were fetched).
-function buildResponse(effQuery, branded, generic) {
-  return ranking.rankFoodCandidates(effQuery, (branded || []).concat(generic || []));
+// `opts.signals` (Phase 4.2.4) is the correction-memory pass — the ONLY new
+// input to ranking. It is optional and defaults to undefined, so the offline
+// ranking harness (which calls with three args) reproduces production ranking
+// exactly, and ranking stays the single authority (food-ranking.js).
+function buildResponse(effQuery, branded, generic, opts) {
+  const options = (opts && opts.signals && opts.signals.length) ? { signals: opts.signals } : undefined;
+  return ranking.rankFoodCandidates(effQuery, (branded || []).concat(generic || []), options);
 }
 
 // The complete search flow (expansion → fetches → recovery ladder → ranking),
@@ -120,7 +126,7 @@ function buildResponse(effQuery, branded, generic) {
 // production runs. Returns { status, body }. `_retried` bounds the recovery
 // recursion: a corrected query reruns the WHOLE flow once (supplements, brand
 // intent, multi-word precision included), never more.
-async function searchFoods(q, _retried) {
+async function searchFoods(q, _retried, opts) {
     // Alias + typeahead expansion — USDA is queried with the EFFECTIVE query
     // ("blueb" → "blueberries", "coke" → "coca cola"), and scoring uses it too.
     const eq = ranking.expandQuery(q);
@@ -213,7 +219,7 @@ async function searchFoods(q, _retried) {
       if (corrected !== effQuery) {
         const cg = await fetchType(corrected, 'Foundation,SR Legacy', 25).catch(function () { return []; });
         if (cg.length) {
-          const out = await searchFoods(corrected, true);
+          const out = await searchFoods(corrected, true, opts);
           if (out.status === 200) out.body.expandedQuery = corrected;
           return out;
         }
@@ -234,7 +240,7 @@ async function searchFoods(q, _retried) {
         const fGeneric = fg.status === 'fulfilled' ? fg.value : [];
         const corrected = ranking.correctFromPool(effQuery, fGeneric.concat(fBranded));
         if (corrected !== effQuery) {
-          const out = await searchFoods(corrected, true);
+          const out = await searchFoods(corrected, true, opts);
           if (out.status === 200) out.body.expandedQuery = corrected;
           return out;
         }
@@ -243,11 +249,54 @@ async function searchFoods(q, _retried) {
       }
     }
 
-    const body = buildResponse(effQuery, branded, generic);
+    const body = buildResponse(effQuery, branded, generic, opts);
 
     if (eq.expanded) body.expandedQuery = effQuery;   // transparency for the client/debugging
     if (USING_DEMO) body.warning = 'Using DEMO_KEY (rate-limited, dev only).';
     return { status: 200, body };
+}
+
+/* ── Correction memory (Phase 4.2.4) ─────────────────────────────────────────
+ * Ranking stays server-authoritative and the resolver never reranks; correction
+ * memory reaches ranking ONLY through the options.signals seam here. Two sources
+ * feed the SAME shared nmCorrectionSignal (food-memory.js):
+ *   • persistent — the user's stored corrections, loaded under THEIR RLS token
+ *     (RLS enforces ownership; a forged user id is impossible), indexed by
+ *     normalized query + the anchored intent bucket, bounded by maxLookupRecords;
+ *   • session — a request-scoped, client-supplied context (X-Correction-Context)
+ *     treated strictly as UNTRUSTED preference EVIDENCE: parsed, size/shape/
+ *     identity/schema-validated, never written to the database from here.
+ * Persistent ∪ session are deduped so one correction is never double-counted.
+ * Every failure path degrades to normal ranking — correction memory can slow or
+ * skew nothing more than the ordering, and never breaks food resolution. */
+
+// The user's active corrections matching this query, read under their own token.
+async function loadPersistentCorrections(q, token) {
+  const nq = memory.nmNormQuery(q);
+  if (!nq || !token) return [];
+  const conds = ['norm_query.eq.' + encodeURIComponent(nq)];
+  const ik = memory.nmIntentKey(q);
+  if (ik) conds.push('intent_key.eq.' + encodeURIComponent(ik));
+  const url = `${SUPABASE_URL}/rest/v1/food_corrections` +
+    `?status=eq.active&limit=${memory.NU_CORRECTION.limits.maxLookupRecords}` +
+    `&select=status,raw_query,norm_query,intent_key,corrected_key,incorrect_key,reinforcement_count,last_used_at` +
+    `&or=(${conds.join(',')})`;
+  const r = await fetch(url, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` } });
+  if (!r.ok) return [];
+  const rows = await r.json();
+  return Array.isArray(rows) ? rows.map((row) => Object.assign({ origin: 'persistent' }, row)) : [];
+}
+
+// Build the correction-memory signal for this request, or null when there is
+// nothing to apply. Never throws — the caller treats any failure as "no memory".
+async function buildCorrectionSignal(q, req, token) {
+  const headerCx = req.headers['x-correction-context'];
+  const session = memory.nmParseContext(typeof headerCx === 'string' ? headerCx : '');
+  let persistent = [];
+  try { persistent = await loadPersistentCorrections(q, token); } catch (e) { persistent = []; }
+  const all = memory.nmDedupeMemories(persistent.concat(session));
+  if (!all.length) return null;
+  return memory.nmCorrectionSignal(all, { query: q });
 }
 
 module.exports = async (req, res) => {
@@ -270,9 +319,18 @@ module.exports = async (req, res) => {
 
     const q = (req.query.q || '').toString().trim();
     if (q.length < 2) return res.status(200).json({ foods: [] }); // mirror client guard
-    const out = await searchFoods(q);
-    // Short CDN cache: identical queries are common while typing.
-    if (out.status === 200) res.setHeader('Cache-Control', 'private, max-age=60');
+
+    // Best-effort correction-memory signal — never blocks resolution.
+    let signal = null;
+    try { signal = await buildCorrectionSignal(q, req, token); } catch (e) { signal = null; }
+
+    const out = await searchFoods(q, undefined, signal ? { signals: [signal] } : undefined);
+    if (out.status === 200) {
+      // A correction-influenced response is user- AND context-specific, so it
+      // must never be served from a URL-keyed cache to a later, different-context
+      // request; the plain query keeps the short private cache (common while typing).
+      res.setHeader('Cache-Control', signal ? 'private, no-store' : 'private, max-age=60');
+    }
     return res.status(out.status).json(out.body);
   } catch (err) {
     console.error('usda-search error:', err);
@@ -286,6 +344,7 @@ module.exports = async (req, res) => {
 // entries now delegate to food-ranking.js (one source of truth).
 module.exports._internals = {
   trimFood, buildResponse, mergeGeneric, searchFoods,
+  loadPersistentCorrections, buildCorrectionSignal,
   expandQuery: ranking.expandQuery,
   supplementFor: ranking.supplementFor,
   brandSupplementQuery: ranking.brandSupplementQuery,

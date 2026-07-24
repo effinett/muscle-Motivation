@@ -195,7 +195,7 @@ provider unless a new route is explicitly built on another.
 **Node / tooling:**
 - `package.json`: `npm test` → `node --test`; `npm run bench` → `node benchmarks/run-resolve.js`.
 - Dependencies: `@anthropic-ai/sdk`, `stripe`. No build step.
-- Test files: `ai-food-parse.test.js`, `usda-search.test.js`, `nutrition-resolve.test.js`, `food-ranking.test.js`, `progression.test.js`.
+- Test files: `ai-food-parse.test.js`, `usda-search.test.js`, `nutrition-resolve.test.js`, `food-ranking.test.js`, `food-memory.test.js`, `progression.test.js`.
 - Benchmark corpus: `benchmarks/resolve-cases.jsonl` + `benchmarks/fixtures.js`, run by `benchmarks/run-resolve.js` (two-tier runner, Phase 4.2.1d).
 
 **Supabase notes:**
@@ -283,6 +283,39 @@ The pure candidate-reranking intelligence behind every food search — extracted
   Phases 4.2.3+ (confidence, correction memory, portion compatibility, meal context,
   preferences) plug in there without touching candidate acquisition or creating a second
   ranking engine.
+
+### Shared Correction Memory Core — `food-memory.js` (`Live`, Phase 4.2.4)
+
+Pure, DOM-free, fetch-free intelligence (browser + Node, same guarded-exports
+pattern) that lets food resolution LEARN from explicit user corrections. It
+reuses `food-core.js` (`nuFoodKey`, `NU_PREP_STATE`, `nuAiNameSig`) and
+`food-ranking.js` (`nText`/`tokenize`/`stem`/`queryBrandEntries`) — no duplicated
+normalization or identity. Browser load order on `nutrition.html`:
+`food-core.js` → `food-ranking.js` → `food-memory.js` → `nutrition.js`.
+
+- **Server-authoritative, one seam.** `rankFoodCandidates` stays the ONLY ranking
+  authority and runs server-side in `/api/usda-search`; the resolver never
+  reranks (still trusts `foods[0]`). Correction memory reaches ranking ONLY
+  through the `options.signals` seam. Two sources feed the SAME
+  `nmCorrectionSignal`: **persistent** (the user's `public.food_corrections`
+  rows, loaded under their RLS token, indexed by `norm_query` + anchored
+  `intent_key`, bounded) and **session** (a request-scoped
+  `X-Correction-Context` header — UNTRUSTED preference evidence: parsed,
+  size/shape/identity/schema-validated, never written to the DB from the search
+  route). Persistent ∪ session are deduped so a correction is never
+  double-counted. Every failure path degrades to normal ranking.
+- **Capture:** only an explicit chooser correction — `aiChoose(i, ci)` with
+  `ci > 0` (the user picked a candidate OTHER than the implicit top). Confirmations,
+  clarification answers, quantity/serving edits, and cancels are NOT corrections.
+- **Matching tiers (conservative):** `exact` (canonical normalized query) >
+  `normalized` (same brand+base+product, compatible prep) > `intent` (an anchored
+  memory generalizing to a strictly more specific query). Brand/prep/product/base
+  conflicts HARD-block generalization. Boosts are bounded (`NU_CORRECTION`,
+  capped below the ranking safety floors) and can never fabricate a candidate or
+  bypass eligibility/verification/dedupe.
+- Covered by `food-memory.test.js`, server-path cases in `usda-search.test.js`,
+  a resolver-no-rerank pin in `nutrition-resolve.test.js`, and `correction-memory`
+  benchmark cases.
 
 ### Other shared modules (`Live`)
 
@@ -711,6 +744,7 @@ ai_usage
 ```
 
 - `ai_usage` (`Live` since Phase 4.2): per-user AI request tracking for rate/cost caps — `id, user_id, route, created_at`. RLS: users may SELECT their own rows; INSERT/UPDATE/DELETE happen only through the service role in Vercel functions.
+- `food_corrections` (`Live` since Phase 4.2.4): per-user Correction Memory — identity columns store `nuFoodKey` strings (`incorrect_key`/`corrected_key`), plus `norm_query`, `intent_key`, minimal `*_meta` snapshots (name+brand only), `status` (active/superseded/deactivated), `reinforcement_count`, `schema_version`, `last_used_at`. Unique `(user_id, norm_query, corrected_key)` (repeats reinforce); indexes on `(user_id, norm_query)` and `(user_id, intent_key)` where `status='active'`. RLS `auth.uid() = user_id` for all four verbs (same client-write pattern as `user_food_favorites`); `on delete cascade` with the user for account-deletion compatibility. Written client-side; read at ranking time under the user's token.
 
 ### Long-Term Product Vision
 

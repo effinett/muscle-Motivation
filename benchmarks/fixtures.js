@@ -126,7 +126,34 @@ const MK_A = { fdcId: 700040, description: 'Whole Milk', brand: 'Horizon', group
 const MK_B = { fdcId: 700041, description: 'Skim Milk', brand: 'Horizon', group: 'branded',
   servingSize: 240, servingSizeUnit: 'MLT', nutrients: { kcal: 34, protein: 3.4, carbs: 5, fat: 0.2, fiber: 0, sugar: 5 } };
 
+// ── Correction-memory fixtures (Phase 4.2.4) ────────────────────────────────
+// Two distinct Fairlife bars (a chooser: different flavors, not alike) plus a
+// Fairlife milk (a DIFFERENT product form) exercise generalization vs the
+// product-conflict rejection boundary. Deterministic, ranked live by
+// rankFoodCandidates in the runner's `rank` mode.
+const FL_BAR_CHOC = { fdcId: 999101, description: 'FAIRLIFE CHOCOLATE PROTEIN BAR', brand: 'Fairlife',
+  group: 'branded', servingSize: 60, servingSizeUnit: 'g', householdServing: '1 bar',
+  nutrients: { kcal: 320, protein: 20, carbs: 30, fat: 10, fiber: 5, sugar: 3 } };
+const FL_BAR_CARAMEL = { fdcId: 999102, description: 'FAIRLIFE CARAMEL PROTEIN BAR', brand: 'Fairlife',
+  group: 'branded', servingSize: 60, servingSizeUnit: 'g', householdServing: '1 bar',
+  nutrients: { kcal: 330, protein: 21, carbs: 31, fat: 11, fiber: 4, sugar: 4 } };
+const FL_MILK = { fdcId: 999103, description: 'FAIRLIFE WHOLE MILK', brand: 'Fairlife',
+  group: 'branded', servingSize: 240, servingSizeUnit: 'MLT', householdServing: '1 cup',
+  nutrients: { kcal: 61, protein: 3.3, carbs: 4.8, fat: 3.3, fiber: 0, sugar: 5 } };
+// Cooked chicken breast twin (a chooser vs the raw entry) for the generic
+// exact/normalized correction cases on the "chicken breast cooked" query.
+const CHK_BREAST_RAW = { fdcId: 999111, description: 'Chicken, breast, meat only, raw', brand: '',
+  group: 'generic', foodCategory: 'Poultry Products',
+  nutrients: { kcal: 120, protein: 22.5, carbs: 0, fat: 2.6, fiber: 0, sugar: 0 } };
+const CHK_BREAST_COOKED = { fdcId: 999112, description: 'Chicken, breast, meat only, cooked, roasted', brand: '',
+  group: 'generic', foodCategory: 'Poultry Products',
+  nutrients: { kcal: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0, sugar: 0 } };
+
 const FIXTURE_SEARCHES = {
+  'fairlife protein bar': [FL_BAR_CHOC, FL_BAR_CARAMEL],
+  'fairlife caramel protein bar': [FL_BAR_CHOC, FL_BAR_CARAMEL],
+  'fairlife whole milk': [FL_MILK, FL_BAR_CHOC, FL_BAR_CARAMEL],
+  'chicken breast cooked': [CHK_BREAST_RAW, CHK_BREAST_COOKED],
   'chicken breast prep': [CHK_RAW, CHK_COOKED],
   'tuna canned': [TUNA_WATER, TUNA_OIL],
   'organic milk': [MK_A, MK_B],
@@ -162,6 +189,7 @@ const FIXTURE_PORTIONS = {
   171284: [{ label: '1 cup (8 fl oz)', gramWeight: 245, amount: 1 }],
   172454: [],
   700001: [], 700002: [], 700030: [], 700031: [], 700040: [], 700041: [],
+  999101: [], 999102: [], 999103: [], 999111: [], 999112: [],
 };
 
 module.exports = { FIXTURE_SEARCHES, FIXTURE_PORTIONS };

@@ -509,8 +509,19 @@ async function nuUsdaSearch(query, signal) {
   var s = await supabaseClient.auth.getSession();
   var token = s.data.session && s.data.session.access_token;
   if (!token) throw new Error('Not authenticated');
+  var headers = { Authorization: 'Bearer ' + token };
+  // Session correction memory (Phase 4.2.4): attach only the corrections relevant
+  // to THIS query so the server can apply them immediately (before/without the
+  // persistent write landing). The server treats this as untrusted evidence and
+  // re-validates it; a failure here must never block search, so it is guarded.
+  try {
+    if (typeof nmSelectRelevant === 'function' && nu_corrections.length) {
+      var rel = nmSelectRelevant(nu_corrections, { query: query });
+      if (rel.length) headers['X-Correction-Context'] = nmSerializeContext(rel);
+    }
+  } catch (e) { /* correction context is best-effort */ }
   var res = await fetch('/api/usda-search?q=' + encodeURIComponent(query), {
-    headers: { Authorization: 'Bearer ' + token },
+    headers: headers,
     signal: signal,
   });
   if (!res.ok) {
@@ -1733,6 +1744,83 @@ function nuAiResolveFood(rawFood, parsed) { return nu_resolver.resolveFood(rawFo
 function nuAiResolveItem(parsed) { return nu_resolver.resolveItem(parsed); }
 function nuAiResolveChoice(item, ci) { return nu_resolver.resolveChoice(item, ci); }
 function nuAiResolveClarification(item, choice) { return nu_resolver.resolveClarification(item, choice); }
+
+/* ── Correction memory capture (Phase 4.2.4) ─────────────────────────────────
+ * A bounded, request-scoped SESSION store of explicit corrections, plus a
+ * best-effort PERSISTENT write under RLS (same client-write pattern as
+ * favorites). The resolver never reranks — captured corrections reach ranking
+ * only via nuUsdaSearch's X-Correction-Context header + the server's persistent
+ * lookup, both feeding the shared nmCorrectionSignal. Every step is guarded:
+ * capturing/persisting a correction can never break logging. */
+var nu_corrections = [];   // in-memory session store (bounded by nmSessionAdd)
+
+// Record an explicit chooser correction: the user picked a candidate OTHER than
+// the top hit. Updates the session store immediately, then persists best-effort.
+function nuRecordCorrection(item, ci) {
+  if (typeof nmIsExplicitCorrection !== 'function' || !nmIsExplicitCorrection(item, ci)) return;
+  var ev;
+  try {
+    ev = nmBuildCorrectionEvent({
+      request: item.parsed || {}, choices: item.choices, chosenIndex: ci,
+      sourceSurface: 'ai_quick_log', provenance: 'choose_candidate',
+    });
+  } catch (e) { return; }
+  if (!ev || !ev.corrected_key || !ev.norm_query) return;
+  nu_corrections = nmSessionAdd(nu_corrections, ev);
+  nuPersistCorrection(ev);   // fire-and-forget; session learning already applied
+}
+
+// Persist a correction for the authenticated user (RLS enforces ownership).
+// Idempotent by (user_id, norm_query, corrected_key): a repeat REINFORCES the
+// row; a contradictory correction for the same query supersedes the old ones.
+// Never throws — a storage failure leaves session learning fully intact.
+async function nuPersistCorrection(ev) {
+  try {
+    var s = await supabaseClient.auth.getSession();
+    var uid = s.data.session && s.data.session.user && s.data.session.user.id;
+    if (!uid) return;
+    // Contradiction policy: same query, a DIFFERENT corrected food → retire the
+    // prior active rows for this query so exactly one preference stays dominant.
+    await supabaseClient.from('food_corrections')
+      .update({ status: 'superseded', updated_at: new Date().toISOString() })
+      .eq('user_id', uid).eq('norm_query', ev.norm_query).eq('status', 'active')
+      .neq('corrected_key', ev.corrected_key);
+    // Reinforce an identical prior correction, else insert a fresh one.
+    var found = await supabaseClient.from('food_corrections')
+      .select('id, reinforcement_count')
+      .eq('user_id', uid).eq('norm_query', ev.norm_query).eq('corrected_key', ev.corrected_key)
+      .limit(1).maybeSingle();
+    if (found.data && found.data.id) {
+      await supabaseClient.from('food_corrections').update({
+        reinforcement_count: (+found.data.reinforcement_count || 1) + 1,
+        status: 'active',
+        last_used_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq('id', found.data.id);
+    } else {
+      await supabaseClient.from('food_corrections').insert({
+        user_id: uid,
+        schema_version: ev.schema_version,
+        status: 'active',
+        raw_query: ev.raw_query,
+        norm_query: ev.norm_query,
+        intent_key: ev.intent_key,
+        incorrect_key: ev.incorrect_key,
+        corrected_key: ev.corrected_key,
+        incorrect_meta: ev.incorrect_meta,
+        corrected_meta: ev.corrected_meta,
+        source_surface: ev.source_surface,
+        provenance: ev.provenance,
+        confidence_before: ev.confidence_before,
+        ambiguity: ev.ambiguity,
+        reinforcement_count: 1,
+        last_used_at: ev.last_used_at,
+      });
+    }
+  } catch (e) {
+    console.error('nuPersistCorrection error (non-fatal):', e);
+  }
+}
 
 // Friendly display names (nuAiDisplayName + its tables, nuNameSingular,
 // nuTitleCase) and nuAiTotals live in food-core.js.

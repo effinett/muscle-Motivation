@@ -55,6 +55,8 @@ const path = require('node:path');
 })();
 
 const core = require('../food-core.js');
+const ranking = require('../food-ranking.js');
+const memory = require('../food-memory.js');
 const { FIXTURE_SEARCHES, FIXTURE_PORTIONS } = require('./fixtures.js');
 
 const STRICT = process.argv.includes('--strict');
@@ -86,6 +88,34 @@ function liveSource() {
       } catch { return []; }               // same graceful fallback as the route
     },
   };
+}
+
+// A per-case fixture source that ranks the raw fixture pool exactly as the
+// server does (rankFoodCandidates), optionally with a correction-memory signal
+// built from the case's `corrections`. This is where Phase 4.2.4 benchmark
+// cases exercise correction RANKING offline: the resolver still never reranks —
+// it consumes this already-ranked pool, mirroring /api/usda-search.
+function rankedCorrectionSource(c) {
+  const raw = FIXTURE_SEARCHES[c.input.query] || [];
+  let options;
+  if (Array.isArray(c.corrections) && c.corrections.length) {
+    const recs = c.corrections.map((cor) => {
+      const q = cor.query || c.input.query;
+      return {
+        status: cor.status || 'active',
+        raw_query: q,
+        norm_query: memory.nmNormQuery(q),
+        intent_key: memory.nmIntentKey(q),
+        corrected_key: cor.corrected_key,
+        incorrect_key: cor.incorrect_key || null,
+        reinforcement_count: cor.reinforcement_count || 1,
+        last_used_at: cor.last_used_at || new Date().toISOString(),
+      };
+    });
+    options = { signals: [memory.nmCorrectionSignal(recs, c.input)] };
+  }
+  const foods = ranking.rankFoodCandidates(c.input.query, raw, options).foods;
+  return { search: async () => foods, portions: async (id) => FIXTURE_PORTIONS[id] || [] };
 }
 
 /* ── expectation checks ────────────────────────────────────────────────── */
@@ -199,7 +229,14 @@ function normalizeInput(input) {
   const tagStats = {};   // tag → { pass, fail }
 
   for (const c of cases) {
-    const resolver = c.tier === 'live' ? liveResolver : fixtureResolver;
+    // Correction-memory cases (Phase 4.2.4) rank a fixture pool through the shared
+    // ranker + correction signal, then resolve as usual — offline + deterministic.
+    let resolver;
+    if (c.corrections || c.rank) {
+      resolver = core.nuCreateResolver(rankedCorrectionSource(c));
+    } else {
+      resolver = c.tier === 'live' ? liveResolver : fixtureResolver;
+    }
     if (!resolver) { skipped++; continue; }              // live tier without USDA_API_KEY
 
     let mismatches;
