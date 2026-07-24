@@ -1094,6 +1094,18 @@ const P25 = {
                nutrients: { kcal: 379, protein: 12, carbs: 74, fat: 7, fiber: 10, sugar: 4 } }],
   'mystery stew': [{ fdcId: 900001, description: 'mixed prepared food', group: 'generic',
                nutrients: { kcal: 150, protein: 8, carbs: 15, fat: 6, fiber: 2, sugar: 3 } }],
+  rice:     [{ fdcId: 168878, description: 'Rice, white, cooked', group: 'generic',
+               foodCategory: 'Cereal Grains and Pasta', servingSize: 158, servingSizeUnit: 'g',
+               householdServing: '1 cup', nutrients: { kcal: 130, protein: 2.7, carbs: 28, fat: 0.3, fiber: 0.4, sugar: 0.1 } }],
+  'peanut butter': [{ fdcId: 172470, description: 'Peanut butter, smooth', group: 'generic',
+               foodCategory: 'Legumes and Legume Products',
+               nutrients: { kcal: 588, protein: 25, carbs: 20, fat: 50, fiber: 6, sugar: 9 } }],
+  chicken:  [{ fdcId: 171534, description: 'Chicken, breast, cooked, roasted', group: 'generic',
+               foodCategory: 'Poultry Products',
+               nutrients: { kcal: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0, sugar: 0 } }],
+  'little gem lettuce': [{ fdcId: 169247, description: 'Lettuce, cos or romaine, raw', group: 'generic',
+               foodCategory: 'Vegetables and Vegetable Products',
+               nutrients: { kcal: 17, protein: 1.2, carbs: 3.3, fat: 0.3, fiber: 2.1, sugar: 1.2 } }],
 };
 function p25resolver() {
   const core = require('./food-core.js');
@@ -1193,6 +1205,68 @@ test('4.2.5: session portion correction overrides the default, isolated by food+
   const bowl = await r.resolveItem(Object.assign(item({ query: 'almonds', unit: 'bowl' }),
     { portionCorrections: corr }));
   assert.ok(!bowl.portion || !bowl.portion.provenance.correctionApplied);
+});
+
+test('4.2.5 hardening: dropped quantifiers (unit=null) are recovered from raw text → clarify', async () => {
+  // The AI parser drops "some"/"a little"/"a bit of" (arrives unit=null but the
+  // phrase survives in `text`). The resolver must recover it and ASK, not silently
+  // log the food's default serving. Parsed shapes mirror the REAL production parser.
+  const r = p25resolver();
+  const phrases = [
+    { text: 'some rice', query: 'rice' },
+    { text: 'a little rice', query: 'rice' },
+    { text: 'a bit of rice', query: 'rice' },
+    { text: 'some peanut butter', query: 'peanut butter' },
+    { text: 'a little milk', query: 'milk' },
+    { text: 'some chicken', query: 'chicken' },
+    { text: 'some almonds', query: 'almonds' },
+  ];
+  for (const p of phrases) {
+    const it = await r.resolveItem(item({ text: p.text, query: p.query, unit: null }));
+    assert.strictEqual(it.needsClarification, true, `"${p.text}" must clarify, not silently default`);
+    assert.strictEqual(it.clarification.type, 'portion', `"${p.text}" → portion clarification`);
+    assert.deepStrictEqual(it.clarification.options.map((o) => o.label),
+      ['Small amount', 'Medium amount', 'Large amount'], `"${p.text}" clean labels`);
+    assert.ok(!it.needsChoice && !it.unmatched);
+  }
+});
+
+test('4.2.5 hardening: answering a recovered clarification resolves, estimated, no loop', async () => {
+  const r = p25resolver();
+  const it = await r.resolveItem(item({ text: 'some rice', query: 'rice', unit: null }));
+  assert.strictEqual(it.needsClarification, true);
+  const ans = await r.resolveClarification(it, 1);           // "Medium amount"
+  assert.ok(!ans.needsClarification, 'must not re-ask the same portion dimension (loop guard)');
+  assert.strictEqual(ans.estimated, true, 'resolved amount is honestly flagged estimated');
+  assert.ok(/~/.test(ans.serving_description), 'serving text carries the ~ estimate marker');
+  assert.strictEqual(ans.food.usda_fdc_id, 168878);
+});
+
+test('4.2.5 hardening: explicit quantity ALWAYS wins over a recovered quantifier', async () => {
+  const r = p25resolver();
+  // explicit grams present → exact wins, no clarify, no estimate
+  const g = await r.resolveItem(item({ text: 'some rice, 150 g', query: 'rice', quantity: 150, unit: 'g', grams: 150 }));
+  assert.strictEqual(g.grams, 150);
+  assert.ok(!g.needsClarification && !g.estimated, 'explicit weight is exact, not an estimate');
+
+  // explicit unit present ("tbsp") → rawText "a little" is NEVER consulted
+  const tbsp = await r.resolveItem(item({ text: 'a little milk', query: 'milk', quantity: 1, unit: 'tbsp' }));
+  assert.ok(!tbsp.needsClarification, 'an explicit unit is honored, quantifier ignored');
+  assert.strictEqual(tbsp.serving_description, '1 tbsp (15 ml)');
+  assert.ok(!tbsp.estimated);
+});
+
+test('4.2.5 hardening: a food NAMED with a quantifier word is not misread', async () => {
+  const r = p25resolver();
+  // query "little gem lettuce" contains "little" — query-filtering must prevent a
+  // false portion clarification; it resolves as a normal food.
+  const it = await r.resolveItem(item({ text: 'little gem lettuce', query: 'little gem lettuce', unit: null }));
+  assert.ok(!it.needsClarification, 'must NOT trigger a portion clarification from a food name');
+  assert.strictEqual(it.food.usda_fdc_id, 169247);
+
+  // a plain bare-count food is unaffected
+  const eggs = await r.resolveItem(item({ text: '2 eggs', query: 'almonds', quantity: 2, unit: null }));
+  assert.ok(!eggs.needsClarification);
 });
 
 test('correction memory (4.2.4): resolver performs NO reranking — trusts source order', async () => {

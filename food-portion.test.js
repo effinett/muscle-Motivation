@@ -219,3 +219,51 @@ test('not a vague phrase → detected:false (caller keeps normal handling)', () 
   assert.strictEqual(fp.nuInterpretVaguePortion({ unit: 'oz', food: food('Nuts, almonds'), per100: NUTS }).detected, false);
   assert.strictEqual(fp.nuInterpretVaguePortion({ unit: null }).detected, false);
 });
+
+/* ── Phase 4.2.5 hardening: recover dropped vague quantifiers from raw text ──
+ * The AI parser drops "some"/"a little"/"a bit of" (they arrive unit=null but
+ * survive in the phrase). The interpreter recovers them from rawText. */
+
+test('nuDetectFromRawText recovers small-amount quantifiers, query-filtered', () => {
+  assert.strictEqual(fp.nuDetectFromRawText('some rice', 'rice').portionClass, 'small_amount');
+  assert.strictEqual(fp.nuDetectFromRawText('a little milk', 'milk').portionClass, 'small_amount');
+  assert.strictEqual(fp.nuDetectFromRawText('a bit of peanut butter', 'peanut butter').portionClass, 'small_amount');
+  // a food NAMED with a quantifier word is NOT misread (query tokens removed)
+  assert.strictEqual(fp.nuDetectFromRawText('little gem lettuce', 'little gem lettuce'), null);
+  // a bare count phrase yields nothing
+  assert.strictEqual(fp.nuDetectFromRawText('2 eggs', 'egg'), null);
+  // only NU_PT_TEXT_SAFE classes are recovered — a container word in free text is NOT
+  assert.strictEqual(fp.nuDetectFromRawText('chicken bowl', 'chicken'), null);
+});
+
+test('interpreter recovers a dropped quantifier from rawText when unit is null', () => {
+  const r = fp.nuInterpretVaguePortion({
+    unit: null, rawText: 'some rice', query: 'rice',
+    food: food('Rice, white, cooked'), per100: { kcal: 130 },
+  });
+  assert.strictEqual(r.detected, true);
+  assert.strictEqual(r.portionClass, 'small_amount');
+  assert.strictEqual(r.requiresClarification, true, 'a small-amount is too vague → ask');
+});
+
+test('rawText recovery NEVER overrides an explicit unit', () => {
+  // unit present ("tbsp") → the interpreter uses it, never the "little" in rawText
+  const r = fp.nuInterpretVaguePortion({
+    unit: 'tbsp', rawText: 'a little milk', query: 'milk',
+    food: food('Milk, whole', { is_liquid: true }), per100: { kcal: 61 }, isLiquid: true,
+  });
+  // "tbsp" is not a vague class → detected:false, so exact/volume handling proceeds
+  assert.strictEqual(r.detected, false);
+});
+
+test('recovered small-amount clarification has clean labels + re-detectable patch', () => {
+  const c = fp.nuInterpretVaguePortion({
+    unit: null, rawText: 'some rice', query: 'rice',
+    food: food('Rice, white, cooked'), per100: { kcal: 130 },
+  }).clarification;
+  assert.deepStrictEqual(c.options.map((o) => o.label), ['Small amount', 'Medium amount', 'Large amount']);
+  // the patch uses a re-detectable trigger word ("bit"), not the display noun
+  const patched = c.options[0].patch.unit;
+  assert.strictEqual(fp.nuDetectPortionPhrase(patched).portionClass, 'small_amount');
+  assert.strictEqual(fp.nuDetectPortionPhrase(patched).modifier, 'small');
+});

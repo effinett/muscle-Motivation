@@ -265,6 +265,7 @@ function nuPortionModule() {
   return (typeof nuInterpretVaguePortion === 'function')
     ? { nuInterpretVaguePortion: nuInterpretVaguePortion,
         nuDetectPortionPhrase: (typeof nuDetectPortionPhrase === 'function') ? nuDetectPortionPhrase : null,
+        nuDetectFromRawText: (typeof nuDetectFromRawText === 'function') ? nuDetectFromRawText : null,
         nuMatchPortionCorrection: (typeof nuMatchPortionCorrection === 'function') ? nuMatchPortionCorrection : null }
     : null;
 }
@@ -296,11 +297,17 @@ function nuVaguePortionServing(f, per100, parsed) {
   // cross-session storage is a documented follow-up.
   var correction = null;
   if (typeof mod.nuMatchPortionCorrection === 'function' && parsed.portionCorrections) {
+    // Same class the interpreter will use: the explicit unit, or a small-amount
+    // quantifier recovered from the raw phrase when the parser gave no unit.
     var det = mod.nuDetectPortionPhrase(parsed.unit);
+    if (!det && !parsed.unit && typeof mod.nuDetectFromRawText === 'function') {
+      det = mod.nuDetectFromRawText(parsed.text, parsed.query);
+    }
     if (det) correction = mod.nuMatchPortionCorrection(parsed.portionCorrections, nuFoodKey(f), det.portionClass);
   }
   var vp = mod.nuInterpretVaguePortion({
-    unit: parsed.unit, quantity: parsed.quantity, food: f, per100: per100,
+    unit: parsed.unit, rawText: parsed.text, query: parsed.query,
+    quantity: parsed.quantity, food: f, per100: per100,
     isLiquid: !!f.is_liquid, correction: correction,
   });
   if (!vp || !vp.detected) return null;                 // real/unknown unit → normal handling
@@ -322,8 +329,9 @@ function nuVaguePortionServing(f, per100, parsed) {
 // verified data always beat an inference):
 //   1. explicit weight ("6 oz" → 170 g) — weight foods only, never ml→g
 //   2. the household word they used ("slice", "cup") found in a verified option label
-//   3. vague-portion intelligence ("handful"/"splash"/"bowl") — category-aware
-//      estimate, correction-memory override, range/confidence/provenance
+//   3. vague-portion intelligence ("handful"/"splash"/"bowl", or a "some"/"a little"
+//      quantifier recovered from the raw phrase when the parser dropped it) —
+//      category-aware estimate, correction override, range/confidence/provenance
 //   4. liquids: tsp/tbsp volume conversion
 //   5. the card's own default (nuDefaultServingKey — portion/serving/100 g)
 function nuAiChooseServing(f, opts, portions, parsed) {
@@ -336,14 +344,16 @@ function nuAiChooseServing(f, opts, portions, parsed) {
     return { perUnit: nuScalePer100(per100, g), grams: g, amount: g, unit: 'g',
              description: nuRound(g) + ' g', wholeQuantity: true, matchedUnit: true };
   }
+  // (2) VERIFIED household serving — only when the user gave an explicit unit. A
+  // real USDA serving/portion label always wins over a vague estimate, so this
+  // runs before the vague branch.
+  var u = null;
   if (parsed.unit) {
     var uFull = String(parsed.unit).toLowerCase().trim().replace(/s$/, '');
     // ≥2 chars so a bare 'g' can't substring-match every label. A matched
-    // option carries unitCount so the resolver can divide the user's
-    // quantity by the label's own count ("1/2 cup" serving ≠ half of it). A
-    // VERIFIED USDA serving/portion always wins over a vague estimate, so this
-    // runs first.
-    var u = uFull.split(' ').pop();
+    // option carries unitCount so the resolver can divide the user's quantity by
+    // the label's own count ("1/2 cup" serving ≠ half of it).
+    u = uFull.split(' ').pop();
     if (u.length >= 2) {
       for (var i = 0; i < opts.length; i++) {
         if (opts[i].custom) continue;
@@ -352,17 +362,22 @@ function nuAiChooseServing(f, opts, portions, parsed) {
         }
       }
     }
-    // Vague portion intelligence (handful/splash/bowl/piece/…), category-aware.
-    var vp = nuVaguePortionServing(f, per100, parsed);
-    if (vp) {
-      if (!vp.unsupported) return vp;
-      var dfb = Object.assign({}, nuDefaultChosenServing(f, opts, portions));
-      dfb.portion = vp.portion;                     // provenance travels; matchedUnit stays unset → row flags it
-      return dfb;
-    }
-    // Liquids: tsp/tbsp are pure volume conversions (per-100ml panel × ml).
+  }
+  // (3) Vague portion intelligence — runs whether or not an explicit unit was
+  // given, so a small-amount quantifier the parser dropped ("some rice" → unit
+  // null) is recovered from parsed.text by the interpreter. Never overrides the
+  // explicit-weight (1) or verified-serving (2) branches above.
+  var vp = nuVaguePortionServing(f, per100, parsed);
+  if (vp) {
+    if (!vp.unsupported) return vp;
+    var dfb = Object.assign({}, nuDefaultChosenServing(f, opts, portions));
+    dfb.portion = vp.portion;                       // provenance travels; matchedUnit stays unset → row flags it
+    return dfb;
+  }
+  // (4) Liquids: tsp/tbsp are pure volume conversions (per-100ml panel × ml).
+  if (parsed.unit && per100 && f.is_liquid) {
     var ml = NU_VOLUME_ML[u];
-    if (ml && per100 && f.is_liquid) {
+    if (ml) {
       return { perUnit: nuScalePer100(per100, ml), grams: null, amount: ml, unit: 'ml',
                description: '1 ' + u + ' (' + ml + ' ml)', matchedUnit: true };
     }

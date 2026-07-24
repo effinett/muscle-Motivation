@@ -377,6 +377,25 @@ var NU_PT_SIZED_CONTAINER_CONF = 0.62;
 // Count words → a numeric multiplier (a "couple"/"few" is ~2–3, "several" ~5).
 var NU_PT_COUNT_VALUE = { few: 3, several: 5 };
 
+// Classes safe to recover from FREE TEXT (Phase 4.2.5 hardening). The AI parser
+// drops pure vague quantifiers ("some", "a little", "a bit of") — they arrive with
+// unit=null but survive in the original phrase. These trigger words are never food
+// nouns, so recovering them from raw text (after removing the food query) cannot
+// misread a food. Container/measure words (bowl/piece/cup/slice) are deliberately
+// EXCLUDED — the parser already forwards those as units, and they can appear in
+// food names, so they are never guessed from free text.
+var NU_PT_TEXT_SAFE = { small_amount: 1 };
+
+// User-facing noun for a class, and a re-detectable trigger word for its
+// clarification patch. Both default to the class name; small_amount needs an
+// override because "small amount" reads awkwardly as a label ("Small small
+// amount") and is not itself a detectable synonym. Display → "amount"; the patch
+// uses "bit" (a small_amount synonym) so answering re-enters the interpreter.
+var NU_PT_DISPLAY = { small_amount: 'amount' };
+var NU_PT_CLASS_WORD = { small_amount: 'bit' };
+function nuPortionDisplay(cls) { return NU_PT_DISPLAY[cls] || cls.replace('_', ' '); }
+function nuPortionClassWord(cls) { return NU_PT_CLASS_WORD[cls] || cls.replace('_', ' '); }
+
 /* ── Phrase detection + modifier extraction ───────────────────────────────────
  * Parse a unit string (already lowercased/singularized upstream, but we are
  * defensive) into { portionClass, modifier, modifiers[], count } or null when it
@@ -400,6 +419,24 @@ function nuDetectPortionPhrase(unit) {
   var seen = {}, umods = [];
   mods.forEach(function (m) { if (!seen[m]) { seen[m] = 1; umods.push(m); } });
   return { portionClass: cls, modifier: umods[0] || null, modifiers: umods };
+}
+
+// Recover a vague quantifier from the ORIGINAL phrase when the parser gave no
+// unit (Phase 4.2.5 hardening). The food's own words are removed first (query
+// tokens), so a food NAMED with a quantifier word — "little gem lettuce",
+// query "little gem lettuce" → nothing left to detect — is never misread. Only
+// NU_PT_TEXT_SAFE classes (pure quantifiers, never food nouns) are accepted;
+// everything else returns null and normal resolution proceeds unchanged.
+// Deterministic, DOM-free, no LLM.
+function nuDetectFromRawText(rawText, query) {
+  var qset = {};
+  String(query == null ? '' : query).toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/)
+    .forEach(function (t) { if (t) qset[t.replace(/s$/, '')] = 1; });
+  var toks = String(rawText == null ? '' : rawText).toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/)
+    .filter(function (t) { return t && !qset[t.replace(/s$/, '')]; });
+  if (!toks.length) return null;
+  var det = nuDetectPortionPhrase(toks.join(' '));
+  return (det && NU_PT_TEXT_SAFE[det.portionClass]) ? det : null;
 }
 
 // Are two of the modifiers pulling in opposite directions? ("small huge bowl")
@@ -430,8 +467,13 @@ function nuModifierMultiplier(portionClass, mods) {
  * nuAiChooseServing). Pure: no DOM, no fetch, no mutation of its inputs.
  *
  * Input:
- *   { unit, food, per100, isLiquid, correction, quantity }
+ *   { unit, rawText, query, food, per100, isLiquid, correction, quantity }
  *     unit        — the raw measure word from the ResolveRequest ("large handful")
+ *     rawText     — the ORIGINAL phrase ("some rice"). Used ONLY when the parser
+ *                   gave no unit, to recover a dropped small-amount quantifier
+ *                   (never overrides an explicit unit; see nuDetectFromRawText).
+ *     query       — the food search term ("rice"); its tokens are excluded from
+ *                   the rawText scan so a food named with a quantifier word is safe.
  *     food        — normalized/raw food (for family + description in the explanation)
  *     per100      — the food's per-100 g/ml nutrient panel (macros come from here,
  *                   never invented). Absent ⇒ we cannot build perUnit → not applied.
@@ -449,6 +491,12 @@ function nuModifierMultiplier(portionClass, mods) {
 function nuInterpretVaguePortion(input) {
   input = input || {};
   var det = nuDetectPortionPhrase(input.unit);
+  // Wiring recovery (Phase 4.2.5 hardening): when the parser gave NO explicit unit,
+  // a dropped small-amount quantifier ("some", "a little", "a bit of") may survive
+  // in the original phrase. Recover it deterministically from rawText. Gated on
+  // "no unit" so an explicit measure ("1 tbsp") always takes precedence, and the
+  // grams/verified-serving branches upstream still run first.
+  if (!det && !input.unit && input.rawText) det = nuDetectFromRawText(input.rawText, input.query);
   if (!det) return { detected: false };
 
   var cls = det.portionClass;
@@ -458,7 +506,7 @@ function nuInterpretVaguePortion(input) {
   var isLiquid = !!input.isLiquid;
   var form = nuFamilyForm(family, isLiquid);
   var spec = NU_PORTION_CLASSES[cls] || { forms: ['solid'], container: false };
-  var phrase = (det.modifier ? det.modifier + ' ' : '') + cls.replace('_', ' ');
+  var phrase = (det.modifier ? det.modifier + ' ' : '') + nuPortionDisplay(cls);
 
   function base(extra) {
     return Object.assign({
@@ -598,7 +646,8 @@ function nuTableAmount(cls, family) {
 function nuPortionExplanation(cls, family, modifier, amount, unit) {
   var fam = (family && family !== 'generic') ? family.replace('_', ' ') : '';
   var sz = modifier ? (modifier + ' ') : '';
-  var head = 'Estimated as ' + (/^[aeiou]/.test(sz || cls) ? 'an ' : 'a ') + sz + cls.replace('_', ' ');
+  var noun = nuPortionDisplay(cls);
+  var head = 'Estimated as ' + (/^[aeiou]/.test(sz || noun) ? 'an ' : 'a ') + sz + noun;
   return head + (fam ? ' of ' + fam : '') + ' (~' + _round1(amount) + ' ' + unit + ').';
 }
 
@@ -607,17 +656,20 @@ function nuPortionExplanation(cls, family, modifier, amount, unit) {
 // option patches set a SIZE-modified unit that re-enters the resolver: answering
 // "Large" turns "bowl" into "large bowl", which the interpreter then resolves
 // with confidence (the user has supplied the missing size). target 'unit' so the
-// answer patches the ResolveRequest's unit, not its query.
+// answer patches the ResolveRequest's unit, not its query. The LABEL uses the
+// friendly display noun ("amount"), while the PATCH uses a re-detectable class
+// trigger word ("bit") so "small amount" answers still re-enter the interpreter.
 function nuPortionClarification(cls, family) {
-  var noun = cls.replace('_', ' ');
+  var display = nuPortionDisplay(cls);
+  var word = nuPortionClassWord(cls);
   return {
     type: 'portion', target: 'unit',
     prompt: 'About how much ' + (family && family !== 'generic' ? family.replace('_', ' ') : 'food') +
             ' was that?',
     options: [
-      { label: 'Small ' + noun, patch: { unit: 'small ' + noun } },
-      { label: 'Medium ' + noun, patch: { unit: 'medium ' + noun } },
-      { label: 'Large ' + noun, patch: { unit: 'large ' + noun } },
+      { label: 'Small ' + display, patch: { unit: 'small ' + word } },
+      { label: 'Medium ' + display, patch: { unit: 'medium ' + word } },
+      { label: 'Large ' + display, patch: { unit: 'large ' + word } },
     ],
     allowFreeText: false,
   };
@@ -687,6 +739,8 @@ if (typeof module !== 'undefined' && module.exports) {
     NU_PT_BASE_CONF: NU_PT_BASE_CONF,
     NU_PT_CLARIFY_BELOW: NU_PT_CLARIFY_BELOW,
     nuDetectPortionPhrase: nuDetectPortionPhrase,
+    nuDetectFromRawText: nuDetectFromRawText,
+    NU_PT_TEXT_SAFE: NU_PT_TEXT_SAFE,
     nuContradictoryModifiers: nuContradictoryModifiers,
     nuModifierMultiplier: nuModifierMultiplier,
     nuFoodFamily: nuFoodFamily,
