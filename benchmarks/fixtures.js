@@ -149,6 +149,61 @@ const CHK_BREAST_COOKED = { fdcId: 999112, description: 'Chicken, breast, meat o
   group: 'generic', foodCategory: 'Poultry Products',
   nutrients: { kcal: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0, sugar: 0 } };
 
+/* ── Phase 4.2.5 vague-portion pools ─────────────────────────────────────── */
+const SPINACH = { fdcId: 168462, description: 'Spinach, raw', brand: '', group: 'generic',
+  foodCategory: 'Vegetables and Vegetable Products',
+  nutrients: { kcal: 23, protein: 2.9, carbs: 3.6, fat: 0.4, fiber: 2.2, sugar: 0.4 } };
+const BLUEBERRIES = { fdcId: 171711, description: 'Blueberries, raw', brand: '', group: 'generic',
+  foodCategory: 'Fruits and Fruit Products',
+  nutrients: { kcal: 57, protein: 0.7, carbs: 14.5, fat: 0.3, fiber: 2.4, sugar: 10 } };
+const CHIPS = { fdcId: 170452, description: 'Potato chips, plain, salted', brand: '', group: 'generic',
+  foodCategory: 'Snacks',
+  nutrients: { kcal: 536, protein: 7, carbs: 53, fat: 34, fiber: 4.8, sugar: 0.6 } };
+const SHRED_CHEESE = { fdcId: 328637, description: 'Cheese, cheddar, shredded', brand: '', group: 'generic',
+  foodCategory: 'Dairy and Egg Products',
+  nutrients: { kcal: 403, protein: 23, carbs: 3.4, fat: 33, fiber: 0, sugar: 0.5 } };
+const OLIVE_OIL = { fdcId: 171413, description: 'Oil, olive, salad or cooking', brand: '', group: 'generic',
+  foodCategory: 'Fats and Oils',
+  nutrients: { kcal: 884, protein: 0, carbs: 0, fat: 100, fiber: 0, sugar: 0 } };
+const DRESSING = { fdcId: 174837, description: 'Salad dressing, ranch dressing', brand: '', group: 'generic',
+  foodCategory: 'Fats and Oils',
+  nutrients: { kcal: 430, protein: 1.3, carbs: 6, fat: 45, fiber: 0, sugar: 4 } };
+const HOT_SAUCE = { fdcId: 172255, description: 'Sauce, hot chile, sriracha', brand: '', group: 'generic',
+  foodCategory: 'Soups, Sauces, and Gravies', is_liquid: true,
+  servingSize: 5, servingSizeUnit: 'ml',
+  nutrients: { kcal: 93, protein: 1.9, carbs: 19, fat: 0.9, fiber: 2.2, sugar: 15 } };
+const SALT = { fdcId: 173468, description: 'Salt, table', brand: '', group: 'generic',
+  foodCategory: 'Spices and Herbs',
+  nutrients: { kcal: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0 } };
+const CREAM = { fdcId: 170857, description: 'Cream, heavy whipping', brand: '', group: 'generic',
+  is_liquid: true, servingSize: 15, servingSizeUnit: 'ml',
+  nutrients: { kcal: 340, protein: 2.8, carbs: 2.8, fat: 36, fiber: 0, sugar: 2.9 } };
+const CEREAL = { fdcId: 173733, description: 'Cheerios cereal', brand: 'General Mills', group: 'branded',
+  foodCategory: 'Breakfast Cereals',
+  nutrients: { kcal: 379, protein: 12, carbs: 74, fat: 7, fiber: 10, sugar: 4 } };
+const SOUP = { fdcId: 174473, description: 'Soup, chicken noodle, canned, prepared', brand: '', group: 'generic',
+  foodCategory: 'Soups, Sauces, and Gravies', is_liquid: true,
+  servingSize: 245, servingSizeUnit: 'ml',
+  nutrients: { kcal: 25, protein: 1.3, carbs: 3, fat: 0.8, fiber: 0.3, sugar: 0.4 } };
+const RICE_COOKED = { fdcId: 168878, description: 'Rice, white, cooked', brand: '', group: 'generic',
+  foodCategory: 'Cereal Grains and Pasta',
+  nutrients: { kcal: 130, protein: 2.7, carbs: 28, fat: 0.3, fiber: 0.4, sugar: 0.1 } };
+const PASTA_COOKED = { fdcId: 168927, description: 'Pasta, cooked', brand: '', group: 'generic',
+  foodCategory: 'Cereal Grains and Pasta',
+  nutrients: { kcal: 158, protein: 5.8, carbs: 31, fat: 0.9, fiber: 1.8, sugar: 0.6 } };
+const CHEESE_BLOCK = { fdcId: 173410, description: 'Cheese, cheddar', brand: '', group: 'generic',
+  foodCategory: 'Dairy and Egg Products',
+  nutrients: { kcal: 403, protein: 23, carbs: 3.4, fat: 33, fiber: 0, sugar: 0.5 } };
+const PIZZA = { fdcId: 170077, description: 'Pizza, cheese, regular crust', brand: '', group: 'generic',
+  foodCategory: 'Baked Products',
+  nutrients: { kcal: 266, protein: 11, carbs: 33, fat: 10, fiber: 2.3, sugar: 3.6 } };
+const PB_CUP = { fdcId: 172470, description: 'Peanut butter, smooth', brand: '', group: 'generic',
+  foodCategory: 'Legumes and Legume Products',
+  nutrients: { kcal: 588, protein: 25, carbs: 20, fat: 50, fiber: 6, sugar: 9 } };
+const CHK_PIECE = { fdcId: 171534, description: 'Chicken, broiler, breast, meat only, cooked, roasted',
+  brand: '', group: 'generic', foodCategory: 'Poultry Products',
+  nutrients: { kcal: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0, sugar: 0 } };
+
 const FIXTURE_SEARCHES = {
   'fairlife protein bar': [FL_BAR_CHOC, FL_BAR_CARAMEL],
   'fairlife caramel protein bar': [FL_BAR_CHOC, FL_BAR_CARAMEL],
@@ -172,6 +227,12 @@ const FIXTURE_SEARCHES = {
   'greek yogurt whole milk': [GREEK_WHOLE],
   'plain yogurt': [YOG_PLAIN_F, YOG_PLAIN_SR],
   hummus: [HUMMUS],
+  // Phase 4.2.5 vague-portion queries
+  spinach: [SPINACH], blueberries: [BLUEBERRIES], chips: [CHIPS],
+  'shredded cheese': [SHRED_CHEESE], 'olive oil': [OLIVE_OIL], dressing: [DRESSING],
+  'hot sauce': [HOT_SAUCE], salt: [SALT], cream: [CREAM], cereal: [CEREAL],
+  soup: [SOUP], rice: [RICE_COOKED], pasta: [PASTA_COOKED], cheese: [CHEESE_BLOCK],
+  pizza: [PIZZA], 'peanut butter smooth': [PB_CUP], chicken: [CHK_PIECE], bread: [BREAD],
 };
 
 const FIXTURE_PORTIONS = {

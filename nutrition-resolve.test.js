@@ -185,8 +185,9 @@ global.fetch = async (url) => {
 };
 
 // Phase 4.2.1a: the shared core loads before nutrition.js, same order as the
-// pages (nutrition.html, app.html).
-['food-core.js', 'nutrition.js'].forEach(function (f) {
+// pages (nutrition.html, app.html). Phase 4.2.5: food-portion.js loads after
+// food-core.js (it reuses its globals) and before nutrition.js.
+['food-core.js', 'food-portion.js', 'nutrition.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(__dirname, f), 'utf8'), { filename: f });
 });
 
@@ -238,10 +239,17 @@ test('1 tbsp on a 2-tbsp USDA portion = half a serving (peanut butter)', async (
   assert.strictEqual(nuScaleMacros(r.perUnit, r.servings).calories, 94);
 });
 
-test('handfuls: deterministic 28/20/40 g estimates, never 100 g', async () => {
+test('handfuls: deterministic category-aware estimates, never 100 g', async () => {
+  // Phase 4.2.5: the flat NU_APPROX_UNITS table became category-aware. A handful
+  // of nuts is the canonical 28 g serving; small/large apply the 0.7/1.4 size
+  // multipliers → 20 g / 39 g (the former flat 40 g became 39 g under the clean
+  // multiplier — within the estimate's own range, and now consistent across every
+  // family). The critical guarantee is unchanged: a handful is never ~100 g.
   const hand = await nuAiResolveItem(item({ query: 'almonds', unit: 'handful' }));
   assert.strictEqual(hand.grams, 28);
   assert.strictEqual(hand.serving_description, 'handful (~28 g)');
+  assert.strictEqual(hand.estimated, true, 'flagged as an estimate');
+  assert.strictEqual(hand.portion.family, 'nuts', 'category-aware');
   assert.strictEqual(hand.perUnit.calories, 162);        // 579 × 0.28
 
   const small = await nuAiResolveItem(item({ query: 'almonds', unit: 'small handful' }));
@@ -249,13 +257,35 @@ test('handfuls: deterministic 28/20/40 g estimates, never 100 g', async () => {
   assert.strictEqual(small.perUnit.calories, 116);
 
   const large = await nuAiResolveItem(item({ query: 'almonds', quantity: 2, unit: 'large handfuls' }));
-  assert.strictEqual(large.grams, 40, 'plural normalizes');
+  assert.strictEqual(large.grams, 39, 'plural normalizes; large = 1.4×');
   assert.strictEqual(large.servings, 2, 'handful counts DO multiply');
 
   // an explicit weight still beats the hand estimate
   const weighed = await nuAiResolveItem(item({ query: 'almonds', unit: 'handful', grams: 30 }));
   assert.strictEqual(weighed.grams, 30);
   assert.strictEqual(weighed.servings, 1);
+});
+
+test('4.2.5: nutrition.js portion-correction session seam (capture → read)', async () => {
+  // Exercises the REAL browser wiring in nutrition.js: nuRecordPortionCorrection
+  // (capture) → nu_portionCorrections (session store) → nuAiResolveItem (read).
+  nu_portionCorrections.length = 0;                       // clean session
+  const before = await nuAiResolveItem(item({ query: 'almonds', unit: 'handful' }));
+  assert.strictEqual(before.grams, 28, 'default estimate first');
+
+  nuRecordPortionCorrection(before, 35);                  // user corrects the estimate
+  const after = await nuAiResolveItem(item({ query: 'almonds', unit: 'handful' }));
+  assert.strictEqual(after.grams, 35, 'the correction is reused for the same food + phrase');
+  assert.strictEqual(after.portion.provenance.correctionApplied, true);
+
+  // Reinforcing the same correction keeps it (count bumps, still applies).
+  nuRecordPortionCorrection(after, 35);
+  assert.strictEqual(nu_portionCorrections[0].reinforcement_count, 2);
+
+  // A different vague class for the same food does NOT inherit it.
+  const bowl = await nuAiResolveItem(item({ query: 'almonds', unit: 'small bowl' }));
+  assert.ok(!bowl.portion || !bowl.portion.provenance.correctionApplied);
+  nu_portionCorrections.length = 0;                       // leave the session clean
 });
 
 test('liquids: tbsp is a 15 ml volume conversion; grams never fabricated', async () => {
@@ -1038,6 +1068,131 @@ test('nuCreateResolver resolves standalone via require() + fake adapter', async 
                                          portions: async () => [] });
   const failed = await broken.resolveItem(item({ query: 'egg' }));
   assert.strictEqual(failed.unmatched, true);
+});
+
+/* ── Phase 4.2.5: Vague Portion Intelligence through the resolver ───────── */
+
+// Purpose-built fixtures (kept local so the vm SEARCHES map is untouched). These
+// exercise the interpreter END-TO-END through nuCreateResolver → resolveFood.
+const P25 = {
+  almonds:  [{ fdcId: 170567, description: 'Nuts, almonds', group: 'generic',
+               foodCategory: 'Nut and Seed Products',
+               nutrients: { kcal: 579, protein: 21.2, carbs: 21.6, fat: 49.9, fiber: 12.5, sugar: 4.4 } }],
+  spinach:  [{ fdcId: 168462, description: 'Spinach, raw', group: 'generic',
+               foodCategory: 'Vegetables and Vegetable Products',
+               nutrients: { kcal: 23, protein: 2.9, carbs: 3.6, fat: 0.4, fiber: 2.2, sugar: 0.4 } }],
+  milk:     [{ fdcId: 746782, description: 'Milk, whole', group: 'generic', is_liquid: true,
+               servingSize: 240, servingSizeUnit: 'ml', householdServing: '1 cup',
+               nutrients: { kcal: 61, protein: 3.1, carbs: 4.8, fat: 3.3, fiber: 0, sugar: 5.1 } }],
+  'olive oil': [{ fdcId: 171413, description: 'Oil, olive, salad or cooking', group: 'generic',
+               foodCategory: 'Fats and Oils',
+               nutrients: { kcal: 884, protein: 0, carbs: 0, fat: 100, fiber: 0, sugar: 0 } }],
+  salt:     [{ fdcId: 173468, description: 'Salt, table', group: 'generic',
+               nutrients: { kcal: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0 } }],
+  cereal:   [{ fdcId: 173733, description: 'Cheerios cereal', group: 'branded',
+               foodCategory: 'Breakfast Cereals',
+               nutrients: { kcal: 379, protein: 12, carbs: 74, fat: 7, fiber: 10, sugar: 4 } }],
+  'mystery stew': [{ fdcId: 900001, description: 'mixed prepared food', group: 'generic',
+               nutrients: { kcal: 150, protein: 8, carbs: 15, fat: 6, fiber: 2, sugar: 3 } }],
+};
+function p25resolver() {
+  const core = require('./food-core.js');
+  return core.nuCreateResolver({ search: async (q) => P25[q] || [], portions: async () => [] });
+}
+
+test('4.2.5: handful is category-aware through the resolver, and flagged estimated', async () => {
+  const r = p25resolver();
+  const almond = await r.resolveItem(item({ query: 'almonds', unit: 'handful' }));
+  assert.strictEqual(almond.grams, 28);
+  assert.strictEqual(almond.estimated, true);
+  assert.strictEqual(almond.matchedUnit, true);
+  assert.strictEqual(almond.serving_description, 'handful (~28 g)');
+  assert.strictEqual(almond.portion.provenance.source, 'verified-table');
+
+  const spinach = await r.resolveItem(item({ query: 'spinach', unit: 'handful' }));
+  assert.strictEqual(spinach.grams, 12, 'a handful of spinach ≠ a handful of almonds');
+});
+
+test('4.2.5: liquids/condiments estimate in the right unit; grams never fabricated', async () => {
+  const r = p25resolver();
+  const splash = await r.resolveItem(item({ query: 'milk', unit: 'splash' }));
+  assert.strictEqual(splash.serving_unit, 'ml');
+  assert.strictEqual(splash.grams, null, 'no fabricated gram weight for a liquid');
+  assert.strictEqual(splash.serving_description, 'splash (~15 ml)');
+  assert.ok(!splash.unitUnresolved);
+
+  const drizzle = await r.resolveItem(item({ query: 'olive oil', unit: 'drizzle' }));
+  assert.strictEqual(drizzle.estimated, true);
+  assert.strictEqual(drizzle.grams, 9);
+
+  const pinch = await r.resolveItem(item({ query: 'salt', unit: 'pinch' }));
+  assert.strictEqual(pinch.estimated, true);
+  assert.strictEqual(pinch.grams, 0.4);
+});
+
+test('4.2.5: nonsensical vague phrases fall back + flag, never fabricate', async () => {
+  const r = p25resolver();
+  const splashNuts = await r.resolveItem(item({ query: 'almonds', unit: 'splash' }));
+  assert.strictEqual(splashNuts.unitUnresolved, true, 'a splash of almonds → flagged, not estimated');
+  assert.strictEqual(splashNuts.servings, 1, 'never multiply an unresolved unit');
+  assert.strictEqual(splashNuts.portion.compatible, false);
+
+  const bowlOil = await r.resolveItem(item({ query: 'olive oil', unit: 'bowl' }));
+  assert.strictEqual(bowlOil.unitUnresolved, true);
+});
+
+test('4.2.5: exact quantities ALWAYS win over a vague phrase', async () => {
+  const r = p25resolver();
+  // "a handful of almonds, about 1 oz" — parse gives the explicit weight
+  const weighed = await r.resolveItem(item({ query: 'almonds', unit: 'handful', grams: 28.35 }));
+  assert.strictEqual(weighed.grams, 28.35, 'the stated weight wins, not the handful estimate');
+  assert.strictEqual(weighed.servings, 1);
+  assert.ok(!weighed.estimated, 'an exact weight is not an estimate');
+});
+
+test('4.2.5: low-confidence container portion asks, then the answer resolves it', async () => {
+  const r = p25resolver();
+  const some = await r.resolveItem(item({ text: 'some food', query: 'mystery stew', unit: 'bowl' }));
+  assert.strictEqual(some.needsClarification, true, 'un-sized bowl of an unknown food → ask');
+  assert.strictEqual(some.clarification.type, 'portion');
+
+  // Answering "Large" (option index 2) re-enters the SAME resolver and resolves.
+  const answered = await r.resolveClarification(some, 2);
+  assert.ok(!answered.needsClarification, 'a sized bowl resolves — never re-asks');
+  assert.strictEqual(answered.estimated, true);
+  assert.ok(answered.grams > 0);
+});
+
+test('4.2.5: a known-category bowl resolves directly (no needless clarify)', async () => {
+  const r = p25resolver();
+  const bowl = await r.resolveItem(item({ query: 'cereal', unit: 'bowl' }));
+  assert.ok(!bowl.needsClarification, 'a bowl of cereal has a category default');
+  assert.strictEqual(bowl.grams, 40);
+  assert.strictEqual(bowl.estimated, true);
+});
+
+test('4.2.5: session portion correction overrides the default, isolated by food+class', async () => {
+  const core = require('./food-core.js');
+  const corr = [{ food_key: 'usda:170567', portion_class: 'handful', grams: 35, reinforcement_count: 2 }];
+  const r = core.nuCreateResolver({ search: async (q) => P25[q] || [], portions: async () => [] });
+
+  // Same food + same phrase → the correction wins.
+  const corrected = await r.resolveItem(Object.assign(item({ query: 'almonds', unit: 'handful' }),
+    { portionCorrections: corr }));
+  assert.strictEqual(corrected.grams, 35);
+  assert.strictEqual(corrected.portion.provenance.correctionApplied, true);
+  assert.strictEqual(corrected.portion.provenance.defaultAmount, 28);
+
+  // Different food (spinach) → correction does NOT leak; default estimate stands.
+  const other = await r.resolveItem(Object.assign(item({ query: 'spinach', unit: 'handful' }),
+    { portionCorrections: corr }));
+  assert.strictEqual(other.grams, 12);
+  assert.ok(!other.portion.provenance.correctionApplied);
+
+  // Different vague class (bowl) for the same food → correction does NOT apply.
+  const bowl = await r.resolveItem(Object.assign(item({ query: 'almonds', unit: 'bowl' }),
+    { portionCorrections: corr }));
+  assert.ok(!bowl.portion || !bowl.portion.provenance.correctionApplied);
 });
 
 test('correction memory (4.2.4): resolver performs NO reranking — trusts source order', async () => {

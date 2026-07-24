@@ -437,6 +437,11 @@
       font-weight: 700; letter-spacing: 1px; color: var(--text-muted); text-transform: uppercase;
     }
     .nu-verified-sm { color: var(--green); font-weight: 700; white-space: nowrap; }
+    /* Phase 4.2.5: vague-portion "Estimated" tag — muted, uppercase text badge
+       (design system: text badges, no color-loud pills), tooltip explains it. */
+    .ai-est-badge { font-size: 9px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .04em; color: var(--text-3, #777); border: 1px solid var(--border, #2A2A2A);
+      border-radius: 4px; padding: 1px 4px; white-space: nowrap; cursor: help; }
     .nu-usda-group {
       font-family: 'Barlow', sans-serif; font-size: 11px; font-weight: 700;
       letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-2);
@@ -721,6 +726,7 @@
 <script src="food-core.js"></script>
 <script src="food-ranking.js"></script>
 <script src="food-memory.js"></script>
+<script src="food-portion.js"></script>
 <script src="nutrition.js"></script>
 <script>
   var currentUserId = null;
@@ -1220,6 +1226,12 @@
       var sub = ['✓ USDA'];
       if (it.food.brand) sub.push(nuEsc(it.food.brand));
       sub.push(nuEsc(it.serving_description || '1 serving'));
+      // Phase 4.2.5: honestly mark an inferred vague-portion amount as estimated
+      // (the serving text already carries "~"); the explanation is on hover.
+      if (it.estimated) {
+        var exp = (it.portion && it.portion.explanation) || 'Estimated portion — adjust if needed.';
+        sub.push('<span class="ai-est-badge" title="' + nuEsc(exp) + '">Estimated</span>');
+      }
       sub.push(nuRound(total.calories) + ' kcal');
       sub.push('P ' + nuRound(total.protein));
       return '<div class="sm-item ai-item">' +

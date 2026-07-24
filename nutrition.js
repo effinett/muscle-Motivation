@@ -1747,7 +1747,15 @@ async function nuAiParse(text) {
 // wrappers above) and keeps the original global names for every call site.
 var nu_resolver = nuCreateResolver({ search: nuUsdaSearch, portions: nuFetchUsdaDetail });
 function nuAiResolveFood(rawFood, parsed) { return nu_resolver.resolveFood(rawFood, parsed); }
-function nuAiResolveItem(parsed) { return nu_resolver.resolveItem(parsed); }
+function nuAiResolveItem(parsed) {
+  // Phase 4.2.5: attach the session portion-correction store so the shared
+  // interpreter can override a default vague estimate with the user's own prior
+  // portion (matched by food identity + vague class inside food-portion.js).
+  // Clone so the caller's parsed object is never mutated.
+  var req = Object.assign({}, parsed);
+  if (nu_portionCorrections.length) req.portionCorrections = nu_portionCorrections;
+  return nu_resolver.resolveItem(req);
+}
 function nuAiResolveChoice(item, ci) { return nu_resolver.resolveChoice(item, ci); }
 function nuAiResolveClarification(item, choice) { return nu_resolver.resolveClarification(item, choice); }
 
@@ -1759,6 +1767,64 @@ function nuAiResolveClarification(item, choice) { return nu_resolver.resolveClar
  * lookup, both feeding the shared nmCorrectionSignal. Every step is guarded:
  * capturing/persisting a correction can never break logging. */
 var nu_corrections = [];   // in-memory session store (bounded by nmSessionAdd)
+
+/* ── Portion correction memory (Phase 4.2.5) ─────────────────────────────────
+ * A DIFFERENT axis than the 4.2.4 candidate corrections above: this learns HOW
+ * MUCH (a gram amount) the user means by a vague portion phrase for a specific
+ * food, not WHICH food. Read at resolve time through nuAiResolveItem →
+ * food-portion.js (nuMatchPortionCorrection). Applied ONLY to an inferred vague
+ * estimate, never to a verified serving, and isolated by food identity + vague
+ * class.
+ *
+ * PERSISTENCE STATUS — read this before "adding persistence":
+ *   1. Food-IDENTITY correction memory (Phase 4.2.4, nuPersistCorrection →
+ *      public.food_corrections) REMAINS PERSISTENT and cross-session. Unchanged.
+ *   2. Vague-PORTION correction reuse (this store) is CURRENTLY SESSION-SCOPED:
+ *      nu_portionCorrections is in-memory only and resets on reload.
+ *   3. Persistent cross-session PORTION corrections HAVE NOT SHIPPED. There is
+ *      deliberately NO food_portion_corrections table and NO DB write here
+ *      (Effi 2026-07-24: do not add it during 4.2.5).
+ *   4. The capture hook (nuRecordPortionCorrection) and the resolver seam
+ *      (parsed.portionCorrections → nuMatchPortionCorrection) are the READY
+ *      extension points — persistence can be added later WITHOUT redesigning the
+ *      vague-portion intelligence, as its own focused follow-up (write UX +
+ *      storage contract designed and tested together; needs a migration +
+ *      approval per CLAUDE.md §3, and MUST stay a separate table from
+ *      food_corrections — these are different axes).
+ *   5. This limitation does NOT affect the shipped Phase 4.2.5 behavior:
+ *      deterministic category-aware estimates, clarification, exact-over-vague
+ *      precedence, provenance/labeling, and the phase Definition of Done are all
+ *      complete and covered by tests. Only cross-session portion PERSONALIZATION
+ *      waits for the follow-up. */
+var nu_portionCorrections = [];   // in-memory session store (bounded)
+
+// Record that the user corrected an ESTIMATED vague portion to a specific amount
+// (grams for a weight food). Reuses the food-portion.js record shape and merges
+// into the bounded session store (reinforcing a repeat). Guarded — never throws.
+function nuRecordPortionCorrection(item, grams) {
+  try {
+    if (!item || !item.estimated || !item.portion || !(+grams > 0)) return;
+    if (typeof nuBuildPortionCorrection !== 'function' || typeof nuFoodKey !== 'function') return;
+    var rec = nuBuildPortionCorrection({
+      food_key: nuFoodKey(item.food),
+      portion_class: item.portion.portionClass,
+      grams: +grams,
+      family: item.portion.family,
+    });
+    if (!rec) return;
+    var merged = false;
+    nu_portionCorrections = nu_portionCorrections.map(function (m) {
+      if (m.food_key === rec.food_key && m.portion_class === rec.portion_class) {
+        merged = true;
+        return Object.assign({}, m, { grams: rec.grams,
+          reinforcement_count: (+m.reinforcement_count || 1) + 1, last_used_at: rec.last_used_at });
+      }
+      return m;
+    });
+    if (!merged) nu_portionCorrections.unshift(rec);
+    nu_portionCorrections = nu_portionCorrections.slice(0, 20);   // bounded
+  } catch (e) { /* portion learning must never break logging */ }
+}
 
 // Record an explicit chooser correction: the user picked a candidate OTHER than
 // the top hit. Updates the session store immediately, then persists best-effort.

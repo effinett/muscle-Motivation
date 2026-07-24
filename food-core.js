@@ -194,11 +194,12 @@ function nuDefaultServingKey(f, opts, portions) {
   return opts[0] && opts[0].key;
 }
 
-// Colloquial hand measures → DETERMINISTIC gram estimates. These are fixed
-// conversions applied here, never weights the model invents — the same phrase
-// always produces the same grams, and the serving label carries "~" so the
-// user sees it's an estimate. "handful of almonds" must never silently
-// become 100 g. Weight foods only (a handful of milk isn't a measure).
+// DEPRECATED (Phase 4.2.5): the flat hand-measure table was superseded by the
+// category-aware Vague Portion Intelligence in food-portion.js
+// (nuInterpretVaguePortion), which nuAiChooseServing now calls. A handful of nuts
+// is still 28 g there, but a handful of spinach is 12 g, chips 18 g, etc. This
+// constant is retained + exported only for backward compatibility; it is no
+// longer consulted by the resolver. Do not add new callers.
 var NU_APPROX_UNITS = { 'handful': 28, 'small handful': 20, 'large handful': 40 };
 
 // Universal VOLUME units for liquids (per-100ml panels): a tbsp is 15 ml for
@@ -251,12 +252,80 @@ function nuAiLabelCount(opt) {
   return (+t > 0) ? +t : 1;
 }
 
+// The shared Vague Portion Intelligence module (Phase 4.2.5). Acquired lazily so
+// there is no load-time cycle: food-portion.js requires food-core.js, so
+// food-core must NOT require food-portion during its own load. In Node we
+// require() at call time (both modules are fully loaded by then); in the browser
+// food-portion.js is loaded as a <script> before nutrition.js and defines the
+// globals referenced here. Returns null if the module is absent (parity fallback).
+function nuPortionModule() {
+  if (typeof require === 'function') {
+    try { return require('./food-portion.js'); } catch (e) { return null; }
+  }
+  return (typeof nuInterpretVaguePortion === 'function')
+    ? { nuInterpretVaguePortion: nuInterpretVaguePortion,
+        nuDetectPortionPhrase: (typeof nuDetectPortionPhrase === 'function') ? nuDetectPortionPhrase : null,
+        nuMatchPortionCorrection: (typeof nuMatchPortionCorrection === 'function') ? nuMatchPortionCorrection : null }
+    : null;
+}
+
+// The card's own default serving (portion/serving/100 g), extracted so both the
+// normal fall-through and the unsupported-vague fallback share one rule.
+function nuDefaultChosenServing(f, opts, portions) {
+  var key = nuDefaultServingKey(f, opts, portions);
+  for (var j = 0; j < opts.length; j++) if (opts[j].key === key) return opts[j];
+  return opts[0];
+}
+
+// The VAGUE branch of serving selection (Phase 4.2.5). Runs the shared
+// interpreter for the resolved food and turns a supported estimate into a serving
+// descriptor (matchedUnit + estimated + the full VaguePortion as `portion`).
+// Returns:
+//   • null                          — not a vague phrase → caller continues
+//   • { …serving…, portion, … }     — a supported/clarify estimate to use
+//   • { unsupported: true, portion } — a vague phrase we can't honor (a splash of
+//                                      almonds) → caller falls back + flags it
+// Deterministic; never throws (a missing module or panel degrades to null).
+function nuVaguePortionServing(f, per100, parsed) {
+  var mod = nuPortionModule();
+  if (!mod || typeof mod.nuInterpretVaguePortion !== 'function') return null;
+  // Session portion-correction override (Phase 4.2.5): match the user's prior
+  // corrections for THIS food identity + THIS vague class only. The corrections
+  // list is supplied on the request (parsed.portionCorrections) — the resolver
+  // stays pure; the browser/session or a test provides it. Persistent
+  // cross-session storage is a documented follow-up.
+  var correction = null;
+  if (typeof mod.nuMatchPortionCorrection === 'function' && parsed.portionCorrections) {
+    var det = mod.nuDetectPortionPhrase(parsed.unit);
+    if (det) correction = mod.nuMatchPortionCorrection(parsed.portionCorrections, nuFoodKey(f), det.portionClass);
+  }
+  var vp = mod.nuInterpretVaguePortion({
+    unit: parsed.unit, quantity: parsed.quantity, food: f, per100: per100,
+    isLiquid: !!f.is_liquid, correction: correction,
+  });
+  if (!vp || !vp.detected) return null;                 // real/unknown unit → normal handling
+  if (!vp.compatible || vp.estimatedAmount == null || !per100) {
+    return { unsupported: true, portion: vp };          // nonsensical or unestimable → fall back + flag
+  }
+  var unit = vp.estimatedUnit;
+  var grams = (unit === 'g') ? vp.estimatedAmount : null;  // never fabricate a gram weight for a liquid
+  return {
+    perUnit: vp.perUnit || nuScalePer100(per100, vp.estimatedAmount),
+    grams: grams, amount: vp.estimatedAmount, unit: unit,
+    description: vp.phrase + ' (~' + vp.estimatedAmount + ' ' + unit + ')',
+    matchedUnit: true, estimated: true, portion: vp,
+  };
+}
+
 // Pick the serving option that matches what the user said, using the SAME
-// option list the food card builds. Priority:
+// option list the food card builds. Priority (Phase 4.2.5 precedence — exact and
+// verified data always beat an inference):
 //   1. explicit weight ("6 oz" → 170 g) — weight foods only, never ml→g
-//   2. approximate hand measures ("handful" ≈ 28 g) — fixed table above
-//   3. the household word they used ("slice", "cup") found in an option label
-//   4. the card's own default (nuDefaultServingKey — portion/serving/100 g)
+//   2. the household word they used ("slice", "cup") found in a verified option label
+//   3. vague-portion intelligence ("handful"/"splash"/"bowl") — category-aware
+//      estimate, correction-memory override, range/confidence/provenance
+//   4. liquids: tsp/tbsp volume conversion
+//   5. the card's own default (nuDefaultServingKey — portion/serving/100 g)
 function nuAiChooseServing(f, opts, portions, parsed) {
   var per100 = f.raw && f.raw.nutrients ? f.raw.nutrients : null;
   if (+parsed.grams > 0 && per100 && !f.is_liquid) {
@@ -269,14 +338,11 @@ function nuAiChooseServing(f, opts, portions, parsed) {
   }
   if (parsed.unit) {
     var uFull = String(parsed.unit).toLowerCase().trim().replace(/s$/, '');
-    var approx = NU_APPROX_UNITS[uFull];
-    if (approx && per100 && !f.is_liquid) {
-      return { perUnit: nuScalePer100(per100, approx), grams: approx, amount: approx, unit: 'g',
-               description: uFull + ' (~' + approx + ' g)', matchedUnit: true };
-    }
     // ≥2 chars so a bare 'g' can't substring-match every label. A matched
     // option carries unitCount so the resolver can divide the user's
-    // quantity by the label's own count ("1/2 cup" serving ≠ half of it).
+    // quantity by the label's own count ("1/2 cup" serving ≠ half of it). A
+    // VERIFIED USDA serving/portion always wins over a vague estimate, so this
+    // runs first.
     var u = uFull.split(' ').pop();
     if (u.length >= 2) {
       for (var i = 0; i < opts.length; i++) {
@@ -286,6 +352,14 @@ function nuAiChooseServing(f, opts, portions, parsed) {
         }
       }
     }
+    // Vague portion intelligence (handful/splash/bowl/piece/…), category-aware.
+    var vp = nuVaguePortionServing(f, per100, parsed);
+    if (vp) {
+      if (!vp.unsupported) return vp;
+      var dfb = Object.assign({}, nuDefaultChosenServing(f, opts, portions));
+      dfb.portion = vp.portion;                     // provenance travels; matchedUnit stays unset → row flags it
+      return dfb;
+    }
     // Liquids: tsp/tbsp are pure volume conversions (per-100ml panel × ml).
     var ml = NU_VOLUME_ML[u];
     if (ml && per100 && f.is_liquid) {
@@ -293,9 +367,7 @@ function nuAiChooseServing(f, opts, portions, parsed) {
                description: '1 ' + u + ' (' + ml + ' ml)', matchedUnit: true };
     }
   }
-  var key = nuDefaultServingKey(f, opts, portions);
-  for (var j = 0; j < opts.length; j++) if (opts[j].key === key) return opts[j];
-  return opts[0];
+  return nuDefaultChosenServing(f, opts, portions);
 }
 
 /* ── confidence & chooser ──────────────────────────────────────────────── */
@@ -835,6 +907,12 @@ function nuCreateResolver(source) {
       serving_amount: sv.amount != null ? sv.amount : null,
       serving_unit: sv.unit || null,
       grams: sv.grams != null ? sv.grams : null,
+      // Phase 4.2.5 vague-portion provenance — present only when a vague phrase
+      // was interpreted. `estimated` marks the amount as inferred (never exact);
+      // `portion` carries the full VaguePortion (class, family, range, confidence,
+      // clarification, provenance) for labeling, saving, and clarification.
+      estimated: !!sv.estimated,
+      portion: sv.portion || null,
     };
   }
 
@@ -912,6 +990,21 @@ function nuCreateResolver(source) {
       // flag the row so the user can adjust with the true size in view.
       resolved.servings = 1;
       resolved.unitUnresolved = true;
+    }
+    // Phase 4.2.5: a vague portion whose size the food category can't pin down
+    // tightly enough (an un-sized bowl of an unknown food, "some rice", a piece
+    // of chicken) → ask ONE focused size question, reusing the needsClarification
+    // path (same surface-neutral contract as Phase 4.2.3). The estimate is kept
+    // on `resolved` as a fallback. Loop-guarded: a portion dimension already
+    // answered (parsed.clarified) is never re-asked — the estimate stands.
+    if (resolved.portion && resolved.portion.requiresClarification &&
+        resolved.portion.clarification &&
+        (parsed.clarified || []).indexOf('portion') === -1) {
+      return {
+        parsed: parsed, needsClarification: true,
+        clarification: resolved.portion.clarification,
+        choices: [], resolved: resolved,
+      };
     }
     return resolved;
   }
@@ -1150,6 +1243,8 @@ if (typeof module !== 'undefined' && module.exports) {
     NU_CUP_GRAMS: NU_CUP_GRAMS,
     nuAiCupServing: nuAiCupServing,
     nuAiLabelCount: nuAiLabelCount,
+    nuDefaultChosenServing: nuDefaultChosenServing,
+    nuVaguePortionServing: nuVaguePortionServing,
     nuAiChooseServing: nuAiChooseServing,
     NU_ASK_CATEGORIES: NU_ASK_CATEGORIES,
     nuAiIsConfident: nuAiIsConfident,
