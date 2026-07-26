@@ -28,6 +28,7 @@
 
 const ranking = require('../food-ranking.js');
 const memory  = require('../food-memory.js');
+const mealctx = require('../food-meal.js');
 
 const SUPABASE_URL      = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
@@ -299,6 +300,21 @@ async function buildCorrectionSignal(q, req, token) {
   return memory.nmCorrectionSignal(all, { query: q });
 }
 
+/* ── Meal-level reasoning (Phase 4.2.6) ───────────────────────────────────────
+ * The client sends a bounded, CANDIDATE-INDEPENDENT per-item meal projection in
+ * the X-Meal-Context header. It is UNTRUSTED preference evidence: parsed +
+ * validated (version/enum/array bounds, fail-open) and turned into ONE meal
+ * ranking signal, injected through the SAME options.signals seam as correction
+ * memory. It carries no candidate ids/rankings/confidence, so it can only nudge
+ * ordering among the normally-retrieved pool — server ranking authority is intact.
+ * Any malformed/oversized/unknown-version header is ignored → normal ranking. */
+function buildMealSignal(req) {
+  const headerMx = req.headers['x-meal-context'];
+  const projection = mealctx.nuParseMealContext(typeof headerMx === 'string' ? headerMx : '');
+  if (!projection) return null;
+  return mealctx.nuMealSignal(projection);
+}
+
 module.exports = async (req, res) => {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
@@ -320,16 +336,23 @@ module.exports = async (req, res) => {
     const q = (req.query.q || '').toString().trim();
     if (q.length < 2) return res.status(200).json({ foods: [] }); // mirror client guard
 
-    // Best-effort correction-memory signal — never blocks resolution.
-    let signal = null;
-    try { signal = await buildCorrectionSignal(q, req, token); } catch (e) { signal = null; }
+    // Best-effort ranking signals — never block resolution. Both feed the SAME
+    // options.signals seam and are summed by the shared ranker (food-ranking.js):
+    //   • correction memory (Phase 4.2.4) — user-specific, persistent + session;
+    //   • meal context (Phase 4.2.6)      — request-scoped meal reasoning.
+    let correctionSignal = null;
+    try { correctionSignal = await buildCorrectionSignal(q, req, token); } catch (e) { correctionSignal = null; }
+    let mealSignal = null;
+    try { mealSignal = buildMealSignal(req); } catch (e) { mealSignal = null; }
+    const signals = [correctionSignal, mealSignal].filter(Boolean);
+    const contextual = signals.length > 0;
 
-    const out = await searchFoods(q, undefined, signal ? { signals: [signal] } : undefined);
+    const out = await searchFoods(q, undefined, contextual ? { signals } : undefined);
     if (out.status === 200) {
-      // A correction-influenced response is user- AND context-specific, so it
-      // must never be served from a URL-keyed cache to a later, different-context
-      // request; the plain query keeps the short private cache (common while typing).
-      res.setHeader('Cache-Control', signal ? 'private, no-store' : 'private, max-age=60');
+      // A context-influenced response is request-specific (user corrections and/or
+      // this meal), so it must never be served from a URL-keyed cache to a later,
+      // different-context request; a plain query keeps the short private cache.
+      res.setHeader('Cache-Control', contextual ? 'private, no-store' : 'private, max-age=60');
     }
     return res.status(out.status).json(out.body);
   } catch (err) {
@@ -344,7 +367,7 @@ module.exports = async (req, res) => {
 // entries now delegate to food-ranking.js (one source of truth).
 module.exports._internals = {
   trimFood, buildResponse, mergeGeneric, searchFoods,
-  loadPersistentCorrections, buildCorrectionSignal,
+  loadPersistentCorrections, buildCorrectionSignal, buildMealSignal,
   expandQuery: ranking.expandQuery,
   supplementFor: ranking.supplementFor,
   brandSupplementQuery: ranking.brandSupplementQuery,

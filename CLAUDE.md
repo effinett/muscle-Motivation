@@ -195,7 +195,7 @@ provider unless a new route is explicitly built on another.
 **Node / tooling:**
 - `package.json`: `npm test` → `node --test`; `npm run bench` → `node benchmarks/run-resolve.js`.
 - Dependencies: `@anthropic-ai/sdk`, `stripe`. No build step.
-- Test files: `ai-food-parse.test.js`, `usda-search.test.js`, `nutrition-resolve.test.js`, `food-ranking.test.js`, `food-memory.test.js`, `progression.test.js`.
+- Test files: `ai-food-parse.test.js`, `usda-search.test.js`, `nutrition-resolve.test.js`, `food-ranking.test.js`, `food-memory.test.js`, `food-meal.test.js`, `food-portion.test.js`, `nutrition-search-cache.test.js`, `progression.test.js`.
 - Benchmark corpus: `benchmarks/resolve-cases.jsonl` + `benchmarks/fixtures.js`, run by `benchmarks/run-resolve.js` (two-tier runner, Phase 4.2.1d).
 
 **Supabase notes:**
@@ -316,6 +316,47 @@ normalization or identity. Browser load order on `nutrition.html`:
 - Covered by `food-memory.test.js`, server-path cases in `usda-search.test.js`,
   a resolver-no-rerank pin in `nutrition-resolve.test.js`, and `correction-memory`
   benchmark cases.
+
+### Shared Meal-Reasoning Core — `food-meal.js` (`Live`, Phase 4.2.6)
+
+Pure, DOM-free, fetch-free intelligence (browser + Node, same guarded-exports
+pattern) that reasons about a GROUP of parsed foods as one meal to improve each
+food's resolution. Reuses `food-ranking.js` (`nText`/`tokenize`/`stem`) and
+`food-core.js` (`NU_PREP_STATE`) — no duplicated normalization. Browser load
+order on `nutrition.html`: `food-core.js` → `food-ranking.js` → `food-memory.js`
+→ `food-portion.js` → `food-meal.js` → `nutrition.js`. (`app.html` doesn't run
+AI Quick Log; every `nutrition.js` meal call is `typeof`-guarded, so it needs no
+new script.)
+
+- **Server-authoritative, one seam.** `rankFoodCandidates` stays the ONLY ranking
+  authority and runs server-side in `/api/usda-search`; the resolver never
+  reranks. Meal reasoning reaches ranking ONLY through the `options.signals` seam,
+  exactly like Correction Memory, and both signals coexist. `nutrition.js`
+  computes ONE immutable meal context per parsed meal (`nuBuildMealContext`, only
+  for a ≥2-item meal), hands each item its stable `mealIndex` + a minimal,
+  CANDIDATE-INDEPENDENT projection (`nuMealItemProjection`), which the browser
+  serializes into an `X-Meal-Context` header. usda-search validates it as
+  UNTRUSTED evidence (`nuParseMealContext`: version/enum/array/size bounds,
+  fail-open) → `nuMealSignal`. It carries no candidate ids/rankings/confidence, so
+  it can only reorder the normally-retrieved pool — never fabricate a candidate.
+- **Bounded tie-breakers.** Every contribution is a named `MEAL_WEIGHTS` entry
+  (beverage ±240/-320, cooked ±160/-240, animal-mismatch -300), sized below the
+  direct query weights (nameIsQuery 2000 …) and clamped to ±`totalCap` (500), so
+  meal context breaks close ties without overriding a decisive match or the
+  ranking safety floors.
+- **Signals (conservative, evidence-based):** beverage-vs-solid consistency;
+  shared cooked-preparation expectation for a raw/cooked commodity (item-local
+  prep always overrides; a raw item is never forced cooked); animal-subtype
+  consistency. Candidate classification prefers structured USDA `foodCategory`,
+  name-based only as a documented fallback.
+- **Confidence + provenance.** Meal evidence is ALWAYS computed and recorded (on
+  the confidence verdict's `meal` field and the resolved item's `meal`
+  provenance); DISPOSITION changes are gated behind `NU_CONFIDENCE.mealContext`
+  (default OFF), so meal context never silently increases clarifications. Foods
+  stay separate entries — this core never merges or splits.
+- Covered by `food-meal.test.js` (incl. validation-rejection + ablation cases),
+  server-path cases in `usda-search.test.js`, resolver integration in
+  `nutrition-resolve.test.js`, and `meal-reasoning` benchmark cases.
 
 ### Other shared modules (`Live`)
 

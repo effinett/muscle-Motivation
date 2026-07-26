@@ -8,7 +8,7 @@
 // X-Correction-Context header). Plain searches must keep the short cache.
 //
 // Loads the full client stack (food-core → food-ranking → food-memory →
-// nutrition.js), same order as the pages, with a capturing fetch stub.
+// food-meal → nutrition.js), same order as the pages, with a capturing fetch stub.
 
 'use strict';
 const test = require('node:test');
@@ -34,8 +34,8 @@ global.supabaseClient = {
   from: () => { throw new Error('DB must not be touched by search'); },
 };
 
-// Page load order: shared core, ranking, memory, then nutrition.js.
-['food-core.js', 'food-ranking.js', 'food-memory.js', 'nutrition.js'].forEach(function (f) {
+// Page load order: shared core, ranking, memory, meal, then nutrition.js.
+['food-core.js', 'food-ranking.js', 'food-memory.js', 'food-meal.js', 'nutrition.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(__dirname, f), 'utf8'), { filename: f });
 });
 
@@ -76,10 +76,32 @@ test('nuUsdaSearch: correction present but NOT relevant to this query → defaul
   assert.ok(!(lastFetchOpts.headers || {})['X-Correction-Context']);
 });
 
-test('nuUsdaSearch: signal option is still forwarded (unchanged behavior)', async () => {
+test('nuUsdaSearch: signal option is forwarded (options-object contract)', async () => {
+  // Phase 4.2.6 changed the 2nd arg from a bare AbortSignal to an options object
+  // { signal?, mealContext? } so the resolver can attach meal context. The manual
+  // search path passes { signal }, and it must still reach fetch.
   nu_corrections = [];
   lastFetchOpts = null;
   const ctrl = { aborted: false };
-  await nuUsdaSearch('banana', ctrl);
+  await nuUsdaSearch('banana', { signal: ctrl });
   assert.strictEqual(lastFetchOpts.signal, ctrl, 'abort signal still passed through');
+});
+
+test('nuUsdaSearch: meal context → X-Meal-Context header + cache no-store (Phase 4.2.6)', async () => {
+  nu_corrections = [];
+  lastFetchOpts = null;
+  // A valid, actionable per-item projection (a beverage item within a meal).
+  const projection = { v: 1, beverage: true, cookedExpected: false, animal: null,
+    commodity: false, companionCats: ['carb'], role: 'beverage', mealType: null };
+  await nuUsdaSearch('coke', { mealContext: projection });
+  assert.ok((lastFetchOpts.headers || {})['X-Meal-Context'], 'meal header is attached');
+  assert.strictEqual(lastFetchOpts.cache, 'no-store', 'meal-context request must bypass the browser cache');
+});
+
+test('nuUsdaSearch: no meal context → no X-Meal-Context header, default cache', async () => {
+  nu_corrections = [];
+  lastFetchOpts = null;
+  await nuUsdaSearch('coke', {});
+  assert.ok(!(lastFetchOpts.headers || {})['X-Meal-Context'], 'no meal header without a projection');
+  assert.strictEqual(lastFetchOpts.cache, undefined, 'plain search keeps the short cache');
 });

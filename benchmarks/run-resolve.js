@@ -57,6 +57,7 @@ const path = require('node:path');
 const core = require('../food-core.js');
 const ranking = require('../food-ranking.js');
 const memory = require('../food-memory.js');
+const mealmod = require('../food-meal.js');
 const { FIXTURE_SEARCHES, FIXTURE_PORTIONS } = require('./fixtures.js');
 
 const STRICT = process.argv.includes('--strict');
@@ -114,6 +115,29 @@ function rankedCorrectionSource(c) {
     });
     options = { signals: [memory.nmCorrectionSignal(recs, c.input)] };
   }
+  const foods = ranking.rankFoodCandidates(c.input.query, raw, options).foods;
+  return { search: async () => foods, portions: async (id) => FIXTURE_PORTIONS[id] || [] };
+}
+
+// A per-case fixture source that ranks the raw fixture pool with the Phase 4.2.6
+// meal signal — mirroring the server (client sends X-Meal-Context → usda-search
+// ranks with nuMealSignal). The resolver still never reranks; it consumes this
+// already-ranked pool. The projection is either given explicitly
+// (`meal.projection`) OR built end-to-end from the whole meal
+// (`meal.text` + `meal.items` + `meal.index`) through the REAL client builder
+// (nuBuildMealContext → nuMealItemProjection) — the faithful path.
+function mealProjectionFor(c) {
+  if (c.meal.projection) return c.meal.projection;
+  if (Array.isArray(c.meal.items)) {
+    const ctx = mealmod.nuBuildMealContext(c.meal.text || '', c.meal.items, { mealType: c.meal.mealType || null });
+    return mealmod.nuMealItemProjection(ctx, c.meal.index || 0);
+  }
+  return null;
+}
+function rankedMealSource(c) {
+  const raw = (FIXTURE_SEARCHES[c.input.query] || []).map((x) => Object.assign({}, x));
+  const proj = mealProjectionFor(c);
+  const options = proj ? { signals: [mealmod.nuMealSignal(proj)] } : undefined;
   const foods = ranking.rankFoodCandidates(c.input.query, raw, options).foods;
   return { search: async () => foods, portions: async (id) => FIXTURE_PORTIONS[id] || [] };
 }
@@ -234,6 +258,8 @@ function normalizeInput(input) {
     let resolver;
     if (c.corrections || c.rank) {
       resolver = core.nuCreateResolver(rankedCorrectionSource(c));
+    } else if (c.meal) {
+      resolver = core.nuCreateResolver(rankedMealSource(c));
     } else {
       resolver = c.tier === 'live' ? liveResolver : fixtureResolver;
     }

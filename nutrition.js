@@ -504,13 +504,18 @@ var nu_usdaIsRoot    = false;  // true when search is the modal's root (new entr
 var nu_formBackTo    = null;   // where the form's back arrow returns ('search' | null)
 var nu_recentLoaded  = false;  // lazy-load guard for the manual form's recent chips
 
-// Fetch trimmed USDA foods through the proxy. `signal` cancels stale requests.
-async function nuUsdaSearch(query, signal) {
+// Fetch trimmed USDA foods through the proxy. `opts` = { signal?, mealContext? }:
+// `signal` cancels stale requests (manual search); `mealContext` is the Phase
+// 4.2.6 per-item meal projection attached by the resolver for AI Quick Log.
+// (Back-compat note: callers pass an options object — the resolver binds a small
+// adapter, the one manual-search caller passes { signal }.)
+async function nuUsdaSearch(query, opts) {
+  opts = opts || {};
   var s = await supabaseClient.auth.getSession();
   var token = s.data.session && s.data.session.access_token;
   if (!token) throw new Error('Not authenticated');
   var headers = { Authorization: 'Bearer ' + token };
-  var hasCorrectionContext = false;
+  var contextual = false;   // any request-specific context → bypass the URL cache
   // Session correction memory (Phase 4.2.4): attach only the corrections relevant
   // to THIS query so the server can apply them immediately (before/without the
   // persistent write landing). The server treats this as untrusted evidence and
@@ -518,18 +523,27 @@ async function nuUsdaSearch(query, signal) {
   try {
     if (typeof nmSelectRelevant === 'function' && nu_corrections.length) {
       var rel = nmSelectRelevant(nu_corrections, { query: query });
-      if (rel.length) { headers['X-Correction-Context'] = nmSerializeContext(rel); hasCorrectionContext = true; }
+      if (rel.length) { headers['X-Correction-Context'] = nmSerializeContext(rel); contextual = true; }
     }
   } catch (e) { /* correction context is best-effort */ }
-  var opts = { headers: headers, signal: signal };
-  // A correction-context request must NEVER be answered from the browser's
+  // Meal-level reasoning (Phase 4.2.6): attach this item's bounded, candidate-
+  // independent meal projection so the server can rank it in the context of the
+  // whole meal. Untrusted + re-validated server-side; best-effort, never blocks.
+  try {
+    if (opts.mealContext && typeof nuSerializeMealContext === 'function') {
+      var mc = nuSerializeMealContext(opts.mealContext);
+      if (mc) { headers['X-Meal-Context'] = mc; contextual = true; }
+    }
+  } catch (e) { /* meal context is best-effort */ }
+  var fetchOpts = { headers: headers, signal: opts.signal };
+  // A context-influenced request must NEVER be answered from the browser's
   // per-query cache: the plain (no-context) response for the same URL is cached
-  // `private, max-age=60`, so right after a correction the identical query would
-  // otherwise be served the STALE pre-correction ranking (the cache is keyed by
-  // URL and ignores this header). `no-store` bypasses that so same-session
-  // learning is immediate. Plain searches keep the short cache (common while typing).
-  if (hasCorrectionContext) opts.cache = 'no-store';
-  var res = await fetch('/api/usda-search?q=' + encodeURIComponent(query), opts);
+  // `private, max-age=60`, so an identical query would otherwise be served the
+  // STALE non-context ranking (the cache is keyed by URL and ignores these
+  // headers). `no-store` bypasses that so the context applies immediately. Plain
+  // searches keep the short cache (common while typing).
+  if (contextual) fetchOpts.cache = 'no-store';
+  var res = await fetch('/api/usda-search?q=' + encodeURIComponent(query), fetchOpts);
   if (!res.ok) {
     var msg = 'Search failed.';
     try { var j = await res.json(); if (j && j.error) msg = j.error; } catch (e) {}
@@ -681,7 +695,7 @@ async function nuRunUsdaSearch(q) {
   document.getElementById('nuUsdaResults').innerHTML = '';
 
   try {
-    var foods = await nuUsdaSearch(q, nu_usdaAbort ? nu_usdaAbort.signal : undefined);
+    var foods = await nuUsdaSearch(q, { signal: nu_usdaAbort ? nu_usdaAbort.signal : undefined });
     if (seq !== nu_usdaSeq) return;                       // a newer search superseded us
     nu_usdaResults = foods.map(nuNormalizeUsdaFood);
     if (!nu_usdaResults.length) {
@@ -1754,7 +1768,38 @@ function nuAiResolveItem(parsed) {
   // Clone so the caller's parsed object is never mutated.
   var req = Object.assign({}, parsed);
   if (nu_portionCorrections.length) req.portionCorrections = nu_portionCorrections;
+  // Phase 4.2.6: carry any meal projection + index the meal orchestrator attached
+  // (single-item / non-meal callers set neither → identical behavior as before).
+  if (parsed && parsed.mealContext) { req.mealContext = parsed.mealContext; req.mealIndex = parsed.mealIndex; }
   return nu_resolver.resolveItem(req);
+}
+
+/* ── Meal-level reasoning orchestration (Phase 4.2.6) ─────────────────────────
+ * The ONE place a parsed AI meal becomes meal-aware. Build one IMMUTABLE meal
+ * context from the raw text + parsed items, then hand each item only its stable
+ * mealIndex + a reference to that same frozen context's per-item projection.
+ * Computed exactly once per meal (never per item), and only for a ≥2-item meal —
+ * nuBuildMealContext returns an inert context otherwise, so a single-food log is
+ * byte-for-byte the pre-4.2.6 path. Fully guarded: any meal-reasoning failure
+ * degrades to the plain per-item resolver. */
+async function nuAiResolveMealItems(items, mealText, mealType) {
+  var list = items || [];
+  var context = null;
+  try {
+    if (typeof nuBuildMealContext === 'function') {
+      context = nuBuildMealContext(mealText, list, { mealType: mealType || null });
+    }
+  } catch (e) { context = null; }
+  return Promise.all(list.map(function (it, i) {
+    var parsed = it;
+    try {
+      if (context && context.active && typeof nuMealItemProjection === 'function') {
+        var proj = nuMealItemProjection(context, i);
+        if (proj) parsed = Object.assign({}, it, { mealContext: proj, mealIndex: i });
+      }
+    } catch (e) { parsed = it; }
+    return nuAiResolveItem(parsed);
+  }));
 }
 function nuAiResolveChoice(item, ci) { return nu_resolver.resolveChoice(item, ci); }
 function nuAiResolveClarification(item, choice) { return nu_resolver.resolveClarification(item, choice); }

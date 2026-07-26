@@ -1399,3 +1399,192 @@ test('friendly display names: USDA grammar → human names', () => {
   // emojis were removed per Effi's design call — the helper must stay gone
   assert.strictEqual(typeof global.nuFoodEmoji, 'undefined');
 });
+
+/* ── Phase 4.2.6: Meal-Level Reasoning through the resolver ──────────────────
+ * require() the shared cores directly (no vm/browser globals) and drive a fake
+ * adapter that reranks its pool with the meal signal EXACTLY as the server does
+ * (client sends the per-item projection → /api/usda-search ranks with it → the
+ * resolver consumes the order). Proves: meal-assisted provenance, confidence
+ * meal evidence, the dormant-by-default gate, and single-food/no-context parity. */
+{
+  const core26 = require('./food-core.js');
+  const meal26 = require('./food-meal.js');
+  const ranking26 = require('./food-ranking.js');
+
+  // Adapter that mirrors the server: when a meal projection rides along, rank the
+  // pool through the shared ranker + meal signal; otherwise plain ranking.
+  function mealAdapter(pools) {
+    return {
+      search: async (q, ctx) => {
+        const pool = (pools[q] || []).map((x) => Object.assign({}, x));
+        const signals = [];
+        if (ctx && ctx.mealContext) signals.push(meal26.nuMealSignal(ctx.mealContext));
+        return ranking26.rankFoodCandidates(q, pool, signals.length ? { signals } : undefined).foods;
+      },
+      portions: async () => [],
+    };
+  }
+
+  const POOLS = {
+    cola: [
+      { fdcId: 501, description: 'Cola cake', brand: 'A', dataType: 'Branded',
+        foodCategory: 'Sweets', nutrients: { kcal: 350, protein: 3, carbs: 60, fat: 12 } },
+      { fdcId: 502, description: 'Cola soft drink', brand: 'B', dataType: 'Branded',
+        foodCategory: 'Beverages', nutrients: { kcal: 41, protein: 0, carbs: 11, fat: 0 } },
+    ],
+    chicken: [
+      { fdcId: 511, description: 'Chicken, breast, cooked, roasted', dataType: 'SR Legacy',
+        foodCategory: 'Poultry Products', nutrients: { kcal: 165, protein: 31, carbs: 0, fat: 3.6 } },
+    ],
+    'green beans': [
+      { fdcId: 521, description: 'Beans, snap, green, cooked, boiled, drained', dataType: 'SR Legacy',
+        foodCategory: 'Vegetables and Vegetable Products', nutrients: { kcal: 35, protein: 1.9, carbs: 7.9, fat: 0.3 } },
+    ],
+  };
+
+  function item26(o) {
+    return Object.assign({ text: '', query: '', brand: null, quantity: 1, unit: null, grams: null }, o);
+  }
+
+  test('4.2.6: meal context reranks a chooser so the beverage leads', async () => {
+    const r = core26.nuCreateResolver(mealAdapter(POOLS));
+    const ctx = meal26.nuBuildMealContext('burger fries and coke',
+      [{ query: 'burger' }, { query: 'fries' }, { query: 'cola' }]);
+    const proj = meal26.nuMealItemProjection(ctx, 2);   // coke → beverage projection
+    assert.ok(proj && proj.beverage);
+    // Two branded cola candidates with no brand named stay a chooser (ask, never
+    // guess a brand) — but the meal beverage cue orders the real drink first.
+    const withMeal = await r.resolveItem(item26({ query: 'cola', mealContext: proj, mealIndex: 2 }));
+    const without = await r.resolveItem(item26({ query: 'cola' }));
+    assert.strictEqual(withMeal.needsChoice, true);
+    assert.strictEqual(withMeal.choices[0].raw.fdcId, 502, 'meal cue floats the drink to the top of the chooser');
+    assert.notStrictEqual(without.choices[0].raw.fdcId, 502, 'without the meal cue the solid led');
+  });
+
+  test('4.2.6: cooked-meal expectation resolves a commodity + records provenance', async () => {
+    const r = core26.nuCreateResolver(mealAdapter(POOLS));
+    const ctx = meal26.nuBuildMealContext('steak mashed potatoes and green beans',
+      [{ query: 'steak' }, { query: 'mashed potatoes' }, { query: 'green beans' }]);
+    const proj = meal26.nuMealItemProjection(ctx, 2);   // green beans → cookedExpected
+    assert.ok(proj && proj.cookedExpected);
+    const resolved = await r.resolveItem(item26({ query: 'green beans', mealContext: proj, mealIndex: 2 }));
+    assert.strictEqual(resolved.food.usda_fdc_id, 521);
+    assert.ok(resolved.meal, 'meal provenance present');
+    assert.strictEqual(resolved.meal.role, 'side');
+    assert.strictEqual(resolved.meal.support, true, 'cooked candidate matches the cooked meal');
+    assert.ok(resolved.meal.reasons.includes('cooked_match'));
+  });
+
+  test('4.2.6: single-food resolution is byte-for-byte unchanged (no meal context)', async () => {
+    const r = core26.nuCreateResolver(mealAdapter(POOLS));
+    const resolved = await r.resolveItem(item26({ query: 'chicken' }));   // no mealContext
+    // Auto-resolves exactly as before, and NO meal provenance is attached.
+    assert.strictEqual(resolved.food.usda_fdc_id, 511);
+    assert.strictEqual(resolved.meal, null, 'no meal provenance without a meal context');
+  });
+
+  test('4.2.6: confidence records meal evidence; disposition gated OFF by default', () => {
+    const proj = { v: 1, animal: 'chicken', companionCats: ['carb'] };
+    const foods = [
+      { description: 'Turkey, breast, roasted', foodCategory: 'Poultry Products',
+        nutrients: { kcal: 135, protein: 30, carbs: 0, fat: 1 }, score: 1000, group: 'generic' },
+      { description: 'Chicken, breast, roasted', foodCategory: 'Poultry Products',
+        nutrients: { kcal: 165, protein: 31, carbs: 0, fat: 3.6 }, score: 940, group: 'generic' },
+    ];
+    // Default policy (mealContext OFF): meal evidence is recorded but the
+    // disposition is unchanged from the no-meal baseline.
+    const baseline = core26.nuAssessConfidence({ query: 'chicken' }, foods);
+    const withMeal = core26.nuAssessConfidence({ query: 'chicken', mealContext: proj }, foods);
+    assert.strictEqual(withMeal.disposition, baseline.disposition, 'gate off → no disposition change');
+    assert.ok(withMeal.meal, 'meal evidence recorded even when the gate is off');
+    assert.strictEqual(withMeal.meal.conflict, true, 'top turkey conflicts with the chicken item');
+  });
+
+  test('4.2.6: gated ON, a meal conflict on the top pick can escalate to a chooser', () => {
+    const proj = { v: 1, animal: 'chicken', companionCats: ['carb'] };
+    const foods = [
+      { description: 'Turkey, breast, roasted', foodCategory: 'Poultry Products',
+        nutrients: { kcal: 135, protein: 30, carbs: 0, fat: 1 }, score: 1000, group: 'generic' },
+      { description: 'Chicken, breast, roasted', foodCategory: 'Poultry Products',
+        nutrients: { kcal: 400, protein: 31, carbs: 0, fat: 20 }, score: 940, group: 'generic' },
+    ];
+    const off = core26.nuAssessConfidence({ query: 'chicken', mealContext: proj }, foods);
+    const on = core26.nuAssessConfidence({ query: 'chicken', mealContext: proj }, foods, { mealContext: true });
+    assert.strictEqual(off.disposition, 'auto_resolve', 'default: turkey auto-resolves (parity)');
+    assert.strictEqual(on.disposition, 'choose_candidate', 'gated on: conflict escalates to a chooser');
+  });
+
+  test('4.2.6: a malformed meal context degrades safely to normal resolution', async () => {
+    const r = core26.nuCreateResolver(mealAdapter(POOLS));
+    // An unknown-version projection is ignored by the signal and provenance alike.
+    const resolved = await r.resolveItem(item26({ query: 'chicken', mealContext: { v: 99 }, mealIndex: 0 }));
+    assert.strictEqual(resolved.food.usda_fdc_id, 511);
+    assert.strictEqual(resolved.meal, null, 'invalid projection → no provenance, no effect');
+  });
+
+  /* ── integration with the other intelligence layers (requirement 3) ─────── */
+
+  const memory26 = require('./food-memory.js');
+
+  test('4.2.6 × 4.2.4: correction memory still targets the right item inside a meal', async () => {
+    // The user previously corrected "cola" → the drink (fdcId 502). Inside a meal,
+    // BOTH the correction and the beverage cue apply through the shared signals
+    // seam; the corrected drink leads the chooser (correction is not lost).
+    const proj = { v: 1, beverage: true, companionCats: ['carb'] };
+    const pool = POOLS.cola;
+    const corr = memory26.nmCorrectionSignal([memory26.nmBuildCorrectionEvent({
+      request: { query: 'cola' }, choices: [{ raw: pool[0] }, { raw: pool[1] }], chosenIndex: 1,
+    })], { query: 'cola' });
+    const src = {
+      search: async () => ranking26.rankFoodCandidates('cola', POOLS.cola.map((x) => Object.assign({}, x)),
+        { signals: [corr, meal26.nuMealSignal(proj)] }).foods,
+      portions: async () => [],
+    };
+    const out = await core26.nuCreateResolver(src).resolveItem(item26({ query: 'cola', mealContext: proj, mealIndex: 2 }));
+    const topFdc = out.needsChoice ? out.choices[0].raw.fdcId : out.food.usda_fdc_id;
+    assert.strictEqual(topFdc, 502, 'the corrected drink leads even with meal context applied');
+  });
+
+  test('4.2.6 × 4.2.5: a vague portion inside a meal stays estimated + carries provenance', async () => {
+    // P25 fixtures + a meal projection: the vague "handful" is still estimated
+    // (portion intelligence intact) AND meal provenance is recorded.
+    const r = core26.nuCreateResolver({ search: async (q) => P25[q] || [], portions: async () => [] });
+    const proj = { v: 1, cookedExpected: false, companionCats: ['carb'], role: 'side' };
+    const almond = await r.resolveItem(item({ query: 'almonds', unit: 'handful', mealContext: proj, mealIndex: 1 }));
+    assert.strictEqual(almond.estimated, true, 'vague portion still estimated within a meal');
+    assert.strictEqual(almond.grams, 28, 'estimate preserved');
+    assert.ok(almond.meal, 'meal provenance present alongside the estimate');
+  });
+
+  test('4.2.6: one unresolved item never blocks the others (independent resolution)', async () => {
+    const r = core26.nuCreateResolver(mealAdapter(POOLS));
+    const ctx = meal26.nuBuildMealContext('chicken and zzz',
+      [{ query: 'chicken' }, { query: 'zzz' }]);
+    const results = await Promise.all([
+      r.resolveItem(item26({ query: 'chicken', mealContext: meal26.nuMealItemProjection(ctx, 0), mealIndex: 0 })),
+      r.resolveItem(item26({ query: 'zzz', mealContext: meal26.nuMealItemProjection(ctx, 1), mealIndex: 1 })),
+    ]);
+    assert.strictEqual(results[0].food.usda_fdc_id, 511, 'good item resolves');
+    assert.strictEqual(results[1].unmatched, true, 'missing item is unmatched, independently');
+  });
+
+  test('4.2.6: separate foods stay separate — one resolved item per food, no merge', async () => {
+    const r = core26.nuCreateResolver(mealAdapter(POOLS));
+    const items = [{ text: 'chicken', query: 'chicken', brand: null, quantity: 1, unit: null, grams: null },
+                   { text: 'green beans', query: 'green beans', brand: null, quantity: 1, unit: null, grams: null }];
+    const ctx = meal26.nuBuildMealContext('chicken and green beans', items);
+    const out = await Promise.all(items.map((it, i) =>
+      r.resolveItem(Object.assign({}, it, { mealContext: meal26.nuMealItemProjection(ctx, i), mealIndex: i }))));
+    assert.strictEqual(out.length, 2, 'two foods in → two resolved items out (never merged)');
+    assert.strictEqual(out[0].food.usda_fdc_id, 511);
+    assert.strictEqual(out[1].food.usda_fdc_id, 521);
+  });
+
+  test('4.2.6: a 1-item mixed dish is never split (context inactive)', () => {
+    // "chicken caesar salad" is one parsed item → nuBuildMealContext is inert, so
+    // there is no projection and nothing that could split it.
+    const ctx = meal26.nuBuildMealContext('chicken caesar salad', [{ query: 'chicken caesar salad' }]);
+    assert.strictEqual(ctx.active, false);
+    assert.strictEqual(meal26.nuMealItemProjection(ctx, 0), null);
+  });
+}

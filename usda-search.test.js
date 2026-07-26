@@ -33,8 +33,9 @@ const path = require('node:path');
 })();
 
 const _internals = require('./api/usda-search.js')._internals;
-const { expandQuery, searchFoods, buildResponse, buildCorrectionSignal, loadPersistentCorrections } = _internals;
+const { expandQuery, searchFoods, buildResponse, buildCorrectionSignal, buildMealSignal, loadPersistentCorrections } = _internals;
 const foodMemory = require('./food-memory.js');
+const foodMeal = require('./food-meal.js');
 const HAS_KEY = !!process.env.USDA_API_KEY;
 
 /* ── tier 1: query normalization (pure) ─────────────────────────────────── */
@@ -299,4 +300,69 @@ test('buildCorrectionSignal: malformed session context is ignored safely', async
       { headers: { 'x-correction-context': 'not-json-{{{' } }, 'tok');
     assert.equal(sig, null); // dropped, no throw, falls back to normal ranking
   });
+});
+
+/* ── Meal-context ranking signal (Phase 4.2.6) — the SERVER seam ──────────────
+ * buildMealSignal parses the untrusted X-Meal-Context header into ONE ranking
+ * signal injected through the SAME options.signals seam as correction memory.
+ * Every malformed/oversized/unknown-version header must fail open to null. */
+
+function beverageMealPool() {
+  // A solid and a beverage candidate for a "cola"-type query.
+  return [
+    { fdcId: 10, description: 'Cola cake', brand: 'A', dataType: 'Branded',
+      foodCategory: 'Sweets', nutrients: { kcal: 350 } },
+    { fdcId: 11, description: 'Cola soft drink', brand: 'B', dataType: 'Branded',
+      foodCategory: 'Beverages', nutrients: { kcal: 41 } },
+  ];
+}
+function mealHeader(projection) { return { headers: { 'x-meal-context': JSON.stringify(projection) } }; }
+
+test('buildMealSignal: valid header → a signal that reranks via the shared seam', () => {
+  const proj = { v: 1, beverage: true, cookedExpected: false, animal: null,
+    commodity: false, companionCats: ['carb'], role: 'beverage', mealType: null };
+  const sig = buildMealSignal(mealHeader(proj));
+  assert.strictEqual(typeof sig, 'function');
+  const base = buildResponse('cola', beverageMealPool(), []);
+  const withMeal = buildResponse('cola', beverageMealPool(), [], { signals: [sig] });
+  // The beverage candidate is boosted, the solid penalized — bounded deltas.
+  assert.strictEqual(scoreOf(withMeal, 11) - scoreOf(base, 11), foodMeal.MEAL_WEIGHTS.beverageMatch);
+  assert.strictEqual(scoreOf(withMeal, 10) - scoreOf(base, 10), foodMeal.MEAL_WEIGHTS.beverageConflict);
+});
+
+test('buildMealSignal: meal context cannot fabricate a candidate', () => {
+  const proj = { v: 1, beverage: true, companionCats: ['carb'] };
+  const sig = buildMealSignal(mealHeader(proj));
+  const base = buildResponse('cola', beverageMealPool(), []);
+  const withMeal = buildResponse('cola', beverageMealPool(), [], { signals: [sig] });
+  // Same set of candidates, just reordered — nothing invented.
+  assert.deepStrictEqual(withMeal.foods.map((f) => f.fdcId).sort(),
+    base.foods.map((f) => f.fdcId).sort());
+});
+
+test('buildMealSignal: no header → null (normal ranking)', () => {
+  assert.strictEqual(buildMealSignal({ headers: {} }), null);
+});
+
+test('buildMealSignal: malformed / oversized / unknown-version header → null', () => {
+  assert.strictEqual(buildMealSignal({ headers: { 'x-meal-context': 'not-json-{{{' } }), null);
+  assert.strictEqual(buildMealSignal({ headers: { 'x-meal-context': 'x'.repeat(9000) } }), null);
+  assert.strictEqual(buildMealSignal({ headers: { 'x-meal-context': JSON.stringify({ v: 99, beverage: true }) } }), null);
+  // A well-formed but NON-actionable projection is also dropped.
+  assert.strictEqual(buildMealSignal({ headers: { 'x-meal-context': JSON.stringify({ v: 1, beverage: false, companionCats: [] }) } }), null);
+});
+
+test('buildMealSignal: correction + meal signals coexist on the same request', () => {
+  // Both signals apply additively through options.signals (server combines them).
+  const proj = { v: 1, beverage: true, companionCats: ['carb'] };
+  const mealSig = buildMealSignal(mealHeader(proj));
+  const pool = beverageMealPool();
+  const corr = foodMemory.nmCorrectionSignal(
+    [correction('cola', pool[0], pool[1])], { query: 'cola' });
+  const base = buildResponse('cola', beverageMealPool(), []);
+  const both = buildResponse('cola', beverageMealPool(), [], { signals: [corr, mealSig] });
+  // The drink (fdcId 11) is both the corrected pick AND the beverage match → it
+  // gains both contributions and leads decisively; nothing is fabricated.
+  assert.strictEqual(both.foods[0].fdcId, 11);
+  assert.ok(scoreOf(both, 11) > scoreOf(base, 11));
 });

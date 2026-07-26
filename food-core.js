@@ -524,6 +524,14 @@ var NU_CONFIDENCE = {
   // an already-interruptible choose_candidate base, so no auto_resolve case is
   // ever turned into an interruption while scoreEscalation stays false.
   targetedClarification: true,
+  // Meal-context DISPOSITION changes (Phase 4.2.6). Meal evidence is ALWAYS
+  // computed and recorded as diagnostics/provenance when a meal context exists;
+  // this flag gates ONLY whether that evidence may CHANGE a disposition (suppress
+  // a clarification the meal strongly supports, or escalate an auto_resolve the
+  // meal contradicts into a chooser). Ships OFF so meal context never silently
+  // increases clarifications — with it false, meal context influences RANKING and
+  // provenance only, and the disposition is byte-for-byte today's.
+  mealContext: false,
 };
 
 // Effective policy for one assessment: an explicit per-call override (used by
@@ -535,7 +543,65 @@ function nuResolvePolicy(policy) {
       ? !!policy.scoreEscalation : NU_CONFIDENCE.scoreEscalation,
     targetedClarification: (policy && 'targetedClarification' in policy)
       ? !!policy.targetedClarification : NU_CONFIDENCE.targetedClarification,
+    mealContext: (policy && 'mealContext' in policy)
+      ? !!policy.mealContext : NU_CONFIDENCE.mealContext,
   };
+}
+
+/* ── Meal-reasoning bridge (Phase 4.2.6) ─────────────────────────────────────
+ * Lazily reach the shared meal-reasoning core (food-meal.js) WITHOUT a
+ * load-order or circular-require problem: prefer the browser global (food-meal.js
+ * loads AFTER food-core.js, so the global exists by resolve time), and fall back
+ * to a guarded Node require. Returns null when the module is absent (app.html, or
+ * a test VM that didn't load it) — meal reasoning then simply doesn't apply and
+ * resolution behaves exactly as before. Never throws. */
+var _nuMealMod = null, _nuMealTried = false;
+function nuMealApi() {
+  if (typeof nuMealAssess === 'function') return { assess: nuMealAssess };
+  if (!_nuMealTried && typeof require === 'function') {
+    _nuMealTried = true;
+    try { _nuMealMod = require('./food-meal.js'); } catch (e) { _nuMealMod = null; }
+  }
+  return _nuMealMod ? { assess: _nuMealMod.nuMealAssess } : null;
+}
+
+// Attach meal evidence to a finished verdict (always, as diagnostics), and apply
+// the GATED disposition change (only when policy.mealContext is on). Pure w.r.t.
+// inputs except the freshly-built verdict it owns; safe to mutate that in place.
+function nuFinalizeMeal(verdict, request, list, policy) {
+  var proj = request && request.mealContext;
+  if (!proj) return verdict;
+  var api = nuMealApi();
+  if (!api || typeof api.assess !== 'function') return verdict;
+  var ev;
+  try { ev = api.assess(proj, verdict.candidate || (list && list[0]) || null); } catch (e) { ev = null; }
+  if (!ev || !ev.active) return verdict;
+
+  // Always-on diagnostics/provenance (present regardless of the gate).
+  verdict.meal = { support: !!ev.support, conflict: !!ev.conflict, reasons: ev.reasons || [] };
+  (ev.reasons || []).forEach(function (r) { verdict.reasons.push({ code: 'meal_' + r, detail: '' }); });
+
+  if (!policy.mealContext) return verdict;   // gate off → annotation only (parity)
+
+  if (verdict.disposition === 'clarify_input' && ev.support && !ev.conflict) {
+    // The rest of the meal strongly supports the top candidate → don't ask.
+    verdict.disposition = 'auto_resolve';
+    verdict.level = NU_DISPOSITION_LEVEL.auto_resolve;
+    verdict.alternatives = [];
+    verdict.clarification = null;
+    verdict.reasons.push({ code: 'meal_support_suppressed_clarification', detail: '' });
+  } else if (verdict.disposition === 'auto_resolve' && ev.conflict) {
+    var distinct = nuAiDedupeChoices((list || []).slice(0, NU_CONFIDENCE.maxAlternatives));
+    if (distinct.length >= 2) {
+      verdict.disposition = 'choose_candidate';
+      verdict.level = NU_DISPOSITION_LEVEL.choose_candidate;
+      verdict.alternatives = distinct;
+      verdict.ambiguity = verdict.ambiguity.concat(['identity']);
+      verdict.material = true;
+      verdict.reasons.push({ code: 'meal_conflict_escalated', detail: '' });
+    }
+  }
+  return verdict;
 }
 
 // Preparation STATES — a small shared, identity-level vocabulary (synonyms →
@@ -641,8 +707,9 @@ function nuAssessConfidence(request, foods, policy) {
 
   // (0) No candidates → safe terminal (mirrors resolveItem's unmatched).
   if (!list.length) {
-    return nuVerdict('unresolved', null, [], ['identity'],
-      [{ code: 'no_candidates', detail: 'search returned no candidates' }], false, evidence);
+    return nuFinalizeMeal(nuVerdict('unresolved', null, [], ['identity'],
+      [{ code: 'no_candidates', detail: 'search returned no candidates' }], false, evidence),
+      request, list, policy);
   }
 
   var top = list[0];
@@ -654,8 +721,9 @@ function nuAssessConfidence(request, foods, policy) {
   //     (parity with resolveItem's askCat branch + nuAiIsConfident H1). A
   //     multi-source dish is not one dominant dimension → never a clarification.
   if (NU_ASK_CATEGORIES[cat]) {
-    return nuVerdict('choose_candidate', top, list.slice(0, NU_CONFIDENCE.maxAlternatives),
-      ['category'], [{ code: 'ask_category', detail: cat }], true, evidence);
+    return nuFinalizeMeal(nuVerdict('choose_candidate', top, list.slice(0, NU_CONFIDENCE.maxAlternatives),
+      ['category'], [{ code: 'ask_category', detail: cat }], true, evidence),
+      request, list, policy);
   }
 
   // TRUE distinct foods: collapse near-identical products via the shared
@@ -670,8 +738,9 @@ function nuAssessConfidence(request, foods, policy) {
   if (distinct.length <= 1) {
     var soleCode = branded ? (brand === 'matched' ? 'brand_matched' : 'single_candidate')
                            : 'generic_canonical';
-    return nuVerdict('auto_resolve', top, [], [],
-      [{ code: soleCode, detail: top.description || '' }], false, evidence);
+    return nuFinalizeMeal(nuVerdict('auto_resolve', top, [], [],
+      [{ code: soleCode, detail: top.description || '' }], false, evidence),
+      request, list, policy);
   }
 
   // ≥2 distinct foods remain — is the disagreement nutritionally MATERIAL?
@@ -689,11 +758,12 @@ function nuAssessConfidence(request, foods, policy) {
   if (policy.targetedClarification && base.disposition === 'choose_candidate' && base.material) {
     var clar = nuDetectClarification(request, top, distinct, brand);
     if (clar) {
-      return nuVerdict('clarify_input', top, distinct, [clar.type],
-        [{ code: 'targeted_clarification', detail: clar.type }], true, evidence, clar);
+      return nuFinalizeMeal(nuVerdict('clarify_input', top, distinct, [clar.type],
+        [{ code: 'targeted_clarification', detail: clar.type }], true, evidence, clar),
+        request, list, policy);
     }
   }
-  return base;
+  return nuFinalizeMeal(base, request, list, policy);
 }
 
 /* ── targeted clarification (Phase 4.2.3, checkpoint 4 — active) ────────────
@@ -928,6 +998,30 @@ function nuCreateResolver(source) {
       // clarification, provenance) for labeling, saving, and clarification.
       estimated: !!sv.estimated,
       portion: sv.portion || null,
+      // Phase 4.2.6 meal-assisted provenance — present only when this item carried
+      // a meal context. Records HOW the meal influenced this pick (role/support/
+      // conflict/reasons + context version) for diagnostics, benchmarks, and
+      // future correction learning; never shown to users, never persisted whole.
+      meal: nuMealProvenance(parsed, rawFood),
+    };
+  }
+
+  // Diagnostic meal-provenance for a resolved candidate, or null when the item
+  // had no meal context / the meal core is absent. Small + stable by design.
+  function nuMealProvenance(parsed, rawFood) {
+    var proj = parsed && parsed.mealContext;
+    if (!proj) return null;
+    var api = nuMealApi();
+    if (!api || typeof api.assess !== 'function') return null;
+    var ev;
+    try { ev = api.assess(proj, rawFood); } catch (e) { ev = null; }
+    if (!ev || !ev.active) return null;
+    return {
+      role: proj.role || null,
+      support: !!ev.support,
+      conflict: !!ev.conflict,
+      reasons: ev.reasons || [],
+      contextVersion: proj.v,
     };
   }
 
@@ -936,7 +1030,12 @@ function nuCreateResolver(source) {
   // the distinct candidates, so the review sheet can ask instead of guessing.
   async function resolveItem(parsed) {
     var foods = [];
-    try { foods = await source.search(parsed.query); } catch (e) {}
+    // Phase 4.2.6: pass the item's meal context to the search adapter (the browser
+    // adapter serializes it into the X-Meal-Context header; fixture/live adapters
+    // ignore the 2nd arg). No meal context → identical single-item search as before.
+    var searchCtx = (parsed && parsed.mealContext)
+      ? { mealContext: parsed.mealContext, mealIndex: parsed.mealIndex } : undefined;
+    try { foods = await source.search(parsed.query, searchCtx); } catch (e) {}
 
     // Phase 4.2.3: the shared confidence verdict — assessed on the EXACT ordered
     // candidate array just returned (no second search) — owns the interrupt

@@ -727,6 +727,7 @@
 <script src="food-ranking.js"></script>
 <script src="food-memory.js"></script>
 <script src="food-portion.js"></script>
+<script src="food-meal.js"></script>
 <script src="nutrition.js"></script>
 <script>
   var currentUserId = null;
@@ -1129,7 +1130,10 @@
         showToast("Couldn't find foods in that — try naming them directly.");
         return;
       }
-      aiItems = await Promise.all(parsed.items.map(nuAiResolveItem));
+      // Phase 4.2.6: resolve the whole meal together (meal-aware) — the resolver
+      // still returns one resolved item per food, so the review sheet + save path
+      // are unchanged; foods stay separate entries.
+      aiItems = await nuAiResolveMealItems(parsed.items, text, parsed.meal);
       document.getElementById('aiSheetSrc').textContent = '“' + text + '”';
       document.getElementById('aiSheetMeal').value = parsed.meal || suggestMeal();
       renderAiSheet();
