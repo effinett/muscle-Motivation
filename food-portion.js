@@ -162,6 +162,14 @@ var NU_FAMILY_DESC = [
   ['ice_cream', /\bice cream|\bgelato|\bfrozen yogurt/],
   ['cheese', /\bchees/],
   ['yogurt', /\byogh?urt/],
+  // Dairy sub-families by NAME (before the coarse /dairy/ category fallback) so a
+  // milk/cream/butter food is never mislabelled as "cheese" in the portion
+  // clarification (Phase 4.2.7). Order matters: cheese/ice-cream/peanut-butter are
+  // matched earlier, so "cream cheese"→cheese, "ice cream"→ice_cream, "peanut
+  // butter"→peanut_butter still win. \b guards keep "buttermilk"/"butternut" out.
+  ['milk', /\bmilk/],
+  ['cream', /\bcream/],
+  ['butter', /\bbutter\b/],
   ['cereal', /\b(cereal|cheerio|granola|corn flake|bran flake)/],
   ['oats', /\b(oat|oatmeal|porridge)/],
   ['rice', /\brice/],
@@ -187,7 +195,10 @@ var NU_FAMILY_CATEGORY = [
   ['pasta', /pasta/i],
   ['oil', /fats and oils/i],
   ['spice', /spices and herbs/i],
-  ['cheese', /dairy/i],
+  // Coarse dairy fallback: a NEUTRAL 'dairy' family (NOT 'cheese') so a milk/
+  // cream/dairy-drink food with no name keyword is never described as cheese.
+  // Solid cheese is still caught by the /\bchees/ NAME rule above → 'cheese'.
+  ['dairy', /dairy/i],
   ['meat', /(poultry|beef|pork|sausage|finfish|lamb|veal)/i],
   ['soup', /soups, sauces/i],
   ['bread', /baked/i],
@@ -651,6 +662,22 @@ function nuPortionExplanation(cls, family, modifier, amount, unit) {
   return head + (fam ? ' of ' + fam : '') + ' (~' + _round1(amount) + ' ' + unit + ').';
 }
 
+// User-facing noun for a family in a clarification prompt. A SEPARATE display
+// layer from the internal family key (Phase 4.2.7): internal keys stay tuned for
+// portion-table lookups, while the prompt always reads as the food the user
+// actually logged — a milk/cream/butter food is never called "cheese". Unknown
+// families fall back to the de-underscored key; 'generic' → "food".
+var NU_FAMILY_LABEL = {
+  generic: 'food', dairy: 'dairy', milk: 'milk', cream: 'cream', butter: 'butter',
+  cheese: 'cheese', shredded_cheese: 'cheese', yogurt: 'yogurt', ice_cream: 'ice cream',
+  leafy_greens: 'greens', peanut_butter: 'peanut butter', meal_solid: 'food',
+  dried_fruit: 'dried fruit',
+};
+function nuFamilyLabel(family) {
+  if (!family || family === 'generic') return 'food';
+  return NU_FAMILY_LABEL[family] || String(family).replace(/_/g, ' ');
+}
+
 // A portion size clarification, reusing the Phase 4.2.3 clarification contract
 // shape { type, target, prompt, options:[{label,patch}], allowFreeText }. The
 // option patches set a SIZE-modified unit that re-enters the resolver: answering
@@ -664,8 +691,7 @@ function nuPortionClarification(cls, family) {
   var word = nuPortionClassWord(cls);
   return {
     type: 'portion', target: 'unit',
-    prompt: 'About how much ' + (family && family !== 'generic' ? family.replace('_', ' ') : 'food') +
-            ' was that?',
+    prompt: 'About how much ' + nuFamilyLabel(family) + ' was that?',
     options: [
       { label: 'Small ' + display, patch: { unit: 'small ' + word } },
       { label: 'Medium ' + display, patch: { unit: 'medium ' + word } },

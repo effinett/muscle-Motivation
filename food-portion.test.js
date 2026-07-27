@@ -71,6 +71,38 @@ test('family: falls back to USDA foodCategory when description is unspecific', (
   assert.strictEqual(fp.nuFoodFamily(food('generic', { foodCategory: 'Fats and Oils' })), 'oil');
 });
 
+/* ── Phase 4.2.7: dairy sub-families + user-facing labels ─────────────────────
+ * A milk/cream/butter food must NEVER classify (or read) as "cheese". Dairy
+ * families are distinguished by name; the coarse category fallback is a NEUTRAL
+ * 'dairy', never 'cheese'. */
+test('dairy sub-families: milk/cream/butter/yogurt/cheese classify distinctly', () => {
+  const cat = 'Dairy and Egg Products';
+  assert.strictEqual(fp.nuFoodFamily(food('Milk, whole, 3.25% milkfat', { foodCategory: cat })), 'milk');
+  assert.strictEqual(fp.nuFoodFamily(food('Cream, heavy whipping', { foodCategory: cat })), 'cream');
+  assert.strictEqual(fp.nuFoodFamily(food('Butter, salted', { foodCategory: cat })), 'butter');
+  assert.strictEqual(fp.nuFoodFamily(food('Yogurt, plain, whole milk', { foodCategory: cat })), 'yogurt');
+  assert.strictEqual(fp.nuFoodFamily(food('Cheese, cheddar', { foodCategory: cat })), 'cheese');
+  // earlier, more-specific rules still win the overlaps
+  assert.strictEqual(fp.nuFoodFamily(food('Cream cheese', { foodCategory: cat })), 'cheese');
+  assert.strictEqual(fp.nuFoodFamily(food('Peanut butter, smooth')), 'peanut_butter');
+  // unknown dairy (buttermilk/kefir) → NEUTRAL 'dairy', never 'cheese'
+  assert.strictEqual(fp.nuFoodFamily(food('Buttermilk, low fat', { foodCategory: cat })), 'dairy');
+  assert.strictEqual(fp.nuFoodFamily(food('Kefir, plain', { foodCategory: cat })), 'dairy');
+});
+
+test('milk portion clarification never describes milk as cheese (4.2.7 regression)', () => {
+  const cat = 'Dairy and Egg Products';
+  const r = fp.nuInterpretVaguePortion({ unit: 'bowl', food: food('Milk, whole', { foodCategory: cat }),
+    per100: { kcal: 61, protein: 3.2, carbs: 4.8, fat: 3.3 }, isLiquid: true });
+  assert.ok(r.clarification, 'an un-sized bowl of milk asks a size question');
+  assert.doesNotMatch(r.clarification.prompt, /cheese/i, 'the milk prompt never says "cheese"');
+  assert.match(r.clarification.prompt, /milk/i, 'the prompt names the actual food (milk)');
+  // cheese still reads as cheese
+  const c = fp.nuInterpretVaguePortion({ unit: 'bowl', food: food('Cheese, cheddar', { foodCategory: cat }),
+    per100: { kcal: 403, protein: 23, carbs: 3.4, fat: 33 } });
+  if (c.clarification) assert.match(c.clarification.prompt, /cheese/i);
+});
+
 /* ── category-aware estimates: THE core requirement ─────────────────────── */
 
 test('handful is category-aware — almonds ≠ spinach, and NEVER ~100 g', () => {
