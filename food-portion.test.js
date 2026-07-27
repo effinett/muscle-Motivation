@@ -278,17 +278,24 @@ test('interpreter recovers a dropped quantifier from rawText when unit is null',
   assert.strictEqual(r.requiresClarification, true, 'a small-amount is too vague → ask');
 });
 
-test('4.2.7: raw-text recovery generalizes to pure quantifiers (splash/drizzle/pinch/handful)', () => {
-  // These are pure quantifiers, never food nouns — recovered like small_amount.
+test('4.2.7: raw-text recovery generalizes to every pure-quantifier class', () => {
+  // All seven pure quantifiers (never food nouns) — recovered like small_amount.
   assert.strictEqual(fp.nuDetectFromRawText('a splash of milk', 'milk').portionClass, 'splash');
   assert.strictEqual(fp.nuDetectFromRawText('a drizzle of olive oil', 'olive oil').portionClass, 'drizzle');
   assert.strictEqual(fp.nuDetectFromRawText('a pinch of salt', 'salt').portionClass, 'pinch');
+  assert.strictEqual(fp.nuDetectFromRawText('a dash of cinnamon', 'cinnamon').portionClass, 'dash');
   assert.strictEqual(fp.nuDetectFromRawText('a handful of almonds', 'almonds').portionClass, 'handful');
+  assert.strictEqual(fp.nuDetectFromRawText('a spoonful of peanut butter', 'peanut butter').portionClass, 'spoonful');
+  assert.strictEqual(fp.nuDetectFromRawText('a scoop of protein powder', 'protein powder').portionClass, 'scoop');
   // container / measure / food-name-adjacent words stay EXCLUDED (parser forwards
   // them; they can occur inside food names) — general rule, not a per-food list.
   assert.strictEqual(fp.nuDetectFromRawText('chicken bowl', 'chicken'), null);
   assert.strictEqual(fp.nuDetectFromRawText('a slice of bread', 'bread'), null);
   assert.strictEqual(fp.nuDetectFromRawText('a piece of chicken', 'chicken'), null);
+  assert.strictEqual(fp.nuDetectFromRawText('a cup of rice', 'rice'), null);
+  // recovery ONLY runs with no explicit unit (exact measure always wins upstream)
+  assert.ok(fp.nuInterpretVaguePortion({ unit: 'tbsp', rawText: 'a splash of milk', query: 'milk',
+    food: food('Milk, whole'), per100: { kcal: 61 }, isLiquid: true }).portionClass !== 'splash');
 });
 
 test('4.2.7: recovered drizzle produces the shared estimate, still marked estimated', () => {
