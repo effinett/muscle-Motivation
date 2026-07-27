@@ -732,6 +732,25 @@ function nuAssessConfidence(request, foods, policy) {
   var branded = (top.group || 'generic') === 'branded';
   var brand = nuConfBrandState(request, top);
 
+  // (1b) HARD identity/form mismatch on the LEADING candidate (Phase 4.2.7):
+  //      ranking sets `mismatch` when the user EXPLICITLY named a species /
+  //      product form / collision-prone identity the top hit contradicts (e.g. no
+  //      real "fairlife protein bar" exists — only Fairlife milk survives). Such a
+  //      result must never be presented with certainty: offer a bounded choice
+  //      when other distinct foods exist, else a safe unresolved terminal. High
+  //      precision — `mismatch` is false for a normal, correctly-matched top hit,
+  //      so ordinary logging is untouched (no new clarifications on clean queries).
+  if (top.mismatch === true) {
+    if (distinct.length >= 2) {
+      return nuFinalizeMeal(nuVerdict('choose_candidate', top, distinct, ['identity'],
+        [{ code: 'top_hard_mismatch', detail: top.description || '' }], true, evidence),
+        request, list, policy);
+    }
+    return nuFinalizeMeal(nuVerdict('unresolved', null, [], ['identity'],
+      [{ code: 'top_hard_mismatch_unresolved', detail: top.description || '' }], false, evidence),
+      request, list, policy);
+  }
+
   // (2) One distinct food after dedupe → no identity ambiguity → auto-resolve.
   //     (Parity: resolveItem auto-picks when dedupe collapses to a single
   //     option, e.g. a lone branded "milk" with no brand named.)

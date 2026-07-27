@@ -62,6 +62,13 @@ test('oatmeal normalizes to oats; derivative products stay literal', () => {
   assert.strictEqual(expandQuery('oatmeal cookies').query, 'oatmeal cookies');
 });
 
+test('mayo normalizes to mayonnaise; the bean cultivar stays literal (4.2.7)', () => {
+  assert.strictEqual(expandQuery('mayo').query, 'mayonnaise');
+  assert.strictEqual(expandQuery('light mayo').query, 'light mayonnaise');
+  // "flor de mayo" beans are a DIFFERENT food — the bean context blocks the rewrite
+  assert.strictEqual(expandQuery('flor de mayo beans').query, 'flor de mayo beans');
+});
+
 test('distinct toast products are NOT rewritten', () => {
   assert.strictEqual(expandQuery('melba toast').query, 'melba toast');
   assert.strictEqual(expandQuery('french toast').query, 'french toast');

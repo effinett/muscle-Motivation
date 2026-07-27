@@ -289,11 +289,42 @@ const CAESAR_F = one(620094, 'Salad, Caesar, with chicken', 'Salads', { kcal: 18
 const TUNASAND_F = one(620095, 'Sandwich, tuna salad', 'Meals, Entrees, and Side Dishes', { kcal: 250, protein: 15, carbs: 25, fat: 10, fiber: 2, sugar: 3 });
 const BURGER_F = one(620096, 'Hamburger, single patty, with bun', 'Fast Foods', { kcal: 254, protein: 12, carbs: 30, fat: 9, fiber: 1, sugar: 5 });
 
+/* ── Phase 4.2.7 ranking-hardening fixtures ──────────────────────────────────
+ * Candidate pools for the named production failures (generic-vs-subtype, food
+ * family, species, product form, brand asymmetry) + serving-metadata quality.
+ * Trimmed Candidate shape; dataType set so the ranker's branded/generic split is
+ * faithful. Ranked live by rankFoodCandidates in the runner's `rank` mode. */
+const R7_GLUT = { fdcId: 730002, description: 'Rice, white, glutinous, cooked', dataType: 'SR Legacy',
+  group: 'generic', foodCategory: 'Cereal Grains and Pasta', servingSize: 174, servingSizeUnit: 'g',
+  householdServing: '1 cup', nutrients: { kcal: 97, protein: 2, carbs: 21, fat: 0.2, fiber: 1, sugar: 0 } };
+const M7_MAYO = { fdcId: 730010, description: 'Salad dressing, mayonnaise, regular', dataType: 'SR Legacy',
+  group: 'generic', foodCategory: 'Fats and Oils', servingSize: 14, servingSizeUnit: 'g',
+  householdServing: '1 tbsp', nutrients: { kcal: 680, protein: 1, carbs: 0.6, fat: 75, fiber: 0, sugar: 0.6 } };
+const M7_BEAN = { fdcId: 730011, description: 'Beans, flor de mayo, mature seeds, cooked', dataType: 'SR Legacy',
+  group: 'generic', foodCategory: 'Legumes and Legume Products', servingSize: 100, servingSizeUnit: 'g',
+  householdServing: '1 cup', nutrients: { kcal: 120, protein: 8, carbs: 21, fat: 0.5, fiber: 7, sugar: 0.3 } };
+const T7_TURKEY = { fdcId: 730020, description: 'Turkey, breast, meat only, roasted', dataType: 'SR Legacy',
+  group: 'generic', foodCategory: 'Poultry Products', servingSize: 85, servingSizeUnit: 'g',
+  householdServing: '3 oz', nutrients: { kcal: 135, protein: 30, carbs: 0, fat: 1, fiber: 0, sugar: 0 } };
+const G7_MILK = { fdcId: 730040, description: 'Milk, whole, 3.25% milkfat, with added vitamin D',
+  dataType: 'SR Legacy', group: 'generic', foodCategory: 'Dairy and Egg Products', is_liquid: true,
+  servingSize: 244, servingSizeUnit: 'g', householdServing: '1 cup',
+  nutrients: { kcal: 61, protein: 3.2, carbs: 4.8, fat: 3.3, fiber: 0, sugar: 5.1 } };
+// Serving-quality pair: SAME identity, one WITH a usable liquid serving, one
+// WITHOUT. The dedupe keeps the better-scored (usable) twin, so identity is
+// unchanged and only the portionable record survives (Part 3 / splash-of-milk).
+const G7_MILK_SERV = { fdcId: 730041, description: 'Milk, whole', dataType: 'SR Legacy', group: 'generic',
+  foodCategory: 'Dairy and Egg Products', is_liquid: true, servingSize: 244, servingSizeUnit: 'ml',
+  householdServing: '1 cup', nutrients: { kcal: 61, protein: 3.2, carbs: 4.8, fat: 3.3, fiber: 0, sugar: 5.1 } };
+const G7_MILK_NOSERV = { fdcId: 730042, description: 'Milk, whole', dataType: 'Foundation', group: 'generic',
+  foodCategory: 'Dairy and Egg Products', is_liquid: true, servingSize: null, servingSizeUnit: '',
+  householdServing: '', nutrients: { kcal: 60, protein: 3.2, carbs: 4.7, fat: 3.2, fiber: 0, sugar: 5 } };
+
 const FIXTURE_SEARCHES = {
-  'fairlife protein bar': [FL_BAR_CHOC, FL_BAR_CARAMEL],
+  'fairlife protein bar': [FL_BAR_CHOC, FL_BAR_CARAMEL, FL_MILK],
   'fairlife caramel protein bar': [FL_BAR_CHOC, FL_BAR_CARAMEL],
-  'fairlife whole milk': [FL_MILK, FL_BAR_CHOC, FL_BAR_CARAMEL],
-  'chicken breast cooked': [CHK_BREAST_RAW, CHK_BREAST_COOKED],
+  'fairlife whole milk': [FL_MILK, FL_BAR_CHOC, FL_BAR_CARAMEL, G7_MILK],
+  'chicken breast cooked': [CHK_BREAST_RAW, CHK_BREAST_COOKED, T7_TURKEY],
   'chicken breast prep': [CHK_RAW, CHK_COOKED],
   'tuna canned': [TUNA_WATER, TUNA_OIL],
   'organic milk': [MK_A, MK_B],
@@ -316,7 +347,7 @@ const FIXTURE_SEARCHES = {
   spinach: [SPINACH], blueberries: [BLUEBERRIES], chips: [CHIPS],
   'shredded cheese': [SHRED_CHEESE], 'olive oil': [OLIVE_OIL], dressing: [DRESSING],
   'hot sauce': [HOT_SAUCE], salt: [SALT], cream: [CREAM], cereal: [CEREAL],
-  soup: [SOUP], rice: [RICE_COOKED], pasta: [PASTA_COOKED], cheese: [CHEESE_BLOCK],
+  soup: [SOUP], rice: [RICE_COOKED, R7_GLUT], pasta: [PASTA_COOKED], cheese: [CHEESE_BLOCK],
   pizza: [PIZZA], 'peanut butter smooth': [PB_CUP], chicken: [CHK_PIECE], bread: [BREAD],
   // Phase 4.2.6 meal-reasoning queries
   cola: [COLA_CAKE, COLA_DRINK], 'green beans': [GBEANS_RAW, GBEANS_COOKED],
@@ -326,6 +357,13 @@ const FIXTURE_SEARCHES = {
   oatmeal: OATMEAL_F, avocado: AVOCADO_F, salsa: SALSA_F, mayo: MAYO_F, ketchup: KETCHUP_F,
   fries: FRIES_F, ranch: RANCH_F, salad: SALAD_F, steak: STEAK_F, turkey: TURKEY_F,
   'caesar salad': CAESAR_F, 'tuna sandwich': TUNASAND_F, burger: BURGER_F,
+  // Phase 4.2.7 ranking-hardening queries (ranked via `rank` mode)
+  'glutinous rice': [RICE_COOKED, R7_GLUT],
+  mayonnaise: [M7_MAYO, M7_BEAN],
+  'flor de mayo beans': [M7_BEAN, M7_MAYO],
+  'turkey breast cooked': [T7_TURKEY, CHK_BREAST_COOKED],
+  'whole milk': [FL_MILK, G7_MILK],
+  'plain whole milk': [G7_MILK_NOSERV, G7_MILK_SERV],
 };
 
 const FIXTURE_PORTIONS = {

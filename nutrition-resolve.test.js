@@ -410,6 +410,37 @@ test('confidence contract: brand-crowded branded lead → choose_candidate (iden
   assert.strictEqual(v.reasons[0].code, 'branded_crowd');
 });
 
+test('confidence guard (4.2.7): top candidate hard-mismatch, sole → unresolved', () => {
+  // Ranking stamps mismatch=true when the user explicitly named a form/species/
+  // identity the top hit contradicts (e.g. no real "fairlife protein bar" exists —
+  // only Fairlife MILK survives the strict branded keep-gate). Never auto-resolve
+  // an incompatible sole survivor.
+  const milkOnly = [{ fdcId: 5551, description: 'Fairlife Whole Milk', brand: 'fairlife',
+    group: 'branded', mismatch: true, nutrients: { kcal: 61, protein: 5, carbs: 5, fat: 3 } }];
+  const v = nuAssessConfidence(item({ query: 'fairlife protein bar', brand: 'fairlife' }), milkOnly);
+  assert.strictEqual(v.disposition, 'unresolved');
+  assert.strictEqual(v.reasons[0].code, 'top_hard_mismatch_unresolved');
+});
+
+test('confidence guard (4.2.7): top hard-mismatch with alternatives → choose_candidate', () => {
+  const pool = [
+    { fdcId: 5551, description: 'Fairlife Whole Milk', brand: 'fairlife', group: 'branded',
+      mismatch: true, nutrients: { kcal: 61, protein: 5, carbs: 5, fat: 3 } },
+    { fdcId: 5552, description: 'Chocolate Protein Shake', brand: 'X', group: 'branded',
+      mismatch: false, nutrients: { kcal: 160, protein: 30, carbs: 5, fat: 3 } },
+  ];
+  const v = nuAssessConfidence(item({ query: 'fairlife protein bar', brand: 'fairlife' }), pool);
+  assert.strictEqual(v.disposition, 'choose_candidate');
+  assert.strictEqual(v.reasons[0].code, 'top_hard_mismatch');
+});
+
+test('confidence guard (4.2.7): a correctly-matched top hit is NOT flagged (no over-clarify)', () => {
+  // The common case: ranking sets mismatch=false, so ordinary logging is untouched.
+  const v = nuAssessConfidence(item({ query: 'egg' }),
+    SEARCHES.egg.map(function (f) { return Object.assign({ mismatch: false }, f); }));
+  assert.strictEqual(v.disposition, 'auto_resolve');
+});
+
 test('confidence contract: named brand matched, alike variants → auto_resolve', () => {
   const req = item({ query: 'quest bar', brand: 'quest' });
   const v = nuAssessConfidence(req, SEARCHES['quest bar']);

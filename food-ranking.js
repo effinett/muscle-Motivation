@@ -88,6 +88,24 @@ const RANK_WEIGHTS = {
   competingSubtype: -600,     // flaunts a SIBLING subtype while missing the typed one
                               //   ("jasmine rice" must never boost a white-rice entry
                               //    on its untyped 'white' — see scoreFoodIntent)
+
+  // ── Phase 4.2.7 tiered identity/intent/quality signals ──────────────────
+  // Sized to enforce the priority model (Checkpoint 1): PRIMARY IDENTITY beats
+  // EXPLICIT INTENT beats CANDIDATE QUALITY. Provisional values tuned against the
+  // benchmark corpus (see the Checkpoint 2 weight review) — a wrong species/family
+  // can never win on preparation, category, brand, form, or serving overlap.
+  // Tier 1 — primary identity
+  speciesMismatch: -1800,     // query names an animal; candidate is a DIFFERENT animal
+  familyIdentityMismatch: -1500, // query IS a food identity; candidate is an incompatible family
+  // Tier 2 — explicit user intent
+  productFormMismatch: -1300, // query names a product form; candidate is an incompatible form
+  missingRequestedBrand: -600,// query named a known brand; candidate is generic/other-brand
+  specialtySubtype: -350,     // generic query; candidate flaunts an unrequested specialty subtype
+  specialtySubtypeCap: 2,
+  // Tier 3 — candidate quality (tie-breaker band; NEVER flips identity)
+  servingUsable: 90,          // usable gram/ml serving weight present
+  servingHousehold: 40,       // parseable household measure ("1 cup", "2 tbsp")
+  servingWeak: -120,          // branded row with NO usable serving AND no household measure
 };
 
 /* ── Ranking configuration (extend here — no code changes needed) ────────────
@@ -229,6 +247,12 @@ const TERM_REWRITES = {
   // drowns in oatmeal-bread/-cookie products) — except when a product word
   // marks a derivative the user actually named.
   oatmeal: { to: 'oats', unless: ['bread', 'cookie', 'cookies', 'muffin', 'raisin', 'crisp', 'stout', 'cream'] },
+  // "mayo" IS mayonnaise — a complete condiment identity people type as shorthand.
+  // Left literal when a bean-cultivar context is named ("flor de mayo" beans is a
+  // DIFFERENT food that must still match), and the identity-family pass (below) is
+  // the INDEPENDENT category safety net so a bean carrying the token 'mayo' can
+  // never win a mayonnaise query even if it reaches the pool.
+  mayo: { to: 'mayonnaise', unless: ['flor', 'de', 'bean', 'beans'] },
 };
 
 // Phrase-level shorthand people type that USDA text never contains. Applied to
@@ -381,6 +405,113 @@ const FOOD_INTENT = {
     penalize: ['substitute', 'replacer', 'salad', 'mayonnaise', 'noodles', 'makers', 'maker'],
   },
 };
+
+/* ── Phase 4.2.7 — identity / product-form / subtype / serving-quality config ──
+ * New shared ranking dimensions, each a plain config table consumed by one
+ * isolated scoring pass. Together they enforce the approved tier hierarchy:
+ * PRIMARY IDENTITY (species, food-family) > EXPLICIT INTENT (brand, product form,
+ * requested subtype) > CANDIDATE QUALITY (serving metadata). Extend a table here;
+ * no code changes. All matching is intent-aware and stem-aware like the lists
+ * above, so an explicitly-named species/form/subtype is never self-penalized. */
+
+// Primary-animal identity. A query naming one animal must not resolve to a
+// materially different animal (chicken → turkey) however much the preparation or
+// USDA category overlaps. Token → canonical species. A species with a PARENT
+// (salmon → fish) is compatible with a query for that parent, but two siblings
+// under one parent (salmon vs tuna) are NOT compatible. Cured/processed
+// cross-species cuts (bacon/sausage/ham) are excluded — they legitimately mix
+// animal names — so they never assert a species identity here.
+const ANIMAL_SPECIES = {
+  chicken: 'chicken', turkey: 'turkey', duck: 'duck', goose: 'goose',
+  beef: 'beef', steak: 'beef', veal: 'veal', bison: 'bison', buffalo: 'bison',
+  pork: 'pork', lamb: 'lamb', mutton: 'lamb', goat: 'goat',
+  fish: 'fish', salmon: 'salmon', tuna: 'tuna', cod: 'cod', tilapia: 'tilapia',
+  halibut: 'halibut', trout: 'trout', sardine: 'sardine', mackerel: 'mackerel',
+  shrimp: 'shrimp', crab: 'crab', lobster: 'lobster',
+};
+// Species → broader parent group. A query for the PARENT ("fish") accepts any
+// child ("salmon"); a query for a CHILD does not accept a sibling.
+const SPECIES_PARENT = {
+  salmon: 'fish', tuna: 'fish', cod: 'fish', tilapia: 'fish', halibut: 'fish',
+  trout: 'fish', sardine: 'fish', mackerel: 'fish',
+};
+// Animal tokens that are cross-species processed cuts — never a species identity
+// (a "turkey bacon" must not read as species=turkey; "hot dog" isn't an animal).
+const SPECIES_CROSS = { bacon: 1, sausage: 1, ham: 1, jerky: 1, hot: 1, dog: 1, dogs: 1 };
+
+// Product-form intent. A query naming a form (bar/shake/drink/milk/powder…) must
+// not resolve to an INCOMPATIBLE form of the same brand/food (Fairlife protein
+// BAR must not land on Fairlife MILK). Token → canonical form.
+const PRODUCT_FORMS = {
+  bar: 'bar', bars: 'bar',
+  shake: 'shake', shakes: 'shake',
+  drink: 'drink', beverage: 'drink', rtd: 'drink',
+  milk: 'milk',
+  powder: 'powder', isolate: 'powder',
+  yogurt: 'yogurt',
+  cheese: 'cheese',
+  cereal: 'cereal',
+  bread: 'bread',
+  sauce: 'sauce',
+  dressing: 'dressing',
+  butter: 'butter',
+  juice: 'juice',
+  chips: 'chips',
+  cracker: 'cracker', crackers: 'cracker',
+};
+// Forms that are mutually acceptable (a "protein shake" IS a "protein drink"; a
+// ready-to-drink shake reads as a drink). Each row is one interchangeable set.
+const FORM_COMPAT = [
+  ['shake', 'drink'],
+];
+
+// Standalone food identities prone to substring collisions inside unrelated food
+// NAMES ("mayo" ⊂ "flor de mayo" bean). When the query IS such an identity, a
+// candidate from an INCOMPATIBLE food family is a false match even if it carries
+// the token. Identity token → the candidate families it may belong to. This is
+// the category-compat safety net (Checkpoint 1): collisions are blocked by family,
+// independent of any query text rewrite. Extend with collision-prone identities.
+const IDENTITY_EXPECTED_FAMILY = {
+  mayonnaise: ['fats_oils', 'condiment'],
+  mayo: ['fats_oils', 'condiment'],
+  ketchup: ['condiment', 'vegetable'],
+  mustard: ['condiment', 'spice'],
+};
+
+// Coarse candidate food-family from the STRUCTURED USDA foodCategory (preferred
+// over name text). Ordered — first match wins. Consumed by the identity-family
+// and (indirectly) product-form passes. Unknown family → no identity penalty.
+const CANDIDATE_FAMILY = [
+  ['legume', /legume/i],
+  ['dairy', /dairy/i],
+  ['condiment', /salad dressing|condiment|gravy|gravies|\bdip/i],
+  ['fats_oils', /fats and oils/i],
+  ['spice', /spices and herbs/i],
+  ['fruit', /fruit/i],
+  ['vegetable', /vegetable/i],
+  ['grain', /cereal grain|pasta/i],
+  ['poultry', /poultry/i],
+  ['beef', /beef products/i],
+  ['pork', /pork products/i],
+  ['fish', /finfish|shellfish/i],
+  ['baked', /baked/i],
+  ['sweets', /sweets/i],
+  ['snacks', /snack/i],
+  ['beverage', /beverage/i],
+  ['nuts', /nut and seed/i],
+];
+
+// Specialty / niche subtype modifiers. For a GENERIC query (the plain base food,
+// no subtype named), a candidate flaunting one of these UNREQUESTED specialty
+// modifiers is not what "rice"/"milk" plainly mean — demote it. Intent-aware:
+// when the user names the subtype ("glutinous rice"), it is neutral and the
+// specialty candidate surfaces normally. Multi-word entries match as a phrase
+// (both stems present) so "sweet" alone never hits "sweet potato". Reusable
+// across foods — add a modifier here, not in code.
+const SPECIALTY_SUBTYPES = [
+  'glutinous', 'sticky', 'sushi', 'arborio', 'mochi', 'sweet rice', 'wild rice',
+  'condensed', 'evaporated', 'eggnog', 'kefir',
+];
 
 /* ── Text normalization shared by the query pipeline AND scoring ─────────────
  * Forgiving matching means both sides normalize identically: lowercase,
@@ -646,6 +777,92 @@ const FOOD_INTENT_LIST = Object.keys(FOOD_INTENT).map(function (k) {
   };
 }).sort(function (a, b) { return b.keyStems.length - a.keyStems.length; });
 
+/* ── Phase 4.2.7 classifiers (pure, stem-aware, candidate-independent) ──────── */
+
+const SPECIALTY_SUBTYPE_STEMS = SPECIALTY_SUBTYPES.map(function (t) { return stemTokens(t.split(/\s+/)); });
+
+// Canonical species named in a token list (query or candidate), excluding
+// cross-species processed cuts. Returns a de-duplicated array of canonical
+// species (usually 0 or 1). Stem-aware so "salmons"/"steaks" still classify.
+function speciesOf(toks) {
+  var out = [], seen = {};
+  for (var i = 0; i < toks.length; i++) {
+    var t = toks[i], s = stem(t);
+    if (SPECIES_CROSS[t] || SPECIES_CROSS[s]) continue;
+    var sp = ANIMAL_SPECIES[t] || ANIMAL_SPECIES[s];
+    if (sp && !seen[sp]) { seen[sp] = 1; out.push(sp); }
+  }
+  return out;
+}
+
+// Are two canonical species compatible? Equal, or one is the other's parent
+// group (salmon ↔ fish). Two siblings under one parent (salmon vs tuna) are NOT.
+function speciesCompatible(a, b) {
+  if (a === b) return true;
+  return SPECIES_PARENT[a] === b || SPECIES_PARENT[b] === a;
+}
+
+// Canonical product forms present in a token list. Stem-aware.
+function formsOf(toks) {
+  var out = [], seen = {};
+  for (var i = 0; i < toks.length; i++) {
+    var t = toks[i], s = stem(t);
+    var fm = PRODUCT_FORMS[t] || PRODUCT_FORMS[s];
+    if (fm && !seen[fm]) { seen[fm] = 1; out.push(fm); }
+  }
+  return out;
+}
+
+// Are two canonical forms compatible? Equal, or in the same FORM_COMPAT set.
+function formsCompatible(a, b) {
+  if (a === b) return true;
+  for (var i = 0; i < FORM_COMPAT.length; i++) {
+    if (FORM_COMPAT[i].indexOf(a) >= 0 && FORM_COMPAT[i].indexOf(b) >= 0) return true;
+  }
+  return false;
+}
+
+// Coarse candidate food-family from the structured USDA foodCategory (name text
+// as a weak fallback). '' when unknown — an unknown family is never penalized.
+function candidateFamily(f) {
+  var cat = String((f && f.foodCategory) || '');
+  var hay = cat || String((f && f.description) || '');
+  for (var i = 0; i < CANDIDATE_FAMILY.length; i++) {
+    if (CANDIDATE_FAMILY[i][1].test(hay)) return CANDIDATE_FAMILY[i][0];
+  }
+  return '';
+}
+
+// The single food-identity in the query that carries an expected-family
+// constraint, or null. Only fires for a query that IS (essentially) that identity
+// so a longer descriptive query ("mayonnaise potato salad") is not over-constrained.
+function queryIdentityFamily(qStems) {
+  for (var key in IDENTITY_EXPECTED_FAMILY) {
+    var ks = stemTokens(key.split(/\s+/));
+    if (ks.length === qStems.length && ks.every(function (s) { return qStems.indexOf(s) >= 0; })) {
+      return { token: key, families: IDENTITY_EXPECTED_FAMILY[key] };
+    }
+  }
+  return null;
+}
+
+// A candidate serving is "usable" for portioning when it carries a real gram/ml
+// weight; a household measure ("1 cup") is a secondary usable signal. Reused by
+// the serving-quality pass and exported for the resolver/benchmarks.
+var SERVING_WEIGHT_UNITS = { g: 1, gram: 1, grams: 1, grm: 1, ml: 1, mlt: 1, milliliter: 1, milliliters: 1 };
+function hasUsableServingWeight(f) {
+  var size = +((f && f.servingSize));
+  var unit = String((f && f.servingSizeUnit) || '').toLowerCase();
+  return isFinite(size) && size > 0 && !!SERVING_WEIGHT_UNITS[unit];
+}
+function hasHouseholdMeasure(f) {
+  var hh = String((f && f.householdServing) || '').trim();
+  if (!hh) return false;
+  // A parseable household measure has a number OR a recognized measure word.
+  if (/\d/.test(hh)) return true;
+  return /\b(cup|cups|tbsp|tsp|tablespoon|teaspoon|oz|ounce|slice|piece|bar|bottle|can|container|scoop|packet|stick)\b/i.test(hh);
+}
+
 // The supplemental generic query for this search, if any: fires only when the
 // query IS exactly the intent's base food ("chicken", not "chicken broth").
 function supplementFor(effQuery) {
@@ -831,6 +1048,10 @@ function buildQueryContext(query, candidates, options) {
     // Subtype vocabulary the user actually typed, from the intent's prefer
     // list ("jasmine rice" → ['jasmine']). Drives the competing-subtype rule.
     typedPrefer: intent ? intent.prefer.filter(function (ts) { return termInQuery(ts, qStems); }) : [],
+    // Phase 4.2.7 query-intent facets (candidate-independent, computed once):
+    querySpecies: speciesOf(toks),        // animal(s) the user named → species pass
+    queryForms: formsOf(toks),            // product form(s) the user named → form pass
+    queryIdentity: queryIdentityFamily(qStems), // collision-prone identity → family pass
     // Extension seam (4.2.3+): extra pure scoring passes, summed per candidate.
     signals: (options && options.signals) || [],
   };
@@ -866,6 +1087,30 @@ function deriveFeatures(f, ctx) {
   // spread, nuggets, deli) OR a food-specific intent penalty (e.g. waffle fries for
   // "waffle"). Such foods don't get the whole-food canonical/base boosts.
   const processed = hasUnqueriedTerm(NEGATIVE_STEMS, foodStemSet, ctx.qStems) || intentPenalized;
+  // Phase 4.2.7 candidate facets, derived once and shared by the identity/form/
+  // serving passes. Species/forms read the candidate NAME tokens; family reads the
+  // structured USDA category; serving reads the trimmed serving metadata.
+  var hayToks = hay.split(/\s+/).filter(Boolean);
+  var servingUsable = hasUsableServingWeight(f);
+  var servingHouse = hasHouseholdMeasure(f);
+  var candForms = formsOf(hayToks);
+  var candSpecies = speciesOf(hayToks);
+  var candFamily = candidateFamily(f);
+  // Hard identity/form mismatches: the user EXPLICITLY named a species / product
+  // form / collision-prone identity, and this candidate asserts a KNOWN
+  // incompatible one. Computed once and shared by the scoring passes, the
+  // brand-intent gate, and the confidence guard (a top candidate with a hard
+  // mismatch is never a confident auto-resolve).
+  var speciesMismatch = ctx.querySpecies.length > 0 && candSpecies.length > 0 &&
+    !ctx.querySpecies.some(function (q) {
+      return candSpecies.some(function (c) { return speciesCompatible(q, c); });
+    });
+  var familyMismatch = !!ctx.queryIdentity && !!candFamily &&
+    ctx.queryIdentity.families.indexOf(candFamily) < 0;
+  var formMismatch = ctx.queryForms.length > 0 && candForms.length > 0 &&
+    !ctx.queryForms.some(function (q) {
+      return candForms.some(function (c) { return formsCompatible(q, c); });
+    });
   return {
     desc: desc, brand: brand, hay: hay,
     foodStemSet: foodStemSet,
@@ -873,6 +1118,18 @@ function deriveFeatures(f, ctx) {
     present: present,
     intentPenalized: intentPenalized,
     processed: processed,
+    species: candSpecies,
+    forms: candForms,
+    speciesMismatch: speciesMismatch,
+    familyMismatch: familyMismatch,
+    formMismatch: formMismatch,
+    hardMismatch: speciesMismatch || familyMismatch || formMismatch,
+    family: candFamily,
+    servingUsable: servingUsable,
+    servingHouse: servingHouse,
+    // Inspectable serving-quality label (Part 3 requirement 1: exposed as
+    // candidate score metadata) — stamped onto kept candidates in rankPool.
+    servingQuality: servingUsable ? 'usable' : (servingHouse ? 'household' : (f.dataType === 'Branded' ? 'weak' : 'generic')),
     // Phrase present in either word order (also reused by rankPool's keep gate).
     phrase: !!(ctx.qLower && (hay.indexOf(ctx.qLower) >= 0 ||
       (ctx.qLowerRev && hay.indexOf(ctx.qLowerRev) >= 0))),
@@ -935,7 +1192,11 @@ function scoreBrandSignals(f, ft, ctx) {
   // product is that brand → make it dominant over generic text matches. The
   // product whose description also carries the brand word (Coca-Cola Classic)
   // outranks sibling brands under the same owner (Sprite).
-  if (brandMatchesIntent(ft.brand, ctx.brandIntent)) {
+  // PRODUCT-FORM GATE (Phase 4.2.7): when the candidate's form is incompatible
+  // with an explicitly requested form (Fairlife MILK for "fairlife protein bar"),
+  // the brand-intent boost is SUPPRESSED — a correct brand must never override the
+  // wrong product form (the productFormMismatch penalty still applies on top).
+  if (!ft.formMismatch && brandMatchesIntent(ft.brand, ctx.brandIntent)) {
     s += RANK_WEIGHTS.brandIntent;
     let descHits = 0;
     ctx.brandIntent.forEach(function (entry) {
@@ -1052,16 +1313,101 @@ function scoreFoodIntent(f, ft, ctx) {
   return s;
 }
 
+/* ── Phase 4.2.7 tiered passes ──────────────────────────────────────────────
+ * PRIMARY IDENTITY, then EXPLICIT INTENT, then CANDIDATE QUALITY. Each is one
+ * isolated (candidate, features, ctx) → contribution, weights from RANK_WEIGHTS
+ * only, guarded so weak/absent classification never over-penalizes. */
+
+// Tier 1 — species identity. The query names an animal and this candidate names
+// a DIFFERENT, incompatible animal → a severe penalty that outweighs any
+// preparation/category/token overlap. Only fires when BOTH sides assert a
+// concrete species (a candidate with no animal token is judged by other passes).
+function scoreSpecies(f, ft, ctx) {
+  return ft.speciesMismatch ? RANK_WEIGHTS.speciesMismatch : 0;
+}
+
+// Tier 1 — food-family identity. The query IS a collision-prone identity (mayo)
+// with an expected family; this candidate belongs to a KNOWN incompatible family
+// (a bean carrying the token 'mayo') → severe penalty. Unknown family → neutral,
+// so short/ambiguous queries are never over-penalized on weak classification.
+function scoreFamilyIdentity(f, ft, ctx) {
+  return ft.familyMismatch ? RANK_WEIGHTS.familyIdentityMismatch : 0;
+}
+
+// Tier 2 — product-form intent. The query names a product form and this candidate
+// asserts a KNOWN incompatible form (Fairlife protein BAR vs Fairlife MILK) → a
+// penalty large enough to lose to a plausible correct-form candidate even when
+// the brand matches. A candidate with no recognizable form is neutral (judged
+// elsewhere), so this never fabricates a mismatch.
+function scoreProductForm(f, ft, ctx) {
+  return ft.formMismatch ? RANK_WEIGHTS.productFormMismatch : 0;
+}
+
+// Tier 2 — brand asymmetry. The user EXPLICITLY named a known brand; a candidate
+// that is NOT that brand (generic, or a different brand) pays a penalty. Purely
+// asymmetric: with no brand named this is silent, so a generic query never
+// suppresses legitimate branded candidates. Sized BELOW product-form so a
+// correct-brand/wrong-form loses to a wrong-brand/correct-form, yet meaningful
+// enough that an explicit brand beats a generic same-form food.
+function scoreBrandAsymmetry(f, ft, ctx) {
+  if (!ctx.brandIntent.length) return 0;
+  if (brandMatchesIntent(ft.brand, ctx.brandIntent)) return 0;
+  return RANK_WEIGHTS.missingRequestedBrand;
+}
+
+// Tier 2 — unrequested specialty subtype. For a generic query, a candidate
+// flaunting a specialty modifier the user did not type (glutinous/sushi rice for
+// "rice") is demoted. Intent-aware: naming the subtype makes it neutral.
+function scoreSpecialtySubtype(f, ft, ctx) {
+  var n = 0;
+  for (var i = 0; i < SPECIALTY_SUBTYPE_STEMS.length; i++) {
+    if (termInQuery(SPECIALTY_SUBTYPE_STEMS[i], ctx.qStems)) continue;   // user asked for it
+    if (termInStems(SPECIALTY_SUBTYPE_STEMS[i], ft.foodStemSet)) n++;
+  }
+  if (!n) return 0;   // guard -0 for clean inspectable metadata
+  return Math.min(n, RANK_WEIGHTS.specialtySubtypeCap) * RANK_WEIGHTS.specialtySubtype;
+}
+
+// Tier 3 — serving-metadata quality (tie-breaker band). Rewards a candidate that
+// can actually be portioned (usable gram/ml weight, parseable household measure)
+// and lightly demotes a branded row with neither. Magnitude is far below the
+// identity/intent tiers, so it only ever breaks near-ties — it can NEVER lift a
+// wrong food over the right one on cleaner metadata.
+function scoreServingQuality(f, ft, ctx) {
+  var s = 0;
+  if (ft.servingUsable) s += RANK_WEIGHTS.servingUsable;
+  if (ft.servingHouse) s += RANK_WEIGHTS.servingHousehold;
+  if (ft.isBranded && !ft.servingUsable && !ft.servingHouse) s += RANK_WEIGHTS.servingWeak;
+  return s;
+}
+
+// The full score breakdown for one candidate — every pass's named contribution.
+// scoreCandidate sums it; explainCandidate exposes it for tests/diagnostics
+// (Part 4: every ranking change produces inspectable score metadata).
+function scoreBreakdown(f, ft, ctx) {
+  return {
+    dataSanity:       scoreDataSanity(f),
+    phrase:           scorePhraseMatch(f, ft, ctx),
+    tokens:           scoreTokenCoverage(f, ft, ctx),
+    brand:            scoreBrandSignals(f, ft, ctx),
+    genericCanonical: scoreGenericCanonical(f, ft, ctx),
+    canonicalTerms:   scoreCanonicalTerms(f, ft, ctx),
+    foodIntent:       scoreFoodIntent(f, ft, ctx),
+    species:          scoreSpecies(f, ft, ctx),
+    familyIdentity:   scoreFamilyIdentity(f, ft, ctx),
+    productForm:      scoreProductForm(f, ft, ctx),
+    brandAsymmetry:   scoreBrandAsymmetry(f, ft, ctx),
+    specialtySubtype: scoreSpecialtySubtype(f, ft, ctx),
+    servingQuality:   scoreServingQuality(f, ft, ctx),
+  };
+}
+
 // Score one trimmed food against the query context. Higher = more relevant.
 // Pure sum of the isolated passes above + any extension signals.
 function scoreCandidate(f, ft, ctx) {
-  let s = scoreDataSanity(f) +
-          scorePhraseMatch(f, ft, ctx) +
-          scoreTokenCoverage(f, ft, ctx) +
-          scoreBrandSignals(f, ft, ctx) +
-          scoreGenericCanonical(f, ft, ctx) +
-          scoreCanonicalTerms(f, ft, ctx) +
-          scoreFoodIntent(f, ft, ctx);
+  const parts = scoreBreakdown(f, ft, ctx);
+  let s = 0;
+  for (const k in parts) s += parts[k];
   // Extension seam: future phases (correction memory, portion compatibility,
   // meal context, preferences) contribute here without touching the engine.
   // Contributions are strictly finite numbers — anything else counts as 0, so
@@ -1072,6 +1418,21 @@ function scoreCandidate(f, ft, ctx) {
     if (typeof v === 'number' && isFinite(v)) s += v;
   }
   return s;
+}
+
+// Diagnostic: the full score + breakdown + derived facets for ONE candidate
+// against a query. Pure; used by tests and the Checkpoint 2 weight review. Never
+// used in the hot ranking path (rankPool sums via scoreCandidate).
+function explainCandidate(query, candidate, options) {
+  const ctx = buildQueryContext(query, [candidate], options);
+  const ft = deriveFeatures(candidate, ctx);
+  const parts = scoreBreakdown(candidate, ft, ctx);
+  let total = 0; for (const k in parts) total += parts[k];
+  return {
+    total: total, parts: parts,
+    features: { species: ft.species, forms: ft.forms, family: ft.family,
+      servingQuality: ft.servingQuality, present: ft.present, isBranded: ft.isBranded },
+  };
 }
 
 /* ── Pool ranking + duplicate-family collapse ────────────────────────────── */
@@ -1092,6 +1453,12 @@ function rankPool(pool, group, strict, cap, ctx) {
     if (!keep) continue;
     f.group = group;
     f.score = score;
+    f.servingQuality = ft.servingQuality;   // inspectable candidate metadata (Phase 4.2.7)
+    // Hard identity/form-mismatch flag: the user explicitly named a species/form/
+    // identity this candidate contradicts. Read by the confidence guard so a poor
+    // sole-survivor (e.g. Fairlife MILK for "fairlife protein BAR") is never a
+    // confident auto-resolve. Provider-neutral boolean on the shared Candidate.
+    f.mismatch = !!ft.hardMismatch;
     scored.push(f);
   }
   // Highest score first; tie-break toward the shorter (less cluttered) name —
@@ -1212,5 +1579,12 @@ if (typeof module !== 'undefined' && module.exports) {
     pickFoodIntent: pickFoodIntent,
     brandRecognized: brandRecognized,
     isWholeCategory: isWholeCategory,
+    // Phase 4.2.7 classifiers + diagnostics
+    explainCandidate: explainCandidate,
+    speciesOf: speciesOf,
+    formsOf: formsOf,
+    candidateFamily: candidateFamily,
+    hasUsableServingWeight: hasUsableServingWeight,
+    hasHouseholdMeasure: hasHouseholdMeasure,
   };
 }

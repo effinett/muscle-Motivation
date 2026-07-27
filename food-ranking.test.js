@@ -257,3 +257,120 @@ test('module is pure: ranking twice with identical input mutates nothing that ch
   const second = JSON.stringify(rankFoodCandidates('honey', pool));
   assert.strictEqual(first, second, 'group/score stamps are overwritten, never accumulated');
 });
+
+/* ── Phase 4.2.7 tiered identity / intent / quality signals ──────────────────
+ * Each pins one shared, generalized rule behind a named production failure.
+ * Weights are provisional; these tests assert ORDERING invariants, not numbers. */
+
+// Tier 1 — species identity (chicken must never lose to turkey on prep overlap)
+test('species identity: chicken query never resolves to turkey', () => {
+  const out = rankFoodCandidates('chicken breast cooked', [
+    food({ description: 'Turkey, breast, meat only, roasted', foodCategory: 'Poultry Products' }),
+    food({ description: 'Chicken, broiler, breast, meat only, cooked, roasted', foodCategory: 'Poultry Products' }),
+  ]);
+  assert.match(out.foods[0].description, /chicken/i);
+  assert.strictEqual(out.foods[0].mismatch, false, 'the correct species is not flagged mismatched');
+});
+test('species identity is symmetric and hierarchical (salmon ≠ tuna, fish ⊇ salmon)', () => {
+  const salmonWins = rankFoodCandidates('salmon', [
+    food({ description: 'Fish, tuna, light, canned in water', foodCategory: 'Finfish and Shellfish Products' }),
+    food({ description: 'Fish, salmon, Atlantic, cooked', foodCategory: 'Finfish and Shellfish Products' }),
+  ]);
+  assert.match(salmonWins.foods[0].description, /salmon/i);
+  // a parent query ("fish") accepts a child species (salmon) — no mismatch flag
+  const fishOk = ranking.explainCandidate('fish',
+    food({ description: 'Fish, salmon, Atlantic, raw', foodCategory: 'Finfish and Shellfish Products' }));
+  assert.strictEqual(fishOk.parts.species, 0, 'a child species satisfies a parent-species query');
+});
+
+// Tier 1 — food-family identity (the mayo/Flor-de-Mayo collision, generalized)
+test('food-family identity: mayo query rejects a bean carrying the token (independent of text rewrite)', () => {
+  const out = rankFoodCandidates('mayo', [
+    food({ description: 'Beans, flor de mayo, mature seeds, cooked', foodCategory: 'Legumes and Legume Products' }),
+    food({ description: 'Salad dressing, mayonnaise, regular', foodCategory: 'Fats and Oils' }),
+  ]);
+  assert.match(out.foods[0].description, /mayonnaise/i, 'the condiment wins on family compatibility');
+  assert.match(out.foods[out.foods.length - 1].description, /bean/i, 'the incompatible-family bean is demoted');
+});
+test('food-family identity: the bean still wins when explicitly requested', () => {
+  const out = rankFoodCandidates('flor de mayo beans', [
+    food({ description: 'Salad dressing, mayonnaise, regular', foodCategory: 'Fats and Oils' }),
+    food({ description: 'Beans, flor de mayo, mature seeds, cooked', foodCategory: 'Legumes and Legume Products' }),
+  ]);
+  assert.match(out.foods[0].description, /bean/i);
+});
+
+// Tier 2 — product form gates brand (Fairlife BAR must not resolve to Fairlife MILK)
+test('product form gates brand: a wrong-form brand match loses to a correct-form candidate', () => {
+  const milk = ranking.explainCandidate('fairlife protein bar',
+    branded({ description: 'Fairlife, Ultra-Filtered Whole Milk', brand: 'fairlife' }));
+  const bar = ranking.explainCandidate('fairlife protein bar',
+    branded({ description: 'Quest Protein Bar, Chocolate', brand: 'Quest Nutrition' }));
+  assert.ok(milk.parts.brand < ranking.RANK_WEIGHTS.brandIntent,
+    'the brand-intent boost is suppressed on a hard form mismatch (only generic brand recognition remains)');
+  assert.ok(milk.parts.productForm < 0, 'the wrong form is penalized');
+  assert.ok(bar.total > milk.total, 'the correct-form bar outranks the wrong-form brand match');
+  assert.strictEqual(milk.features.forms[0], 'milk');
+});
+
+// Tier 2 — asymmetric brand intent (Fairlife milk beats generic; unbranded query stays neutral)
+test('brand asymmetry: an explicit brand prefers the branded candidate over generic', () => {
+  const fair = ranking.explainCandidate('fairlife whole milk',
+    branded({ description: 'Fairlife Whole Milk', brand: 'fairlife' }));
+  const generic = ranking.explainCandidate('fairlife whole milk',
+    food({ description: 'Milk, whole, 3.25% milkfat', foodCategory: 'Dairy and Egg Products' }));
+  assert.strictEqual(generic.parts.brandAsymmetry, ranking.RANK_WEIGHTS.missingRequestedBrand,
+    'a generic candidate is penalized for missing the requested brand');
+  assert.strictEqual(fair.parts.brandAsymmetry, 0, 'the matching brand pays no penalty');
+});
+test('brand asymmetry is silent when no brand is typed (generics never suppressed)', () => {
+  const generic = ranking.explainCandidate('whole milk',
+    food({ description: 'Milk, whole, 3.25% milkfat', foodCategory: 'Dairy and Egg Products' }));
+  assert.strictEqual(generic.parts.brandAsymmetry, 0);
+});
+
+// Tier 2 — unrequested specialty subtype (generic rice ≠ glutinous rice)
+test('specialty subtype: a generic query demotes an unrequested specialty subtype', () => {
+  const out = rankFoodCandidates('rice', [
+    food({ description: 'Rice, white, glutinous, cooked', foodCategory: 'Cereal Grains and Pasta' }),
+    food({ description: 'Rice, white, long-grain, cooked', foodCategory: 'Cereal Grains and Pasta' }),
+  ]);
+  assert.doesNotMatch(out.foods[0].description, /glutinous/i, 'plain rice leads');
+  const glut = ranking.explainCandidate('rice',
+    food({ description: 'Rice, white, glutinous, cooked', foodCategory: 'Cereal Grains and Pasta' }));
+  assert.ok(glut.parts.specialtySubtype < 0);
+  // requested → neutral
+  const asked = ranking.explainCandidate('glutinous rice',
+    food({ description: 'Rice, white, glutinous, cooked', foodCategory: 'Cereal Grains and Pasta' }));
+  assert.strictEqual(asked.parts.specialtySubtype, 0, 'an explicitly requested subtype is never penalized');
+});
+
+// Tier 3 — serving-metadata quality (tie-breaker only; never flips identity)
+test('serving quality: rewards a portionable record but never overturns identity', () => {
+  const usable = ranking.explainCandidate('milk',
+    food({ description: 'Milk, whole', foodCategory: 'Dairy and Egg Products',
+      servingSize: 244, servingSizeUnit: 'g', householdServing: '1 cup' }));
+  const weak = ranking.explainCandidate('milk',
+    branded({ description: 'Milk, whole', brand: 'X' }));
+  assert.ok(usable.parts.servingQuality > weak.parts.servingQuality, 'usable serving scores higher');
+  // magnitude is a tie-breaker: far smaller than a single identity signal
+  assert.ok(Math.abs(usable.parts.servingQuality) < Math.abs(ranking.RANK_WEIGHTS.speciesMismatch),
+    'serving quality can never outweigh a primary-identity signal');
+});
+test('serving quality is exposed as inspectable candidate metadata', () => {
+  const out = rankFoodCandidates('milk', [
+    food({ description: 'Milk, whole', foodCategory: 'Dairy and Egg Products',
+      servingSize: 244, servingSizeUnit: 'g', householdServing: '1 cup' }),
+  ]);
+  assert.strictEqual(out.foods[0].servingQuality, 'usable');
+  assert.strictEqual(typeof out.foods[0].mismatch, 'boolean');
+});
+
+// short / ambiguous queries must not trigger aggressive mismatch penalties
+test('short/ambiguous queries with weak classification take no identity penalty', () => {
+  const e = ranking.explainCandidate('milk',
+    food({ description: 'Milk, whole', foodCategory: 'Dairy and Egg Products' }));
+  assert.strictEqual(e.parts.species, 0);
+  assert.strictEqual(e.parts.familyIdentity, 0);
+  assert.strictEqual(e.parts.productForm, 0);
+});
