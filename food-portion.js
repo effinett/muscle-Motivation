@@ -215,6 +215,11 @@ var NU_FAMILY_FORM = {
   // protein_powder is a scoopable solid (a "scoop"/"spoonful" of it), not a
   // tiny-amount seasoning — leaving it to default 'solid'.
   soup: 'liquid',
+  // Dairy LIQUIDS (Phase 4.2.7): milk/cream are inherently pourable liquids, so a
+  // "splash"/"dash"/"spoonful" of them is meaningful even when the selected USDA
+  // record reports its serving in GRAMS (is_liquid=false) — the common generic
+  // "Milk, whole, 3.25%" case. Keyed on the food family, not on a milk query.
+  milk: 'liquid', cream: 'liquid',
   // meal-form composites (a "plate"/"bowl" of these makes sense)
   pasta: 'meal_solid', rice: 'meal_solid', pizza: 'meal',
 };
@@ -566,11 +571,13 @@ function nuInterpretVaguePortion(input) {
     });
   }
 
-  // Estimate UNIT follows the food's stable is_liquid flag: a food USDA measures
-  // in ml has no reliable gram weight, so we estimate in ml and never fabricate a
-  // gram value (parity with the rest of the serving engine). `form` (from the
-  // family) is used only for phrase COMPATIBILITY, not for the unit.
-  var unit = isLiquid ? 'ml' : 'g';
+  // Estimate UNIT: ml for a liquid, g otherwise. A food USDA measures in ml
+  // (is_liquid) has no reliable gram weight, so we estimate in ml and never
+  // fabricate a gram value. A liquid-FAMILY food (milk/cream) whose USDA record
+  // happens to be gram-based is still a liquid, so it also estimates in ml (grams
+  // stays null upstream) — 15 ml of milk ≈ 15 g, well within the splash range, so
+  // the per-100 panel scales correctly and the display reads naturally ("~15 ml").
+  var unit = (isLiquid || form === 'liquid') ? 'ml' : 'g';
   // Small amounts (seasonings, a splash) keep one decimal so a pinch of salt is
   // "~0.4 g", not a meaningless "~0 g"; larger amounts round to whole g/ml.
   function amt(v) { return (Math.abs(v) < 10) ? _round1(v) : _round(v); }

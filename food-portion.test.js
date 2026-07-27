@@ -302,6 +302,26 @@ test('4.2.7: recovered drizzle produces the shared estimate, still marked estima
   assert.ok(r.estimatedAmount > 0, 'a real approximation, not the default serving');
 });
 
+test('4.2.7: milk/cream are a LIQUID form even when USDA reports grams (splash in mL)', () => {
+  // A gram-serving generic milk (is_liquid=false) is still a liquid FAMILY, so a
+  // splash is compatible and estimated in mL — the live "a splash of milk" case.
+  const r = fp.nuInterpretVaguePortion({
+    unit: null, rawText: 'a splash of milk', query: 'milk',
+    food: food('Milk, whole, 3.25% milkfat', { foodCategory: 'Dairy and Egg Products' }),
+    per100: { kcal: 61, protein: 3.2, carbs: 4.8, fat: 3.3 }, isLiquid: false,
+  });
+  assert.strictEqual(r.detected, true);
+  assert.strictEqual(r.family, 'milk');
+  assert.strictEqual(r.form, 'liquid', 'liquid family form despite a gram serving');
+  assert.strictEqual(r.compatible, true);
+  assert.strictEqual(r.estimatedUnit, 'ml');
+  assert.strictEqual(r.estimatedAmount, 15, 'shared splash approximation');
+  // pourable (oil) and seasoning (salt) foods still estimate in grams — unchanged
+  const oil = fp.nuInterpretVaguePortion({ unit: 'drizzle',
+    food: food('Oil, olive', { foodCategory: 'Fats and Oils' }), per100: { kcal: 884, fat: 100 }, isLiquid: false });
+  assert.strictEqual(oil.estimatedUnit, 'g', 'pourable oil stays grams, not liquid');
+});
+
 test('4.2.7: unsupported vague wording falls back safely (no invented precision)', () => {
   // "a mountain of milk" is not a supported class → nothing recovered → normal
   // resolution (the caller uses the food default; recovery never fabricates).

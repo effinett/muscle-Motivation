@@ -319,6 +319,13 @@ const G7_MILK_SERV = { fdcId: 730041, description: 'Milk, whole', dataType: 'SR 
 const G7_MILK_NOSERV = { fdcId: 730042, description: 'Milk, whole', dataType: 'Foundation', group: 'generic',
   foodCategory: 'Dairy and Egg Products', is_liquid: true, servingSize: null, servingSizeUnit: '',
   householdServing: '', nutrients: { kcal: 60, protein: 3.2, carbs: 4.7, fat: 3.2, fiber: 0, sugar: 5 } };
+// The common GENERIC milk USDA reports in GRAMS (servingSizeUnit 'g' → is_liquid
+// false). A "splash" must still resolve in mL via the liquid milk FAMILY, never the
+// default 1-cup serving — the live "a splash of milk" case (Phase 4.2.7).
+const G7_MILK_GRAMS = { fdcId: 730043, description: 'Milk, whole, 3.25% milkfat, with added vitamin D',
+  dataType: 'SR Legacy', group: 'generic', foodCategory: 'Dairy and Egg Products',
+  servingSize: 244, servingSizeUnit: 'g', householdServing: '1 cup',
+  nutrients: { kcal: 61, protein: 3.2, carbs: 4.8, fat: 3.3, fiber: 0, sugar: 5.1 } };
 
 const FIXTURE_SEARCHES = {
   'fairlife protein bar': [FL_BAR_CHOC, FL_BAR_CARAMEL, FL_MILK],
@@ -364,6 +371,7 @@ const FIXTURE_SEARCHES = {
   'turkey breast cooked': [T7_TURKEY, CHK_BREAST_COOKED],
   'whole milk': [FL_MILK, G7_MILK],
   'plain whole milk': [G7_MILK_NOSERV, G7_MILK_SERV],
+  'gram milk': [G7_MILK_GRAMS],
 };
 
 const FIXTURE_PORTIONS = {

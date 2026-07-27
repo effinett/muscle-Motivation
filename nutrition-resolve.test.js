@@ -56,6 +56,15 @@ const ALMONDS = {
   foodCategory: 'Nut and Seed Products',
   nutrients: { kcal: 579, protein: 21.2, carbs: 21.6, fat: 49.9, fiber: 12.5, sugar: 4.4 },
 };
+// The common GENERIC USDA milk: reports its serving in GRAMS, so is_liquid=false —
+// the live "a splash of milk" case. The milk FAMILY (liquid form) must still make a
+// splash resolvable in ml (Phase 4.2.7), not fall to the default cup.
+const GMILK = {
+  fdcId: 746782, description: 'Milk, whole, 3.25% milkfat, with added vitamin D',
+  brand: '', group: 'generic', foodCategory: 'Dairy and Egg Products',
+  servingSize: 244, servingSizeUnit: 'g', householdServing: '1 cup',
+  nutrients: { kcal: 61, protein: 3.2, carbs: 4.8, fat: 3.3, fiber: 0, sugar: 5.1 },
+};
 const QUEST_CC = {
   fdcId: 999002, description: 'QUEST CHOCOLATE CHIP COOKIE DOUGH BAR', brand: 'Quest Nutrition',
   group: 'branded', servingSize: 60, servingSizeUnit: 'g', householdServing: '1 bar',
@@ -140,7 +149,7 @@ const HUMMUS = {
 
 const SEARCHES = {
   egg: [EGG], toast: [BREAD], 'chicken breast': [CHICKEN], milk: [MILK], zzz: [],
-  almonds: [ALMONDS],
+  almonds: [ALMONDS], 'whole milk': [GMILK],
   'protein bar': [QUEST_CC, QUEST_CNC, BAREBELLS],
   'quest bar': [QUEST_CC, QUEST_CNC],
   'jasmine rice': [JR1, JR2, JR3, JR4],
@@ -289,6 +298,22 @@ test('4.2.7: vague quantifier recovered from RAW TEXT when the parser drops the 
   const hand = await nuAiResolveItem(item({ query: 'almonds', text: 'a handful of almonds', unit: null }));
   assert.strictEqual(hand.estimated, true);
   assert.strictEqual(hand.serving_description, 'handful (~28 g)');
+});
+
+test('4.2.7: splash of a GRAM-serving milk (is_liquid=false) still resolves in mL, not 1 cup', async () => {
+  // The live case: the generic USDA milk reports grams (is_liquid=false). The milk
+  // FAMILY is a liquid form, so a splash is a ~15 mL estimate — NEVER the default
+  // 1-cup serving and NEVER a "didn't match a size" 100 g fallback.
+  const r = await nuAiResolveItem(item({ query: 'whole milk', text: 'a splash of whole milk', unit: null }));
+  assert.strictEqual(r.unmatched, false);
+  assert.strictEqual(r.food.usda_fdc_id, 746782, 'the gram-serving generic milk');
+  assert.strictEqual(r.food.is_liquid, false, 'USDA gives it a gram serving');
+  assert.strictEqual(r.estimated, true, 'marked estimated');
+  assert.notStrictEqual(r.unitUnresolved, true, 'NOT a "didn’t match a size" fallback');
+  assert.match(r.serving_description, /splash \(~15 ml\)/, 'liquid-family splash in mL, not 1 cup');
+  assert.strictEqual(r.grams, null, 'no fabricated gram weight for a liquid-family estimate');
+  // nutrition from ~15 ml, not 244 g (1 cup): 61 kcal/100 × 15 ≈ 9 kcal
+  assert.ok(r.perUnit.calories > 6 && r.perUnit.calories < 12, '~15 ml worth, not a cup (149)');
 });
 
 test('4.2.7: an EXPLICIT exact quantity always beats a raw-text vague token', async () => {
