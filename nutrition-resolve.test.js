@@ -266,6 +266,59 @@ test('handfuls: deterministic category-aware estimates, never 100 g', async () =
   assert.strictEqual(weighed.servings, 1);
 });
 
+test('4.2.7: vague quantifier recovered from RAW TEXT when the parser drops the unit', async () => {
+  // The REAL AI Quick Log path: the parser returns unit=null for "a splash of
+  // milk" but the phrase survives in `text`. Recovery must restore "splash" (a
+  // pure quantifier, never a food noun) and produce the shared splash estimate —
+  // NEVER the food's default 1-cup serving. Generalizes beyond small_amount.
+  const splash = await nuAiResolveItem(item({ query: 'milk', text: 'a splash of milk', unit: null }));
+  assert.strictEqual(splash.unmatched, false);
+  assert.strictEqual(splash.food.usda_fdc_id, 999001, 'semantically-correct milk candidate');
+  assert.strictEqual(splash.estimated, true, 'marked estimated, not exact');
+  assert.match(splash.serving_description, /splash \(~15 ml\)/, 'shared splash approximation, not 1 cup');
+  assert.notStrictEqual(splash.serving_description, '1 cup', 'never silently substitutes the default serving');
+  assert.strictEqual(splash.grams, null, 'no fabricated gram weight for a liquid');
+  assert.strictEqual(splash.servings, 1);
+
+  // Leading verb / filler survives ("add a splash of milk").
+  const added = await nuAiResolveItem(item({ query: 'milk', text: 'add a splash of milk', unit: null }));
+  assert.strictEqual(added.estimated, true);
+  assert.match(added.serving_description, /splash \(~15 ml\)/);
+
+  // Generalizes to another pure quantifier: handful, recovered from raw text.
+  const hand = await nuAiResolveItem(item({ query: 'almonds', text: 'a handful of almonds', unit: null }));
+  assert.strictEqual(hand.estimated, true);
+  assert.strictEqual(hand.serving_description, 'handful (~28 g)');
+});
+
+test('4.2.7: an EXPLICIT exact quantity always beats a raw-text vague token', async () => {
+  // "1 cup milk with a splash of vanilla": the milk item carries an explicit
+  // unit=cup — the unrelated "splash" token in the raw text must NOT hijack it.
+  // Recovery is gated on the parser giving NO unit, so exact quantities win.
+  const r = await nuAiResolveItem(item({
+    query: 'milk', text: '1 cup milk with a splash of vanilla', unit: 'cup', quantity: 1 }));
+  assert.strictEqual(r.unmatched, false);
+  assert.notStrictEqual(r.estimated, true, 'the exact cup is used, not a splash estimate');
+  assert.doesNotMatch(r.serving_description || '', /splash/i, 'the vanilla splash never touches the milk');
+});
+
+test('4.2.7: a recovered vague unit that is nonsensical for the food stays safe (no fabrication)', async () => {
+  // "a splash of almonds" (unit dropped) → splash recovered, but a splash is a
+  // LIQUID measure incompatible with a solid → the safe unresolved flag, exactly
+  // like the explicit-unit case. Never invents a weight.
+  const r = await nuAiResolveItem(item({ query: 'almonds', text: 'a splash of almonds', unit: null }));
+  assert.strictEqual(r.unitUnresolved, true, 'flagged, not fabricated');
+  assert.strictEqual(r.servings, 1);
+});
+
+test('4.2.7: raw-text recovery needs the raw phrase (manual Search, with no text, is unaffected)', async () => {
+  // Parity guard: recovery keys on `text`. A manual food pick (no vague phrase,
+  // no unit) resolves to the normal default serving — Search never invents a
+  // vague portion out of nothing. Only the text-logging surfaces carry a phrase.
+  const r = await nuAiResolveItem(item({ query: 'milk', text: '', unit: null }));
+  assert.notStrictEqual(r.estimated, true, 'no phrase → no recovered estimate');
+});
+
 test('4.2.5: nutrition.js portion-correction session seam (capture → read)', async () => {
   // Exercises the REAL browser wiring in nutrition.js: nuRecordPortionCorrection
   // (capture) → nu_portionCorrections (session store) → nuAiResolveItem (read).

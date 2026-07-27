@@ -1124,6 +1124,17 @@ function nuCreateResolver(source) {
       resolved.servings = 1;
       resolved.unitUnresolved = true;
     }
+    // Phase 4.2.7: a vague quantifier RECOVERED from raw text (the parser dropped
+    // the unit) that is unsupported for this food — "a splash of almonds" (a liquid
+    // measure on a solid) has no reliable conversion — is flagged unresolved (one
+    // default serving, user adjusts) rather than silently logging the default,
+    // mirroring the explicit-unit path above. The compatible recovered case
+    // (splash of milk) set matchedUnit and never reaches here.
+    if (!resolved.matchedUnit && !resolved.unitUnresolved &&
+        resolved.portion && resolved.portion.detected && resolved.portion.compatible === false) {
+      resolved.servings = 1;
+      resolved.unitUnresolved = true;
+    }
     // Phase 4.2.5: a vague portion whose size the food category can't pin down
     // tightly enough (an un-sized bowl of an unknown food, "some rice", a piece
     // of chicken) → ask ONE focused size question, reusing the needsClarification

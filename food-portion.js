@@ -388,14 +388,25 @@ var NU_PT_SIZED_CONTAINER_CONF = 0.62;
 // Count words → a numeric multiplier (a "couple"/"few" is ~2–3, "several" ~5).
 var NU_PT_COUNT_VALUE = { few: 3, several: 5 };
 
-// Classes safe to recover from FREE TEXT (Phase 4.2.5 hardening). The AI parser
-// drops pure vague quantifiers ("some", "a little", "a bit of") — they arrive with
-// unit=null but survive in the original phrase. These trigger words are never food
-// nouns, so recovering them from raw text (after removing the food query) cannot
-// misread a food. Container/measure words (bowl/piece/cup/slice) are deliberately
-// EXCLUDED — the parser already forwards those as units, and they can appear in
-// food names, so they are never guessed from free text.
-var NU_PT_TEXT_SAFE = { small_amount: 1 };
+// Classes safe to recover from FREE TEXT (Phase 4.2.5 hardening; extended in
+// Phase 4.2.7). The AI parser inconsistently DROPS pure vague quantifiers — not
+// only "some"/"a little"/"a bit of" (small_amount) but also "splash", "drizzle",
+// "pinch", "handful", etc. — which then arrive with unit=null but survive in the
+// original phrase. Every class here is a PURE QUANTIFIER whose trigger words are
+// NEVER food nouns, so recovering them from raw text (after removing the food
+// query tokens) cannot misread a food. Recovery is additionally gated on the
+// parser having given NO explicit unit, so an exact/known measure always wins.
+//
+// EXCLUDED on purpose: container/measure words (bowl, cupful, plate, serving,
+// portion, helping) and food-name-adjacent words (slice, piece) — those can occur
+// inside food names and the parser already forwards them as units, so they are
+// never guessed from free text; and count words (several, few) — a bare count
+// without a food count is not a size to recover. This is a GENERAL rule keyed on
+// the class, not a per-food or per-phrase exception.
+var NU_PT_TEXT_SAFE = {
+  small_amount: 1,
+  splash: 1, drizzle: 1, pinch: 1, dash: 1, handful: 1, spoonful: 1, scoop: 1,
+};
 
 // User-facing noun for a class, and a re-detectable trigger word for its
 // clarification patch. Both default to the class name; small_amount needs an

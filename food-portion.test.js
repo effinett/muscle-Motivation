@@ -278,6 +278,36 @@ test('interpreter recovers a dropped quantifier from rawText when unit is null',
   assert.strictEqual(r.requiresClarification, true, 'a small-amount is too vague → ask');
 });
 
+test('4.2.7: raw-text recovery generalizes to pure quantifiers (splash/drizzle/pinch/handful)', () => {
+  // These are pure quantifiers, never food nouns — recovered like small_amount.
+  assert.strictEqual(fp.nuDetectFromRawText('a splash of milk', 'milk').portionClass, 'splash');
+  assert.strictEqual(fp.nuDetectFromRawText('a drizzle of olive oil', 'olive oil').portionClass, 'drizzle');
+  assert.strictEqual(fp.nuDetectFromRawText('a pinch of salt', 'salt').portionClass, 'pinch');
+  assert.strictEqual(fp.nuDetectFromRawText('a handful of almonds', 'almonds').portionClass, 'handful');
+  // container / measure / food-name-adjacent words stay EXCLUDED (parser forwards
+  // them; they can occur inside food names) — general rule, not a per-food list.
+  assert.strictEqual(fp.nuDetectFromRawText('chicken bowl', 'chicken'), null);
+  assert.strictEqual(fp.nuDetectFromRawText('a slice of bread', 'bread'), null);
+  assert.strictEqual(fp.nuDetectFromRawText('a piece of chicken', 'chicken'), null);
+});
+
+test('4.2.7: recovered drizzle produces the shared estimate, still marked estimated', () => {
+  const r = fp.nuInterpretVaguePortion({
+    unit: null, rawText: 'a drizzle of olive oil', query: 'olive oil',
+    food: food('Oil, olive', { foodCategory: 'Fats and Oils' }), per100: { kcal: 884, fat: 100 },
+  });
+  assert.strictEqual(r.detected, true);
+  assert.strictEqual(r.portionClass, 'drizzle');
+  assert.strictEqual(r.compatible, true);
+  assert.ok(r.estimatedAmount > 0, 'a real approximation, not the default serving');
+});
+
+test('4.2.7: unsupported vague wording falls back safely (no invented precision)', () => {
+  // "a mountain of milk" is not a supported class → nothing recovered → normal
+  // resolution (the caller uses the food default; recovery never fabricates).
+  assert.strictEqual(fp.nuDetectFromRawText('a mountain of milk', 'milk'), null);
+});
+
 test('rawText recovery NEVER overrides an explicit unit', () => {
   // unit present ("tbsp") → the interpreter uses it, never the "little" in rawText
   const r = fp.nuInterpretVaguePortion({
