@@ -283,6 +283,24 @@ The pure candidate-reranking intelligence behind every food search — extracted
   Phases 4.2.3+ (confidence, correction memory, portion compatibility, meal context,
   preferences) plug in there without touching candidate acquisition or creating a second
   ranking engine.
+- **Tiered identity/intent/quality signals (`Live`, Phase 4.2.7).** Six named passes enforce
+  an explicit priority model — **primary identity > explicit intent > candidate quality** — so a
+  weak signal can never overpower identity: `speciesMismatch` (chicken never resolves to turkey),
+  `familyIdentityMismatch` (a "mayo" query rejects a Flor-de-Mayo *bean* by food-family, independent
+  of the `mayo→mayonnaise` query rewrite), `productFormMismatch` (a form mismatch also **gates**
+  the brand-intent boost — a Fairlife *bar* query never lands on Fairlife *milk*),
+  `missingRequestedBrand` (asymmetric: an explicit brand prefers its candidate; silent when no
+  brand is typed), `unrequestedSpecialtySubtype` (generic "rice" demotes glutinous/sushi/etc.,
+  intent-aware), and a tie-breaker-band `servingQuality` (usable gram/ml + household measure; can
+  never flip identity). Config lives in named tables (`ANIMAL_SPECIES`, `PRODUCT_FORMS`,
+  `IDENTITY_EXPECTED_FAMILY`, `CANDIDATE_FAMILY`, `SPECIALTY_SUBTYPES`). Each kept candidate is
+  stamped with two inspectable fields on the shared Candidate contract: `servingQuality`
+  (`'usable'|'household'|'weak'|'generic'`) and `mismatch` (a hard species/form/identity conflict);
+  `explainCandidate(query, candidate)` returns the full per-pass breakdown for tests/diagnostics.
+  The `mismatch` flag feeds a high-precision **confidence guard** in `food-core.js`
+  (`nuAssessConfidence`): a top candidate that hard-mismatches an explicitly-requested
+  form/species/identity is never a confident auto-resolve (choose_candidate if alternatives exist,
+  else `unresolved`) — so a query with no valid candidate is never confidently mis-logged.
 
 ### Shared Correction Memory Core — `food-memory.js` (`Live`, Phase 4.2.4)
 
