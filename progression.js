@@ -57,6 +57,22 @@
     return 'other';
   }
 
+  // Equipment resolution seam (Phase 4.2.1E): prefer explicit exercise metadata
+  // supplied by the caller (from the shared Exercise-Intelligence layer /
+  // `exercises` row — e.g. ExerciseIntelligence.getProgressionMeta(ex).equipment)
+  // over parsing it back out of the name. The name regex stays as the fallback
+  // for unresolved/custom exercises. PARITY: when no `equipment` is supplied this
+  // returns exactly inferEquipment(name), so existing callers are unchanged.
+  function resolveEquipment(input) {
+    var provided = input && input.equipment;
+    if (provided) {
+      var e = String(provided).toLowerCase();
+      var known = { bodyweight: 1, dumbbell: 1, cable: 1, machine: 1, barbell: 1, other: 1 };
+      return known[e] ? e : 'other';
+    }
+    return inferEquipment((input && input.exerciseName) || '');
+  }
+
   // Round to a sensible plate increment, never below zero.
   // Dumbbells & everything else round to the nearest 5 lb — always achievable.
   function roundWeight(w, equip) {
@@ -166,8 +182,13 @@
     isolation: { mev: null, mav: null, mrv: null }
   };
 
-  function defaultTargetSets(name) {
-    var conf = EXERCISE_CATEGORY_DEFAULTS[classifyExercise(name)] || EXERCISE_CATEGORY_DEFAULTS.isolation;
+  // `mechanics` ('compound'|'isolation') is the Phase 4.2.1E metadata seam: when
+  // supplied (e.g. ExerciseIntelligence.getMechanics(ex)) it overrides the name
+  // regex. Both categories map to the same default today, so this is a pure
+  // wiring seam with no behavioral change — parity when mechanics is omitted.
+  function defaultTargetSets(name, mechanics) {
+    var cls = (mechanics === 'compound' || mechanics === 'isolation') ? mechanics : classifyExercise(name);
+    var conf = EXERCISE_CATEGORY_DEFAULTS[cls] || EXERCISE_CATEGORY_DEFAULTS.isolation;
     return conf.defaultSets;
   }
 
@@ -204,7 +225,7 @@
     if (p && p > 0) return Math.round(p);
     var established = establishedTargetSets(history);
     if (established) return established;
-    return defaultTargetSets(input.exerciseName);
+    return defaultTargetSets(input.exerciseName, input.mechanics);
   }
 
   // ── Display formatting ─────────────────────────────────────────────────────
@@ -267,7 +288,7 @@
   function analyze(input) {
     input = input || {};
     var name = input.exerciseName || '';
-    var equip = inferEquipment(name);
+    var equip = resolveEquipment(input);
 
     var low = num(input.repsLow);
     var high = num(input.repsHigh);
@@ -530,6 +551,7 @@
     evaluatePRs: evaluatePRs,
     detectPlateau: detectPlateau,
     inferEquipment: inferEquipment,
+    resolveEquipment: resolveEquipment,
     roundWeight: roundWeight,
     weightIncrement: weightIncrement,
     estimate1RM: estimate1RM,

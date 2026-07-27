@@ -27,7 +27,7 @@ include it. If no, leave it out.
 - Companion design docs are authoritative for their domains:
   - `docs/ai-master-blueprint.md` — AI roadmap 4.2.x → 5.0 (source of truth for the roadmap).
   - `docs/food-resolution-core-design.md` — shared food-resolution core design (Phase 4.2.1).
-  - `docs/exercise-intelligence-roadmap.md` + `docs/exercise-intelligence-architecture.md` — Phase 4.2.1E.
+  - `docs/exercise-intelligence-roadmap.md` + `docs/exercise-intelligence-architecture.md` — Phase 4.2.1E plan; `docs/exercise-intelligence-foundation.md` — the shipped `exercise-core.js` foundation reference.
   - `docs/progression-spec.md` — progressive-overload logic.
 
 ---
@@ -193,10 +193,10 @@ At the end of implementation tasks, provide:
 provider unless a new route is explicitly built on another.
 
 **Node / tooling:**
-- `package.json`: `npm test` → `node --test`; `npm run bench` → `node benchmarks/run-resolve.js`.
+- `package.json`: `npm test` → `node --test`; `npm run bench` → `node benchmarks/run-resolve.js`; `npm run bench:exercise` → `node benchmarks/run-exercise.js`.
 - Dependencies: `@anthropic-ai/sdk`, `stripe`. No build step.
-- Test files: `ai-food-parse.test.js`, `usda-search.test.js`, `nutrition-resolve.test.js`, `food-ranking.test.js`, `food-memory.test.js`, `food-meal.test.js`, `food-portion.test.js`, `nutrition-search-cache.test.js`, `progression.test.js`.
-- Benchmark corpus: `benchmarks/resolve-cases.jsonl` + `benchmarks/fixtures.js`, run by `benchmarks/run-resolve.js` (two-tier runner, Phase 4.2.1d).
+- Test files: `ai-food-parse.test.js`, `usda-search.test.js`, `nutrition-resolve.test.js`, `food-ranking.test.js`, `food-memory.test.js`, `food-meal.test.js`, `food-portion.test.js`, `nutrition-search-cache.test.js`, `progression.test.js`, `exercise-core.test.js`.
+- Benchmark corpus: `benchmarks/resolve-cases.jsonl` + `benchmarks/fixtures.js`, run by `benchmarks/run-resolve.js` (two-tier runner, Phase 4.2.1d). Exercise resolution: `benchmarks/exercise-cases.jsonl` + `benchmarks/exercise-fixtures.js`, run by `benchmarks/run-exercise.js` (Phase 4.2.1E).
 
 **Supabase notes:**
 - Auth calls wrapped in `window.addEventListener('load', ...)`.
@@ -380,7 +380,34 @@ new script.)
 
 - `metrics.js`, `snapshot.js` — dashboard snapshot/metrics.
 - `weight.js`, `weight-history.html` — weight tracking + trend.
-- `progression.js` (spec: `docs/progression-spec.md`) — progressive-overload logic; `schedules.js`, `workout-history.js` — workout support.
+- `progression.js` (spec: `docs/progression-spec.md`) — progressive-overload logic; `schedules.js`, `workout-history.js` — workout support. `analyze()` now accepts optional `equipment`/`mechanics` exercise metadata (Phase 4.2.1E seam), name-regex inference as fallback — exact parity when omitted.
+
+### Shared Exercise-Intelligence Core — `exercise-core.js` (`Live`, Phase 4.2.1E)
+
+The exercise-domain equivalent of `food-core.js`: one pure, DOM-free, fetch-free,
+DB-free layer owning *what an exercise is* and *which exercise the user means*.
+Browser global `ExerciseIntelligence` + guarded `module.exports` (same pattern as
+`progression.js`). Full reference: `docs/exercise-intelligence-foundation.md`.
+
+- **Catalog-injected, never catalog-owning.** Resolution runs over a catalog of
+  `exercises`-row records passed IN (the DB stays the runtime source of truth);
+  the module keys off the SAME stable `exercises.id`, so a `canonicalExerciseId`
+  it returns equals the production id. No migration shipped — the 57-row metadata
+  backfill was already applied (id checksum `53db1ebbc332b2ccee9ee0ebb726166a`).
+- **One shared taxonomy** (movement patterns, equipment, force/difficulty/
+  tracking enums), **normalization** (`normalizeExerciseName`/
+  `buildExerciseLookupKey`), **alias + variant resolution** with a HARD-modifier
+  variant guard (incline never collapses to flat, `front squat` → `unresolved`
+  not back squat, `assisted pull-up` is an approximate variant not an exact
+  alias), a curated **family model** (base movement + intent, never muscle-only),
+  a conservative directional **relationship graph** (equipment-substitution /
+  variant / progression / regression / same-pattern-alternative; isolation gets
+  no cross-family net), and deterministic **validation**.
+- **Consumed today** by `progression.js` via `getProgressionMeta(ex)` (equipment/
+  mechanics from metadata, not name regex). The workout picker/search (roadmap
+  Phase 3) and PR/history id-migration (Phase 6) are the next consumers — out of
+  this phase by design. Covered by `exercise-core.test.js` + the
+  `benchmarks/exercise-cases.jsonl` corpus.
 
 ---
 

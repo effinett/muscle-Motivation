@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "test": "node --test",
-    "bench": "node benchmarks/run-resolve.js"
+    "bench": "node benchmarks/run-resolve.js",
+    "bench:exercise": "node benchmarks/run-exercise.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",

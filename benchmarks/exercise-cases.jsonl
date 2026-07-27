@@ -1,0 +1,40 @@
+{ "id": "exact-bench", "input": { "query": "Bench Press" }, "expect": { "name": "Bench Press", "matchType": "exact_canonical", "confidence": "high" }, "tags": ["exact"] }
+{ "id": "exact-squat", "input": { "query": "Barbell Back Squat" }, "expect": { "name": "Barbell Back Squat", "matchType": "exact_canonical" }, "tags": ["exact"] }
+{ "id": "exact-rdl-name", "input": { "query": "Romanian Deadlift" }, "expect": { "name": "Romanian Deadlift", "matchType": "exact_canonical" }, "tags": ["exact"] }
+{ "id": "case-insensitive", "input": { "query": "bench press" }, "expect": { "name": "Bench Press", "matchType": "exact_canonical" }, "tags": ["normalization"] }
+{ "id": "alias-bb-bench", "input": { "query": "BB bench" }, "expect": { "name": "Bench Press", "matchType": "exact_alias", "confidence": "high" }, "tags": ["alias", "abbreviation"] }
+{ "id": "alias-dumbbell-bench-press", "input": { "query": "dumbbell bench press" }, "expect": { "name": "Dumbbell Press", "matchType": "exact_alias" }, "tags": ["alias"] }
+{ "id": "abbr-db-bench", "input": { "query": "DB bench" }, "expect": { "name": "Dumbbell Press", "matchTypeIn": ["variant", "normalized_alias", "exact_alias"] }, "tags": ["abbreviation", "variant"] }
+{ "id": "alias-lat-pulldown", "input": { "query": "lat pulldown" }, "expect": { "name": "Lat Pulldown", "matchType": "exact_canonical" }, "tags": ["alias"] }
+{ "id": "hyphen-lat-pull-down", "input": { "query": "lat pull-down" }, "expect": { "name": "Lat Pulldown" }, "tags": ["normalization", "hyphen"] }
+{ "id": "abbr-rdl", "input": { "query": "RDL" }, "expect": { "name": "Romanian Deadlift", "matchType": "exact_alias" }, "tags": ["abbreviation"] }
+{ "id": "abbr-ohp", "input": { "query": "OHP" }, "expect": { "name": "Overhead Press", "matchType": "exact_alias" }, "tags": ["abbreviation"] }
+{ "id": "abbr-db-row", "input": { "query": "db row" }, "expect": { "name": "Dumbbell Row", "matchType": "exact_alias" }, "tags": ["abbreviation"] }
+{ "id": "alias-pushup", "input": { "query": "pushup" }, "expect": { "name": "Push-Up", "matchType": "exact_alias" }, "tags": ["alias"] }
+{ "id": "alias-chinup", "input": { "query": "chin up" }, "expect": { "name": "Chin-Up" }, "tags": ["alias", "hyphen"] }
+{ "id": "alias-farmers-walk", "input": { "query": "farmers walk" }, "expect": { "name": "Farmer Carry", "matchType": "exact_alias" }, "tags": ["alias"] }
+{ "id": "alias-apostrophe-farmers", "input": { "query": "farmer's walk" }, "expect": { "name": "Farmer Carry" }, "tags": ["alias", "apostrophe"] }
+{ "id": "variant-incline-bench", "input": { "query": "incline bench" }, "expect": { "name": "Incline Bench Press" }, "tags": ["variant"] }
+{ "id": "variant-incline-db-press", "input": { "query": "incline db press" }, "expect": { "name": "Incline Dumbbell Press" }, "tags": ["variant", "abbreviation"] }
+{ "id": "variant-flat-bench-not-incline", "input": { "query": "flat bench" }, "expect": { "name": "Bench Press", "notName": "Incline Bench Press" }, "tags": ["variant"] }
+{ "id": "variant-front-squat-unresolved", "input": { "query": "front squat" }, "expect": { "unresolved": true, "notName": "Barbell Back Squat" }, "tags": ["variant", "not-in-catalog"] }
+{ "id": "variant-seated-row-not-barbell", "input": { "query": "seated row" }, "expect": { "name": "Seated Cable Row", "notName": "Barbell Row" }, "tags": ["variant"] }
+{ "id": "variant-db-shoulder-press", "input": { "query": "dumbbell shoulder press" }, "expect": { "name": "Dumbbell Shoulder Press", "notName": "Overhead Press" }, "tags": ["variant"] }
+{ "id": "variant-assisted-pullup-approx", "input": { "query": "assisted pull-up" }, "expect": { "name": "Pull-Up", "notMatchType": "exact_alias", "confidence": "low" }, "tags": ["variant", "soft-modifier"] }
+{ "id": "family-row", "input": { "query": "row" }, "expect": { "matchType": "family", "family": "row", "unresolvedId": true }, "tags": ["ambiguity", "family"] }
+{ "id": "ambiguous-press", "input": { "query": "press" }, "expect": { "matchType": "ambiguous", "unresolvedId": true }, "tags": ["ambiguity"] }
+{ "id": "ambiguous-curl", "input": { "query": "curl" }, "expect": { "matchType": "ambiguous", "unresolvedId": true }, "tags": ["ambiguity"] }
+{ "id": "ambiguous-extension", "input": { "query": "extension" }, "expect": { "matchTypeIn": ["ambiguous", "family"], "unresolvedId": true }, "tags": ["ambiguity"] }
+{ "id": "ambiguous-raise", "input": { "query": "raise" }, "expect": { "matchTypeIn": ["ambiguous", "family"], "unresolvedId": true }, "tags": ["ambiguity"] }
+{ "id": "prefix-ben", "input": { "query": "ben" }, "expect": { "matchTypeIn": ["prefix", "family", "ambiguous"] }, "tags": ["prefix"] }
+{ "id": "single-fly", "input": { "query": "fly" }, "expect": { "name": "Cable Fly" }, "tags": ["single-generic"] }
+{ "id": "single-goblet", "input": { "query": "goblet" }, "expect": { "name": "Goblet Squat" }, "tags": ["token"] }
+{ "id": "unknown-unresolved", "input": { "query": "levitation crunch machine" }, "expect": { "unresolved": true }, "tags": ["unresolved"] }
+{ "id": "empty-unresolved", "input": { "query": "" }, "expect": { "unresolved": true }, "tags": ["unresolved"] }
+{ "id": "family-goblet-vs-back-squat-distinct", "input": { "query": "goblet squat" }, "expect": { "name": "Goblet Squat", "notName": "Barbell Back Squat" }, "tags": ["variant"] }
+{ "id": "deadlift-bare-alias", "input": { "query": "deadlift" }, "expect": { "name": "Conventional Deadlift", "matchType": "exact_alias" }, "tags": ["alias"] }
+{ "id": "trap-bar-deadlift", "input": { "query": "hex bar deadlift" }, "expect": { "name": "Trap Bar Deadlift", "matchType": "exact_alias" }, "tags": ["alias"] }
+{ "id": "skullcrusher", "input": { "query": "skullcrusher" }, "expect": { "name": "Skull Crusher" }, "tags": ["alias"] }
+{ "id": "bulgarian-abbr", "input": { "query": "BSS" }, "expect": { "name": "Bulgarian Split Squat" }, "tags": ["abbreviation"] }
+{ "id": "leg-ext-alias", "input": { "query": "leg ext" }, "expect": { "name": "Leg Extension", "matchType": "exact_alias" }, "tags": ["alias"] }
+{ "id": "calf-raise-alias", "input": { "query": "calf raise" }, "expect": { "name": "Standing Calf Raise" }, "tags": ["alias"] }
