@@ -38,3 +38,21 @@
 { "id": "bulgarian-abbr", "input": { "query": "BSS" }, "expect": { "name": "Bulgarian Split Squat" }, "tags": ["abbreviation"] }
 { "id": "leg-ext-alias", "input": { "query": "leg ext" }, "expect": { "name": "Leg Extension", "matchType": "exact_alias" }, "tags": ["alias"] }
 { "id": "calf-raise-alias", "input": { "query": "calf raise" }, "expect": { "name": "Standing Calf Raise" }, "tags": ["alias"] }
+{ "id": "picker-db-bench-top", "input": { "query": "DB bench" }, "expect": { "searchTop": "Dumbbell Press", "searchTopNot": "Incline Dumbbell Press" }, "tags": ["picker", "abbreviation"] }
+{ "id": "picker-bb-bench-top", "input": { "query": "BB bench" }, "expect": { "searchTop": "Bench Press" }, "tags": ["picker", "abbreviation"] }
+{ "id": "picker-rdl-top", "input": { "query": "RDL" }, "expect": { "searchTop": "Romanian Deadlift" }, "tags": ["picker", "abbreviation"] }
+{ "id": "picker-romanian-top", "input": { "query": "romanian deadlift" }, "expect": { "searchTop": "Romanian Deadlift" }, "tags": ["picker"] }
+{ "id": "picker-lat-pulldown-top", "input": { "query": "lat pull-down" }, "expect": { "searchTop": "Lat Pulldown" }, "tags": ["picker", "hyphen"] }
+{ "id": "picker-pullup-top", "input": { "query": "pullup" }, "expect": { "searchTop": "Pull-Up" }, "tags": ["picker"] }
+{ "id": "picker-assisted-pullup-approx", "input": { "query": "assisted pull-up" }, "expect": { "searchTop": "Pull-Up", "searchNoExact": true }, "tags": ["picker", "variant"] }
+{ "id": "picker-front-squat-no-exact", "input": { "query": "front squat" }, "expect": { "searchNoExact": true }, "tags": ["picker", "variant"] }
+{ "id": "picker-incline-db-top", "input": { "query": "incline dumbbell press" }, "expect": { "searchTop": "Incline Dumbbell Press", "searchTopNot": "Dumbbell Press" }, "tags": ["picker", "variant"] }
+{ "id": "picker-seated-cable-row-top", "input": { "query": "seated cable row" }, "expect": { "searchTop": "Seated Cable Row" }, "tags": ["picker"] }
+{ "id": "picker-seated-row-not-barbell", "input": { "query": "seated row" }, "expect": { "searchTop": "Seated Cable Row", "searchTopNot": "Barbell Row" }, "tags": ["picker", "variant"] }
+{ "id": "picker-row-ambiguous", "input": { "query": "row" }, "expect": { "searchMinResults": 3, "searchIncludes": ["Barbell Row", "Seated Cable Row"] }, "tags": ["picker", "ambiguity"] }
+{ "id": "picker-press-ambiguous", "input": { "query": "press" }, "expect": { "searchMinResults": 3 }, "tags": ["picker", "ambiguity"] }
+{ "id": "picker-curl-ambiguous", "input": { "query": "curl" }, "expect": { "searchMinResults": 3, "searchIncludes": ["Barbell Curl", "Hammer Curl"] }, "tags": ["picker", "ambiguity"] }
+{ "id": "picker-db-shoulder-press-top", "input": { "query": "DB shoulder press" }, "expect": { "searchTop": "Dumbbell Shoulder Press", "searchTopNot": "Overhead Press" }, "tags": ["picker", "variant"] }
+{ "id": "picker-smith-squat-no-exact", "input": { "query": "smith squat" }, "expect": { "searchNoExact": true }, "tags": ["picker", "not-in-catalog"] }
+{ "id": "picker-flat-bench-top", "input": { "query": "flat bench" }, "expect": { "searchTop": "Bench Press", "searchTopNot": "Incline Bench Press" }, "tags": ["picker", "variant"] }
+{ "id": "picker-single-arm-row", "input": { "query": "single arm row" }, "expect": { "searchTopNot": "Barbell Row" }, "tags": ["picker", "variant"] }

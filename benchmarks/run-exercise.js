@@ -36,7 +36,11 @@ function loadCases() {
     .map((l, i) => { try { return JSON.parse(l); } catch (e) { throw new Error(`bad JSONL at line ${i + 1}: ${e.message}`); } });
 }
 
-// Returns null on pass, or a reason string on failure.
+const EXACT_TYPES = ['exact_canonical', 'exact_alias', 'normalized', 'normalized_alias'];
+
+// Returns null on pass, or a reason string on failure. Checks the single-answer
+// resolve() (name/matchType/…) AND, when a case declares search* expectations,
+// the LIST-producing picker search (Phase 4.2.1F) over the same catalog.
 function checkCase(c) {
   const r = idx.resolve(c.input.query);
   const e = c.expect || {};
@@ -50,6 +54,22 @@ function checkCase(c) {
   if (e.family !== undefined && r.exerciseFamily !== e.family) fails.push(`family ${r.exerciseFamily} != ${e.family}`);
   if (e.unresolved === true && r.matchType !== 'unresolved') fails.push(`expected unresolved, got ${r.matchType}`);
   if (e.unresolvedId === true && r.canonicalExerciseId !== null) fails.push(`expected no single id, got ${r.canonicalName}`);
+
+  // Picker-search expectations (only evaluated when present).
+  const hasSearch = ['searchTop', 'searchTopNot', 'searchIncludes', 'searchMinResults', 'searchNoExact']
+    .some((k) => e[k] !== undefined);
+  if (hasSearch) {
+    const s = idx.search(c.input.query);
+    const list = s.results.map((x) => x.name);
+    if (e.searchTop !== undefined && list[0] !== e.searchTop) fails.push(`searchTop ${JSON.stringify(list[0])} != ${JSON.stringify(e.searchTop)}`);
+    if (e.searchTopNot !== undefined && list[0] === e.searchTopNot) fails.push(`searchTop must NOT be ${JSON.stringify(e.searchTopNot)}`);
+    if (e.searchMinResults !== undefined && list.length < e.searchMinResults) fails.push(`searchMinResults ${list.length} < ${e.searchMinResults}`);
+    if (e.searchIncludes !== undefined) e.searchIncludes.forEach((n) => { if (list.indexOf(n) === -1) fails.push(`searchIncludes missing ${JSON.stringify(n)}`); });
+    if (e.searchNoExact === true) {
+      const exact = s.results.find((x) => EXACT_TYPES.indexOf(x.matchType) !== -1);
+      if (exact) fails.push(`searchNoExact but ${exact.name} is ${exact.matchType}`);
+    }
+  }
   return fails.length ? fails.join('; ') : null;
 }
 

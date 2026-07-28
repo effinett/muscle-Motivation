@@ -434,6 +434,11 @@
     .picker-item-name { font-size: 14px; font-weight: 600; }
     .picker-item-cat { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
     .picker-item-plus { color: var(--red); flex-shrink: 0; }
+    .picker-hint {
+      font-family: 'Barlow', sans-serif; font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);
+      padding: 8px 4px 6px;
+    }
     .btn-picker-close {
       width: 100%; margin-top: 12px; padding: 11px; background: transparent;
       border: 1px solid var(--border-2); border-radius: 8px; color: var(--text-muted);
@@ -765,6 +770,10 @@
 <script src="schedules.js"></script>
 <script src="workout-history.js"></script>
 <script src="progression.js"></script>
+<!-- Shared exercise-intelligence core (Phase 4.2.1E) — powers the picker's
+     normalization/alias/variant-aware search (Phase 4.2.1F). Load before the
+     inline consumer below. -->
+<script src="exercise-core.js"></script>
 <script>
   var currentUser     = null;
   var currentWorkout  = null;
@@ -780,6 +789,10 @@
   var templates       = [];
   var editingTemplate = null;
   var pickerMode      = 'workout';
+  // Shared exercise-intelligence index over the GLOBAL catalog (exercise-core.js,
+  // Phase 4.2.1F). Built once per library load; the picker's search consumes it so
+  // normalization/alias/variant identity lives in ONE place, never re-derived here.
+  var exerciseIndex   = null;
   // Live PR session state (prState/prStateLoading) is declared with the live PR
   // detection block below.
   // workoutHistory + history rendering/edit/delete live in workout-history.js (shared)
@@ -835,8 +848,14 @@
   // reusable across future workouts. User entries are deduped against the
   // global list by case-insensitive name so nothing shows up twice.
   async function loadExerciseLibrary() {
+    // Fetch the full identity/classification metadata the shared resolver reasons
+    // over (aliases, movement_pattern, muscles, flags) — not just name/category —
+    // so alias/abbreviation/variant search works. The DB stays the source of truth
+    // for the catalog; exercise-core.js keys off the SAME exercises.id values.
     var results = await Promise.all([
-      supabaseClient.from('exercises').select('id, name, category, equipment').order('name'),
+      supabaseClient.from('exercises')
+        .select('id, name, category, equipment, aliases, primary_muscle, secondary_muscles, movement_pattern, force_type, difficulty, is_bodyweight, is_unilateral, tracking_type, default_unit')
+        .order('name'),
       supabaseClient.from('user_exercises').select('id, name, category').eq('user_id', currentUser.id).order('name')
     ]);
     var globalEx = results[0].data || [];
@@ -850,6 +869,16 @@
       merged.push({ id: e.id, name: e.name, category: e.category || 'Custom', equipment: null, user_created: true });
     });
     exerciseLibrary = merged;
+    // Build the shared resolver index over the GLOBAL catalog only (the controlled
+    // 57-exercise surface with real exercises.id + metadata). User customs have no
+    // aliases/metadata and their id targets user_exercises, not the exercises FK —
+    // they stay searchable via a lightweight name pass in filterPicker, never the
+    // resolver, so a canonicalExerciseId from the index is always a real
+    // exercises.id. Degrades safely if the module or catalog is unavailable.
+    try {
+      exerciseIndex = (typeof ExerciseIntelligence !== 'undefined' && globalEx.length)
+        ? ExerciseIntelligence.createExerciseIndex(globalEx) : null;
+    } catch (e) { exerciseIndex = null; }
   }
 
   // Resolve a name to a stable GLOBAL library exercise id (exercises.id) so we
@@ -863,6 +892,19 @@
       return !e.user_created && e.name && e.name.toLowerCase() === lc;
     });
     return hit ? hit.id : null;
+  }
+
+  // Trust the picker-supplied canonical id only when it's a real GLOBAL
+  // exercises.id (the shared index resolves against global rows, so it always is),
+  // validating it against the loaded catalog before it becomes stored identity.
+  // Falls back to exact-name resolution — so free-typed/custom picks and any
+  // fallback path behave exactly as before.
+  function resolvePickedId(name, pickedId) {
+    if (pickedId) {
+      var ok = exerciseLibrary.some(function(e) { return !e.user_created && e.id === pickedId; });
+      if (ok) return pickedId;
+    }
+    return libraryExerciseId(name);
   }
 
   // Persist a manually typed exercise to the user's library so it's reusable.
@@ -1257,49 +1299,121 @@
     window.visualViewport.removeEventListener('scroll', syncPickerViewport);
   }
 
+  // Build one picker row. `id` is the real exercises.id for a global catalog hit
+  // (stamped onto the logged set as canonical identity) or '' for a custom / free
+  // add. The displayed + saved name is ALWAYS the canonical exercise name (never
+  // the matched alias text), so search text never becomes stored identity.
+  function pickerRowHtml(name, id, category, equipment) {
+    return '<div class="picker-item" data-name="' + esc(name) + '" data-id="' + esc(id || '') +
+      '" onclick="selectExercise(this.dataset.name, this.dataset.id)">' +
+      '<div><div class="picker-item-name">' + esc(name) + '</div>' +
+      '<div class="picker-item-cat">' + esc(category || '') + (equipment ? ' · ' + esc(equipment) : '') + '</div></div>' +
+      '<span class="picker-item-plus"><i data-lucide="plus" style="width:16px;height:16px;"></i></span>' +
+      '</div>';
+  }
+
   function filterPicker(query) {
     var q = query.toLowerCase().trim();
-    var filtered = exerciseLibrary.filter(function(e) {
-      return !q || e.name.toLowerCase().includes(q) || (e.category || '').toLowerCase().includes(q);
-    });
-    var rows = filtered.map(function(e) {
-      return '<div class="picker-item" data-name="' + esc(e.name) + '" onclick="selectExercise(this.dataset.name)">' +
-        '<div><div class="picker-item-name">' + esc(e.name) + '</div>' +
-        '<div class="picker-item-cat">' + esc(e.category || '') + (e.equipment ? ' · ' + esc(e.equipment) : '') + '</div></div>' +
-        '<span class="picker-item-plus"><i data-lucide="plus" style="width:16px;height:16px;"></i></span>' +
-        '</div>';
-    });
+    var rows = [];
+    var shownIds = {};   // global exercises.id already listed
+    var shownNames = {}; // normalized names already listed (dedupe customs)
+    var hint = '';
+
+    if (!q) {
+      // No query — full library, alphabetical (unchanged behavior).
+      rows = exerciseLibrary.map(function(e) { return pickerRowHtml(e.name, e.user_created ? '' : e.id, e.category, e.equipment); });
+    } else if (exerciseIndex) {
+      // Ranked global matches from the SHARED resolver (normalization + alias +
+      // abbreviation + variant-aware). No auto-selection: this only ORDERS a list
+      // the user chooses from, so a broad/ambiguous term simply shows several
+      // options rather than silently picking one.
+      var res = exerciseIndex.search(query, { limit: 40 });
+      res.results.forEach(function(r) {
+        shownIds[r.id] = 1;
+        shownNames[r.name.toLowerCase()] = 1;
+        var ex = r.exercise || {};
+        rows.push(pickerRowHtml(r.name, r.id, ex.category, ex.equipment));
+      });
+      // User customs aren't in the resolver index (no metadata; id targets
+      // user_exercises) — surface them with a lightweight name match, deduped.
+      exerciseLibrary.forEach(function(e) {
+        if (!e.user_created) return;
+        if (shownNames[e.name.toLowerCase()]) return;
+        if (e.name.toLowerCase().indexOf(q) === -1 && (e.category || '').toLowerCase().indexOf(q) === -1) return;
+        shownNames[e.name.toLowerCase()] = 1;
+        rows.push(pickerRowHtml(e.name, '', e.category, e.equipment));
+      });
+      // Honest framing when the exact thing isn't in the catalog: never present a
+      // nearby variant as the exact result (e.g. "front squat" over a catalog with
+      // only back/goblet squat). Selection stays a deliberate tap.
+      var rez = res.resolution;
+      var noExact = rez && (rez.matchType === 'unresolved' || rez.reason === 'variant_not_in_catalog');
+      if (noExact && rows.length) hint = 'No exact match for “' + esc(query.trim()) + '” — closest options:';
+      recordSearchGap(query, rez);
+    } else {
+      // Fallback: shared module unavailable — original substring filter, unchanged.
+      exerciseLibrary.filter(function(e) {
+        return e.name.toLowerCase().includes(q) || (e.category || '').toLowerCase().includes(q);
+      }).forEach(function(e) { rows.push(pickerRowHtml(e.name, e.user_created ? '' : e.id, e.category, e.equipment)); });
+    }
+
     // The custom "+ Add" option renders in its own fixed zone — directly under
     // the search input and above the scroll list — so it stays tappable while the
     // keyboard is open and the result list scrolls independently.
     var addRow = '';
-    if (q && !filtered.find(function(e) { return e.name.toLowerCase() === q; })) {
-      addRow = '<div class="picker-item" data-name="' + esc(query.trim()) + '" onclick="selectExercise(this.dataset.name)">' +
+    if (q && !shownNames[q] && !exerciseLibrary.find(function(e) { return e.name.toLowerCase() === q; })) {
+      addRow = '<div class="picker-item" data-name="' + esc(query.trim()) + '" data-id="" onclick="selectExercise(this.dataset.name, this.dataset.id)">' +
         '<div><div class="picker-item-name">+ Add "' + esc(query.trim()) + '"</div>' +
         '<div class="picker-item-cat">Custom exercise</div></div>' +
         '<span class="picker-item-plus"><i data-lucide="plus" style="width:16px;height:16px;"></i></span>' +
         '</div>';
     }
     document.getElementById('pickerAddRow').innerHTML = addRow;
+    var listHtml = (hint ? '<div class="picker-hint">' + hint + '</div>' : '') + rows.join('');
     document.getElementById('pickerList').innerHTML = rows.length
-      ? rows.join('')
+      ? listHtml
       : (addRow ? '' : '<div class="empty-state">No exercises found.</div>');
     lucide.createIcons();
   }
 
-  async function selectExercise(name) {
+  // Search-gap instrumentation (Phase 4.2.1F) — records queries the shared
+  // resolver could not confidently place, to drive the next catalog-expansion
+  // phase (4.2.1G) from REAL misses instead of guesses. Session-only + in-memory
+  // (no network, no storage, not tied to identity); console output on dev hosts
+  // only. Inspect during a session with `exerciseSearchGaps()`.
+  var searchGaps = [];
+  function recordSearchGap(query, resolution) {
+    if (!resolution || resolution.matchType !== 'unresolved') return;
+    var norm = (resolution.normalizedQuery || '').trim();
+    if (!norm) return;
+    var hit = searchGaps.find(function(g) { return g.query === norm; });
+    if (hit) { hit.count++; return; }
+    if (searchGaps.length < 200) searchGaps.push({ query: norm, reason: resolution.reason || 'no_match', count: 1 });
+    var host = location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1' || /\.vercel\.app$/.test(host)) {
+      console.debug('[exercise-search-gap]', norm, '(' + (resolution.reason || 'no_match') + ')');
+    }
+  }
+  window.exerciseSearchGaps = function() { return searchGaps.slice(); };
+
+  // `pickedId` is the canonical exercises.id the picker resolved (from the shared
+  // index — always a real global id, empty for a custom/free add). Preferred over
+  // re-deriving from the name so alias-driven selections still stamp the exact
+  // production identity; libraryExerciseId(name) is the fallback.
+  async function selectExercise(name, pickedId) {
     closePicker();
+    var canonicalId = resolvePickedId(name, pickedId);
     // Save any brand-new (non-library) exercise to the user's library so it's
     // reusable later. Dedupes internally — global/known names are no-ops.
     await saveUserExercise(name);
     // Template builder reuses this same picker — route the pick into the draft
     // instead of the live workout.
-    if (pickerMode === 'template') { addTemplateExercise(name); return; }
+    if (pickerMode === 'template') { addTemplateExercise(name, canonicalId); return; }
     var orderIndex = exercises.length;
     var { data, error } = await supabaseClient
       .from('workout_exercises')
       .insert({ workout_id: currentWorkout.id, exercise_name: name, order_index: orderIndex,
-                exercise_id: libraryExerciseId(name) })
+                exercise_id: canonicalId })
       .select().single();
     if (error) { showToast('Error adding exercise.'); return; }
     var ex = { id: data.id, name: name, order_index: orderIndex, last_perf: null, last_weight: null, last_reps: null, sets: [], history: [] };
@@ -1896,13 +2010,14 @@
     setTimeout(function() { document.getElementById('pickerSearch').focus(); }, 80);
   }
 
-  function addTemplateExercise(name) {
+  function addTemplateExercise(name, pickedId) {
     editingTemplate.exercises.push({
       name: name, sets: TEMPLATE_DEFAULT_SETS,
       reps_low: 8, reps_high: 12, notes: '', rest_sec: 90,
       // Stable library id so the template still resolves if the exercise is
-      // renamed later. Null for free-typed names / user customs.
-      exercise_id: libraryExerciseId(name)
+      // renamed later. Prefers the canonical id the picker resolved; null for
+      // free-typed names / user customs.
+      exercise_id: (pickedId != null ? pickedId : libraryExerciseId(name))
     });
     renderBuilderExercises();
   }

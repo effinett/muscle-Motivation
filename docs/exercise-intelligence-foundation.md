@@ -266,12 +266,53 @@ consumes it.
 - **Catalog snapshot for tests:** `benchmarks/exercise-fixtures.js` mirrors the
   live 57 rows; production loads from Supabase. Regenerate the fixture if the
   catalog changes (the id checksum guards drift).
-- **Not wired into `workout.html`/`app.html` yet:** the picker still uses its own
-  substring filter. Adopting `resolve()` there is roadmap Phase 3 (frontend),
-  deliberately out of this phase to preserve UX and scope.
+- **Picker integration shipped (Phase 4.2.1F):** `workout.html` now consumes the
+  shared layer through `index.search()` (see §13); the old substring filter
+  remains only as a degrade-safe fallback when the module can't load. `app.html`
+  runs no picker.
 - **PRs / history still name-keyed:** the id-migration sweep (Phase 6) is future.
 - **Custom exercises (`user_exercises`) have no stable id** (blueprint §9.2
   identity convergence) — a designed schema migration, future and approval-gated.
 - **Relationships are derived, not stored:** computed from family + pattern each
   call. If a persisted/curated override graph is ever needed,
   `validateRelationships` already validates an explicit list.
+
+---
+
+## 13. Picker integration — `index.search()` (Phase 4.2.1F)
+
+The workout exercise picker (`workout.html`) is the first production consumer of
+the shared layer. `resolve()` answers *which single exercise the user means* (for
+auto-select/confidence); its sibling **`index.search(query, opts)`** answers
+*which exercises the picker should SHOW, best first*. Both share the exact same
+normalization, alias index, and hard-modifier variant guard — `search()` is not a
+second resolver, just a ranked projection of the same matching over every record.
+
+- **Result shape:** `{ query, normalizedQuery, results[], resolution }`. Each
+  result is `{ id, name, exercise (the raw catalog row), family, equipment,
+  matchType, matchedAlias, unrequestedHardModifier, missingRequestedModifier }`.
+  `resolution` is the full `resolve()` verdict, so a consumer distinguishes a
+  confident single answer from a `family`/`ambiguous`/`variant_not_in_catalog`
+  list without re-deriving it. Convenience: `searchExercises(query, catalog, opts)`.
+- **Ranking order** (deterministic; lower tier wins, then a fixed penalty vector):
+  `exact_canonical` → `exact_alias` → `normalized` → `normalized_alias` →
+  `variant` (all base tokens present, demanded hard modifiers satisfied) →
+  `related` (base present but a **demanded hard modifier is absent** — a nearby
+  option, never the exact result) → `prefix` → `partial`. Within a tier the
+  penalty vector is `[missingRequestedHardMod, unrequestedHardMod, missingSoftMod,
+  extraTokens, aliasOverName]`, final tie-break by normalized name. So "DB bench"
+  ranks flat *Dumbbell Press* above *Incline Dumbbell Press*, and "incline bench"
+  ranks *Incline Bench Press* above flat.
+- **Variant safety in a list:** a demanded hard modifier the catalog lacks drops
+  every candidate to `related` and leaves `resolution.matchType === 'unresolved'`
+  (`front squat`, `smith squat`) — the picker shows a *"No exact match … closest
+  options"* hint and never labels a nearby variant as exact. Selection is always a
+  deliberate tap; nothing is auto-logged.
+- **Identity:** `workout.html` builds the index over the GLOBAL catalog only, so
+  every result `id` is a real `exercises.id`. The picker stamps that id onto the
+  logged `workout_exercises.exercise_id` (validated against the loaded catalog),
+  and always saves the canonical `name` — never the matched alias/search text.
+  User customs (`user_exercises`, no stable FK id) stay out of the index and are
+  surfaced by a lightweight name pass with a null id, exactly as before.
+- Covered by `exercise-search.test.js` and the `picker`-tagged cases in
+  `benchmarks/exercise-cases.jsonl` (search-aware assertions in `run-exercise.js`).

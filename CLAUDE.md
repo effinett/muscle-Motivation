@@ -195,7 +195,7 @@ provider unless a new route is explicitly built on another.
 **Node / tooling:**
 - `package.json`: `npm test` → `node --test`; `npm run bench` → `node benchmarks/run-resolve.js`; `npm run bench:exercise` → `node benchmarks/run-exercise.js`.
 - Dependencies: `@anthropic-ai/sdk`, `stripe`. No build step.
-- Test files: `ai-food-parse.test.js`, `usda-search.test.js`, `nutrition-resolve.test.js`, `food-ranking.test.js`, `food-memory.test.js`, `food-meal.test.js`, `food-portion.test.js`, `nutrition-search-cache.test.js`, `progression.test.js`, `exercise-core.test.js`.
+- Test files: `ai-food-parse.test.js`, `usda-search.test.js`, `nutrition-resolve.test.js`, `food-ranking.test.js`, `food-memory.test.js`, `food-meal.test.js`, `food-portion.test.js`, `nutrition-search-cache.test.js`, `progression.test.js`, `exercise-core.test.js`, `exercise-search.test.js`.
 - Benchmark corpus: `benchmarks/resolve-cases.jsonl` + `benchmarks/fixtures.js`, run by `benchmarks/run-resolve.js` (two-tier runner, Phase 4.2.1d). Exercise resolution: `benchmarks/exercise-cases.jsonl` + `benchmarks/exercise-fixtures.js`, run by `benchmarks/run-exercise.js` (Phase 4.2.1E).
 
 **Supabase notes:**
@@ -404,10 +404,20 @@ Browser global `ExerciseIntelligence` + guarded `module.exports` (same pattern a
   variant / progression / regression / same-pattern-alternative; isolation gets
   no cross-family net), and deterministic **validation**.
 - **Consumed today** by `progression.js` via `getProgressionMeta(ex)` (equipment/
-  mechanics from metadata, not name regex). The workout picker/search (roadmap
-  Phase 3) and PR/history id-migration (Phase 6) are the next consumers — out of
-  this phase by design. Covered by `exercise-core.test.js` + the
-  `benchmarks/exercise-cases.jsonl` corpus.
+  mechanics from metadata, not name regex) and, since **Phase 4.2.1F**, by the
+  `workout.html` exercise picker via `index.search()` — the LIST-producing sibling
+  of `resolve()` (deterministic tiered ranking: exact→alias→normalized→variant→
+  related→prefix→partial; same normalization/alias/variant guard, no second
+  resolver). The picker builds the index over the GLOBAL catalog only, so every
+  result id is a real `exercises.id`; it stamps that id onto
+  `workout_exercises.exercise_id` and always saves the canonical name (never alias/
+  search text). Broad/ambiguous terms show a chooser and never auto-select; a
+  demanded hard variant absent from the catalog stays `unresolved` (no false
+  exact). Details in `docs/exercise-intelligence-foundation.md` §13. PR/history
+  id-migration (Phase 6) and catalog expansion (**Phase 4.2.1G**) are the next
+  consumers/steps — out of 4.2.1F by design. Covered by `exercise-core.test.js`,
+  `exercise-search.test.js`, and the `benchmarks/exercise-cases.jsonl` corpus
+  (incl. `picker`-tagged search cases).
 
 ---
 

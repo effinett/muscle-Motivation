@@ -535,8 +535,52 @@
       return computeRelationships(rec, records);
     }
 
+    // search(query) — the LIST-producing sibling of resolve(). resolve() answers
+    // "which single exercise does the user mean" (for auto-select/confidence);
+    // search() answers "which exercises should the picker SHOW, best first" for a
+    // human to choose from. Both share the SAME normalization, alias index, and
+    // hard-modifier variant guard — search is not a second resolver, just a
+    // ranked projection of the same matching over every record. Returns
+    // { query, normalizedQuery, results[], resolution }, where `resolution` is the
+    // full resolve() verdict so a consumer can tell a confident single answer from
+    // a family/ambiguous/variant_not_in_catalog list without re-deriving it.
+    function search(query, opts) {
+      opts = opts || {};
+      var limit = opts.limit != null ? opts.limit : 25;
+      var normQ = normalizeExerciseName(query);
+      if (!normQ) return { query: query, normalizedQuery: '', results: [], resolution: null };
+      var keyQ = buildExerciseLookupKey(query);
+      var qToks = uniq(exTokens(query));
+      var qm = classifyMods(qToks);
+      var scored = [];
+      for (var i = 0; i < records.length; i++) {
+        var a = assessSearch(records[i], normQ, keyQ, qToks, qm);
+        if (a) scored.push(a);
+      }
+      scored.sort(function (a, b) {
+        var c = cmpSearchTuple(a, b);
+        if (c !== 0) return c;
+        return a.rec.normName < b.rec.normName ? -1 : (a.rec.normName > b.rec.normName ? 1 : 0);
+      });
+      var results = scored.slice(0, limit).map(function (a) {
+        return {
+          id: a.rec.id,
+          name: a.rec.name,
+          exercise: a.rec.raw,
+          family: a.rec.family,
+          equipment: a.rec.equipmentNorm,
+          matchType: SEARCH_TIER_NAME[a.tier],
+          matchedAlias: a.matchedAlias || null,
+          unrequestedHardModifier: a.unreqHard > 0,
+          missingRequestedModifier: a.missingReqHard > 0
+        };
+      });
+      return { query: query, normalizedQuery: normQ, results: results, resolution: resolve(query) };
+    }
+
     return {
       resolve: resolve,
+      search: search,
       getById: getById,
       getFamilyMembers: getFamilyMembers,
       getRelationships: relationshipsFor,
@@ -566,6 +610,106 @@
 
   function resolveExercise(query, catalog, opts) {
     return createExerciseIndex(catalog).resolve(query, opts);
+  }
+
+  /* ── 7b. Picker search ranking ──────────────────────────────────────────────
+   * Deterministic ranking for the LIST view (index.search). Tiers mirror the
+   * resolve() priority — exact canonical > exact alias > normalized key >
+   * normalized alias key > variant (hard modifiers satisfied) > related (a
+   * demanded hard modifier is absent — a nearby option, never the exact result) >
+   * prefix > partial — so the picker orders results with the same identity/variant
+   * intelligence resolve() uses, never a bare substring sort. All matching reuses
+   * the decorated record's precomputed strings/aliasKeys; no second alias map. */
+  var SEARCH_TIER_NAME = [
+    'exact_canonical', 'exact_alias', 'normalized', 'normalized_alias',
+    'variant', 'related', 'prefix', 'partial'
+  ];
+
+  // Lower is better, compared field by field: tier, then a missing REQUESTED hard
+  // modifier (flat query vs incline candidate — pushed below true variants), then
+  // an UNREQUESTED hard modifier the candidate carries (so "DB bench" prefers flat
+  // Dumbbell Press over Incline), then a missing soft modifier, then extra
+  // (unmatched) candidate tokens, then name over alias.
+  function searchTupleOf(a) {
+    return [a.tier, a.missingReqHard || 0, a.unreqHard || 0, a.softMissing || 0,
+      a.extra || 0, a.via === 'alias' ? 1 : 0];
+  }
+  function cmpSearchTuple(a, b) {
+    var ta = searchTupleOf(a), tb = searchTupleOf(b);
+    for (var i = 0; i < ta.length; i++) { if (ta[i] !== tb[i]) return ta[i] - tb[i]; }
+    return 0;
+  }
+  function mkSearch(rec, tier, x) {
+    x = x || {};
+    return {
+      rec: rec, tier: tier,
+      missingReqHard: x.missingReqHard || 0, unreqHard: x.unreqHard || 0,
+      softMissing: x.softMissing || 0, extra: x.extra || 0,
+      via: x.matchedAlias ? 'alias' : 'name', matchedAlias: x.matchedAlias || null
+    };
+  }
+
+  // Assess one record against a query for the LIST view. Pure over the decorated
+  // record — same primitives resolve() uses — returning the best tier/penalty
+  // assessment, or null when nothing matches.
+  function assessSearch(rec, normQ, keyQ, qToks, qm) {
+    var i;
+    // Exact tiers (== resolve()'s confident A–C tiers).
+    if (rec.normName === normQ) return mkSearch(rec, 0, {});
+    for (i = 0; i < rec.aliasKeys.length; i++) if (rec.aliasKeys[i].norm === normQ) return mkSearch(rec, 1, { matchedAlias: rec.aliasKeys[i].raw });
+    if (rec.lookupKey === keyQ) return mkSearch(rec, 2, {});
+    for (i = 0; i < rec.aliasKeys.length; i++) if (rec.aliasKeys[i].key === keyQ) return mkSearch(rec, 3, { matchedAlias: rec.aliasKeys[i].raw });
+
+    // Variant / related tiers — per name/alias string, with the hard-modifier
+    // guard. A string must contain every BASE query token; a demanded hard
+    // modifier it lacks drops it to the weaker 'related' tier (never presented as
+    // exact) instead of silently collapsing onto it.
+    var best = null;
+    if (qm.base.length || qm.hard.length) {
+      for (var s = 0; s < rec.strings.length; s++) {
+        var str = rec.strings[s];
+        if (!qm.base.every(function (t) { return str.set[t]; })) continue;
+        var missingReqHard = qm.hard.filter(function (t) { return !str.set[t]; }).length;
+        var unreqHard = 0;
+        str.hardMods.forEach(function (h) { if (qToks.indexOf(h) === -1) unreqHard++; });
+        var softMissing = qm.soft.filter(function (t) { return !str.set[t]; }).length;
+        var matched = qToks.filter(function (t) { return str.set[t]; }).length;
+        var extra = str.len - matched; if (extra < 0) extra = 0;
+        var cand = {
+          tier: missingReqHard > 0 ? 5 : 4, missingReqHard: missingReqHard,
+          unreqHard: unreqHard, softMissing: softMissing, extra: extra,
+          via: str.via, raw: str.raw
+        };
+        if (!best || cmpSearchTuple(cand, best) < 0) best = cand;
+      }
+    }
+    if (best) return mkSearch(rec, best.tier, {
+      missingReqHard: best.missingReqHard, unreqHard: best.unreqHard,
+      softMissing: best.softMissing, extra: best.extra,
+      matchedAlias: best.via === 'alias' ? best.raw : null
+    });
+
+    // Prefix — a partial word that begins a name/alias.
+    if (normQ.length >= 2) {
+      if (rec.normName.indexOf(normQ) === 0 || (keyQ && rec.lookupKey.indexOf(keyQ) === 0)) return mkSearch(rec, 6, {});
+      for (i = 0; i < rec.aliasKeys.length; i++) {
+        if (rec.aliasKeys[i].norm.indexOf(normQ) === 0 || (keyQ && rec.aliasKeys[i].key.indexOf(keyQ) === 0)) return mkSearch(rec, 6, { matchedAlias: rec.aliasKeys[i].raw });
+      }
+    }
+
+    // Partial — a loose substring/token overlap, ranked last so nothing relevant
+    // is dropped while never outranking a real match.
+    var anyTok = qToks.some(function (t) { return t && rec.normName.indexOf(t) !== -1; });
+    if (anyTok || (normQ && rec.normName.indexOf(normQ) !== -1)) {
+      var m2 = qToks.filter(function (t) { return t && rec.normName.indexOf(t) !== -1; }).length;
+      var recTokLen = uniq(exTokens(rec.name)).length;
+      return mkSearch(rec, 7, { extra: Math.max(0, recTokLen - m2) });
+    }
+    return null;
+  }
+
+  function searchExercises(query, catalog, opts) {
+    return createExerciseIndex(catalog).search(query, opts);
   }
 
   /* ── 8. Relationship graph ─────────────────────────────────────────────────
@@ -732,6 +876,7 @@
     // resolution
     createExerciseIndex: createExerciseIndex,
     resolveExercise: resolveExercise,
+    searchExercises: searchExercises,
     // relationships
     getExerciseRelationships: getExerciseRelationships,
     // validation
