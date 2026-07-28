@@ -54,6 +54,12 @@
     'barbell', 'dumbbell', 'machine', 'cable', 'bodyweight', 'kettlebell',
     'band', 'smith', 'other'
   ];
+  // Equipment words that can appear inside a canonical NAME (used by validation
+  // to flag a name/equipment disagreement). 'smith'/'machine' co-occur in
+  // "Smith Machine …" — the check passes if ANY named equipment matches the row.
+  var EQUIP_NAME_WORDS = {
+    barbell: 1, dumbbell: 1, cable: 1, machine: 1, smith: 1, kettlebell: 1, band: 1, bodyweight: 1
+  };
   var FORCE_TYPES = ['push', 'pull', 'static'];
   var DIFFICULTIES = ['beginner', 'intermediate', 'advanced'];
   var TRACKING_TYPES = [
@@ -261,7 +267,43 @@
     // Core / carry / cardio / plyo
     'crunches': 'crunch', 'dead bug': 'dead-bug', 'plank': 'plank', 'russian twist': 'russian-twist',
     'hanging knee raise': 'leg-raise', 'lying leg raise': 'leg-raise',
-    'farmer carry': 'carry', 'incline treadmill walk': 'treadmill', 'treadmill run': 'treadmill', 'box jump': 'jump'
+    'farmer carry': 'carry', 'incline treadmill walk': 'treadmill', 'treadmill run': 'treadmill', 'box jump': 'jump',
+    // ── Phase 4.2.1G catalog expansion (families for the 84 new canonicals) ──
+    'front squat': 'squat', 'smith machine squat': 'squat', 'hack squat': 'squat',
+    'dumbbell squat': 'squat', 'bodyweight squat': 'squat', 'pistol squat': 'squat',
+    'wall sit': 'squat', 'band squat': 'squat',
+    'walking lunge': 'lunge', 'forward lunge': 'lunge', 'lateral lunge': 'lunge',
+    'sumo deadlift': 'deadlift', 'stiff leg deadlift': 'deadlift',
+    'dumbbell romanian deadlift': 'deadlift', 'single leg romanian deadlift': 'deadlift',
+    'good morning': 'good-morning', 'back extension': 'back-extension', 'kettlebell swing': 'kb-swing',
+    'glute bridge': 'hip-thrust', 'single leg glute bridge': 'hip-thrust',
+    'machine hip thrust': 'hip-thrust', 'smith machine hip thrust': 'hip-thrust',
+    'hip adduction': 'hip-adduction', 'seated leg curl': 'leg-curl', 'lying leg curl': 'leg-curl',
+    'machine chest press': 'bench-press', 'smith machine bench press': 'bench-press',
+    'decline bench press': 'bench-press', 'close grip bench press': 'bench-press', 'band chest press': 'bench-press',
+    'dumbbell fly': 'cable-fly', 'pec deck': 'cable-fly',
+    'incline push up': 'push-up', 'knee push up': 'push-up', 'decline push up': 'push-up',
+    'single arm cable row': 'row', 'chest supported row': 'row', 'chest supported dumbbell row': 'row',
+    't bar row': 'row', 'pendlay row': 'row', 'inverted row': 'row',
+    'smith machine row': 'row', 'band row': 'row',
+    'close grip lat pulldown': 'pulldown', 'wide grip lat pulldown': 'pulldown',
+    'neutral grip lat pulldown': 'pulldown', 'single arm lat pulldown': 'pulldown',
+    'assisted pull up': 'pull-up', 'cable pullover': 'pullover',
+    'machine shoulder press': 'overhead-press', 'smith machine shoulder press': 'overhead-press',
+    'arnold press': 'overhead-press',
+    'cable lateral raise': 'lateral-raise', 'machine lateral raise': 'lateral-raise', 'band lateral raise': 'lateral-raise',
+    'upright row': 'upright-row',
+    'rear delt fly': 'rear-delt-fly', 'reverse pec deck': 'rear-delt-fly', 'band pull apart': 'rear-delt-fly',
+    'barbell shrug': 'shrug', 'dumbbell shrug': 'shrug',
+    'preacher curl': 'biceps-curl', 'incline dumbbell curl': 'biceps-curl', 'concentration curl': 'biceps-curl',
+    'reverse curl': 'biceps-curl', 'spider curl': 'biceps-curl', 'band bicep curl': 'biceps-curl',
+    'rope pushdown': 'triceps-extension', 'overhead cable triceps extension': 'triceps-extension',
+    'single arm triceps pushdown': 'triceps-extension', 'triceps kickback': 'triceps-extension',
+    'band triceps extension': 'triceps-extension', 'bench dip': 'dip',
+    'cable crunch': 'crunch', 'bicycle crunch': 'crunch', 'reverse crunch': 'crunch',
+    'sit up': 'sit-up', 'hanging leg raise': 'leg-raise', 'side plank': 'plank',
+    'ab wheel rollout': 'ab-wheel', 'mountain climber': 'core', 'cable woodchopper': 'woodchopper',
+    'leg press calf raise': 'calf-raise', 'donkey calf raise': 'calf-raise'
   };
 
   function getExerciseFamily(ex) {
@@ -789,6 +831,24 @@
         warnings.push({ code: 'invalid_default_unit', id: id, value: ex.default_unit });
       if (ex.equipment != null && normalizeEquipment(ex.equipment) === 'other' && EQUIPMENT.indexOf(normalizeExerciseName(ex.equipment)) === -1)
         warnings.push({ code: 'unrecognized_equipment', id: id, value: ex.equipment });
+
+      // Phase 4.2.1G integrity: metadata that disagrees with the canonical name.
+      // Equipment: if the name names equipment, one of those must be the row's
+      // equipment (so "Smith Machine …" with equipment Smith is fine, but a
+      // "Dumbbell …" row tagged Barbell is flagged).
+      var nameToks = normalizeExerciseName(ex.name).split(' ');
+      var nameEquip = {};
+      nameToks.forEach(function (t) { if (EQUIP_NAME_WORDS[t]) nameEquip[normalizeEquipment(t)] = 1; });
+      var nameEquipKeys = Object.keys(nameEquip);
+      if (nameEquipKeys.length && ex.equipment != null && !nameEquip[normalizeEquipment(ex.equipment)])
+        warnings.push({ code: 'equipment_name_mismatch', id: id, name: ex.name, equipment: ex.equipment, nameSuggests: nameEquipKeys });
+      // Laterality: a name that says single-arm/-leg/unilateral must be unilateral
+      // (and vice-versa for an explicit bilateral).
+      var uni = !!ex.is_unilateral;
+      if ((nameToks.indexOf('single') !== -1 || nameToks.indexOf('unilateral') !== -1) && !uni)
+        warnings.push({ code: 'laterality_name_mismatch', id: id, name: ex.name, is_unilateral: uni });
+      if (nameToks.indexOf('bilateral') !== -1 && uni)
+        warnings.push({ code: 'laterality_name_mismatch', id: id, name: ex.name, is_unilateral: uni });
 
       var localAlias = {};
       (ex.aliases || []).forEach(function (a) {

@@ -60,7 +60,9 @@ test('canonical/alias prefix behavior is deterministic and stable', () => {
   const a = names('bench');
   const b = names('bench');
   assert.deepEqual(a, b);
-  assert.equal(a[0], 'Bench Press');
+  // "bench" is now a broad token (Bench Press, Bench Dip, Smith/Decline/Machine…);
+  // the list stays stable and surfaces Bench Press prominently.
+  assert.ok(a.slice(0, 3).includes('Bench Press'));
 });
 
 test('fallback (partial) matches never outrank a real resolver match', () => {
@@ -83,13 +85,13 @@ test('flat does not collapse to incline', () => {
   assert.notEqual(top('flat bench').name, 'Incline Bench Press');
 });
 
-test('front squat: no exact match, back squat only ever a labeled nearby option', () => {
+test('front squat resolves to its own canonical (Phase 4.2.1G added it)', () => {
   const s = search('front squat');
-  assert.equal(s.resolution.matchType, 'unresolved');
-  // Never presented as an exact match.
-  s.results.forEach((r) => assert.ok(!EXACT.includes(r.matchType)));
-  const back = s.results.find((r) => r.name === 'Barbell Back Squat');
-  if (back) assert.equal(back.matchType, 'related');
+  assert.equal(s.resolution.matchType, 'exact_canonical');
+  assert.equal(top('front squat').name, 'Front Squat');
+  assert.equal(top('front squat').matchType, 'exact_canonical');
+  // and back squat is never the top for "front squat"
+  assert.notEqual(top('front squat').name, 'Barbell Back Squat');
 });
 
 test('RDL does not become conventional deadlift', () => {
@@ -97,11 +99,11 @@ test('RDL does not become conventional deadlift', () => {
   assert.equal(top('romanian deadlift').name, 'Romanian Deadlift');
 });
 
-test('assisted pull-up is not an exact pull-up', () => {
+test('assisted pull-up resolves to its own machine canonical', () => {
   const r = top('assisted pull-up');
-  assert.equal(r.name, 'Pull-Up');
-  assert.ok(!EXACT.includes(r.matchType)); // approximate variant, never exact_alias
-  assert.equal(search('assisted pull-up').resolution.confidence, 'low');
+  assert.equal(r.name, 'Assisted Pull-Up');
+  assert.ok(EXACT.includes(r.matchType));
+  assert.notEqual(r.id, byName['Pull-Up'].id);
 });
 
 test('seated cable row does not become barbell row', () => {
@@ -122,7 +124,8 @@ test('"row" returns multiple relevant choices, none auto-selected', () => {
   const ns = rs.map((r) => r.name);
   assert.ok(ns.includes('Barbell Row') && ns.includes('Seated Cable Row'));
   assert.ok(rs.length >= 3);
-  assert.equal(search('row').resolution.matchType, 'family');
+  // cross-family ambiguous now (Upright Row shares the token); still a chooser.
+  assert.ok(['family', 'ambiguous'].includes(search('row').resolution.matchType));
   assert.equal(search('row').resolution.canonicalExerciseId, null);
 });
 

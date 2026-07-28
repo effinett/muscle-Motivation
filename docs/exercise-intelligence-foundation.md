@@ -23,11 +23,13 @@ Dual runtime (same pattern as `progression.js`): browser global
 The Phase-1 metadata backfill (`docs/phase1-metadata-backfill.DRAFT.sql`) is
 **already applied to production**. Audit at build time (read-only):
 
-- `public.exercises` = **57 rows**, id-set checksum
-  `53db1ebbc332b2ccee9ee0ebb726166a` (matches the DRAFT's expected checksum).
+- `public.exercises` = **141 rows** since the Phase 4.2.1G expansion (was 57);
+  id-set checksum `3f740fb4f3466d3e15aee5718f4a910e`. The 4.2.1G migration added
+  84 curated canonicals + 5 alias edits (splitting bundled leg-curl/pushdown/
+  hanging-raise movements into their own records); the benchmark fixture mirrors
+  the DB id-for-id.
 - **0 NULLs** in `movement_pattern`, `force_type`, `difficulty`, `instructions`,
-  `tips`, `tracking_type`, `default_unit`. `aliases` populated on 56/57 (only
-  *Seated Calf Raise* is empty — benign).
+  `tips`, `tracking_type`, `default_unit`. `aliases` populated on every row.
 - Reference tables intact: `workout_exercises` (369 rows, `exercise_id` nullable
   FK), `personal_records` (182, name-keyed), `user_exercises` (119, custom),
   `program_workouts` (47 JSONB), `workout_templates` (31 JSONB).
@@ -145,7 +147,7 @@ family — not boundaries. A different base movement OR a different
 `movement_pattern` is a different family. **Shared target muscle alone never makes
 a family.**
 
-For the curated 57, families are explicit (`FAMILY_BY_NAME`, keyed by normalized
+For the curated catalog (141 rows), families are explicit (`FAMILY_BY_NAME`, keyed by normalized
 name); uncurated/future exercises fall back to `movement_pattern + ':' + base
 token` so a newly-seeded exercise still gets a stable family.
 
@@ -264,7 +266,7 @@ consumes it.
 ## 12. Known limitations / deferred
 
 - **Catalog snapshot for tests:** `benchmarks/exercise-fixtures.js` mirrors the
-  live 57 rows; production loads from Supabase. Regenerate the fixture if the
+  live 141 rows; production loads from Supabase. Regenerate the fixture if the
   catalog changes (the id checksum guards drift).
 - **Picker integration shipped (Phase 4.2.1F):** `workout.html` now consumes the
   shared layer through `index.search()` (see §13); the old substring filter

@@ -90,8 +90,9 @@ test('incline never resolves to flat and vice-versa', () => {
 });
 
 test('a demanded hard variant absent from the catalog stays unresolved, never collapses', () => {
-  // Catalog has back/goblet squat but no front squat.
-  const r = resolve('front squat');
+  // Catalog now has front/back/goblet/smith squat, but no DECLINE squat — a hard
+  // modifier with no matching variant must not collapse onto another squat.
+  const r = resolve('decline squat');
   assert.equal(r.matchType, 'unresolved');
   assert.equal(r.canonicalExerciseId, null);
   assert.equal(r.reason, 'variant_not_in_catalog');
@@ -115,13 +116,13 @@ test('dumbbell shoulder press does not resolve to the barbell overhead press', (
   assert.notEqual(nameOf('dumbbell shoulder press'), 'Overhead Press');
 });
 
-test('assisted pull-up is NOT an exact alias of the unassisted pull-up', () => {
+test('assisted pull-up resolves to its own machine canonical (Phase 4.2.1G)', () => {
+  // Phase 4.2.1G added Assisted Pull-Up as a distinct machine station, so the
+  // assist is now an identity of its own record — not a soft variant of Pull-Up.
   const r = resolve('assisted pull-up');
-  assert.notEqual(r.matchType, 'exact_alias');
-  assert.notEqual(r.matchType, 'exact_canonical');
-  // it still points at the pull-up as an approximate/soft variant, low confidence
-  assert.equal(r.canonicalName, 'Pull-Up');
-  assert.equal(r.confidence, 'low');
+  assert.equal(r.canonicalName, 'Assisted Pull-Up');
+  assert.equal(r.matchType, 'exact_canonical');
+  assert.notEqual(r.canonicalExerciseId, byName['Pull-Up'].id);
 });
 
 /* ── Family model ────────────────────────────────────────────────────────── */
@@ -190,9 +191,12 @@ test('broad generic terms do not resolve to a single exact exercise', () => {
 });
 
 test('a generic term whose candidates are all one family reports that family', () => {
-  const r = resolve('row');
+  // "lunge" spans several lunge-family variants (walking/forward/lateral/reverse)
+  // but no other family, so it reports the family rather than bare ambiguity.
+  // ("row" is now cross-family ambiguous because Upright Row shares the token.)
+  const r = resolve('lunge');
   assert.equal(r.matchType, 'family');
-  assert.equal(r.exerciseFamily, 'row');
+  assert.equal(r.exerciseFamily, 'lunge');
 });
 
 test('a generic term spanning families reports ambiguous', () => {
@@ -276,7 +280,23 @@ test('the production catalog passes validation (no identity errors)', () => {
   const v = EX.validateExerciseCatalog(EXERCISE_CATALOG);
   assert.equal(v.ok, true);
   assert.equal(v.errors.length, 0);
-  assert.equal(v.counts.exercises, 57);
+  assert.equal(v.counts.exercises, 141); // Phase 4.2.1G expansion (57 → 141)
+  // The expansion introduces no name/equipment or laterality integrity warnings.
+  const noisy = v.warnings.filter((w) => w.code === 'equipment_name_mismatch' || w.code === 'laterality_name_mismatch');
+  assert.equal(noisy.length, 0);
+});
+
+test('validation flags name/equipment and laterality integrity problems (Phase 4.2.1G)', () => {
+  const v = EX.validateExerciseCatalog([
+    { id: '1', name: 'Dumbbell Thing', equipment: 'Barbell', primary_muscle: 'X' },      // name says dumbbell, tagged barbell
+    { id: '2', name: 'Single-Arm Press', equipment: 'Cable', primary_muscle: 'X', is_unilateral: false }, // says single-arm, not unilateral
+    { id: '3', name: 'Smith Machine Squat', equipment: 'Smith', primary_muscle: 'Quads' } // smith+machine in name, Smith equip → OK
+  ]);
+  const codes = v.warnings.map((w) => w.code);
+  assert.ok(codes.includes('equipment_name_mismatch'));
+  assert.ok(codes.includes('laterality_name_mismatch'));
+  // the legitimate "Smith Machine …" row must NOT be flagged
+  assert.ok(!v.warnings.some((w) => w.id === '3' && w.code === 'equipment_name_mismatch'));
 });
 
 test('validation flags invalid enums, missing names, duplicate + colliding aliases', () => {

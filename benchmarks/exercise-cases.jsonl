@@ -17,11 +17,11 @@
 { "id": "variant-incline-bench", "input": { "query": "incline bench" }, "expect": { "name": "Incline Bench Press" }, "tags": ["variant"] }
 { "id": "variant-incline-db-press", "input": { "query": "incline db press" }, "expect": { "name": "Incline Dumbbell Press" }, "tags": ["variant", "abbreviation"] }
 { "id": "variant-flat-bench-not-incline", "input": { "query": "flat bench" }, "expect": { "name": "Bench Press", "notName": "Incline Bench Press" }, "tags": ["variant"] }
-{ "id": "variant-front-squat-unresolved", "input": { "query": "front squat" }, "expect": { "unresolved": true, "notName": "Barbell Back Squat" }, "tags": ["variant", "not-in-catalog"] }
+{"id":"variant-front-squat","input":{"query":"front squat"},"expect":{"name":"Front Squat","matchType":"exact_canonical","notName":"Barbell Back Squat"},"tags":["variant","confirmed-miss"]}
 { "id": "variant-seated-row-not-barbell", "input": { "query": "seated row" }, "expect": { "name": "Seated Cable Row", "notName": "Barbell Row" }, "tags": ["variant"] }
 { "id": "variant-db-shoulder-press", "input": { "query": "dumbbell shoulder press" }, "expect": { "name": "Dumbbell Shoulder Press", "notName": "Overhead Press" }, "tags": ["variant"] }
-{ "id": "variant-assisted-pullup-approx", "input": { "query": "assisted pull-up" }, "expect": { "name": "Pull-Up", "notMatchType": "exact_alias", "confidence": "low" }, "tags": ["variant", "soft-modifier"] }
-{ "id": "family-row", "input": { "query": "row" }, "expect": { "matchType": "family", "family": "row", "unresolvedId": true }, "tags": ["ambiguity", "family"] }
+{"id":"assisted-pullup-canonical","input":{"query":"assisted pull-up"},"expect":{"name":"Assisted Pull-Up","matchType":"exact_canonical"},"tags":["variant"]}
+{"id":"family-row","input":{"query":"row"},"expect":{"matchTypeIn":["family","ambiguous"],"unresolvedId":true},"tags":["ambiguity","family"]}
 { "id": "ambiguous-press", "input": { "query": "press" }, "expect": { "matchType": "ambiguous", "unresolvedId": true }, "tags": ["ambiguity"] }
 { "id": "ambiguous-curl", "input": { "query": "curl" }, "expect": { "matchType": "ambiguous", "unresolvedId": true }, "tags": ["ambiguity"] }
 { "id": "ambiguous-extension", "input": { "query": "extension" }, "expect": { "matchTypeIn": ["ambiguous", "family"], "unresolvedId": true }, "tags": ["ambiguity"] }
@@ -44,8 +44,8 @@
 { "id": "picker-romanian-top", "input": { "query": "romanian deadlift" }, "expect": { "searchTop": "Romanian Deadlift" }, "tags": ["picker"] }
 { "id": "picker-lat-pulldown-top", "input": { "query": "lat pull-down" }, "expect": { "searchTop": "Lat Pulldown" }, "tags": ["picker", "hyphen"] }
 { "id": "picker-pullup-top", "input": { "query": "pullup" }, "expect": { "searchTop": "Pull-Up" }, "tags": ["picker"] }
-{ "id": "picker-assisted-pullup-approx", "input": { "query": "assisted pull-up" }, "expect": { "searchTop": "Pull-Up", "searchNoExact": true }, "tags": ["picker", "variant"] }
-{ "id": "picker-front-squat-no-exact", "input": { "query": "front squat" }, "expect": { "searchNoExact": true }, "tags": ["picker", "variant"] }
+{"id":"picker-assisted-pullup-top","input":{"query":"assisted pull-up"},"expect":{"searchTop":"Assisted Pull-Up"},"tags":["picker"]}
+{"id":"picker-front-squat-top","input":{"query":"front squat"},"expect":{"searchTop":"Front Squat","searchTopNot":"Barbell Back Squat"},"tags":["picker","variant"]}
 { "id": "picker-incline-db-top", "input": { "query": "incline dumbbell press" }, "expect": { "searchTop": "Incline Dumbbell Press", "searchTopNot": "Dumbbell Press" }, "tags": ["picker", "variant"] }
 { "id": "picker-seated-cable-row-top", "input": { "query": "seated cable row" }, "expect": { "searchTop": "Seated Cable Row" }, "tags": ["picker"] }
 { "id": "picker-seated-row-not-barbell", "input": { "query": "seated row" }, "expect": { "searchTop": "Seated Cable Row", "searchTopNot": "Barbell Row" }, "tags": ["picker", "variant"] }
@@ -53,6 +53,80 @@
 { "id": "picker-press-ambiguous", "input": { "query": "press" }, "expect": { "searchMinResults": 3 }, "tags": ["picker", "ambiguity"] }
 { "id": "picker-curl-ambiguous", "input": { "query": "curl" }, "expect": { "searchMinResults": 3, "searchIncludes": ["Barbell Curl", "Hammer Curl"] }, "tags": ["picker", "ambiguity"] }
 { "id": "picker-db-shoulder-press-top", "input": { "query": "DB shoulder press" }, "expect": { "searchTop": "Dumbbell Shoulder Press", "searchTopNot": "Overhead Press" }, "tags": ["picker", "variant"] }
-{ "id": "picker-smith-squat-no-exact", "input": { "query": "smith squat" }, "expect": { "searchNoExact": true }, "tags": ["picker", "not-in-catalog"] }
+{"id":"picker-smith-squat-top","input":{"query":"smith squat"},"expect":{"searchTop":"Smith Machine Squat","searchTopNot":"Barbell Back Squat"},"tags":["picker","variant"]}
 { "id": "picker-flat-bench-top", "input": { "query": "flat bench" }, "expect": { "searchTop": "Bench Press", "searchTopNot": "Incline Bench Press" }, "tags": ["picker", "variant"] }
 { "id": "picker-single-arm-row", "input": { "query": "single arm row" }, "expect": { "searchTopNot": "Barbell Row" }, "tags": ["picker", "variant"] }
+{"id":"g-barbell-front-squat","input":{"query":"barbell front squat"},"expect":{"name":"Front Squat","matchType":"exact_alias"},"tags":["confirmed-miss"]}
+{"id":"g-smith-squat","input":{"query":"smith squat"},"expect":{"name":"Smith Machine Squat","matchType":"exact_alias","notName":"Barbell Back Squat"},"tags":["confirmed-miss","variant"]}
+{"id":"g-smith-machine-squat","input":{"query":"smith machine squat"},"expect":{"name":"Smith Machine Squat","matchType":"exact_canonical"},"tags":["smith"]}
+{"id":"g-hack-squat","input":{"query":"hack squat"},"expect":{"name":"Hack Squat","matchType":"exact_canonical"},"tags":["machine"]}
+{"id":"g-dumbbell-squat","input":{"query":"dumbbell squat"},"expect":{"name":"Dumbbell Squat","matchType":"exact_canonical"},"tags":["dumbbell"]}
+{"id":"g-bodyweight-squat","input":{"query":"bodyweight squat"},"expect":{"name":"Bodyweight Squat","matchType":"exact_canonical"},"tags":["bodyweight"]}
+{"id":"g-air-squat","input":{"query":"air squat"},"expect":{"name":"Bodyweight Squat","matchType":"exact_alias"},"tags":["bodyweight","alias"]}
+{"id":"g-single-arm-cable-row","input":{"query":"single arm cable row"},"expect":{"name":"Single-Arm Cable Row","matchType":"exact_canonical","notName":"Seated Cable Row"},"tags":["unilateral","confirmed-miss"]}
+{"id":"g-one-arm-cable-row","input":{"query":"one arm cable row"},"expect":{"name":"Single-Arm Cable Row","matchType":"exact_alias"},"tags":["unilateral"]}
+{"id":"g-single-arm-dumbbell-row","input":{"query":"single arm dumbbell row"},"expect":{"name":"Dumbbell Row","matchType":"exact_alias"},"tags":["unilateral"]}
+{"id":"g-one-arm-dumbbell-row","input":{"query":"one arm dumbbell row"},"expect":{"name":"Dumbbell Row","matchType":"exact_alias"},"tags":["unilateral"]}
+{"id":"g-chest-supported-row","input":{"query":"chest supported row"},"expect":{"name":"Chest-Supported Row","matchType":"exact_canonical"},"tags":["machine"]}
+{"id":"g-chest-supported-db-row","input":{"query":"chest supported dumbbell row"},"expect":{"name":"Chest-Supported Dumbbell Row","matchType":"exact_canonical","notName":"Dumbbell Row"},"tags":["confirmed-miss"]}
+{"id":"g-tbar-row","input":{"query":"t bar row"},"expect":{"name":"T-Bar Row","matchType":"exact_canonical"},"tags":["barbell"]}
+{"id":"g-landmine-row","input":{"query":"landmine row"},"expect":{"name":"T-Bar Row","matchType":"exact_alias"},"tags":["alias"]}
+{"id":"g-pendlay-row","input":{"query":"pendlay row"},"expect":{"name":"Pendlay Row","matchType":"exact_canonical"},"tags":["barbell"]}
+{"id":"g-inverted-row","input":{"query":"inverted row"},"expect":{"name":"Inverted Row","matchType":"exact_canonical"},"tags":["bodyweight"]}
+{"id":"g-smith-row","input":{"query":"smith machine row"},"expect":{"name":"Smith Machine Row","matchType":"exact_canonical"},"tags":["smith"]}
+{"id":"picker-single-arm-cable-row","input":{"query":"single arm cable row"},"expect":{"searchTop":"Single-Arm Cable Row","searchTopNot":"Seated Cable Row"},"tags":["picker","unilateral"]}
+{"id":"g-machine-chest-press","input":{"query":"machine chest press"},"expect":{"name":"Machine Chest Press","matchType":"exact_canonical","notName":"Dumbbell Press"},"tags":["confirmed-miss"]}
+{"id":"g-smith-bench","input":{"query":"smith machine bench press"},"expect":{"name":"Smith Machine Bench Press","matchType":"exact_canonical","notName":"Bench Press"},"tags":["smith"]}
+{"id":"g-smith-bench-alias","input":{"query":"smith bench"},"expect":{"name":"Smith Machine Bench Press","matchType":"exact_alias"},"tags":["smith","alias"]}
+{"id":"g-decline-bench","input":{"query":"decline bench press"},"expect":{"name":"Decline Bench Press","matchType":"exact_canonical"},"tags":["barbell"]}
+{"id":"g-close-grip-bench","input":{"query":"close grip bench press"},"expect":{"name":"Close-Grip Bench Press","matchType":"exact_canonical"},"tags":["barbell"]}
+{"id":"g-machine-shoulder-press","input":{"query":"machine shoulder press"},"expect":{"name":"Machine Shoulder Press","matchType":"exact_canonical","notName":"Dumbbell Shoulder Press"},"tags":["confirmed-miss"]}
+{"id":"g-smith-shoulder-press","input":{"query":"smith machine shoulder press"},"expect":{"name":"Smith Machine Shoulder Press","matchType":"exact_canonical"},"tags":["smith"]}
+{"id":"g-arnold-press","input":{"query":"arnold press"},"expect":{"name":"Arnold Press","matchType":"exact_canonical"},"tags":["dumbbell"]}
+{"id":"g-shoulder-press-ambiguous","input":{"query":"shoulder press"},"expect":{"matchTypeIn":["family","ambiguous"],"unresolvedId":true},"tags":["ambiguity"]}
+{"id":"picker-machine-chest-press","input":{"query":"machine chest press"},"expect":{"searchTop":"Machine Chest Press","searchTopNot":"Dumbbell Press"},"tags":["picker"]}
+{"id":"g-close-grip-pulldown","input":{"query":"close grip lat pulldown"},"expect":{"name":"Close-Grip Lat Pulldown","matchType":"exact_canonical"},"tags":["cable"]}
+{"id":"g-wide-grip-pulldown","input":{"query":"wide grip lat pulldown"},"expect":{"name":"Wide-Grip Lat Pulldown","matchType":"exact_canonical"},"tags":["cable"]}
+{"id":"g-single-arm-pulldown","input":{"query":"single arm lat pulldown"},"expect":{"name":"Single-Arm Lat Pulldown","matchType":"exact_canonical"},"tags":["unilateral"]}
+{"id":"g-cable-pullover","input":{"query":"cable pullover"},"expect":{"name":"Cable Pullover","matchType":"exact_canonical"},"tags":["cable"]}
+{"id":"g-sumo-deadlift","input":{"query":"sumo deadlift"},"expect":{"name":"Sumo Deadlift","matchType":"exact_canonical"},"tags":["barbell"]}
+{"id":"g-stiff-leg-deadlift","input":{"query":"stiff leg deadlift"},"expect":{"name":"Stiff-Leg Deadlift","matchType":"exact_canonical"},"tags":["barbell"]}
+{"id":"g-db-rdl","input":{"query":"dumbbell romanian deadlift"},"expect":{"name":"Dumbbell Romanian Deadlift","matchType":"exact_canonical"},"tags":["dumbbell"]}
+{"id":"g-single-leg-rdl","input":{"query":"single leg romanian deadlift"},"expect":{"name":"Single-Leg Romanian Deadlift","matchType":"exact_canonical"},"tags":["unilateral"]}
+{"id":"g-good-morning","input":{"query":"good morning"},"expect":{"name":"Good Morning","matchType":"exact_canonical"},"tags":["barbell"]}
+{"id":"g-back-extension","input":{"query":"hyperextension"},"expect":{"name":"Back Extension","matchType":"exact_alias"},"tags":["alias"]}
+{"id":"g-kb-swing","input":{"query":"kettlebell swing"},"expect":{"name":"Kettlebell Swing","matchType":"exact_canonical"},"tags":["kettlebell"]}
+{"id":"g-machine-hip-thrust","input":{"query":"machine hip thrust"},"expect":{"name":"Machine Hip Thrust","matchType":"exact_canonical"},"tags":["machine"]}
+{"id":"g-glute-bridge","input":{"query":"glute bridge"},"expect":{"name":"Glute Bridge","matchType":"exact_canonical"},"tags":["bodyweight"]}
+{"id":"g-preacher-curl","input":{"query":"preacher curl"},"expect":{"name":"Preacher Curl","matchType":"exact_canonical"},"tags":["biceps"]}
+{"id":"g-concentration-curl","input":{"query":"concentration curl"},"expect":{"name":"Concentration Curl","matchType":"exact_canonical"},"tags":["unilateral"]}
+{"id":"g-reverse-curl","input":{"query":"reverse curl"},"expect":{"name":"Reverse Curl","matchType":"exact_canonical"},"tags":["biceps"]}
+{"id":"g-rope-pushdown","input":{"query":"rope pushdown"},"expect":{"name":"Rope Pushdown","matchType":"exact_canonical"},"tags":["triceps","split"]}
+{"id":"g-overhead-cable-ext","input":{"query":"overhead cable triceps extension"},"expect":{"name":"Overhead Cable Triceps Extension","matchType":"exact_canonical"},"tags":["triceps"]}
+{"id":"g-single-arm-pushdown","input":{"query":"single arm triceps pushdown"},"expect":{"name":"Single-Arm Triceps Pushdown","matchType":"exact_canonical"},"tags":["unilateral"]}
+{"id":"g-seated-leg-curl","input":{"query":"seated leg curl"},"expect":{"name":"Seated Leg Curl","matchType":"exact_canonical","notName":"Leg Extension"},"tags":["machine","split"]}
+{"id":"g-lying-leg-curl","input":{"query":"lying leg curl"},"expect":{"name":"Lying Leg Curl","matchType":"exact_canonical"},"tags":["machine","split"]}
+{"id":"g-leg-curl-not-extension","input":{"query":"leg curl"},"expect":{"name":"Leg Curl","notName":"Leg Extension"},"tags":["negative"]}
+{"id":"g-hip-adduction","input":{"query":"hip adduction"},"expect":{"name":"Hip Adduction","matchType":"exact_canonical","notName":"Seated Hip Abduction"},"tags":["confirmed-miss","negative"]}
+{"id":"g-hip-abduction-not-adduction","input":{"query":"hip abduction"},"expect":{"unresolvedId":true,"notName":"Hip Adduction"},"tags":["negative"]}
+{"id":"g-leg-press-calf-raise","input":{"query":"leg press calf raise"},"expect":{"name":"Leg Press Calf Raise","matchType":"exact_canonical"},"tags":["machine"]}
+{"id":"g-cable-lateral-raise","input":{"query":"cable lateral raise"},"expect":{"name":"Cable Lateral Raise","matchType":"exact_canonical"},"tags":["cable"]}
+{"id":"g-upright-row","input":{"query":"upright row"},"expect":{"name":"Upright Row","matchType":"exact_canonical"},"tags":["barbell"]}
+{"id":"g-rear-delt-fly","input":{"query":"rear delt fly"},"expect":{"name":"Rear Delt Fly","matchType":"exact_canonical"},"tags":["dumbbell"]}
+{"id":"g-barbell-shrug","input":{"query":"barbell shrug"},"expect":{"name":"Barbell Shrug","matchType":"exact_canonical"},"tags":["barbell"]}
+{"id":"g-pistol-squat","input":{"query":"pistol squat"},"expect":{"name":"Pistol Squat","matchType":"exact_canonical"},"tags":["bodyweight"]}
+{"id":"g-walking-lunge","input":{"query":"walking lunge"},"expect":{"name":"Walking Lunge","matchType":"exact_canonical"},"tags":["dumbbell"]}
+{"id":"g-incline-push-up","input":{"query":"incline push up"},"expect":{"name":"Incline Push-Up","matchType":"exact_canonical"},"tags":["bodyweight"]}
+{"id":"g-band-row","input":{"query":"band row"},"expect":{"name":"Band Row","matchType":"exact_canonical"},"tags":["band"]}
+{"id":"g-band-chest-press","input":{"query":"band chest press"},"expect":{"name":"Band Chest Press","matchType":"exact_canonical"},"tags":["band"]}
+{"id":"g-band-lateral-raise","input":{"query":"band lateral raise"},"expect":{"name":"Band Lateral Raise","matchType":"exact_canonical"},"tags":["band"]}
+{"id":"g-band-bicep-curl","input":{"query":"band bicep curl"},"expect":{"name":"Band Bicep Curl","matchType":"exact_canonical"},"tags":["band"]}
+{"id":"g-band-triceps-extension","input":{"query":"band triceps extension"},"expect":{"name":"Band Triceps Extension","matchType":"exact_canonical"},"tags":["band"]}
+{"id":"g-band-pull-apart","input":{"query":"band pull apart"},"expect":{"name":"Band Pull-Apart","matchType":"exact_canonical"},"tags":["band"]}
+{"id":"g-cable-crunch","input":{"query":"cable crunch"},"expect":{"name":"Cable Crunch","matchType":"exact_canonical"},"tags":["core"]}
+{"id":"g-hanging-leg-raise","input":{"query":"hanging leg raise"},"expect":{"name":"Hanging Leg Raise","matchType":"exact_canonical","notName":"Hanging Knee Raise"},"tags":["core","split"]}
+{"id":"g-side-plank","input":{"query":"side plank"},"expect":{"name":"Side Plank","matchType":"exact_canonical"},"tags":["core"]}
+{"id":"g-ab-wheel","input":{"query":"ab wheel rollout"},"expect":{"name":"Ab Wheel Rollout","matchType":"exact_canonical"},"tags":["core"]}
+{"id":"g-dumbbell-fly","input":{"query":"dumbbell fly"},"expect":{"name":"Dumbbell Fly","matchType":"exact_canonical"},"tags":["dumbbell"]}
+{"id":"g-pec-deck","input":{"query":"pec deck"},"expect":{"name":"Pec Deck","matchType":"exact_canonical"},"tags":["machine"]}
+{"id":"g-fly-still-cable","input":{"query":"fly"},"expect":{"name":"Cable Fly"},"tags":["parity"]}

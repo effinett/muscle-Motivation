@@ -392,14 +392,18 @@ Browser global `ExerciseIntelligence` + guarded `module.exports` (same pattern a
 - **Catalog-injected, never catalog-owning.** Resolution runs over a catalog of
   `exercises`-row records passed IN (the DB stays the runtime source of truth);
   the module keys off the SAME stable `exercises.id`, so a `canonicalExerciseId`
-  it returns equals the production id. No migration shipped — the 57-row metadata
-  backfill was already applied (id checksum `53db1ebbc332b2ccee9ee0ebb726166a`).
+  it returns equals the production id. The catalog was expanded from 57 to **141
+  curated rows** in **Phase 4.2.1G** (Smith/machine/cable/dumbbell/bodyweight/band
+  staples, unilateral variants, confirmed picker misses like front squat); id-set
+  checksum `3f740fb4f3466d3e15aee5718f4a910e`. The benchmark fixture
+  (`benchmarks/exercise-fixtures.js`) mirrors the DB id-for-id.
 - **One shared taxonomy** (movement patterns, equipment, force/difficulty/
   tracking enums), **normalization** (`normalizeExerciseName`/
   `buildExerciseLookupKey`), **alias + variant resolution** with a HARD-modifier
-  variant guard (incline never collapses to flat, `front squat` → `unresolved`
-  not back squat, `assisted pull-up` is an approximate variant not an exact
-  alias), a curated **family model** (base movement + intent, never muscle-only),
+  variant guard (incline never collapses to flat; a demanded hard variant the
+  catalog lacks — e.g. `decline squat` — stays `unresolved`, never another squat;
+  base-token superset keeps `single-arm cable row` off the bilateral row), a
+  curated **family model** (base movement + intent, never muscle-only),
   a conservative directional **relationship graph** (equipment-substitution /
   variant / progression / regression / same-pattern-alternative; isolation gets
   no cross-family net), and deterministic **validation**.
@@ -413,11 +417,12 @@ Browser global `ExerciseIntelligence` + guarded `module.exports` (same pattern a
   `workout_exercises.exercise_id` and always saves the canonical name (never alias/
   search text). Broad/ambiguous terms show a chooser and never auto-select; a
   demanded hard variant absent from the catalog stays `unresolved` (no false
-  exact). Details in `docs/exercise-intelligence-foundation.md` §13. PR/history
-  id-migration (Phase 6) and catalog expansion (**Phase 4.2.1G**) are the next
-  consumers/steps — out of 4.2.1F by design. Covered by `exercise-core.test.js`,
-  `exercise-search.test.js`, and the `benchmarks/exercise-cases.jsonl` corpus
-  (incl. `picker`-tagged search cases).
+  exact). Details in `docs/exercise-intelligence-foundation.md` §13. Catalog
+  expansion (**Phase 4.2.1G**) shipped; PR/history `exercise_id` migration
+  (Phase 6) remains the next step — deliberately deferred (no historical rewrite
+  in 4.2.1G). Covered by `exercise-core.test.js`, `exercise-search.test.js`, and
+  the `benchmarks/exercise-cases.jsonl` corpus (incl. `picker`-tagged search cases
+  and Phase 4.2.1G collision/negative-boundary cases).
 
 ---
 
