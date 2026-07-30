@@ -925,6 +925,11 @@
      membership + search-plus-filter composition for the picker. Loads after
      exercise-core (reuses its normalization/equipment vocab). -->
 <script src="exercise-filters.js"></script>
+<!-- Shared exercise-logging reliability core (Phase 4.2.1J) — ID-first logged
+     identity (previous-performance/history/live-PR), chronological previous-
+     session selection, and set-value sanitization. Loads after exercise-core
+     (reuses its normalizer) and before the inline consumer below. -->
+<script src="exercise-log.js"></script>
 <script>
   var currentUser     = null;
   var currentWorkout  = null;
@@ -1350,12 +1355,12 @@
   async function loadExercisesForWorkout(workoutId) {
     var { data: wexs } = await supabaseClient
       .from('workout_exercises')
-      .select('id, exercise_name, order_index, workout_sets(*)')
+      .select('id, exercise_name, exercise_id, order_index, workout_sets(*)')
       .eq('workout_id', workoutId).order('order_index');
     if (!wexs) return;
     exercises = wexs.map(function(we) {
       return {
-        id: we.id, name: we.exercise_name, order_index: we.order_index,
+        id: we.id, name: we.exercise_name, exercise_id: we.exercise_id, order_index: we.order_index,
         last_perf: null, last_weight: null, last_reps: null,
         sets: (we.workout_sets || [])
           .sort(function(a, b) { return a.set_number - b.set_number; })
@@ -1371,15 +1376,48 @@
     await applyTemplateRanges(currentWorkout.program_slug, currentWorkout.session_key);
   }
 
+  // Return this exercise's matching workout_exercises rows across the user's
+  // history, ID-FIRST via the shared ExerciseLog identity core: a canonical
+  // exercise matches by stable exercises.id (plus legacy NULL rows carrying its
+  // canonical name); a custom/free-typed exercise matches by name and never
+  // inherits a canonical's history. RLS scopes every row to the current user.
+  // Non-fatal — returns [] so the convenience features degrade cleanly.
+  async function loadLoggedMatches(ex) {
+    try {
+      var buckets = [];
+      if (ex.exercise_id != null) {
+        var r1 = await supabaseClient
+          .from('workout_exercises').select('id, workout_id, exercise_name, exercise_id')
+          .eq('exercise_id', ex.exercise_id);
+        if (r1.data) buckets = buckets.concat(r1.data);
+      }
+      var r2 = await supabaseClient
+        .from('workout_exercises').select('id, workout_id, exercise_name, exercise_id')
+        .eq('exercise_name', ex.name);
+      if (r2.data) buckets = buckets.concat(r2.data);
+      var seen = {}, rows = [];
+      buckets.forEach(function(w) { if (!seen[w.id]) { seen[w.id] = 1; rows.push(w); } });
+      if (typeof ExerciseLog === 'undefined') {
+        // Degrade to legacy id-or-name matching if the module failed to load.
+        return rows.filter(function(w) {
+          return (ex.exercise_id != null && w.exercise_id === ex.exercise_id) || w.exercise_name === ex.name;
+        });
+      }
+      return ExerciseLog.filterLoggedMatches(
+        { exerciseId: ex.exercise_id != null ? ex.exercise_id : null, name: ex.name }, rows);
+    } catch (e) {
+      return [];
+    }
+  }
+
   async function loadLastPerf(ex) {
     try {
-      var { data: wexs } = await supabaseClient
-        .from('workout_exercises').select('id, workout_id').eq('exercise_name', ex.name);
-      if (!wexs || wexs.length === 0) return;
+      var wexs = await loadLoggedMatches(ex);
+      if (!wexs.length) return;
       var ids = [...new Set(wexs.map(function(we) { return we.workout_id; }))];
       var { data: ws } = await supabaseClient
         .from('workouts').select('id').eq('user_id', currentUser.id).eq('completed', true)
-        .in('id', ids).order('created_at', { ascending: false }).limit(1).maybeSingle();
+        .in('id', ids).order('date', { ascending: false }).order('created_at', { ascending: false }).limit(1).maybeSingle();
       if (!ws) return;
       var lastWex = wexs.find(function(we) { return we.workout_id === ws.id; });
       if (!lastWex) return;
@@ -1406,15 +1444,14 @@
   async function loadExerciseHistory(ex, limitSessions) {
     ex.history = [];
     try {
-      var { data: wexs } = await supabaseClient
-        .from('workout_exercises').select('id, workout_id')
-        .eq('exercise_name', ex.name);
-      if (!wexs || wexs.length === 0) return;
+      var wexs = await loadLoggedMatches(ex);
+      if (!wexs.length) return;
       var ids = [...new Set(wexs.map(function(w) { return w.workout_id; }))];
       var { data: ws } = await supabaseClient
         .from('workouts').select('id, created_at')
         .eq('user_id', currentUser.id).eq('completed', true)
         .in('id', ids)
+        .order('date', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(limitSessions || 6);
       if (!ws || ws.length === 0) return;
@@ -1903,64 +1940,82 @@
   // re-deriving from the name so alias-driven selections still stamp the exact
   // production identity; libraryExerciseId(name) is the fallback.
   async function selectExercise(name, pickedId) {
-    closePicker();
-    var canonicalId = resolvePickedId(name, pickedId);
-    // Save any brand-new (non-library) exercise to the user's library so it's
-    // reusable later. Dedupes internally — global/known names are no-ops.
-    await saveUserExercise(name);
-    // Template builder reuses this same picker — route the pick into the draft
-    // instead of the live workout.
-    if (pickerMode === 'template') { addTemplateExercise(name, canonicalId); return; }
-    var orderIndex = exercises.length;
-    var { data, error } = await supabaseClient
-      .from('workout_exercises')
-      .insert({ workout_id: currentWorkout.id, exercise_name: name, order_index: orderIndex,
-                exercise_id: canonicalId })
-      .select().single();
-    if (error) { showToast('Error adding exercise.'); return; }
-    var ex = { id: data.id, name: name, order_index: orderIndex, last_perf: null, last_weight: null, last_reps: null, sets: [], history: [] };
-    await Promise.all([loadLastPerf(ex), loadExerciseHistory(ex)]);
-    exercises.push(ex);
-    // Pre-create the recommended number of straight sets, each pre-filled with
-    // the recommended weight (reps blank). addSet seeds the first from the
-    // recommendation and copies the weight forward.
-    var rec = recForExercise(ex);
-    var nSets = (rec && rec.recommendedSets) ? rec.recommendedSets : 1;
-    for (var k = 0; k < nSets; k++) await addSet(exercises.length - 1);
+    if (!beginAction('select')) return;   // block a rapid double-pick
+    try {
+      closePicker();
+      var canonicalId = resolvePickedId(name, pickedId);
+      // Save any brand-new (non-library) exercise to the user's library so it's
+      // reusable later. Dedupes internally — global/known names are no-ops.
+      await saveUserExercise(name);
+      // Template builder reuses this same picker — route the pick into the draft
+      // instead of the live workout.
+      if (pickerMode === 'template') { addTemplateExercise(name, canonicalId); return; }
+      var orderIndex = exercises.length;
+      var { data, error } = await supabaseClient
+        .from('workout_exercises')
+        .insert({ workout_id: currentWorkout.id, exercise_name: name, order_index: orderIndex,
+                  exercise_id: canonicalId })
+        .select().single();
+      if (error) { showToast('Error adding exercise.'); return; }
+      var ex = { id: data.id, name: name, exercise_id: canonicalId, order_index: orderIndex, last_perf: null, last_weight: null, last_reps: null, sets: [], history: [] };
+      await Promise.all([loadLastPerf(ex), loadExerciseHistory(ex)]);
+      exercises.push(ex);
+      // Pre-create the recommended number of straight sets, each pre-filled with
+      // the recommended weight (reps blank). addSet seeds the first from the
+      // recommendation and copies the weight forward.
+      var rec = recForExercise(ex);
+      var nSets = (rec && rec.recommendedSets) ? rec.recommendedSets : 1;
+      for (var k = 0; k < nSets; k++) await addSet(exercises.length - 1);
+    } finally {
+      endAction('select');
+    }
   }
 
   async function removeExercise(id, exIdx) {
-    var { error } = await supabaseClient.from('workout_exercises').delete().eq('id', id);
-    if (error) { showToast('Error removing exercise.'); return; }
-    exercises.splice(exIdx, 1);
-    renderExercises();
+    var lockKey = 'rmex:' + id;
+    if (!beginAction(lockKey)) return;   // block a rapid double-tap on remove
+    try {
+      var { error } = await supabaseClient.from('workout_exercises').delete().eq('id', id);
+      if (error) { showToast('Error removing exercise.'); return; }
+      exercises.splice(exIdx, 1);
+      renderExercises();
+    } finally {
+      endAction(lockKey);
+    }
   }
 
   // ── Sets ──────────────────────────────────────────────────────────
   async function addSet(exIdx) {
     var ex = exercises[exIdx];
-    var setNum = ex.sets.length + 1;
-    // Reps are ALWAYS left blank (the measured result the user enters). Weight is
-    // pre-filled: the first set takes the engine recommendation, later sets copy
-    // the previous set's weight only (straight-sets model).
-    var weight = null;
-    if (ex.sets.length > 0) {
-      weight = ex.sets[ex.sets.length - 1].weight_lbs;
-    } else {
-      var rec = recForExercise(ex);
-      weight = rec ? rec.recommendedWeight : null;
+    if (!ex) return;
+    var lockKey = 'addset:' + ex.id;
+    if (!beginAction(lockKey)) return;   // block a rapid double-tap on Add Set
+    try {
+      var setNum = ex.sets.length + 1;
+      // Reps are ALWAYS left blank (the measured result the user enters). Weight is
+      // pre-filled: the first set takes the engine recommendation, later sets copy
+      // the previous set's weight only (straight-sets model).
+      var weight = null;
+      if (ex.sets.length > 0) {
+        weight = ex.sets[ex.sets.length - 1].weight_lbs;
+      } else {
+        var rec = recForExercise(ex);
+        weight = rec ? rec.recommendedWeight : null;
+      }
+      var { data, error } = await supabaseClient
+        .from('workout_sets')
+        .insert({ workout_exercise_id: ex.id, set_number: setNum, weight_lbs: weight, reps: null, completed: false })
+        .select().single();
+      if (error) { showToast('Error adding set.'); return; }
+      ex.sets.push({ id: data.id, set_number: setNum, weight_lbs: weight, reps: null, completed: false });
+      renderExercises();
+      setTimeout(function() {
+        var el = document.getElementById('ex-' + ex.id);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 60);
+    } finally {
+      endAction(lockKey);
     }
-    var { data, error } = await supabaseClient
-      .from('workout_sets')
-      .insert({ workout_exercise_id: ex.id, set_number: setNum, weight_lbs: weight, reps: null, completed: false })
-      .select().single();
-    if (error) { showToast('Error adding set.'); return; }
-    ex.sets.push({ id: data.id, set_number: setNum, weight_lbs: weight, reps: null, completed: false });
-    renderExercises();
-    setTimeout(function() {
-      var el = document.getElementById('ex-' + ex.id);
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }, 60);
   }
 
   async function deleteSet(setId, exIdx, setIdx) {
@@ -1978,8 +2033,14 @@
   }
 
   async function updateSet(setId, exIdx, setIdx, field, value) {
-    var parsed = value !== '' ? parseFloat(value) : null;
     var s = exercises[exIdx].sets[setIdx];
+    // Sanitize at the persistence boundary: blank stays blank, zero and decimals
+    // are preserved, but NaN/Infinity/negative/malformed never reach the DB.
+    var sane = (typeof ExerciseLog !== 'undefined')
+      ? ExerciseLog.sanitizeSetField(field, value)
+      : { value: (value !== '' ? parseFloat(value) : null), valid: true };
+    if (!sane.valid) showToast('Enter a valid number.');
+    var parsed = sane.value;
     s[field] = parsed;
     var update = {};
     update[field] = parsed;
@@ -2052,9 +2113,8 @@
     var st = { everLogged: false, firstCelebrated: false,
                heaviestWeight: null, bestVolume: null, bestE1rm: null, repsAtWeight: {} };
     try {
-      var { data: wexs } = await supabaseClient
-        .from('workout_exercises').select('id, workout_id').eq('exercise_name', ex.name);
-      if (!wexs || !wexs.length) return st;
+      var wexs = await loadLoggedMatches(ex);
+      if (!wexs.length) return st;
       var ids = [...new Set(wexs.map(function(w) { return w.workout_id; }))];
       var { data: ws } = await supabaseClient
         .from('workouts').select('id')
@@ -2145,12 +2205,36 @@
   function closeFinishModal() { document.getElementById('finishModal').classList.remove('open'); }
   function onFinishBgClick(e) { if (e.target === document.getElementById('finishModal')) closeFinishModal(); }
 
+  // ── Duplicate-submit protection (Phase 4.2.1J) ────────────────────────────
+  // Persistence is incremental (each add/edit writes immediately), so the real
+  // duplication risk is a rapid double-tap firing the SAME insert/update twice.
+  // A tiny in-flight lock keyed per action makes these idempotent without
+  // changing the save model.
+  var _inFlight = {};
+  function beginAction(key) {
+    if (_inFlight[key]) return false;
+    _inFlight[key] = true;
+    return true;
+  }
+  function endAction(key) { delete _inFlight[key]; }
+
   async function finishWorkout() {
+    if (!beginAction('finish')) return;   // block rapid double-taps on Finish
     var key     = 'wkt_start_' + currentWorkout.id;
     var elapsed = Math.floor((Date.now() - parseInt(localStorage.getItem(key) || Date.now())) / 60000);
-    var { error } = await supabaseClient
-      .from('workouts').update({ completed: true, duration_minutes: elapsed }).eq('id', currentWorkout.id);
-    if (error) { showToast('Error saving — try again.'); return; }
+    // Optimistic state transition: only an ACTIVE (completed=false) workout can
+    // be finished. If another tab already completed it, zero rows update — treat
+    // it as already done and never double-run PR detection / progression.
+    var { data: updated, error } = await supabaseClient
+      .from('workouts').update({ completed: true, duration_minutes: elapsed })
+      .eq('id', currentWorkout.id).eq('completed', false).select('id');
+    if (error) { showToast('Error saving — try again.'); endAction('finish'); return; }
+    if (!updated || !updated.length) {
+      // Already completed elsewhere — go straight to the recap, no re-processing.
+      showToast('This workout was already finished.');
+      window.location.href = 'workout-complete.html?workout_id=' + currentWorkout.id;
+      return;
+    }
     if (timerInterval) clearInterval(timerInterval);
     stopRest();
     // PR detection (Phase 3) — runs after the workout is marked complete so the
@@ -2303,7 +2387,7 @@
                   exercise_id: (ex.exercise_id != null ? ex.exercise_id : libraryExerciseId(ex.name)) })
           .select().single();
         if (!we) continue;
-        var newEx = { id: we.id, name: ex.name, order_index: i, last_perf: null, last_weight: null, last_reps: null, sets: [],
+        var newEx = { id: we.id, name: ex.name, exercise_id: we.exercise_id, order_index: i, last_perf: null, last_weight: null, last_reps: null, sets: [],
           history: [], reps_low: ex.reps_low, reps_high: ex.reps_high, target_sets: ex.sets };
         await Promise.all([loadLastPerf(newEx), loadExerciseHistory(newEx)]);
         exercises.push(newEx);

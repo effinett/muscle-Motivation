@@ -183,8 +183,17 @@ async function saveHistoryEdit(workoutId, wIdx) {
         var s = sets[j];
         var wEl = document.getElementById('hs-w-' + s.id);
         var rEl = document.getElementById('hs-r-' + s.id);
-        var newWeight = (wEl && wEl.value !== '') ? parseFloat(wEl.value) : null;
-        var newReps   = (rEl && rEl.value !== '') ? parseInt(rEl.value, 10) : null;
+        // Sanitize at the persistence boundary (Phase 4.2.1J): blank stays
+        // blank, decimals preserved on weight, reps kept whole; NaN/Infinity/
+        // negative/malformed never overwrite a saved set.
+        var newWeight, newReps;
+        if (typeof ExerciseLog !== 'undefined') {
+          newWeight = ExerciseLog.sanitizeWeight(wEl ? wEl.value : '').value;
+          newReps   = ExerciseLog.sanitizeReps(rEl ? rEl.value : '').value;
+        } else {
+          newWeight = (wEl && wEl.value !== '') ? parseFloat(wEl.value) : null;
+          newReps   = (rEl && rEl.value !== '') ? parseInt(rEl.value, 10) : null;
+        }
         if (newWeight !== s.weight_lbs || newReps !== s.reps) {
           updates.push({ id: s.id, weight_lbs: newWeight, reps: newReps });
           s.weight_lbs = newWeight;

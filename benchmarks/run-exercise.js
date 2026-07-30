@@ -23,6 +23,16 @@
 //               discoveryMinResults?, discoveryEquip?[], discoveryEmpty? },
 //     known_fail?, tags?[] }
 // input.filters = { splits?[], movements?[], equipment?[] } (keys per exercise-filters.js).
+//
+// Phase 4.2.1J — logging identity + chronology (exercise-log.js), scored inline:
+//   { id, identity: { a, b, sameExercise }, tags }
+//     a / b are either a query STRING (resolved to real catalog identity via the
+//     shared index) or a literal ref { exerciseId?, customId?, name } (for
+//     custom / free-typed cases the catalog can't produce). sameExercise asserts
+//     ExerciseLog.isComparableForProgression(a, b).
+//   { id, prevSession: { sessions[], opts?, expectOrder[] }, tags }
+//     asserts the workoutId order of ExerciseLog.selectPreviousSessions(...) —
+//     current/incomplete/future-dated exclusion + deterministic ordering.
 
 'use strict';
 
@@ -31,6 +41,7 @@ const path = require('node:path');
 
 const EX = require('../exercise-core.js');
 const EF = require('../exercise-filters.js');
+const EL = require('../exercise-log.js');
 const { EXERCISE_CATALOG } = require('./exercise-fixtures.js');
 
 const strict = process.argv.includes('--strict');
@@ -49,9 +60,12 @@ const EXACT_TYPES = ['exact_canonical', 'exact_alias', 'normalized', 'normalized
 // resolve() (name/matchType/…) AND, when a case declares search* expectations,
 // the LIST-producing picker search (Phase 4.2.1F) over the same catalog.
 function checkCase(c) {
-  const r = idx.resolve(c.input.query);
   const e = c.expect || {};
   const fails = [];
+  // Resolution/search/discovery cases carry input.query; identity/prevSession
+  // cases (Phase 4.2.1J) do not — skip the resolver for those.
+  const r = c.input ? idx.resolve(c.input.query) : null;
+  if (r) {
   if (e.name !== undefined && r.canonicalName !== e.name) fails.push(`name ${JSON.stringify(r.canonicalName)} != ${JSON.stringify(e.name)}`);
   if (e.notName !== undefined && r.canonicalName === e.notName) fails.push(`name must NOT be ${JSON.stringify(e.notName)}`);
   if (e.matchType !== undefined && r.matchType !== e.matchType) fails.push(`matchType ${r.matchType} != ${e.matchType}`);
@@ -99,7 +113,48 @@ function checkCase(c) {
       if (extra.length) fails.push(`discoveryEquip has unexpected ${JSON.stringify(extra)} (want only ${JSON.stringify(e.discoveryEquip)})`);
     }
   }
+  } // end resolution/search/discovery (input-bearing cases)
+
+  // Logging identity (Phase 4.2.1J) — resolves query strings to REAL catalog
+  // identity via the shared index, then runs the exact ExerciseLog comparison
+  // the workout logger uses for previous-performance / progression.
+  if (c.identity) {
+    const a = toRef(c.identity.a), b = toRef(c.identity.b);
+    const same = EL.isComparableForProgression(a, b);
+    if (c.identity.sameExercise !== undefined && same !== c.identity.sameExercise) {
+      fails.push(`identity same=${same} != ${c.identity.sameExercise} (a=${JSON.stringify(a.name)}#${a.exerciseId || a.customId || '·'} b=${JSON.stringify(b.name)}#${b.exerciseId || b.customId || '·'})`);
+    }
+  }
+
+  // Chronological previous-session selection (Phase 4.2.1J).
+  if (c.prevSession) {
+    const out = EL.selectPreviousSessions(c.prevSession.sessions, c.prevSession.opts || {});
+    const order = out.map((s) => s.workoutId);
+    if (c.prevSession.expectOrder !== undefined &&
+        JSON.stringify(order) !== JSON.stringify(c.prevSession.expectOrder)) {
+      fails.push(`prevSession order ${JSON.stringify(order)} != ${JSON.stringify(c.prevSession.expectOrder)}`);
+    }
+  }
+
   return fails.length ? fails.join('; ') : null;
+}
+
+// Build an ExerciseLog reference from either a query string (resolved to real
+// catalog identity) or a literal ref object (custom / free-typed cases).
+function toRef(spec) {
+  if (spec && typeof spec === 'object') {
+    return {
+      exerciseId: spec.exerciseId != null ? spec.exerciseId : null,
+      customId: spec.customId != null ? spec.customId : null,
+      name: spec.name
+    };
+  }
+  const r = idx.resolve(spec);
+  return {
+    exerciseId: r.canonicalExerciseId != null ? r.canonicalExerciseId : null,
+    customId: null,
+    name: r.canonicalName != null ? r.canonicalName : spec
+  };
 }
 
 function main() {

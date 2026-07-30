@@ -195,7 +195,7 @@ provider unless a new route is explicitly built on another.
 **Node / tooling:**
 - `package.json`: `npm test` → `node --test`; `npm run bench` → `node benchmarks/run-resolve.js`; `npm run bench:exercise` → `node benchmarks/run-exercise.js`.
 - Dependencies: `@anthropic-ai/sdk`, `stripe`. No build step.
-- Test files: `ai-food-parse.test.js`, `usda-search.test.js`, `nutrition-resolve.test.js`, `food-ranking.test.js`, `food-memory.test.js`, `food-meal.test.js`, `food-portion.test.js`, `nutrition-search-cache.test.js`, `progression.test.js`, `exercise-core.test.js`, `exercise-search.test.js`, `exercise-custom.test.js`, `exercise-filters.test.js`.
+- Test files: `ai-food-parse.test.js`, `usda-search.test.js`, `nutrition-resolve.test.js`, `food-ranking.test.js`, `food-memory.test.js`, `food-meal.test.js`, `food-portion.test.js`, `nutrition-search-cache.test.js`, `progression.test.js`, `exercise-core.test.js`, `exercise-search.test.js`, `exercise-custom.test.js`, `exercise-filters.test.js`, `exercise-log.test.js`.
 - Benchmark corpus: `benchmarks/resolve-cases.jsonl` + `benchmarks/fixtures.js`, run by `benchmarks/run-resolve.js` (two-tier runner, Phase 4.2.1d). Exercise resolution: `benchmarks/exercise-cases.jsonl` + `benchmarks/exercise-fixtures.js`, run by `benchmarks/run-exercise.js` (Phase 4.2.1E).
 
 **Supabase notes:**
@@ -457,6 +457,49 @@ loaded on `workout.html` AFTER `exercise-core.js` (reuses its `normalizeEquipmen
   never native dialogs. Result rows wrap long names (no mobile overflow/clipping).
   Covered by `exercise-filters.test.js` and `discovery`-tagged
   `benchmarks/exercise-cases.jsonl` cases (collision assertions, not just presence).
+
+### Shared Exercise-Logging Reliability Core — `exercise-log.js` (`Live`, Phase 4.2.1J)
+
+The logging-reliability sibling of `exercise-core.js` (identity/resolution),
+`exercise-custom.js` (lifecycle), and `exercise-filters.js` (discovery): one
+pure, DOM-free, fetch-free, DB-free layer owning three reliability concerns for
+the workout logger. Browser global `ExerciseLog` + guarded `module.exports`;
+loaded on `workout.html` and `workout-history.html` AFTER `exercise-core.js`
+(reuses its `normalizeExerciseName`, so logged identity never drifts).
+
+- **ID-first logged identity.** `sameLoggedExercise(ref, row)` /
+  `filterLoggedMatches` / `isComparableForProgression` decide which prior logged
+  `workout_exercises` rows are the SAME exercise as the one being logged. A
+  canonical exercise matches by stable `exercises.id` (so Smith-machine bench ≠
+  barbell bench, pull-up ≠ assisted pull-up, seated ≠ lying leg curl, machine
+  press ≠ free-weight bench — regardless of name similarity), plus legacy
+  pre-4.2.1F NULL rows carrying its canonical name (a custom can never take a
+  canonical name per 4.2.1H, so a name-equal NULL row with **no** custom id is a
+  legacy canonical log — safe to fold). A custom/free-typed exercise matches by
+  name and **never** inherits a canonical's history; two customs with different
+  known ids stay distinct. `workout.html` `loadLoggedMatches(ex)` consumes this
+  for `loadLastPerf`, `loadExerciseHistory`, and the live-PR baseline — the
+  in-memory `ex` now carries `exercise_id`. Previous-performance/progression are
+  therefore ID-first, not name-only. **Not yet changed:** `personal_records` is
+  keyed by `exercise_name` at the table level, and `workout_exercises` does not
+  yet persist a custom's `user_exercises.id` (two same-name customs share logged
+  history until that column exists) — both deferred, documented, non-destructive.
+- **Chronological previous-session selection.** `selectPreviousSessions(...)`
+  excludes the current in-progress workout, incomplete (draft/abandoned)
+  sessions, and future-dated rows, then orders deterministically (date desc →
+  createdAt desc → id). DB queries order by `date, created_at` to match.
+- **Set-value sanitization.** `sanitizeReps` / `sanitizeWeight` / `sanitizeSetField`
+  guard the persistence boundary: blank stays blank, zero and decimals are
+  preserved, but NaN/Infinity/negative/malformed never reach the DB. Consumed by
+  `updateSet` and the history editor.
+- **Duplicate-submit + completed-workout guards** (in `workout.html`, not this
+  module): a per-action in-flight lock makes `selectExercise`/`addSet`/
+  `removeExercise`/`finishWorkout` idempotent under rapid taps, and
+  `finishWorkout` uses an optimistic `completed=false → true` transition so a
+  second tab / re-tap never double-runs PR detection or progression.
+- Covered by `exercise-log.test.js` and `logging-identity` / `logging-chrono`
+  tagged `benchmarks/exercise-cases.jsonl` cases (real-catalog identity + literal
+  custom refs), scored inline by `run-exercise.js`.
 
 ### Other shared modules (`Live`)
 
