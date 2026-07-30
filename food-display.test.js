@@ -1,0 +1,239 @@
+// food-display.test.js — unit tests for the shared Food PRESENTATION core
+// (Phase 4.2.8). Pure module: no DOM, no fetch, no keys. Run via `npm test`.
+//
+// Coverage: number/quantity formatting, serving-label sanitization (the
+// "1 1 serving" / "158.0 g" / "1 unit" / null cases), estimated detection,
+// name simplification + brand de-duplication, macro/calorie formatting, the
+// full food + log display models, and the PRESENTATION CONTRACT (no input
+// mutation, stable output, canonical values preserved).
+
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert');
+const fd = require('./food-display.js');
+
+/* ── number + quantity formatting ───────────────────────────────────────── */
+
+test('fdNum: strips trailing zeros; guards NaN/Infinity', () => {
+  assert.strictEqual(fd.fdNum(158.0), '158');
+  assert.strictEqual(fd.fdNum(1.5), '1.5');
+  assert.strictEqual(fd.fdNum(1.50), '1.5');
+  assert.strictEqual(fd.fdNum(2), '2');
+  assert.strictEqual(fd.fdNum(0.333333), '0.33');
+  assert.strictEqual(fd.fdNum(NaN), '');
+  assert.strictEqual(fd.fdNum(Infinity), '');
+});
+
+test('fdQty: renders common fractions as glyphs', () => {
+  assert.strictEqual(fd.fdQty(0.5), '½');
+  assert.strictEqual(fd.fdQty(1.5), '1½');
+  assert.strictEqual(fd.fdQty(0.25), '¼');
+  assert.strictEqual(fd.fdQty(2), '2');
+  assert.strictEqual(fd.fdQty(1.25), '1¼');     // whole + quarter glyph
+  assert.strictEqual(fd.fdQty(0.1), '0.1');     // uncommon fraction → decimal
+});
+
+/* ── serving-label sanitization ─────────────────────────────────────────── */
+
+test('fdServingLabel: household portion → "MAIN · DETAIL"', () => {
+  assert.strictEqual(fd.fdServingLabel({ serving_description: '1 cup (158 g)' }), '1 cup · 158 g');
+  assert.strictEqual(fd.fdServingLabel({ serving_description: '1 large (50 g)' }), '1 large · 50 g');
+});
+
+test('fdServingLabel: metric-only stays single token', () => {
+  assert.strictEqual(fd.fdServingLabel({ serving_description: '100 g' }), '100 g');
+  assert.strictEqual(fd.fdServingLabel({ serving_description: '100 ml' }), '100 ml');
+});
+
+test('fdServingLabel: kills the "1 1 serving" double-number bug', () => {
+  assert.strictEqual(fd.fdServingLabel({ serving_description: '1 1 serving' }), '1 serving');
+});
+
+test('fdServingLabel: "1 unit" → "1 serving"; "serving serving" collapses', () => {
+  assert.strictEqual(fd.fdServingLabel({ serving_description: '1 unit' }), '1 serving');
+  assert.strictEqual(fd.fdServingLabel({ serving_description: 'serving serving' }), 'serving');
+});
+
+test('fdServingLabel: trailing zeros trimmed inside numbers', () => {
+  assert.strictEqual(fd.fdServingLabel({ serving_description: '1.0 cup (158.0 g)' }), '1 cup · 158 g');
+});
+
+test('fdServingLabel: null / empty / empty-parens → "1 serving"', () => {
+  assert.strictEqual(fd.fdServingLabel({ serving_description: null }), '1 serving');
+  assert.strictEqual(fd.fdServingLabel({ serving_description: '' }), '1 serving');
+  assert.strictEqual(fd.fdServingLabel({ serving_description: 'null' }), '1 serving');
+  assert.strictEqual(fd.fdServingLabel({ serving_description: '1 serving ()' }), '1 serving');
+});
+
+test('fdServingLabel: falls back to amount+unit with pluralization', () => {
+  assert.strictEqual(fd.fdServingLabel({ serving_amount: 2, serving_unit: 'slice' }), '2 slices');
+  assert.strictEqual(fd.fdServingLabel({ serving_amount: 1, serving_unit: 'slice' }), '1 slice');
+  assert.strictEqual(fd.fdServingLabel({ serving_amount: 2, serving_unit: 'g' }), '2 g'); // metric invariant
+});
+
+test('fdServingLabel: capitalize option (compact rows)', () => {
+  assert.strictEqual(fd.fdServingLabel({ serving_description: 'splash (~15 ml)' }, { capitalize: true }),
+    'Splash · ~15 ml');
+});
+
+/* ── estimated detection + compact serving ──────────────────────────────── */
+
+test('fdIsEstimatedServing: "~" or "estimated" marks estimated', () => {
+  assert.strictEqual(fd.fdIsEstimatedServing('splash (~15 ml)'), true);
+  assert.strictEqual(fd.fdIsEstimatedServing('handful — estimated'), true);
+  assert.strictEqual(fd.fdIsEstimatedServing('1 cup (158 g)'), false);
+  assert.strictEqual(fd.fdIsEstimatedServing(null), false);
+});
+
+test('fdCompactServing: estimated portion stays visibly estimated + keeps ~amount', () => {
+  const c = fd.fdCompactServing({ serving_description: 'splash (~15 ml)' });
+  assert.strictEqual(c.estimated, true);
+  assert.strictEqual(c.text, 'Splash · ~15 ml');
+});
+
+test('fdCompactServing: explicit estimated flag honoured even without "~"', () => {
+  const c = fd.fdCompactServing({ serving_description: 'handful', estimated: true });
+  assert.strictEqual(c.estimated, true);
+});
+
+test('fdCompactServing: exact portion is NOT estimated', () => {
+  const c = fd.fdCompactServing({ serving_description: '1 cup (158 g)' });
+  assert.strictEqual(c.estimated, false);
+  assert.strictEqual(c.text, '1 cup · 158 g');
+});
+
+/* ── name simplification + brand de-duplication ─────────────────────────── */
+
+test('fdStripBrandSuffix: removes trailing "(Brand)" only when it matches', () => {
+  assert.strictEqual(fd.fdStripBrandSuffix('Whole Milk (Fairlife)', 'Fairlife'), 'Whole Milk');
+  assert.strictEqual(fd.fdStripBrandSuffix('Whole Milk', 'Fairlife'), 'Whole Milk');
+  assert.strictEqual(fd.fdStripBrandSuffix('Milk (2%)', 'Fairlife'), 'Milk (2%)'); // unrelated parens kept
+});
+
+test('fdSimplifyName: verbose generic USDA name → scannable', () => {
+  assert.strictEqual(fd.fdSimplifyName('Chicken, broilers or fryers, breast, meat only, cooked, roasted'),
+    'Chicken Breast');
+  assert.strictEqual(fd.fdSimplifyName('Apples, fuji, with skin, raw'), 'Fuji Apple');
+});
+
+test('fdSimplifyName: brand never appears twice', () => {
+  // name carries "(Fairlife)" AND brand is Fairlife → simplified name drops it.
+  assert.strictEqual(fd.fdSimplifyName('Milk, whole (Fairlife)', 'Fairlife'), 'Milk');
+});
+
+/* ── macros + calories ──────────────────────────────────────────────────── */
+
+test('fdMacroSummary: one consistent format (whole grams by default)', () => {
+  assert.strictEqual(fd.fdMacroSummary({ protein: 30.4, carbs: 12.6, fat: 8.1 }), 'P 30 · C 13 · F 8');
+  assert.strictEqual(fd.fdMacroSummary({ protein: 30.4, carbs: 12.6, fat: 8.1 }, { round1: true }),
+    'P 30.4 · C 12.6 · F 8.1');
+});
+
+test('fdCalories: rounds to whole kcal', () => {
+  assert.strictEqual(fd.fdCalories(210.6), 211);
+});
+
+/* ── full food display model ────────────────────────────────────────────── */
+
+test('buildFoodDisplay: branded food — brand shown once, USDA badge, clean serving', () => {
+  const food = {
+    usda_fdc_id: 123, name: 'Milk, whole (Fairlife)', description: 'Milk, whole',
+    brand: 'Fairlife', serving_description: '1 cup (240 ml)',
+    calories: 150, protein: 13, carbs: 12, fat: 8,
+  };
+  const m = fd.buildFoodDisplay(food);
+  assert.strictEqual(m.name, 'Milk');
+  assert.strictEqual(m.brand, 'Fairlife');
+  assert.ok(!/Fairlife/.test(m.name), 'brand must not appear in the name');
+  assert.strictEqual(m.serving, '1 cup · 240 ml');
+  assert.strictEqual(m.caloriesLabel, '150 kcal');
+  assert.deepStrictEqual(m.badges, ['USDA']);
+  assert.ok(m.fullName.length > 0);
+});
+
+test('buildFoodDisplay: raw vs cooked distinction is preserved in fullName', () => {
+  const raw = fd.buildFoodDisplay({ description: 'Chicken breast, raw', name: 'Chicken breast, raw' });
+  const cooked = fd.buildFoodDisplay({ description: 'Chicken breast, cooked', name: 'Chicken breast, cooked' });
+  assert.notStrictEqual(raw.fullName, cooked.fullName);
+});
+
+test('buildFoodDisplay: estimated vague portion flagged', () => {
+  const m = fd.buildFoodDisplay({ name: 'Almonds', serving_description: 'handful (~28 g)', calories: 164 });
+  assert.strictEqual(m.estimated, true);
+});
+
+test('buildFoodDisplay: fallback name when everything is empty', () => {
+  const m = fd.buildFoodDisplay({});
+  assert.strictEqual(m.name, 'Food');
+  assert.strictEqual(m.serving, '1 serving');
+});
+
+/* ── log display model ──────────────────────────────────────────────────── */
+
+test('buildLogDisplay: USDA row simplified; manual row verbatim', () => {
+  const usda = fd.buildLogDisplay({ source: 'usda', name: 'Apples, fuji, with skin, raw',
+    calories: 95, protein: 0.5, carbs: 25, fat: 0.3, servings: 1 });
+  assert.strictEqual(usda.name, 'Fuji Apple');
+  const manual = fd.buildLogDisplay({ source: 'manual', name: "Grandma's stew", calories: 400, servings: 2 });
+  assert.strictEqual(manual.name, "Grandma's stew");
+  assert.strictEqual(manual.servingsLabel, '2×');
+});
+
+test('buildLogDisplay: estimated portion visible in compact row', () => {
+  const m = fd.buildLogDisplay({ source: 'usda', name: 'Milk', brand: '',
+    serving_description: 'splash (~15 ml)', calories: 9, servings: 1 });
+  assert.strictEqual(m.estimated, true);
+  assert.strictEqual(m.serving, 'Splash · ~15 ml');
+});
+
+/* ── PRESENTATION CONTRACT — the load-bearing guarantees ─────────────────── */
+
+test('contract: buildFoodDisplay does NOT mutate its input', () => {
+  const food = {
+    usda_fdc_id: 5, name: 'Milk, whole (Fairlife)', description: 'Milk, whole',
+    brand: 'Fairlife', serving_description: '1 cup (240 ml)',
+    calories: 150, protein: 13, carbs: 12, fat: 8,
+  };
+  const snapshot = JSON.parse(JSON.stringify(food));
+  fd.buildFoodDisplay(food);
+  assert.deepStrictEqual(food, snapshot, 'input food record must be untouched');
+});
+
+test('contract: buildLogDisplay does NOT mutate its input row', () => {
+  const row = { source: 'usda', name: 'Apples, fuji, with skin, raw', brand: '',
+    serving_description: 'splash (~15 ml)', calories: 9, protein: 0, carbs: 2, fat: 0, servings: 1 };
+  const snapshot = JSON.parse(JSON.stringify(row));
+  fd.buildLogDisplay(row);
+  assert.deepStrictEqual(row, snapshot, 'input log row must be untouched');
+});
+
+test('contract: aria text carries the FULL canonical name (mobile has no hover)', () => {
+  const m = fd.buildFoodDisplay({ usda_fdc_id: 1,
+    name: 'Chicken, broilers or fryers, breast, meat only, cooked',
+    description: 'Chicken, broilers or fryers, breast, meat only, cooked', calories: 165 });
+  assert.notStrictEqual(m.name, m.fullName);            // visible name is simplified
+  assert.ok(m.ariaLabel.indexOf('broilers') >= 0, 'aria must expose the full identity');
+});
+
+test('contract: canonical name/id/macros are preserved, never overwritten', () => {
+  const food = { usda_fdc_id: 42, name: 'Chicken, broilers or fryers, breast, cooked',
+    description: 'Chicken, broilers or fryers, breast, cooked', calories: 165, protein: 31 };
+  const m = fd.buildFoodDisplay(food);
+  assert.strictEqual(food.usda_fdc_id, 42);            // id untouched
+  assert.strictEqual(m.fullName, food.description);    // canonical still available
+  assert.strictEqual(food.calories, 165);              // macros untouched
+});
+
+test('contract: output is stable for identical input', () => {
+  const food = { name: 'Broccoli, boiled, drained', description: 'Broccoli, boiled, drained',
+    serving_description: '1 cup (156 g)', calories: 55, protein: 3.7, carbs: 11, fat: 0.6 };
+  assert.deepStrictEqual(fd.buildFoodDisplay(food), fd.buildFoodDisplay(food));
+});
+
+test('contract: malformed optional fields never render null/undefined', () => {
+  const m = fd.buildFoodDisplay({ name: 'Egg', brand: null, serving_description: undefined,
+    calories: 'x', protein: null });
+  assert.ok(!/null|undefined|NaN/.test(m.serving));
+  assert.ok(!/null|undefined|NaN/.test(m.macroSummary));
+  assert.ok(!/null|undefined/.test(m.caloriesLabel));
+});

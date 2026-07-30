@@ -137,9 +137,12 @@
       transition: border-color .2s;
     }
     .food-row:hover { border-color: var(--border-3); }
-    .food-main { min-width: 0; }
+    .food-main { flex: 1 1 auto; min-width: 0; }
     .food-name { font-size: 14px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .food-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    /* Sub-line can carry servings · estimated portion · macros — keep it to one
+       ellipsised line so a long portion label never widens or wraps the row. */
+    .food-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .food-sub .ai-est-badge { cursor: default; }
     .food-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
     .food-cals { font-family: 'Bebas Neue', sans-serif; font-size: 20px; letter-spacing: 1px; }
     .food-cals small { font-family: 'Barlow', sans-serif; font-size: 11px; color: var(--text-muted); font-weight: 600; }
@@ -418,7 +421,7 @@
       border-radius: 10px; padding: 11px 14px; transition: border-color .2s;
     }
     .nu-usda-row:hover { border-color: var(--red-border); }
-    .nu-usda-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .nu-usda-main { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
     .nu-usda-name {
       font-family: 'Barlow', sans-serif; font-size: 14px; font-weight: 600; color: var(--text);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -427,7 +430,7 @@
       font-size: 11px; color: var(--text-muted);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
-    .nu-usda-macros { font-size: 11px; color: var(--text-2); margin-top: 1px; }
+    .nu-usda-macros { font-size: 11px; color: var(--text-2); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .nu-usda-cals {
       font-family: 'Bebas Neue', sans-serif; font-size: 20px; letter-spacing: 0.5px;
       color: var(--text); flex-shrink: 0; text-align: right; line-height: 1;
@@ -728,6 +731,7 @@
 <script src="food-memory.js"></script>
 <script src="food-portion.js"></script>
 <script src="food-meal.js"></script>
+<script src="food-display.js"></script>
 <script src="nutrition.js"></script>
 <script>
   var currentUserId = null;
@@ -807,27 +811,23 @@
         inner = '<div class="meal-empty">Nothing logged.</div>';
       } else {
         inner = rows.map(function (l) {
-          var sv = (+l.servings === 1) ? '' : (nuRound1(l.servings) + '× · ');
-          var macros = 'P ' + nuRound(l.protein) + ' · C ' + nuRound(l.carbs) + ' · F ' + nuRound(l.fat);
-          // DISPLAY-ONLY friendly name for USDA rows (same transform as the
-          // quick-log sheet); manual entries keep the user's own words. The
-          // saved name/identity are untouched — editEntry reads the log row.
-          var disp = l.name;
-          if (l.source === 'usda') {
-            var base = String(l.name || '');
-            if (l.brand) {
-              var suf = ' (' + l.brand + ')';
-              if (base.slice(-suf.length) === suf) base = base.slice(0, -suf.length);
-            }
-            disp = nuAiDisplayName(base);
-          }
+          // Shared presentation model (Phase 4.2.8): USDA rows get the simplified,
+          // brand-stripped name; manual rows keep the user's own words verbatim.
+          // Identity/saved values are untouched — editEntry reads the log row.
+          var dm = FoodDisplay.buildLogDisplay(l);
+          var sub = [];
+          if (dm.servingsLabel) sub.push(nuEsc(dm.servingsLabel));
+          // Keep an ESTIMATED portion visibly estimated even in this condensed
+          // row: a text "Est." badge (never colour alone) plus the ~amount.
+          if (dm.estimated) sub.push('<span class="ai-est-badge" title="Estimated portion — tap to adjust">Est.</span> ' + nuEsc(dm.serving));
+          sub.push(nuEsc(dm.macroSummary));
           return '<div class="food-row" data-id="' + l.id + '" onclick="editEntry(this)">' +
             '<div class="food-main">' +
-              '<div class="food-name" title="' + nuEsc(l.name) + '">' + nuEsc(disp) + '</div>' +
-              '<div class="food-sub">' + sv + macros + '</div>' +
+              '<div class="food-name" title="' + nuEsc(dm.fullName || dm.name) + '" aria-label="' + nuEsc(dm.fullName || dm.name) + '">' + nuEsc(dm.name) + '</div>' +
+              '<div class="food-sub">' + sub.join(' · ') + '</div>' +
             '</div>' +
             '<div class="food-right">' +
-              '<div class="food-cals">' + nuRound(l.calories) + ' <small>kcal</small></div>' +
+              '<div class="food-cals">' + dm.calories + ' <small>kcal</small></div>' +
             '</div>' +
           '</div>';
         }).join('');
@@ -943,21 +943,15 @@
     document.getElementById('mealSheetTitle').textContent = m.name;
     document.getElementById('mealSheetItems').innerHTML = m.items.map(function (it) {
       var q = (+it.servings > 0) ? +it.servings : 1;
-      var qty = q === 1 ? '' : nuRound1(q) + '× ';
-      // DISPLAY-ONLY friendly name for USDA items (same rule as the meal
-      // rows); snapshot names/identity are untouched — re-adding replays the
-      // stored items verbatim.
-      var disp = it.name;
-      if (it.usda_fdc_id != null) {
-        var base = String(it.name || '');
-        if (it.brand) {
-          var suf = ' (' + it.brand + ')';
-          if (base.slice(-suf.length) === suf) base = base.slice(0, -suf.length);
-        }
-        disp = nuAiDisplayName(base);
-      }
+      var qty = q === 1 ? '' : FoodDisplay.fdQty(q) + '× ';
+      // DISPLAY-ONLY friendly name for USDA items (shared model, same rule as
+      // the meal rows); snapshot names/identity are untouched — re-adding
+      // replays the stored items verbatim.
+      var disp = (it.usda_fdc_id != null)
+        ? FoodDisplay.fdSimplifyName(it.name, it.brand)
+        : it.name;
       return '<div class="sm-item">' +
-        '<div class="sm-item-name" title="' + nuEsc(it.name) + '">' + nuEsc(qty + disp) + '</div>' +
+        '<div class="sm-item-name" title="' + nuEsc(it.name) + '" aria-label="' + nuEsc(qty + it.name) + '">' + nuEsc(qty + disp) + '</div>' +
         '<div class="sm-item-kcal">' + nuRound((+it.calories || 0) * q) + ' kcal</div>' +
       '</div>';
     }).join('');
@@ -1179,7 +1173,7 @@
             if (c.brand) meta.push(nuEsc(c.brand));
             if (c.kcal != null) meta.push(nuRound(c.kcal) + ' kcal/100g');
             return '<button type="button" class="ai-choice" title="' + nuEsc(c.name) + '" onclick="aiChoose(' + i + ',' + ci + ')">' +
-              '<span class="ai-choice-name">' + nuEsc(nuAiDisplayName(c.name)) + '</span>' +
+              '<span class="ai-choice-name">' + nuEsc(FoodDisplay.fdSimplifyName(c.name, c.brand)) + '</span>' +
               (meta.length ? '<span class="ai-choice-brand">' + meta.join(' · ') + '</span>' : '') +
             '</button>';
           }).join('') +
@@ -1226,21 +1220,30 @@
         '</div>';
       }
       var total = nuScaleMacros(it.perUnit, it.servings);
-      var fullName = it.food.description || it.food.name;
-      var sub = ['✓ USDA'];
-      if (it.food.brand) sub.push(nuEsc(it.food.brand));
-      sub.push(nuEsc(it.serving_description || '1 serving'));
+      // Shared presentation model (Phase 4.2.8): simplified name (brand stripped
+      // so it never shows twice), clean serving, consistent macro/calorie format.
+      var dm = FoodDisplay.buildFoodDisplay({
+        name: it.food.name, description: it.food.description, brand: it.food.brand,
+        usda_fdc_id: it.food.usda_fdc_id, serving_description: it.serving_description,
+        estimated: it.estimated,
+        calories: total.calories, protein: total.protein, carbs: total.carbs, fat: total.fat,
+      });
+      var fullName = dm.fullName;
+      var sub = [];
+      if (dm.brand) sub.push(nuEsc(dm.brand));
       // Phase 4.2.5: honestly mark an inferred vague-portion amount as estimated
       // (the serving text already carries "~"); the explanation is on hover.
+      var servingCell = nuEsc(dm.serving);
       if (it.estimated) {
         var exp = (it.portion && it.portion.explanation) || 'Estimated portion — adjust if needed.';
-        sub.push('<span class="ai-est-badge" title="' + nuEsc(exp) + '">Estimated</span>');
+        servingCell += ' <span class="ai-est-badge" title="' + nuEsc(exp) + '">Estimated</span>';
       }
+      sub.push(servingCell);
       sub.push(nuRound(total.calories) + ' kcal');
       sub.push('P ' + nuRound(total.protein));
       return '<div class="sm-item ai-item">' +
         '<div class="ai-item-top">' +
-          '<div class="ai-item-name" title="' + nuEsc(fullName) + '">' + nuEsc(nuAiDisplayName(fullName)) + '</div>' +
+          '<div class="ai-item-name" title="' + nuEsc(fullName) + '" aria-label="' + nuEsc(fullName) + '">' + nuEsc(dm.name) + '</div>' +
           '<button type="button" class="ai-item-x" onclick="aiRemove(' + i + ')" aria-label="Remove">✕</button>' +
         '</div>' +
         (it.unitUnresolved
@@ -1249,7 +1252,7 @@
             nuEsc(it.serving_description || '1 serving') + '. Adjust below if needed.</div>'
           : '') +
         '<div class="ai-item-bottom">' +
-          '<div class="ai-item-sub"><span class="nu-verified-sm">' + sub[0] + '</span> · ' + sub.slice(1).join(' · ') + '</div>' +
+          '<div class="ai-item-sub"><span class="nu-verified-sm">USDA</span> · ' + sub.join(' · ') + '</div>' +
           '<div class="ai-mini-stepper">' +
             '<button type="button" class="ai-mini-step" onclick="aiQtyStep(' + i + ',-1)" aria-label="Decrease quantity">−</button>' +
             '<span class="ai-mini-qty">' + (Math.round(it.servings * 100) / 100) + '</span>' +

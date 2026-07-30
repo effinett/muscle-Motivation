@@ -52,7 +52,9 @@ async function nuFetchLogs(userId, date) {
       .from('food_logs')
       // Identity columns (source…serving_unit) ride along so edit mode can keep a
       // USDA food's identity for favorites — cheap text columns, no raw payload.
-      .select('id, food_id, name, date, meal, servings, calories, protein, carbs, fat, source, usda_fdc_id, brand, gtin_upc, serving_amount, serving_unit')
+      // serving_description rides along (Phase 4.2.8) so the compact daily-log
+      // row can show the portion and keep an ESTIMATED portion visibly estimated.
+      .select('id, food_id, name, date, meal, servings, calories, protein, carbs, fat, source, usda_fdc_id, brand, gtin_upc, serving_amount, serving_unit, serving_description')
       .eq('user_id', userId)
       .eq('date', date)
       .order('created_at', { ascending: true });
@@ -713,33 +715,38 @@ async function nuRunUsdaSearch(q) {
   }
 }
 
-var NU_GROUP_LABELS = { branded: '⭐ Branded Foods', generic: 'USDA Generic Foods' };
+var NU_GROUP_LABELS = { branded: 'Branded foods', generic: 'USDA generic foods' };
 
 function nuRenderUsdaResults() {
   var list = document.getElementById('nuUsdaResults');
   if (!list) return;
   // Results arrive branded-first (proxy-ranked); insert a header whenever the
   // group changes so branded and generic foods are visually separated.
+  // Presentation goes through the shared FoodDisplay model (Phase 4.2.8): the
+  // primary line is the simplified name (brand stripped so it never shows
+  // twice), the sub-line is USDA badge · brand · clean serving, and calories
+  // live ONLY in the right column (no duplicate kcal in the macro line).
   var lastGroup = null;
   list.innerHTML = nu_usdaResults.map(function (f, i) {
     var header = '';
     var group = f.group || 'generic';
     if (group !== lastGroup) {
       lastGroup = group;
-      header = '<div class="nu-usda-group">' + (NU_GROUP_LABELS[group] || 'USDA Foods') + '</div>';
+      header = '<div class="nu-usda-group">' + (NU_GROUP_LABELS[group] || 'USDA foods') + '</div>';
     }
-    var macros = nuRound(f.calories) + ' kcal · P ' + nuRound1(f.protein) +
-                 ' · C ' + nuRound1(f.carbs) + ' · F ' + nuRound1(f.fat);
-    var sub = (f.brand ? nuEsc(f.brand) + ' · ' : '') + nuEsc(f.serving_description) +
-      ' · <span class="nu-verified-sm">✓ USDA</span>';
+    var dm = FoodDisplay.buildFoodDisplay(f);
+    var meta = [];
+    if (dm.brand) meta.push(nuEsc(dm.brand));
+    meta.push(nuEsc(dm.serving));
+    var sub = '<span class="nu-verified-sm">USDA</span> · ' + meta.join(' · ');
     return header +
-      '<button type="button" class="nu-usda-row" onclick="nuPickUsda(' + i + ')">' +
+      '<button type="button" class="nu-usda-row" onclick="nuPickUsda(' + i + ')" title="' + nuEsc(dm.fullName) + '">' +
         '<span class="nu-usda-main">' +
-          '<span class="nu-usda-name">' + nuEsc(f.name) + '</span>' +
+          '<span class="nu-usda-name" aria-label="' + nuEsc(dm.fullName) + '">' + nuEsc(dm.name) + '</span>' +
           '<span class="nu-usda-sub">' + sub + '</span>' +
-          '<span class="nu-usda-macros">' + macros + '</span>' +
+          '<span class="nu-usda-macros">' + nuEsc(dm.macroSummary) + '</span>' +
         '</span>' +
-        '<span class="nu-usda-cals">' + nuRound(f.calories) + '<small>kcal</small></span>' +
+        '<span class="nu-usda-cals">' + dm.calories + '<small>kcal</small></span>' +
       '</button>';
   }).join('');
 }
@@ -774,8 +781,12 @@ function nuPickUsda(i) {
   nu_servingTouched = false;
   document.getElementById('nuName').value = f.name;      // logged name keeps the brand suffix
 
-  // Card header.
-  document.getElementById('nuCardName').textContent = f.description || f.name;
+  // Card header. Simplified name (matches the row the user tapped); the full
+  // canonical description stays available on hover via title.
+  var cardDm = FoodDisplay.buildFoodDisplay(f);
+  var cnEl = document.getElementById('nuCardName');
+  cnEl.textContent = cardDm.name;
+  cnEl.title = cardDm.fullName;
   var bEl = document.getElementById('nuCardBrand');
   bEl.textContent = f.brand || '';
   bEl.style.display = f.brand ? 'inline-block' : 'none';
@@ -1614,7 +1625,7 @@ function nuModalMarkup() {
           '<div class="nu-card-name" id="nuCardName"></div>' +
           '<div class="nu-card-meta">' +
             '<span class="nu-card-brand" id="nuCardBrand" style="display:none;"></span>' +
-            '<span class="nu-verified">✓ USDA</span>' +
+            '<span class="nu-verified">USDA</span>' +
           '</div>' +
         '</div>' +
         // manual/edit only — editable food name
