@@ -195,7 +195,7 @@ provider unless a new route is explicitly built on another.
 **Node / tooling:**
 - `package.json`: `npm test` → `node --test`; `npm run bench` → `node benchmarks/run-resolve.js`; `npm run bench:exercise` → `node benchmarks/run-exercise.js`.
 - Dependencies: `@anthropic-ai/sdk`, `stripe`. No build step.
-- Test files: `ai-food-parse.test.js`, `usda-search.test.js`, `nutrition-resolve.test.js`, `food-ranking.test.js`, `food-memory.test.js`, `food-meal.test.js`, `food-portion.test.js`, `nutrition-search-cache.test.js`, `progression.test.js`, `exercise-core.test.js`, `exercise-search.test.js`.
+- Test files: `ai-food-parse.test.js`, `usda-search.test.js`, `nutrition-resolve.test.js`, `food-ranking.test.js`, `food-memory.test.js`, `food-meal.test.js`, `food-portion.test.js`, `nutrition-search-cache.test.js`, `progression.test.js`, `exercise-core.test.js`, `exercise-search.test.js`, `exercise-custom.test.js`.
 - Benchmark corpus: `benchmarks/resolve-cases.jsonl` + `benchmarks/fixtures.js`, run by `benchmarks/run-resolve.js` (two-tier runner, Phase 4.2.1d). Exercise resolution: `benchmarks/exercise-cases.jsonl` + `benchmarks/exercise-fixtures.js`, run by `benchmarks/run-exercise.js` (Phase 4.2.1E).
 
 **Supabase notes:**
@@ -375,6 +375,45 @@ new script.)
 - Covered by `food-meal.test.js` (incl. validation-rejection + ablation cases),
   server-path cases in `usda-search.test.js`, resolver integration in
   `nutrition-resolve.test.js`, and `meal-reasoning` benchmark cases.
+
+### Shared Custom-Exercise Lifecycle Core — `exercise-custom.js` (`Live`, Phase 4.2.1H)
+
+The lifecycle sibling of `exercise-core.js`: one pure, DOM-free, fetch-free,
+DB-free layer owning the rules for **user-created custom exercises**
+(`user_exercises`) — create, edit, archive, restore, permanent-delete. Browser
+global `ExerciseCustom` + guarded `module.exports`; loaded on `workout.html`
+AFTER `exercise-core.js` (reuses its `normalizeExerciseName`, so custom identity
+and catalog identity never drift).
+
+- **Customs live OUTSIDE the resolver.** They carry no taxonomy metadata and are
+  never in the `createExerciseIndex` catalog, so every lifecycle decision runs
+  through this metadata-free core. `workout_exercises.exercise_id` FKs to
+  canonical `exercises.id` ONLY (nullable); a custom persists purely as an
+  `exercise_name` **text snapshot** (`exercise_id = NULL`). Nothing
+  (history/PRs/progression/templates) foreign-keys `user_exercises`, so editing/
+  archiving/deleting a custom can never damage logged data. **History shows the
+  snapshot name, not the live custom name — by design; editing never rewrites
+  history.**
+- **DB (Phase 4.2.1H):** `user_exercises` gained `normalized_name` (generated,
+  mirrors `normalizeExerciseName`), `archived_at` (soft-delete; NULL = active),
+  `updated_at`, and a partial unique index `(user_id, normalized_name) WHERE
+  archived_at IS NULL` (active-only uniqueness; archived rows excluded so
+  same-name restore/recreate works — the old plain `UNIQUE(user_id, lower(name))`
+  was dropped for this reason). RLS unchanged: `user_exercises` ALL policy
+  `auth.uid()=user_id` owner-scopes all four verbs; `exercises` stays SELECT-only
+  (canonical read-only to clients).
+- **Decision surface:** `buildLifecycleContext` → `classifyCreateIntent`
+  (deterministic precedence invalid → **use-canonical** → **reuse-active** →
+  **restore-archived** → **create**, so a canonical name never spawns a shadow
+  custom, an active dup is reused, and an archived match is restored not
+  duplicated), `classifyEditIntent` (blank/canonical-collision/active-collision/
+  archived-collision rejections; noop vs rename; id preserved), and
+  `canPermanentlyDelete(referenceCount)` (delete allowed only when unreferenced;
+  otherwise archive-only). A foreign user's custom is invisible by construction
+  (RLS), so matching one has no effect. Covered by `exercise-custom.test.js`.
+- **UI:** a "My Exercises" section on `workout.html` (edit/archive/restore, and
+  permanent-delete only for unreferenced archived customs) using the app's modal
+  pattern — never native `confirm()`.
 
 ### Other shared modules (`Live`)
 

@@ -646,6 +646,20 @@
         <i data-lucide="history"></i>
         View Workout History
       </a>
+
+      <!-- 5 · My Exercises (custom-exercise lifecycle management, Phase 4.2.1H).
+           Manage the user's OWN custom exercises: rename, archive, restore,
+           and (when unreferenced) permanently delete. Canonical exercises are
+           never listed here — they are read-only system rows. -->
+      <div class="section-label">My Exercises</div>
+      <div id="customExerciseList">
+        <div class="empty-state">Custom exercises you add while logging appear here to manage.</div>
+      </div>
+      <a class="btn-add-exercise" id="customArchivedToggle" onclick="toggleArchivedCustoms()"
+         style="margin-top:4px; display:none; cursor:pointer;">
+        <i data-lucide="archive"></i>
+        <span id="customArchivedToggleLabel">Show archived</span>
+      </a>
     </div>
 
     <!-- Active workout view -->
@@ -745,6 +759,37 @@
   </div>
 </div>
 
+<!-- Custom Exercise — Edit Name (Phase 4.2.1H). Modal (not native confirm) so
+     the flow is verifiable and consistent with the design system. -->
+<div class="overlay" id="customEditModal" onclick="onCustomEditBgClick(event)">
+  <div class="modal-box">
+    <div class="modal-title">Edit Exercise</div>
+    <div class="modal-sub">Rename your custom exercise. Your logged history keeps the name it was saved under.</div>
+    <div class="field-group" style="margin-bottom:8px;">
+      <input class="field-input" type="text" id="customEditInput" maxlength="60"
+        placeholder="Exercise name" onkeydown="if(event.key==='Enter')submitCustomEdit()">
+    </div>
+    <div class="modal-sub" id="customEditError" style="color:var(--red);margin-bottom:16px;min-height:18px;"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeCustomEditModal()">Cancel</button>
+      <button class="btn-confirm-finish" onclick="submitCustomEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Custom Exercise — Archive / Restore / Delete confirm (Phase 4.2.1H). One
+     reusable confirm modal; the action + copy are set per invocation. -->
+<div class="overlay" id="customConfirmModal" onclick="onCustomConfirmBgClick(event)">
+  <div class="modal-box">
+    <div class="modal-title" id="customConfirmTitle">Archive Exercise?</div>
+    <div class="modal-sub" id="customConfirmSub">—</div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeCustomConfirmModal()">Cancel</button>
+      <button class="btn-confirm-finish" id="customConfirmBtn" onclick="runCustomConfirm()">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <!-- Live PR Trophy (mid-workout, transient) -->
 <div class="overlay" id="prModal" onclick="closeLivePr()">
   <div class="pr-celebrate">
@@ -774,11 +819,20 @@
      normalization/alias/variant-aware search (Phase 4.2.1F). Load before the
      inline consumer below. -->
 <script src="exercise-core.js"></script>
+<!-- Shared custom-exercise lifecycle core (Phase 4.2.1H) — create/edit/archive/
+     restore/delete decision rules for user_exercises. Loads after exercise-core
+     (reuses its normalizer) and before the inline consumer below. -->
+<script src="exercise-custom.js"></script>
 <script>
   var currentUser     = null;
   var currentWorkout  = null;
   var exercises       = [];
   var exerciseLibrary = [];
+  // The user's OWN custom exercises (user_exercises rows), active AND archived,
+  // for the lifecycle manager (Phase 4.2.1H). exerciseLibrary carries only the
+  // ACTIVE ones (merged with the global catalog) for picker/search.
+  var customExercises = [];
+  var showArchivedCustoms = false;
   var timerInterval   = null;
   var restInterval    = null;
   var restStart       = null;
@@ -856,19 +910,25 @@
       supabaseClient.from('exercises')
         .select('id, name, category, equipment, aliases, primary_muscle, secondary_muscles, movement_pattern, force_type, difficulty, is_bodyweight, is_unilateral, tracking_type, default_unit')
         .order('name'),
-      supabaseClient.from('user_exercises').select('id, name, category').eq('user_id', currentUser.id).order('name')
+      // ALL of the user's customs (active + archived). Archived rows are kept in
+      // customExercises for the manager but excluded from the picker/search
+      // library below (Phase 4.2.1H).
+      supabaseClient.from('user_exercises').select('id, name, category, archived_at').eq('user_id', currentUser.id).order('name')
     ]);
     var globalEx = results[0].data || [];
     var userEx   = results[1].data || [];
+    customExercises = userEx;
     var seen = {};
     globalEx.forEach(function(e) { seen[e.name.toLowerCase()] = true; });
     var merged = globalEx.slice();
     userEx.forEach(function(e) {
+      if (e.archived_at) return;                       // archived customs never enter the picker
       if (seen[e.name.toLowerCase()]) return;
       seen[e.name.toLowerCase()] = true;
       merged.push({ id: e.id, name: e.name, category: e.category || 'Custom', equipment: null, user_created: true });
     });
     exerciseLibrary = merged;
+    renderCustomManager();
     // Build the shared resolver index over the GLOBAL catalog only (the controlled
     // 57-exercise surface with real exercises.id + metadata). User customs have no
     // aliases/metadata and their id targets user_exercises, not the exercises FK —
@@ -907,25 +967,261 @@
     return libraryExerciseId(name);
   }
 
+  // Build the immutable lifecycle context (canonical names + the user's own
+  // customs) the shared decision core reasons over. Guards for the module being
+  // unavailable so callers can fall back to legacy behavior.
+  function customLifecycleCtx() {
+    if (typeof ExerciseCustom === 'undefined') return null;
+    var canonicalNames = exerciseLibrary.filter(function(e) { return !e.user_created; })
+                                        .map(function(e) { return e.name; });
+    return ExerciseCustom.buildLifecycleContext({ canonicalNames: canonicalNames, customs: customExercises });
+  }
+
+  // Register a custom row into the in-memory library + manager after a write.
+  function upsertLocalCustom(row) {
+    var i = customExercises.findIndex(function(c) { return c.id === row.id; });
+    if (i >= 0) customExercises[i] = row; else customExercises.push(row);
+    if (!row.archived_at) {
+      var known = exerciseLibrary.some(function(e) { return e.user_created && e.id === row.id; });
+      if (!known) exerciseLibrary.push({ id: row.id, name: row.name, category: row.category || 'Custom', equipment: null, user_created: true });
+    }
+    renderCustomManager();
+  }
+
   // Persist a manually typed exercise to the user's library so it's reusable.
-  // Skips anything already in the merged library (global or user) — no dupes.
+  // Routes every create through the shared lifecycle core (Phase 4.2.1H) so the
+  // outcome is deterministic: a name matching a canonical creates NO custom; a
+  // match to an active own custom reuses it (no dupes); a match to an ARCHIVED
+  // own custom RESTORES that row (same id) instead of creating a duplicate.
   // Non-fatal: a failure here still lets the exercise be added to this workout.
   async function saveUserExercise(name) {
-    var clean = (name || '').trim();
-    if (!clean) return;
-    var exists = exerciseLibrary.some(function(e) { return e.name.toLowerCase() === clean.toLowerCase(); });
-    if (exists) return;
-    try {
-      var { data } = await supabaseClient
-        .from('user_exercises')
-        .insert({ user_id: currentUser.id, name: clean })
-        .select().single();
-      if (data) {
-        exerciseLibrary.push({ id: data.id, name: data.name, category: 'Custom', equipment: null, user_created: true });
-      }
-    } catch (e) {
-      // Unique-violation (already saved) or transient error — safe to ignore.
+    var ctx = customLifecycleCtx();
+    if (!ctx) {                                   // legacy fallback (module unavailable)
+      var clean = (name || '').trim();
+      if (!clean) return;
+      if (exerciseLibrary.some(function(e) { return e.name.toLowerCase() === clean.toLowerCase(); })) return;
+      try {
+        var { data } = await supabaseClient.from('user_exercises').insert({ user_id: currentUser.id, name: clean }).select().single();
+        if (data) exerciseLibrary.push({ id: data.id, name: data.name, category: 'Custom', equipment: null, user_created: true });
+      } catch (e) {}
+      return;
     }
+    var intent = ExerciseCustom.classifyCreateIntent(name, ctx);
+    if (intent.action === 'invalid' || intent.action === 'use-canonical' || intent.action === 'reuse-active') return;
+    try {
+      if (intent.action === 'restore-archived') {
+        var { data: restored } = await supabaseClient.from('user_exercises')
+          .update({ archived_at: null, updated_at: new Date().toISOString() })
+          .eq('id', intent.targetId).select('id, name, category, archived_at').single();
+        if (restored) upsertLocalCustom(restored);
+        return;
+      }
+      // action === 'create'
+      var { data: created, error } = await supabaseClient.from('user_exercises')
+        .insert({ user_id: currentUser.id, name: intent.display })
+        .select('id, name, category, archived_at').single();
+      if (created) { upsertLocalCustom(created); return; }
+      // Unique-violation from a concurrent create/restore — reconcile by reloading.
+      if (error) await loadExerciseLibrary();
+    } catch (e) {
+      // Transient error — safe to ignore; the exercise still logs by name.
+    }
+  }
+
+  // ── Custom-exercise lifecycle manager (Phase 4.2.1H) ──────────────
+  // Manage the user's OWN customs: rename, archive, restore, and (only when
+  // unreferenced) permanently delete. Canonical exercises never appear here.
+  // Custom exercises carry NO canonical taxonomy metadata and are never in the
+  // resolver index — every decision runs through the metadata-free shared core.
+  var editingCustomId = null;
+  var pendingCustomAction = null;
+
+  function renderCustomManager() {
+    var el = document.getElementById('customExerciseList');
+    if (!el) return;
+    var ctx = customLifecycleCtx();
+    var canonicalSet = ctx ? ctx.canonicalSet : {};
+    var part = (typeof ExerciseCustom !== 'undefined')
+      ? ExerciseCustom.partitionCustoms(customExercises, canonicalSet)
+      : { active: customExercises.filter(function(c){ return !c.archived_at; }),
+          archived: customExercises.filter(function(c){ return c.archived_at; }), shadowed: [] };
+
+    var toggle = document.getElementById('customArchivedToggle');
+    var toggleLabel = document.getElementById('customArchivedToggleLabel');
+    if (part.archived.length) {
+      toggle.style.display = '';
+      toggleLabel.textContent = (showArchivedCustoms ? 'Hide archived' : 'Show archived') + ' (' + part.archived.length + ')';
+    } else {
+      toggle.style.display = 'none';
+      showArchivedCustoms = false;
+    }
+
+    var rows = [];
+    part.active.forEach(function(c){ rows.push(customRowHtml(c, false)); });
+    if (showArchivedCustoms) part.archived.forEach(function(c){ rows.push(customRowHtml(c, true)); });
+    el.innerHTML = rows.length ? rows.join('')
+      : '<div class="empty-state">Custom exercises you add while logging appear here to manage.</div>';
+    lucide.createIcons();
+  }
+
+  function customRowHtml(c, arch) {
+    var sub = arch ? 'Archived · hidden when adding exercises' : 'Custom exercise';
+    var actions = arch
+      ? '<button class="btn-icon" title="Restore" onclick="askRestoreCustom(\'' + c.id + '\')"><i data-lucide="rotate-ccw"></i></button>' +
+        '<button class="btn-icon" title="Delete permanently" onclick="askDeleteCustom(\'' + c.id + '\')"><i data-lucide="trash-2"></i></button>'
+      : '<button class="btn-icon" title="Edit" onclick="openCustomEdit(\'' + c.id + '\')"><i data-lucide="pencil"></i></button>' +
+        '<button class="btn-icon" title="Archive" onclick="askArchiveCustom(\'' + c.id + '\')"><i data-lucide="archive"></i></button>';
+    return '<div class="tpl-card"' + (arch ? ' style="opacity:0.6;"' : '') + '>' +
+      '<div class="tpl-info"><div class="tpl-name">' + esc(c.name) + '</div>' +
+      '<div class="tpl-sub">' + sub + '</div></div>' +
+      '<div class="tpl-actions">' + actions + '</div></div>';
+  }
+
+  function toggleArchivedCustoms() { showArchivedCustoms = !showArchivedCustoms; renderCustomManager(); }
+
+  // ── Edit name ─────────────────────────────────────────────────────
+  function openCustomEdit(id) {
+    var c = customExercises.find(function(x){ return x.id === id && !x.archived_at; });
+    if (!c) return;
+    editingCustomId = id;
+    document.getElementById('customEditInput').value = c.name;
+    document.getElementById('customEditError').textContent = '';
+    document.getElementById('customEditModal').classList.add('open');
+    setTimeout(function(){ document.getElementById('customEditInput').focus(); }, 60);
+  }
+  function closeCustomEditModal() { document.getElementById('customEditModal').classList.remove('open'); editingCustomId = null; }
+  function onCustomEditBgClick(e) { if (e.target === document.getElementById('customEditModal')) closeCustomEditModal(); }
+
+  async function submitCustomEdit() {
+    if (!editingCustomId || typeof ExerciseCustom === 'undefined') return;
+    var id = editingCustomId;
+    var res = ExerciseCustom.classifyEditIntent(id, document.getElementById('customEditInput').value, customLifecycleCtx());
+    var errEl = document.getElementById('customEditError');
+    if (!res.ok) { errEl.textContent = res.error; return; }
+    if (res.action === 'noop') { closeCustomEditModal(); return; }
+    var { data, error } = await supabaseClient.from('user_exercises')
+      .update({ name: res.display, updated_at: new Date().toISOString() })
+      .eq('id', id).select('id, name, category, archived_at').single();
+    if (error || !data) { errEl.textContent = 'Could not save — that name may already be taken.'; return; }
+    // Update future display only; historical workout_exercises keep their name
+    // snapshot (the workout data model stores names, not custom ids — history
+    // is preserved by design).
+    var c = customExercises.find(function(x){ return x.id === id; }); if (c) c.name = data.name;
+    var lib = exerciseLibrary.find(function(e){ return e.user_created && e.id === id; }); if (lib) lib.name = data.name;
+    closeCustomEditModal();
+    renderCustomManager();
+    showToast('Exercise renamed.');
+  }
+
+  // ── Archive / Restore / Delete (modal-confirmed, no native confirm) ─
+  function showCustomConfirm(title, subHtml, btnLabel, danger, action) {
+    document.getElementById('customConfirmTitle').textContent = title;
+    document.getElementById('customConfirmSub').innerHTML = subHtml;
+    var btn = document.getElementById('customConfirmBtn');
+    if (btnLabel) {
+      btn.style.display = ''; btn.textContent = btnLabel;
+      btn.style.background = danger ? 'var(--red)' : '';
+      pendingCustomAction = action;
+    } else {
+      btn.style.display = 'none'; pendingCustomAction = null;
+    }
+    document.getElementById('customConfirmModal').classList.add('open');
+  }
+  function closeCustomConfirmModal() { document.getElementById('customConfirmModal').classList.remove('open'); pendingCustomAction = null; }
+  function onCustomConfirmBgClick(e) { if (e.target === document.getElementById('customConfirmModal')) closeCustomConfirmModal(); }
+  async function runCustomConfirm() { var action = pendingCustomAction; closeCustomConfirmModal(); if (action) await action(); }
+
+  function askArchiveCustom(id) {
+    var c = customExercises.find(function(x){ return x.id === id && !x.archived_at; });
+    if (!c) return;
+    showCustomConfirm('Archive Exercise?',
+      'Archive “' + esc(c.name) + '”? It will be hidden when adding exercises, but your logged workouts and records are kept. You can restore it anytime.',
+      'Archive', false, function(){ return archiveCustom(id); });
+  }
+  function askRestoreCustom(id) {
+    var c = customExercises.find(function(x){ return x.id === id && x.archived_at; });
+    if (!c) return;
+    showCustomConfirm('Restore Exercise?',
+      'Restore “' + esc(c.name) + '”? It will appear again when you add exercises.',
+      'Restore', false, function(){ return restoreCustom(id); });
+  }
+  async function askDeleteCustom(id) {
+    var c = customExercises.find(function(x){ return x.id === id; });
+    if (!c || typeof ExerciseCustom === 'undefined') return;
+    var refs = await countCustomReferences(c);
+    var verdict = ExerciseCustom.canPermanentlyDelete(refs);
+    if (!verdict.allowed) {
+      showCustomConfirm('Can’t Delete', esc(verdict.message) + ' It stays archived so nothing breaks.', null, false, null);
+      // Keep the row archived if it wasn't already — safest resting state.
+      if (!c.archived_at) await archiveCustom(id);
+      return;
+    }
+    showCustomConfirm('Delete Exercise?',
+      'Permanently delete “' + esc(c.name) + '”? This can’t be undone. It isn’t used in any logged workout or saved template.',
+      'Delete', true, function(){ return deleteCustom(id); });
+  }
+
+  async function archiveCustom(id) {
+    var { data, error } = await supabaseClient.from('user_exercises')
+      .update({ archived_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq('id', id).select('id, name, category, archived_at').single();
+    if (error || !data) { showToast('Could not archive.'); return; }
+    var c = customExercises.find(function(x){ return x.id === id; }); if (c) c.archived_at = data.archived_at;
+    exerciseLibrary = exerciseLibrary.filter(function(e){ return !(e.user_created && e.id === id); });
+    renderCustomManager();
+    showToast('Exercise archived.');
+  }
+
+  async function restoreCustom(id) {
+    var c = customExercises.find(function(x){ return x.id === id && x.archived_at; });
+    if (!c || typeof ExerciseCustom === 'undefined') return;
+    // Guard the active-uniqueness invariant: a same-name active custom or a new
+    // canonical could have appeared while this was archived.
+    var ctx = customLifecycleCtx();
+    var norm = ExerciseCustom.normalizeCustomName(c.name);
+    if (ctx.canonicalSet[norm]) { showToast('That name is now a built-in exercise — no need to restore.'); return; }
+    if (ctx.activeByNorm[norm]) { showToast('You already have an active exercise with that name.'); return; }
+    var { data, error } = await supabaseClient.from('user_exercises')
+      .update({ archived_at: null, updated_at: new Date().toISOString() })
+      .eq('id', id).select('id, name, category, archived_at').single();
+    if (error || !data) { showToast('Could not restore.'); return; }
+    upsertLocalCustom(data);
+    showToast('Exercise restored.');
+  }
+
+  async function deleteCustom(id) {
+    var { error } = await supabaseClient.from('user_exercises').delete().eq('id', id);
+    if (error) { showToast('Could not delete.'); return; }
+    customExercises = customExercises.filter(function(x){ return x.id !== id; });
+    exerciseLibrary = exerciseLibrary.filter(function(e){ return !(e.user_created && e.id === id); });
+    renderCustomManager();
+    showToast('Exercise deleted.');
+  }
+
+  // Count dependent references for a custom exercise. Customs are name-snapshot
+  // only (workout_exercises.exercise_id is NULL, no FK), so "referenced" = any
+  // of the user's logged workout_exercises OR saved templates whose normalized
+  // name matches. Fails SAFE (treats errors as referenced) so a delete is never
+  // allowed on uncertain data.
+  async function countCustomReferences(c) {
+    var norm = ExerciseCustom.normalizeCustomName(c.name);
+    var count = 0;
+    try {
+      var { data, error } = await supabaseClient
+        .from('workout_exercises')
+        .select('exercise_name, workouts!inner(user_id)')
+        .eq('workouts.user_id', currentUser.id);
+      if (error) return 1;
+      (data || []).forEach(function(we){
+        if (ExerciseCustom.normalizeCustomName(we.exercise_name) === norm) count++;
+      });
+    } catch (e) { return 1; }
+    (templates || []).forEach(function(t){
+      (t.exercises || []).forEach(function(ex){
+        if (ExerciseCustom.normalizeCustomName(ex.name) === norm) count++;
+      });
+    });
+    return count;
   }
 
   // ── Check/resume active workout ───────────────────────────────────
