@@ -134,6 +134,76 @@
     });
   }
 
+  // ── Stable identity model (Phase 4.2.1K) ─────────────────────────────────────
+  // A single, shared classification of an exercise reference so previous-
+  // performance, history, progression AND personal_records all key off the SAME
+  // rules. Priority is explicit: canonical id > custom id > conservative legacy
+  // name. A reference is one of:
+  //   'canonical' — has a stable exercises.id (exerciseId), no custom id.
+  //   'custom'    — has a stable user_exercises.id (customId), no canonical id.
+  //   'legacy'    — neither stable id; identity is the normalized name only.
+  //   'invalid'   — BOTH ids present (an impossible dual-identity state). The DB
+  //                 mutual-exclusivity CHECK is the backstop; app code should
+  //                 never construct one, and never persists an 'invalid' row.
+  function identityType(ref) {
+    if (!ref) return 'legacy';
+    var hasCanon = ref.exerciseId != null;
+    var hasCustom = ref.customId != null;
+    if (hasCanon && hasCustom) return 'invalid';
+    if (hasCanon) return 'canonical';
+    if (hasCustom) return 'custom';
+    return 'legacy';
+  }
+  function isValidIdentity(ref) { return identityType(ref) !== 'invalid'; }
+
+  // A deterministic, debug-safe identity key. Two references with the same key
+  // are the SAME exercise; a legacy key can never equal a canonical/custom key
+  // (distinct prefixes), so a name-only reference is never conflated with an
+  // id-backed one. Used to key per-session maps (e.g. live-PR state).
+  function identityKey(ref) {
+    var t = identityType(ref);
+    if (t === 'canonical') return 'canon:' + String(ref.exerciseId);
+    if (t === 'custom') return 'custom:' + String(ref.customId);
+    if (t === 'invalid') return 'invalid';
+    return 'legacy:' + normalizeName(ref && ref.name);
+  }
+
+  // The personal_records identity columns to persist for this reference. Exactly
+  // one stable id is ever set (or neither, for a legacy write); exercise_name is
+  // ALWAYS carried as the human snapshot. An 'invalid' ref is normalized to
+  // canonical-wins (defensive — should never occur).
+  function prIdentityColumns(ref) {
+    var t = identityType(ref);
+    var canon = (t === 'canonical' || t === 'invalid') ? ref.exerciseId : null;
+    var cust  = (t === 'custom') ? ref.customId : null;
+    return {
+      exercise_id: canon != null ? canon : null,
+      user_exercise_id: cust != null ? cust : null,
+      exercise_name: (ref && ref.name != null) ? String(ref.name) : ''
+    };
+  }
+
+  // The Supabase upsert onConflict target for a PR write, or null for a legacy
+  // reference (no modern arbiter — the caller must read-then-write by row id so a
+  // NEW legacy row is never created when a stable identity is available). Only
+  // 'canonical'/'custom' produce a modern arbiter, matching the identity-aware
+  // unique constraints.
+  function prConflictTarget(ref) {
+    var t = identityType(ref);
+    if (t === 'canonical' || t === 'invalid') return 'user_id,exercise_id';
+    if (t === 'custom') return 'user_id,user_exercise_id';
+    return null;
+  }
+
+  // Human-readable identity label for logs/diagnostics — never used for matching.
+  function identityLabel(ref) {
+    var t = identityType(ref);
+    if (t === 'canonical') return 'canonical#' + ref.exerciseId;
+    if (t === 'custom') return 'custom#' + ref.customId;
+    if (t === 'invalid') return 'INVALID(dual-id)';
+    return 'legacy(' + normalizeName(ref && ref.name) + ')';
+  }
+
   // ── Chronology ─────────────────────────────────────────────────────────────
   // Newest-first comparator over sessions { workoutId, date, createdAt }.
   // Primary: workout `date` (user-facing, editable in principle); secondary:
@@ -228,6 +298,13 @@
     filterLoggedMatches: filterLoggedMatches,
     isComparableForProgression: isComparableForProgression,
     normalizeName: normalizeName,
+    // stable identity model (Phase 4.2.1K)
+    identityType: identityType,
+    isValidIdentity: isValidIdentity,
+    identityKey: identityKey,
+    prIdentityColumns: prIdentityColumns,
+    prConflictTarget: prConflictTarget,
+    identityLabel: identityLabel,
     // chronology
     selectPreviousSessions: selectPreviousSessions,
     orderByRecency: orderByRecency,

@@ -33,6 +33,13 @@
 //   { id, prevSession: { sessions[], opts?, expectOrder[] }, tags }
 //     asserts the workoutId order of ExerciseLog.selectPreviousSessions(...) —
 //     current/incomplete/future-dated exclusion + deterministic ordering.
+//
+// Phase 4.2.1K — stable PR / exercise identity (exercise-log.js), scored inline:
+//   { id, prIdentity: { a, b?, sameKey?, type?, key?, conflict? }, tags }
+//     a / b are refs (query string or literal { exerciseId?, customId?, name }).
+//     sameKey asserts ExerciseLog.identityKey(a)===identityKey(b) (PR identity
+//     separation across canonical/custom/rename/recreate). type/key/conflict
+//     assert identityType / identityKey / prConflictTarget of `a`.
 
 'use strict';
 
@@ -123,6 +130,30 @@ function checkCase(c) {
     const same = EL.isComparableForProgression(a, b);
     if (c.identity.sameExercise !== undefined && same !== c.identity.sameExercise) {
       fails.push(`identity same=${same} != ${c.identity.sameExercise} (a=${JSON.stringify(a.name)}#${a.exerciseId || a.customId || '·'} b=${JSON.stringify(b.name)}#${b.exerciseId || b.customId || '·'})`);
+    }
+  }
+
+  // PR / stable identity keys (Phase 4.2.1K) — the shared identity model behind
+  // personal_records upserts and per-session keying. `a`/`b` are refs (string or
+  // literal). Asserts sameKey (identityKey equality) and/or the individual
+  // key/type/conflict-target of `a`.
+  if (c.prIdentity) {
+    const a = toRef(c.prIdentity.a);
+    if (c.prIdentity.b !== undefined) {
+      const b = toRef(c.prIdentity.b);
+      const same = EL.identityKey(a) === EL.identityKey(b);
+      if (c.prIdentity.sameKey !== undefined && same !== c.prIdentity.sameKey) {
+        fails.push(`prIdentity sameKey=${same} != ${c.prIdentity.sameKey} (aKey=${EL.identityKey(a)} bKey=${EL.identityKey(b)})`);
+      }
+    }
+    if (c.prIdentity.type !== undefined && EL.identityType(a) !== c.prIdentity.type) {
+      fails.push(`prIdentity type=${EL.identityType(a)} != ${c.prIdentity.type}`);
+    }
+    if (c.prIdentity.key !== undefined && EL.identityKey(a) !== c.prIdentity.key) {
+      fails.push(`prIdentity key=${EL.identityKey(a)} != ${c.prIdentity.key}`);
+    }
+    if (c.prIdentity.conflict !== undefined && EL.prConflictTarget(a) !== c.prIdentity.conflict) {
+      fails.push(`prIdentity conflict=${EL.prConflictTarget(a)} != ${c.prIdentity.conflict}`);
     }
   }
 

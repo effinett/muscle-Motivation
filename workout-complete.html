@@ -237,6 +237,11 @@
 <script src="supabase.js"></script>
 <script src="schedules.js"></script>
 <script src="progression.js"></script>
+<!-- Shared exercise-identity cores (Phase 4.2.1E/J/K): stable canonical/custom/
+     legacy identity so the recap's per-exercise trend never merges a same-name
+     canonical and custom (or two same-name customs). -->
+<script src="exercise-core.js"></script>
+<script src="exercise-log.js"></script>
 <script>
   var user = null;
 
@@ -302,7 +307,7 @@
     // Current workout + its exercises + sets (RLS scopes to this user).
     var { data: w } = await supabaseClient
       .from('workouts')
-      .select('id,user_id,name,created_at,date,duration_minutes,program_slug,session_key,mode, workout_exercises(id,exercise_name,order_index, workout_sets(set_number,weight_lbs,reps,completed,is_warmup))')
+      .select('id,user_id,name,created_at,date,duration_minutes,program_slug,session_key,mode, workout_exercises(id,exercise_name,exercise_id,user_exercise_id,order_index, workout_sets(set_number,weight_lbs,reps,completed,is_warmup))')
       .eq('id', workoutId).maybeSingle();
     if(!w || w.user_id !== user.id) return null;
 
@@ -310,11 +315,16 @@
       .sort(function(a,b){ return (a.order_index||0)-(b.order_index||0); })
       .map(function(e){
         return { name:e.exercise_name,
+          exercise_id: e.exercise_id != null ? e.exercise_id : null,
+          customId: e.user_exercise_id != null ? e.user_exercise_id : null,
           sets:(e.workout_sets||[]).slice().sort(function(a,b){ return (a.set_number||0)-(b.set_number||0); }) };
       });
 
-    var names = exs.map(function(e){ return e.name; });
-    var history = names.length ? await loadHistory(names, workoutId) : {};
+    // Attach each exercise's prior-session history keyed by STABLE identity
+    // (Phase 4.2.1K): a canonical exercise and a same-name custom never share a
+    // trend; two same-name customs stay separate; legacy name-only rows fold in
+    // only when the current exercise has no stable id.
+    if(exs.length) await loadHistory(exs, workoutId);
 
     // Optional: programmed rep ranges for the session (for progression text).
     var ranges = {};
@@ -325,35 +335,50 @@
         if(tmpl && tmpl.exercises) tmpl.exercises.forEach(function(t){ ranges[(t.name||'').toLowerCase()] = t; });
       } catch(e){}
     }
-    return { w:w, exs:exs, history:history, ranges:ranges };
+    return { w:w, exs:exs, ranges:ranges };
   }
 
-  // For each exercise name, return historical sessions (newest first), built from
-  // the user's OTHER completed workouts (current workout excluded). Raw sets.
-  async function loadHistory(names, excludeWorkoutId){
-    var out = {};
+  // Attach `e.history` (prior sessions, newest first) to each current exercise,
+  // built from the user's OTHER completed workouts (current excluded). Rows are
+  // gathered by name + canonical id + custom id, then filtered PER exercise by
+  // stable identity (ExerciseLog) so same-name exercises never share a trend.
+  async function loadHistory(exs, excludeWorkoutId){
+    exs.forEach(function(e){ e.history = []; });
     try {
-      var { data: wexs } = await supabaseClient
-        .from('workout_exercises').select('id,exercise_name,workout_id').in('exercise_name', names);
-      if(!wexs || !wexs.length) return out;
+      var SEL = 'id,exercise_name,exercise_id,user_exercise_id,workout_id';
+      var names   = [...new Set(exs.map(function(e){ return e.name; }))];
+      var exIds   = [...new Set(exs.map(function(e){ return e.exercise_id; }).filter(function(x){ return x!=null; }))];
+      var custIds = [...new Set(exs.map(function(e){ return e.customId; }).filter(function(x){ return x!=null; }))];
+      var buckets = [];
+      if(names.length){   var a=await supabaseClient.from('workout_exercises').select(SEL).in('exercise_name', names);      if(a.data) buckets=buckets.concat(a.data); }
+      if(exIds.length){   var b=await supabaseClient.from('workout_exercises').select(SEL).in('exercise_id', exIds);        if(b.data) buckets=buckets.concat(b.data); }
+      if(custIds.length){ var c=await supabaseClient.from('workout_exercises').select(SEL).in('user_exercise_id', custIds); if(c.data) buckets=buckets.concat(c.data); }
+      var seen={}, wexs=[];
+      buckets.forEach(function(x){ if(!seen[x.id]){ seen[x.id]=1; wexs.push(x); } });
+      if(!wexs.length) return;
       var ids = [...new Set(wexs.map(function(x){return x.workout_id;}))];
       var { data: ws } = await supabaseClient
         .from('workouts').select('id,created_at').eq('user_id', user.id).eq('completed', true).in('id', ids);
       var when = {}; (ws||[]).forEach(function(x){ when[x.id]=x.created_at; });
       var valid = wexs.filter(function(x){ return when[x.workout_id] && x.workout_id !== excludeWorkoutId; });
       var wexIds = valid.map(function(x){ return x.id; });
-      if(!wexIds.length) return out;
+      if(!wexIds.length) return;
       var { data: sets } = await supabaseClient
         .from('workout_sets').select('workout_exercise_id,set_number,weight_lbs,reps,completed,is_warmup').in('workout_exercise_id', wexIds);
       var byWex = {}; (sets||[]).forEach(function(s){ (byWex[s.workout_exercise_id]=byWex[s.workout_exercise_id]||[]).push(s); });
-      valid.forEach(function(x){
-        var ss = (byWex[x.id]||[]).slice().sort(function(a,b){ return (a.set_number||0)-(b.set_number||0); });
-        if(!ss.length) return;
-        (out[x.exercise_name]=out[x.exercise_name]||[]).push({ date:when[x.workout_id], sets:ss });
+      exs.forEach(function(e){
+        var ref = { exerciseId: e.exercise_id!=null?e.exercise_id:null, customId: e.customId!=null?e.customId:null, name: e.name };
+        var matches = (typeof ExerciseLog!=='undefined')
+          ? ExerciseLog.filterLoggedMatches(ref, valid)
+          : valid.filter(function(x){ return x.exercise_name === e.name; });
+        matches.forEach(function(x){
+          var ss = (byWex[x.id]||[]).slice().sort(function(a,b){ return (a.set_number||0)-(b.set_number||0); });
+          if(!ss.length) return;
+          e.history.push({ date:when[x.workout_id], sets:ss });
+        });
+        e.history.sort(function(a,b){ return new Date(b.date)-new Date(a.date); });
       });
-      Object.keys(out).forEach(function(n){ out[n].sort(function(a,b){ return new Date(b.date)-new Date(a.date); }); });
     } catch(e){ console.error('loadHistory', e); }
-    return out;
   }
 
   // Build pre-workout PR baseline from history sessions (completed, non-warmup).
@@ -377,7 +402,7 @@
 
   // ── render ────────────────────────────────────────────────────────
   function render(d){
-    var w=d.w, exs=d.exs, history=d.history, ranges=d.ranges;
+    var w=d.w, exs=d.exs, ranges=d.ranges;
 
     // Hero meta + stats
     var dt = new Date(w.created_at || w.date);
@@ -408,7 +433,7 @@
     var prCards=[], bdRows=[], progItems=[], improved=0, analyzable=0;
     exs.forEach(function(e){
       var ws = working(e.sets);
-      var sessions = history[e.name] || [];
+      var sessions = e.history || [];
       var base = baseline(sessions);
       var prevSession = sessions.length ? sessions[0] : null;
 

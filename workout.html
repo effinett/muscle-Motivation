@@ -1080,6 +1080,37 @@
     return libraryExerciseId(name);
   }
 
+  // Resolve an ACTIVE custom exercise's stable user_exercises.id by name (Phase
+  // 4.2.1K). Customs live OUTSIDE the canonical exercises FK, so their identity
+  // rides separately on workout_exercises.user_exercise_id / personal_records.
+  // Matches on the shared custom normalizer so it never drifts from lifecycle
+  // (4.2.1H) or resolution. Returns null for canonical/free-typed names or when
+  // no ACTIVE custom matches (archived customs are intentionally excluded).
+  function activeCustomIdByName(name) {
+    if (!name) return null;
+    var normOf = (typeof ExerciseCustom !== 'undefined')
+      ? function(n) { return ExerciseCustom.normalizeCustomName(n); }
+      : (typeof ExerciseLog !== 'undefined'
+          ? function(n) { return ExerciseLog.normalizeName(n); }
+          : function(n) { return String(n || '').toLowerCase().trim(); });
+    var norm = normOf(name);
+    var hit = (customExercises || []).find(function(c) {
+      return !c.archived_at && normOf(c.name) === norm;
+    });
+    return hit ? hit.id : null;
+  }
+
+  // Decide the mutually-exclusive identity columns to persist for a logged
+  // exercise (Phase 4.2.1K). A real canonical exercises.id wins; else an ACTIVE
+  // custom user_exercises.id; else neither (legacy/free-typed name-only row).
+  // exercise_id and user_exercise_id are NEVER both set — the DB CHECK backstops
+  // it. `canonicalHint` is a picker/template-supplied canonical id when known.
+  function exerciseIdentityColumns(name, canonicalHint) {
+    var canon = (canonicalHint != null) ? canonicalHint : libraryExerciseId(name);
+    if (canon != null) return { exercise_id: canon, user_exercise_id: null };
+    return { exercise_id: null, user_exercise_id: activeCustomIdByName(name) };
+  }
+
   // Build the immutable lifecycle context (canonical names + the user's own
   // customs) the shared decision core reasons over. Guards for the module being
   // unavailable so callers can fall back to legacy behavior.
@@ -1322,11 +1353,15 @@
     try {
       var { data, error } = await supabaseClient
         .from('workout_exercises')
-        .select('exercise_name, workouts!inner(user_id)')
+        .select('exercise_name, user_exercise_id, workouts!inner(user_id)')
         .eq('workouts.user_id', currentUser.id);
       if (error) return 1;
       (data || []).forEach(function(we){
-        if (ExerciseCustom.normalizeCustomName(we.exercise_name) === norm) count++;
+        // ID-first (Phase 4.2.1K): an id-backed row references this custom even
+        // after a rename (its name-snapshot no longer matches). Legacy name-only
+        // rows still count by normalized name.
+        if (we.user_exercise_id != null) { if (we.user_exercise_id === c.id) count++; }
+        else if (ExerciseCustom.normalizeCustomName(we.exercise_name) === norm) count++;
       });
     } catch (e) { return 1; }
     (templates || []).forEach(function(t){
@@ -1355,12 +1390,13 @@
   async function loadExercisesForWorkout(workoutId) {
     var { data: wexs } = await supabaseClient
       .from('workout_exercises')
-      .select('id, exercise_name, exercise_id, order_index, workout_sets(*)')
+      .select('id, exercise_name, exercise_id, user_exercise_id, order_index, workout_sets(*)')
       .eq('workout_id', workoutId).order('order_index');
     if (!wexs) return;
     exercises = wexs.map(function(we) {
       return {
-        id: we.id, name: we.exercise_name, exercise_id: we.exercise_id, order_index: we.order_index,
+        id: we.id, name: we.exercise_name, exercise_id: we.exercise_id,
+        customId: we.user_exercise_id != null ? we.user_exercise_id : null, order_index: we.order_index,
         last_perf: null, last_weight: null, last_reps: null,
         sets: (we.workout_sets || [])
           .sort(function(a, b) { return a.set_number - b.set_number; })
@@ -1385,26 +1421,38 @@
   async function loadLoggedMatches(ex) {
     try {
       var buckets = [];
+      var SEL = 'id, workout_id, exercise_name, exercise_id, user_exercise_id';
       if (ex.exercise_id != null) {
         var r1 = await supabaseClient
-          .from('workout_exercises').select('id, workout_id, exercise_name, exercise_id')
-          .eq('exercise_id', ex.exercise_id);
+          .from('workout_exercises').select(SEL).eq('exercise_id', ex.exercise_id);
         if (r1.data) buckets = buckets.concat(r1.data);
       }
+      // Custom identity (Phase 4.2.1K): id-backed custom rows match by stable
+      // user_exercises.id even after a rename (their name-snapshot differs).
+      if (ex.customId != null) {
+        var rc = await supabaseClient
+          .from('workout_exercises').select(SEL).eq('user_exercise_id', ex.customId);
+        if (rc.data) buckets = buckets.concat(rc.data);
+      }
+      // Name pass: folds legacy (pre-ID) rows for BOTH canonical and custom refs;
+      // filterLoggedMatches then drops anything that is not the same identity.
       var r2 = await supabaseClient
-        .from('workout_exercises').select('id, workout_id, exercise_name, exercise_id')
-        .eq('exercise_name', ex.name);
+        .from('workout_exercises').select(SEL).eq('exercise_name', ex.name);
       if (r2.data) buckets = buckets.concat(r2.data);
       var seen = {}, rows = [];
       buckets.forEach(function(w) { if (!seen[w.id]) { seen[w.id] = 1; rows.push(w); } });
       if (typeof ExerciseLog === 'undefined') {
         // Degrade to legacy id-or-name matching if the module failed to load.
         return rows.filter(function(w) {
-          return (ex.exercise_id != null && w.exercise_id === ex.exercise_id) || w.exercise_name === ex.name;
+          return (ex.exercise_id != null && w.exercise_id === ex.exercise_id)
+              || (ex.customId != null && w.user_exercise_id === ex.customId)
+              || w.exercise_name === ex.name;
         });
       }
       return ExerciseLog.filterLoggedMatches(
-        { exerciseId: ex.exercise_id != null ? ex.exercise_id : null, name: ex.name }, rows);
+        { exerciseId: ex.exercise_id != null ? ex.exercise_id : null,
+          customId: ex.customId != null ? ex.customId : null,
+          name: ex.name }, rows);
     } catch (e) {
       return [];
     }
@@ -1950,14 +1998,18 @@
       // Template builder reuses this same picker — route the pick into the draft
       // instead of the live workout.
       if (pickerMode === 'template') { addTemplateExercise(name, canonicalId); return; }
+      // Stable identity (Phase 4.2.1K): saveUserExercise above already created/
+      // restored/reused the custom row, so it is now resolvable by name. Persist
+      // exactly one of exercise_id (canonical) / user_exercise_id (custom).
+      var ids = exerciseIdentityColumns(name, canonicalId);
       var orderIndex = exercises.length;
       var { data, error } = await supabaseClient
         .from('workout_exercises')
         .insert({ workout_id: currentWorkout.id, exercise_name: name, order_index: orderIndex,
-                  exercise_id: canonicalId })
+                  exercise_id: ids.exercise_id, user_exercise_id: ids.user_exercise_id })
         .select().single();
       if (error) { showToast('Error adding exercise.'); return; }
-      var ex = { id: data.id, name: name, exercise_id: canonicalId, order_index: orderIndex, last_perf: null, last_weight: null, last_reps: null, sets: [], history: [] };
+      var ex = { id: data.id, name: name, exercise_id: ids.exercise_id, customId: ids.user_exercise_id, order_index: orderIndex, last_perf: null, last_weight: null, last_reps: null, sets: [], history: [] };
       await Promise.all([loadLastPerf(ex), loadExerciseHistory(ex)]);
       exercises.push(ex);
       // Pre-create the recommended number of straight sets, each pre-filled with
@@ -2140,12 +2192,26 @@
     return st;
   }
 
+  // Per-session PR-state key: stable identity (Phase 4.2.1K), NOT the display
+  // name — so a canonical and a same-name custom logged in one session keep
+  // separate live-PR baselines. Falls back to name if the module is unavailable.
+  function prStateKey(ex) {
+    if (typeof ExerciseLog !== 'undefined') {
+      return ExerciseLog.identityKey({
+        exerciseId: ex.exercise_id != null ? ex.exercise_id : null,
+        customId: ex.customId != null ? ex.customId : null,
+        name: ex.name });
+    }
+    return ex.name;
+  }
+
   // Cache the baseline promise so rapid set checks don't double-query.
   async function getPrState(ex) {
-    if (prState[ex.name]) return prState[ex.name];
-    if (!prStateLoading[ex.name]) prStateLoading[ex.name] = loadPrBaseline(ex);
-    prState[ex.name] = await prStateLoading[ex.name];
-    return prState[ex.name];
+    var k = prStateKey(ex);
+    if (prState[k]) return prState[k];
+    if (!prStateLoading[k]) prStateLoading[k] = loadPrBaseline(ex);
+    prState[k] = await prStateLoading[k];
+    return prState[k];
   }
 
   // Called when a set is checked complete. Decides whether this set establishes
@@ -2291,22 +2357,56 @@
           .map(function(s) { return { weight: s.weight_lbs, reps: s.reps }; });
         if (!working.length) continue;
 
-        var { data: prior } = await supabaseClient
-          .from('personal_records').select('*')
-          .eq('user_id', currentUser.id).eq('exercise_name', ex.name).maybeSingle();
+        // Stable PR identity (Phase 4.2.1K): read the prior record and write the
+        // new one keyed by canonical exercise_id or custom user_exercise_id — so
+        // a canonical and a same-name custom never collide, two same-name customs
+        // stay separate, and rename/archive/restore keep the SAME id-backed PR.
+        // Legacy name-only fallback is used ONLY when the exercise has no stable
+        // id, and never creates a NEW legacy row when an id is available.
+        var pref = {
+          exerciseId: ex.exercise_id != null ? ex.exercise_id : null,
+          customId: ex.customId != null ? ex.customId : null,
+          name: ex.name
+        };
+        var idType = (typeof ExerciseLog !== 'undefined') ? ExerciseLog.identityType(pref) : 'legacy';
+
+        var priorQ = supabaseClient.from('personal_records').select('*').eq('user_id', currentUser.id);
+        if (idType === 'canonical')      priorQ = priorQ.eq('exercise_id', pref.exerciseId);
+        else if (idType === 'custom')    priorQ = priorQ.eq('user_exercise_id', pref.customId);
+        else                             priorQ = priorQ.eq('exercise_name', ex.name)
+                                                        .is('exercise_id', null).is('user_exercise_id', null);
+        var { data: prior } = await priorQ.maybeSingle();
 
         var res = Progression.evaluatePRs(working, prior);
         if (res.updated) {
-          await supabaseClient.from('personal_records').upsert({
+          var idcols = (typeof ExerciseLog !== 'undefined')
+            ? ExerciseLog.prIdentityColumns(pref)
+            : { exercise_id: pref.exerciseId, user_exercise_id: pref.customId, exercise_name: ex.name };
+          var prRow = {
             user_id: currentUser.id,
             exercise_name: ex.name,
+            exercise_id: idcols.exercise_id,
+            user_exercise_id: idcols.user_exercise_id,
             best_weight: res.best.best_weight,
             best_reps: res.best.best_reps,
             best_volume: res.best.best_volume,
             best_estimated_1rm: res.best.best_estimated_1rm,
             source_workout_id: currentWorkout.id,
             updated_at: new Date().toISOString()
-          }, { onConflict: 'user_id,exercise_name' });
+          };
+          var conflict = (typeof ExerciseLog !== 'undefined') ? ExerciseLog.prConflictTarget(pref) : null;
+          if (conflict) {
+            // Canonical / custom: deterministic upsert against the identity-aware
+            // unique constraint (idempotent under duplicate submits).
+            await supabaseClient.from('personal_records').upsert(prRow, { onConflict: conflict });
+          } else if (prior && prior.id) {
+            // Legacy row already exists → update in place (no duplicate legacy row).
+            await supabaseClient.from('personal_records').update(prRow).eq('id', prior.id);
+          } else {
+            // Truly new legacy record (rare: a free-typed name whose custom row
+            // could not be saved). Keeps behavior working without a stable id.
+            await supabaseClient.from('personal_records').insert(prRow);
+          }
         }
         if (res.hadPrior && res.topMessage) {
           messages.push(ex.name + ' ' + res.topMessage);
@@ -2381,13 +2481,15 @@
       var exList = sessData.exercises || [];
       for (var i = 0; i < exList.length; i++) {
         var ex = exList[i];
+        var pids = exerciseIdentityColumns(ex.name, ex.exercise_id != null ? ex.exercise_id : null);
         var { data: we } = await supabaseClient
           .from('workout_exercises')
           .insert({ workout_id: workout.id, exercise_name: ex.name, order_index: i,
-                  exercise_id: (ex.exercise_id != null ? ex.exercise_id : libraryExerciseId(ex.name)) })
+                  exercise_id: pids.exercise_id, user_exercise_id: pids.user_exercise_id })
           .select().single();
         if (!we) continue;
-        var newEx = { id: we.id, name: ex.name, exercise_id: we.exercise_id, order_index: i, last_perf: null, last_weight: null, last_reps: null, sets: [],
+        var newEx = { id: we.id, name: ex.name, exercise_id: we.exercise_id,
+          customId: we.user_exercise_id != null ? we.user_exercise_id : null, order_index: i, last_perf: null, last_weight: null, last_reps: null, sets: [],
           history: [], reps_low: ex.reps_low, reps_high: ex.reps_high, target_sets: ex.sets };
         await Promise.all([loadLastPerf(newEx), loadExerciseHistory(newEx)]);
         exercises.push(newEx);
@@ -2746,13 +2848,15 @@
     var exList = tpl.exercises || [];
     for (var i = 0; i < exList.length; i++) {
       var ex = exList[i];
+      var tids = exerciseIdentityColumns(ex.name, ex.exercise_id != null ? ex.exercise_id : null);
       var { data: we } = await supabaseClient
         .from('workout_exercises')
         .insert({ workout_id: workout.id, exercise_name: ex.name, order_index: i,
-                  exercise_id: (ex.exercise_id != null ? ex.exercise_id : libraryExerciseId(ex.name)) })
+                  exercise_id: tids.exercise_id, user_exercise_id: tids.user_exercise_id })
         .select().single();
       if (!we) continue;
-      var newEx = { id: we.id, name: ex.name, order_index: i, last_perf: null, last_weight: null, last_reps: null,
+      var newEx = { id: we.id, name: ex.name, exercise_id: we.exercise_id,
+        customId: we.user_exercise_id != null ? we.user_exercise_id : null, order_index: i, last_perf: null, last_weight: null, last_reps: null,
         sets: [], history: [], reps_low: ex.reps_low, reps_high: ex.reps_high, target_sets: ex.sets };
       await Promise.all([loadLastPerf(newEx), loadExerciseHistory(newEx)]);
       exercises.push(newEx);

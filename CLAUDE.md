@@ -479,11 +479,31 @@ loaded on `workout.html` and `workout-history.html` AFTER `exercise-core.js`
   name and **never** inherits a canonical's history; two customs with different
   known ids stay distinct. `workout.html` `loadLoggedMatches(ex)` consumes this
   for `loadLastPerf`, `loadExerciseHistory`, and the live-PR baseline — the
-  in-memory `ex` now carries `exercise_id`. Previous-performance/progression are
-  therefore ID-first, not name-only. **Not yet changed:** `personal_records` is
-  keyed by `exercise_name` at the table level, and `workout_exercises` does not
-  yet persist a custom's `user_exercises.id` (two same-name customs share logged
-  history until that column exists) — both deferred, documented, non-destructive.
+  in-memory `ex` now carries `exercise_id` **and `customId`** (Phase 4.2.1K).
+  Previous-performance/progression are therefore ID-first, not name-only.
+- **Stable identity model + PR identity (`Live`, Phase 4.2.1K).** The two Phase-J
+  gaps are closed. `workout_exercises` now persists `user_exercise_id` (a custom's
+  stable `user_exercises.id`) alongside canonical `exercise_id` — mutually
+  exclusive (DB CHECK), FK `ON DELETE SET NULL` so a custom's permanent delete or
+  account deletion degrades a row to legacy rather than erasing history. A shared
+  `identityType` / `identityKey` / `prIdentityColumns` / `prConflictTarget`
+  classify a reference as `canonical` (exercise_id) > `custom` (user_exercise_id) >
+  `legacy` (normalized name), and `personal_records` gained `exercise_id` +
+  `user_exercise_id` with identity-aware uniqueness — `unique (user_id,
+  exercise_id)` / `unique (user_id, user_exercise_id)` (NULLs distinct) + a partial
+  `(user_id, exercise_name) WHERE both ids null` legacy guard — so a canonical and
+  a same-name custom, two same-name customs, and rename/archive/restore/recreate
+  all keep separate PRs, while a **recreated** same-name custom gets a NEW id.
+  `detectAndRecordPRs` reads/writes by identity (canonical→`user_id,exercise_id`,
+  custom→`user_id,user_exercise_id` upsert; legacy read-then-write by row id, never
+  a new name-only row). Backfill was conservative and unambiguous only (81
+  canonical + 99 custom of 189; the 8 canonical/custom name-collision rows + 1
+  un-attributable stay legacy — never guessed). Same-user ownership of custom
+  references is enforced server-side by BEFORE triggers on both tables (User A can
+  never reference User B's custom). The `workout-complete.html` recap trend and
+  `personal_records` are the only PR read/write surfaces; there is no global PR
+  list. **Still name-only:** legacy pre-K `workout_exercises` custom rows keep
+  matching by name (conservative fold) — never backfilled to avoid guessing.
 - **Chronological previous-session selection.** `selectPreviousSessions(...)`
   excludes the current in-progress workout, incomplete (draft/abandoned)
   sessions, and future-dated rows, then orders deterministically (date desc →

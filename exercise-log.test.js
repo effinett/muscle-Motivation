@@ -207,3 +207,139 @@ test('sanitizeSetField dispatches by field name', () => {
   assert.deepStrictEqual(EL.sanitizeSetField('weight_lbs', '95.5'), { value: 95.5, valid: true });
   assert.deepStrictEqual(EL.sanitizeSetField('unknown', 'x'), { value: 'x', valid: true });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 4.2.1K — Stable identity model (canonical / custom / legacy) + PR identity
+// ─────────────────────────────────────────────────────────────────────────────
+const CUST_A = 'ue-aaa';
+const CUST_B = 'ue-bbb';
+
+// ── identityType: classification ─────────────────────────────────────────────
+test('identityType: canonical / custom / legacy / invalid', () => {
+  assert.strictEqual(EL.identityType(ref({ exerciseId: BENCH, name: 'Bench Press' })), 'canonical');
+  assert.strictEqual(EL.identityType(ref({ customId: CUST_A, name: 'Sled Push' })), 'custom');
+  assert.strictEqual(EL.identityType(ref({ name: 'Free Typed' })), 'legacy');
+  assert.strictEqual(EL.identityType(ref({})), 'legacy');
+  assert.strictEqual(EL.identityType(null), 'legacy');
+  // impossible dual-id state is flagged, never silently accepted
+  assert.strictEqual(EL.identityType(ref({ exerciseId: BENCH, customId: CUST_A, name: 'x' })), 'invalid');
+  assert.strictEqual(EL.isValidIdentity(ref({ exerciseId: BENCH, customId: CUST_A })), false);
+  assert.strictEqual(EL.isValidIdentity(ref({ exerciseId: BENCH })), true);
+});
+
+// ── identityKey: deterministic, never cross-type collisions ──────────────────
+test('identityKey: canonical/custom/legacy keys are distinct & deterministic', () => {
+  assert.strictEqual(EL.identityKey(ref({ exerciseId: BENCH, name: 'Bench Press' })), 'canon:' + BENCH);
+  assert.strictEqual(EL.identityKey(ref({ customId: CUST_A, name: 'Sled Push' })), 'custom:' + CUST_A);
+  // legacy key normalizes the name
+  assert.strictEqual(EL.identityKey(ref({ name: 'Bench  Press' })), 'legacy:bench press');
+  // a canonical named "Bench Press" and a legacy "Bench Press" never share a key
+  assert.notStrictEqual(
+    EL.identityKey(ref({ exerciseId: BENCH, name: 'Bench Press' })),
+    EL.identityKey(ref({ name: 'Bench Press' })));
+  // two customs with the same name but different ids get different keys
+  assert.notStrictEqual(
+    EL.identityKey(ref({ customId: CUST_A, name: 'Row' })),
+    EL.identityKey(ref({ customId: CUST_B, name: 'Row' })));
+});
+
+test('identityKey: punctuation/case differences normalize to the same legacy key', () => {
+  assert.strictEqual(
+    EL.identityKey(ref({ name: "Farmer's Carry" })),
+    EL.identityKey(ref({ name: 'FARMERS   carry' })));
+});
+
+// ── prIdentityColumns: exactly one stable id, name always carried ────────────
+test('prIdentityColumns: canonical row carries exercise_id only', () => {
+  assert.deepStrictEqual(
+    EL.prIdentityColumns(ref({ exerciseId: BENCH, name: 'Bench Press' })),
+    { exercise_id: BENCH, user_exercise_id: null, exercise_name: 'Bench Press' });
+});
+
+test('prIdentityColumns: custom row carries user_exercise_id only', () => {
+  assert.deepStrictEqual(
+    EL.prIdentityColumns(ref({ customId: CUST_A, name: 'Sled Push' })),
+    { exercise_id: null, user_exercise_id: CUST_A, exercise_name: 'Sled Push' });
+});
+
+test('prIdentityColumns: legacy row carries neither id, snapshot name only', () => {
+  assert.deepStrictEqual(
+    EL.prIdentityColumns(ref({ name: 'Mystery Move' })),
+    { exercise_id: null, user_exercise_id: null, exercise_name: 'Mystery Move' });
+});
+
+test('prIdentityColumns: dual-id is normalized to canonical-wins (never persists both)', () => {
+  const cols = EL.prIdentityColumns(ref({ exerciseId: BENCH, customId: CUST_A, name: 'x' }));
+  assert.strictEqual(cols.exercise_id, BENCH);
+  assert.strictEqual(cols.user_exercise_id, null);
+});
+
+// ── prConflictTarget: the upsert arbiter per identity type ───────────────────
+test('prConflictTarget: canonical→exercise_id, custom→user_exercise_id, legacy→null', () => {
+  assert.strictEqual(EL.prConflictTarget(ref({ exerciseId: BENCH })), 'user_id,exercise_id');
+  assert.strictEqual(EL.prConflictTarget(ref({ customId: CUST_A })), 'user_id,user_exercise_id');
+  assert.strictEqual(EL.prConflictTarget(ref({ name: 'legacy' })), null);
+});
+
+// ── PR identity separation invariants (via the same identity model) ──────────
+test('PR identity: canonical and same-name custom get different conflict identities', () => {
+  const canon = ref({ exerciseId: BENCH, name: 'Bench Press' });
+  const cust  = ref({ customId: CUST_A, name: 'Bench Press' });
+  assert.notStrictEqual(EL.identityKey(canon), EL.identityKey(cust));
+  assert.notStrictEqual(EL.prConflictTarget(canon), EL.prConflictTarget(cust));
+});
+
+test('PR identity: two same-name customs get separate PR identities', () => {
+  assert.notStrictEqual(
+    EL.identityKey(ref({ customId: CUST_A, name: 'Row' })),
+    EL.identityKey(ref({ customId: CUST_B, name: 'Row' })));
+});
+
+test('PR identity: rename preserves the same custom PR identity (id-stable)', () => {
+  // Same user_exercises.id before/after a rename → same key → same PR row.
+  assert.strictEqual(
+    EL.identityKey(ref({ customId: CUST_A, name: 'Old Name' })),
+    EL.identityKey(ref({ customId: CUST_A, name: 'New Name' })));
+});
+
+test('PR identity: recreated same-name custom (new id) is a separate identity', () => {
+  // archived CUST_A recreated as CUST_B under the same display name.
+  assert.notStrictEqual(
+    EL.identityKey(ref({ customId: CUST_A, name: 'Hip Thrust Machine' })),
+    EL.identityKey(ref({ customId: CUST_B, name: 'Hip Thrust Machine' })));
+});
+
+// ── identityLabel: debug-safe, never used for matching ───────────────────────
+test('identityLabel: readable per type', () => {
+  assert.strictEqual(EL.identityLabel(ref({ exerciseId: BENCH })), 'canonical#' + BENCH);
+  assert.strictEqual(EL.identityLabel(ref({ customId: CUST_A })), 'custom#' + CUST_A);
+  assert.strictEqual(EL.identityLabel(ref({ name: 'X Y' })), 'legacy(x y)');
+  assert.strictEqual(EL.identityLabel(ref({ exerciseId: BENCH, customId: CUST_A })), 'INVALID(dual-id)');
+});
+
+// ── sameLoggedExercise with populated custom ids (Phase K persistence) ───────
+test('custom ref matches an id-backed custom row after rename (name differs, id same)', () => {
+  // Post-K: workout_exercises carries user_exercise_id. A renamed custom whose
+  // history rows carry its id still matches by id even though names differ.
+  const renamed = ref({ customId: CUST_A, name: 'New Name' });
+  assert.strictEqual(
+    EL.sameLoggedExercise(renamed, row({ user_exercise_id: CUST_A, exercise_name: 'Old Name' })), true);
+});
+
+test('recreated custom does not inherit the archived custom’s id-backed history', () => {
+  const recreated = ref({ customId: CUST_B, name: 'Hip Thrust Machine' });
+  assert.strictEqual(
+    EL.sameLoggedExercise(recreated, row({ user_exercise_id: CUST_A, exercise_name: 'Hip Thrust Machine' })), false);
+});
+
+test('filterLoggedMatches: custom ref keeps its own id rows + legacy name rows, drops other customs', () => {
+  const r = ref({ customId: CUST_A, name: 'Sled Push' });
+  const rows = [
+    row({ user_exercise_id: CUST_A, exercise_name: 'Sled Push' }),   // ✓ id match
+    row({ user_exercise_id: CUST_B, exercise_name: 'Sled Push' }),   // ✗ other custom, same name
+    row({ exercise_id: null, exercise_name: 'Sled Push' }),          // ✓ legacy name fallback
+    row({ exercise_id: BENCH, exercise_name: 'Sled Push' })          // ✗ canonical id row
+  ];
+  const kept = EL.filterLoggedMatches(r, rows);
+  assert.strictEqual(kept.length, 2);
+});

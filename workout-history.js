@@ -34,7 +34,7 @@ async function loadHistory(opts) {
 
   var query = supabaseClient
     .from('workouts')
-    .select('id, name, notes, created_at, duration_minutes, program_slug, session_key, mode, workout_exercises(id, exercise_name, order_index, workout_sets(id, set_number, weight_lbs, reps, completed))')
+    .select('id, name, notes, created_at, duration_minutes, program_slug, session_key, mode, workout_exercises(id, exercise_name, exercise_id, user_exercise_id, order_index, workout_sets(id, set_number, weight_lbs, reps, completed))')
     .eq('user_id', currentUser.id).eq('completed', true)
     .order('created_at', { ascending: false });
   if (opts.limit) query = query.limit(opts.limit);
