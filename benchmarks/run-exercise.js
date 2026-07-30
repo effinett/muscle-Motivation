@@ -13,10 +13,16 @@
 // pass rate — but if one STARTS passing, the runner flags it for promotion.
 //
 // Case format (one JSON object per line):
-//   { id, input: { query },
+//   { id, input: { query, filters? },
 //     expect: { name?, matchType?, matchTypeIn?[], notMatchType?, confidence?,
-//               family?, notName?, unresolved?, unresolvedId? },
+//               family?, notName?, unresolved?, unresolvedId?,
+//               // picker search (Phase 4.2.1F):
+//               searchTop?, searchTopNot?, searchIncludes?[], searchMinResults?, searchNoExact?,
+//               // discovery = search + filters (Phase 4.2.1I):
+//               discoveryTop?, discoveryTopNot?, discoveryIncludes?[], discoveryExcludes?[],
+//               discoveryMinResults?, discoveryEquip?[], discoveryEmpty? },
 //     known_fail?, tags?[] }
+// input.filters = { splits?[], movements?[], equipment?[] } (keys per exercise-filters.js).
 
 'use strict';
 
@@ -24,6 +30,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const EX = require('../exercise-core.js');
+const EF = require('../exercise-filters.js');
 const { EXERCISE_CATALOG } = require('./exercise-fixtures.js');
 
 const strict = process.argv.includes('--strict');
@@ -68,6 +75,28 @@ function checkCase(c) {
     if (e.searchNoExact === true) {
       const exact = s.results.find((x) => EXACT_TYPES.indexOf(x.matchType) !== -1);
       if (exact) fails.push(`searchNoExact but ${exact.name} is ${exact.matchType}`);
+    }
+  }
+
+  // Discovery expectations (Phase 4.2.1I) — search + split/movement/equipment
+  // filters composed through the SAME shared layer the picker uses. Evaluated
+  // when a case declares input.filters or any discovery* expectation.
+  const hasDiscovery = c.input.filters !== undefined ||
+    ['discoveryTop', 'discoveryTopNot', 'discoveryIncludes', 'discoveryExcludes',
+     'discoveryMinResults', 'discoveryEquip', 'discoveryEmpty'].some((k) => e[k] !== undefined);
+  if (hasDiscovery) {
+    const d = EF.runDiscovery({ index: idx, customs: [], query: c.input.query, filters: c.input.filters, limit: 60 });
+    const list = d.rows.map((x) => x.name);
+    const eqs = [...new Set(d.rows.map((x) => x.exercise && x.exercise.equipment))];
+    if (e.discoveryTop !== undefined && list[0] !== e.discoveryTop) fails.push(`discoveryTop ${JSON.stringify(list[0])} != ${JSON.stringify(e.discoveryTop)}`);
+    if (e.discoveryTopNot !== undefined && list[0] === e.discoveryTopNot) fails.push(`discoveryTop must NOT be ${JSON.stringify(e.discoveryTopNot)}`);
+    if (e.discoveryMinResults !== undefined && list.length < e.discoveryMinResults) fails.push(`discoveryMinResults ${list.length} < ${e.discoveryMinResults}`);
+    if (e.discoveryEmpty === true && list.length !== 0) fails.push(`discoveryEmpty but got ${list.length} (${list.slice(0, 3)})`);
+    if (e.discoveryIncludes !== undefined) e.discoveryIncludes.forEach((n) => { if (list.indexOf(n) === -1) fails.push(`discoveryIncludes missing ${JSON.stringify(n)}`); });
+    if (e.discoveryExcludes !== undefined) e.discoveryExcludes.forEach((n) => { if (list.indexOf(n) !== -1) fails.push(`discoveryExcludes present ${JSON.stringify(n)}`); });
+    if (e.discoveryEquip !== undefined) {
+      const extra = eqs.filter((x) => e.discoveryEquip.indexOf(x) === -1);
+      if (extra.length) fails.push(`discoveryEquip has unexpected ${JSON.stringify(extra)} (want only ${JSON.stringify(e.discoveryEquip)})`);
     }
   }
   return fails.length ? fails.join('; ') : null;

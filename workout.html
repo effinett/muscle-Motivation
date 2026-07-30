@@ -431,9 +431,88 @@
     }
     .picker-item:hover .picker-item-name { color: var(--red); }
     .picker-item:last-child { border-bottom: none; }
-    .picker-item-name { font-size: 14px; font-weight: 600; }
-    .picker-item-cat { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    /* min-width:0 lets the text column shrink so a long name wraps instead of
+       pushing the + icon off-screen (mobile overflow fix, Phase 4.2.1I). */
+    .picker-item-text { min-width: 0; flex: 1; }
+    .picker-item-name {
+      font-size: 14px; font-weight: 600;
+      overflow-wrap: anywhere; word-break: break-word;
+    }
+    .picker-item-cat {
+      font-size: 11px; color: var(--text-muted); margin-top: 2px;
+      overflow-wrap: anywhere;
+    }
     .picker-item-plus { color: var(--red); flex-shrink: 0; }
+
+    /* ── Filter UI (Phase 4.2.1I) ─────────────────────────────────────── */
+    .picker-search-row { display: flex; gap: 8px; align-items: stretch; margin-bottom: 10px; }
+    .picker-search-row .picker-search { margin-bottom: 0; flex: 1; min-width: 0; }
+    .btn-filter {
+      flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px;
+      padding: 0 12px; min-height: 40px; background: var(--surface-2);
+      border: 1px solid var(--border-2); border-radius: 8px; color: var(--text-2);
+      font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-filter i { width: 15px; height: 15px; }
+    .btn-filter:hover { border-color: var(--border-3); color: var(--text); }
+    .btn-filter[aria-expanded="true"] { border-color: var(--red-border); color: var(--text); }
+    .btn-filter.has-active { border-color: var(--red-border); color: var(--text); }
+    .filter-count {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+      background: var(--red); color: #fff; font-size: 11px; font-weight: 700;
+    }
+    .filter-panel {
+      border: 1px solid var(--border-2); border-radius: 10px; background: var(--surface-2);
+      padding: 12px; margin-bottom: 10px; flex-shrink: 0;
+      max-height: 46vh; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    }
+    .filter-group { margin-bottom: 12px; }
+    .filter-group:last-of-type { margin-bottom: 8px; }
+    .filter-group-label {
+      font-family: 'Barlow', sans-serif; font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted);
+      margin-bottom: 7px;
+    }
+    .filter-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+    .filter-chip {
+      padding: 7px 12px; min-height: 34px; border-radius: 18px;
+      background: var(--surface-3); border: 1px solid var(--border-2); color: var(--text-2);
+      font-family: 'Barlow', sans-serif; font-size: 12.5px; font-weight: 600;
+      cursor: pointer; transition: background 0.12s, border-color 0.12s, color 0.12s;
+    }
+    .filter-chip:hover { border-color: var(--border-3); color: var(--text); }
+    .filter-chip[aria-pressed="true"] {
+      background: var(--red-muted); border-color: var(--red-border); color: var(--text);
+    }
+    .filter-chip:focus-visible, .btn-filter:focus-visible,
+    .filter-reset:focus-visible, .active-filter-chip:focus-visible {
+      outline: 2px solid var(--red); outline-offset: 2px;
+    }
+    .filter-panel-footer { display: flex; justify-content: flex-end; }
+    .filter-reset {
+      background: transparent; border: none; color: var(--red);
+      font-family: 'Barlow', sans-serif; font-size: 12px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer; padding: 6px 2px;
+    }
+    .filter-reset[disabled] { color: var(--text-muted); cursor: default; }
+    /* Active-filter chips row (removable). Wraps; never scrolls the page. */
+    .picker-active-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+    .picker-active-filters:not(:empty) { margin-bottom: 10px; }
+    .active-filter-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 9px; border-radius: 14px; background: var(--red-muted);
+      border: 1px solid var(--red-border); color: var(--text);
+      font-family: 'Barlow', sans-serif; font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+    .active-filter-chip i { width: 13px; height: 13px; color: var(--text-2); }
+    .active-filter-chip:hover i { color: var(--text); }
+    .picker-empty {
+      text-align: center; color: var(--text-muted); font-size: 13px; padding: 20px 8px;
+    }
+    .picker-empty b { color: var(--text-2); }
+    .picker-empty .filter-reset { display: inline-block; margin-top: 8px; }
     .picker-hint {
       font-family: 'Barlow', sans-serif; font-size: 11px; font-weight: 700;
       text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);
@@ -725,11 +804,26 @@
 
 <!-- Exercise Picker -->
 <div class="overlay" id="pickerModal" onclick="onPickerBgClick(event)">
-  <div class="picker-sheet">
+  <div class="picker-sheet" role="dialog" aria-modal="true" aria-label="Add exercise">
     <div class="picker-drag"></div>
     <div class="picker-title">Add Exercise</div>
-    <input class="picker-search" type="text" id="pickerSearch"
-      placeholder="Search exercises or type custom…" oninput="filterPicker(this.value)">
+    <div class="picker-search-row">
+      <input class="picker-search" type="text" id="pickerSearch"
+        placeholder="Search exercises or type custom…" oninput="filterPicker(this.value)"
+        aria-label="Search exercises">
+      <button type="button" class="btn-filter" id="pickerFilterBtn" onclick="toggleFilterPanel()"
+        aria-expanded="false" aria-controls="pickerFilterPanel">
+        <i data-lucide="sliders-horizontal"></i>
+        <span>Filters</span>
+        <span class="filter-count" id="pickerFilterCount" hidden aria-hidden="true">0</span>
+      </button>
+    </div>
+    <!-- Collapsible filter panel (Phase 4.2.1I). Chip groups rendered by
+         renderFilterUI() from ExerciseFilters vocab — one source of truth. -->
+    <div class="filter-panel" id="pickerFilterPanel" hidden role="group" aria-label="Filter exercises"></div>
+    <!-- Active-filter chips (removable). aria-live so screen readers announce
+         when the active filter set changes. -->
+    <div class="picker-active-filters" id="pickerActiveFilters" aria-live="polite"></div>
     <div class="picker-add-row" id="pickerAddRow"></div>
     <div class="picker-list" id="pickerList"></div>
     <button class="btn-picker-close" onclick="closePicker()">Cancel</button>
@@ -825,6 +919,10 @@
      restore/delete decision rules for user_exercises. Loads after exercise-core
      (reuses its normalizer) and before the inline consumer below. -->
 <script src="exercise-custom.js"></script>
+<!-- Shared exercise-discovery filters (Phase 4.2.1I) — split/movement/equipment
+     membership + search-plus-filter composition for the picker. Loads after
+     exercise-core (reuses its normalization/equipment vocab). -->
+<script src="exercise-filters.js"></script>
 <script>
   var currentUser     = null;
   var currentWorkout  = null;
@@ -849,6 +947,12 @@
   // Phase 4.2.1F). Built once per library load; the picker's search consumes it so
   // normalization/alias/variant identity lives in ONE place, never re-derived here.
   var exerciseIndex   = null;
+  // Active discovery filters for the picker (Phase 4.2.1I): split/movement/
+  // equipment. Session-scoped to a single selection: reset each time the picker
+  // opens (openPicker/openTemplatePicker), preserved while it stays open. Never
+  // persisted to the DB. Shape/logic owned by ExerciseFilters.
+  var pickerFilters   = (typeof ExerciseFilters !== 'undefined') ? ExerciseFilters.emptyFilters() : { splits: [], movements: [], equipment: [] };
+  var filterPanelOpen = false;
   // Live PR session state (prState/prStateLoading) is declared with the live PR
   // detection block below.
   // workoutHistory + history rendering/edit/delete live in workout-history.js (shared)
@@ -1553,17 +1657,35 @@
   // ── Exercise picker ───────────────────────────────────────────────
   function openPicker() {
     pickerMode = 'workout';
-    document.getElementById('pickerSearch').value = '';
-    filterPicker('');
+    resetPickerState();
     document.getElementById('pickerModal').classList.add('open');
+    document.addEventListener('keydown', handlePickerKeydown);
     bindPickerViewport();
     setTimeout(function() { document.getElementById('pickerSearch').focus(); }, 80);
   }
   function closePicker() {
     document.getElementById('pickerModal').classList.remove('open');
+    document.removeEventListener('keydown', handlePickerKeydown);
     unbindPickerViewport();
   }
   function onPickerBgClick(e) { if (e.target === document.getElementById('pickerModal')) closePicker(); }
+
+  // Reset the picker to a clean selection session: clear search, clear filters
+  // (session-scoped — never persisted), collapse the filter panel, re-render.
+  function resetPickerState() {
+    document.getElementById('pickerSearch').value = '';
+    if (typeof ExerciseFilters !== 'undefined') pickerFilters = ExerciseFilters.emptyFilters();
+    toggleFilterPanel(false);
+    renderFilterUI();
+    filterPicker('');
+  }
+
+  // Escape collapses the filter panel first (if open), else closes the picker.
+  function handlePickerKeydown(e) {
+    if (e.key !== 'Escape') return;
+    if (filterPanelOpen) toggleFilterPanel(false);
+    else closePicker();
+  }
 
   // ── Mobile keyboard handling ──────────────────────────────────────
   // Lift the bottom sheet above the on-screen keyboard and cap its height to the
@@ -1604,64 +1726,64 @@
   function pickerRowHtml(name, id, category, equipment) {
     return '<div class="picker-item" data-name="' + esc(name) + '" data-id="' + esc(id || '') +
       '" onclick="selectExercise(this.dataset.name, this.dataset.id)">' +
-      '<div><div class="picker-item-name">' + esc(name) + '</div>' +
+      '<div class="picker-item-text"><div class="picker-item-name">' + esc(name) + '</div>' +
       '<div class="picker-item-cat">' + esc(category || '') + (equipment ? ' · ' + esc(equipment) : '') + '</div></div>' +
       '<span class="picker-item-plus"><i data-lucide="plus" style="width:16px;height:16px;"></i></span>' +
       '</div>';
   }
 
   function filterPicker(query) {
-    var q = query.toLowerCase().trim();
+    var q = (query || '').trim();
+    var qKey = q.toLowerCase();
     var rows = [];
-    var shownIds = {};   // global exercises.id already listed
-    var shownNames = {}; // normalized names already listed (dedupe customs)
+    var shownNames = {}; // lowercased names already listed (dedupe + add-row check)
     var hint = '';
+    var emptyHtml = '';
 
-    if (!q) {
-      // No query — full library, alphabetical (unchanged behavior).
-      rows = exerciseLibrary.map(function(e) { return pickerRowHtml(e.name, e.user_created ? '' : e.id, e.category, e.equipment); });
-    } else if (exerciseIndex) {
-      // Ranked global matches from the SHARED resolver (normalization + alias +
-      // abbreviation + variant-aware). No auto-selection: this only ORDERS a list
-      // the user chooses from, so a broad/ambiguous term simply shows several
-      // options rather than silently picking one.
-      var res = exerciseIndex.search(query, { limit: 40 });
-      res.results.forEach(function(r) {
-        shownIds[r.id] = 1;
+    if (typeof ExerciseFilters !== 'undefined' && exerciseIndex) {
+      // Shared discovery (Phase 4.2.1I): the SAME ranked search (exercise-core
+      // normalization/alias/variant) constrained by the active split/movement/
+      // equipment filters, plus the custom-exercise name pass — one composition
+      // the UI, Node tests, and benchmarks all share. Filters constrain
+      // eligibility; ranking order within the eligible set is unchanged, and no
+      // auto-selection happens (the user still taps a row).
+      var activeCustoms = exerciseLibrary.filter(function(e) { return e.user_created; });
+      var disc = ExerciseFilters.runDiscovery({
+        index: exerciseIndex, customs: activeCustoms, query: query, filters: pickerFilters, limit: 40
+      });
+      disc.rows.forEach(function(r) {
         shownNames[r.name.toLowerCase()] = 1;
-        var ex = r.exercise || {};
-        rows.push(pickerRowHtml(r.name, r.id, ex.category, ex.equipment));
+        var eq = r.exercise ? r.exercise.equipment : null;
+        rows.push(pickerRowHtml(r.name, r.isCustom ? '' : r.id, r.category, eq));
       });
-      // User customs aren't in the resolver index (no metadata; id targets
-      // user_exercises) — surface them with a lightweight name match, deduped.
-      exerciseLibrary.forEach(function(e) {
-        if (!e.user_created) return;
-        if (shownNames[e.name.toLowerCase()]) return;
-        if (e.name.toLowerCase().indexOf(q) === -1 && (e.category || '').toLowerCase().indexOf(q) === -1) return;
-        shownNames[e.name.toLowerCase()] = 1;
-        rows.push(pickerRowHtml(e.name, '', e.category, e.equipment));
-      });
-      // Honest framing when the exact thing isn't in the catalog: never present a
-      // nearby variant as the exact result (e.g. "front squat" over a catalog with
-      // only back/goblet squat). Selection stays a deliberate tap.
-      var rez = res.resolution;
-      var noExact = rez && (rez.matchType === 'unresolved' || rez.reason === 'variant_not_in_catalog');
-      if (noExact && rows.length) hint = 'No exact match for “' + esc(query.trim()) + '” — closest options:';
-      recordSearchGap(query, rez);
+      if (q) {
+        // Honest framing when the exact thing isn't in the catalog — never
+        // present a nearby variant as the exact result.
+        var rez = disc.resolution;
+        var noExact = rez && (rez.matchType === 'unresolved' || rez.reason === 'variant_not_in_catalog');
+        if (noExact && rows.length) hint = 'No exact match for “' + esc(q) + '” — closest options:';
+        recordSearchGap(query, rez);
+      }
+      if (!rows.length) emptyHtml = pickerEmptyHtml(q);
     } else {
       // Fallback: shared module unavailable — original substring filter, unchanged.
       exerciseLibrary.filter(function(e) {
-        return e.name.toLowerCase().includes(q) || (e.category || '').toLowerCase().includes(q);
-      }).forEach(function(e) { rows.push(pickerRowHtml(e.name, e.user_created ? '' : e.id, e.category, e.equipment)); });
+        return e.name.toLowerCase().includes(qKey) || (e.category || '').toLowerCase().includes(qKey);
+      }).forEach(function(e) {
+        shownNames[e.name.toLowerCase()] = 1;
+        rows.push(pickerRowHtml(e.name, e.user_created ? '' : e.id, e.category, e.equipment));
+      });
     }
 
     // The custom "+ Add" option renders in its own fixed zone — directly under
     // the search input and above the scroll list — so it stays tappable while the
-    // keyboard is open and the result list scrolls independently.
+    // keyboard is open and the result list scrolls independently. Creating is
+    // always offered (even with filters active) since it's an explicit action,
+    // not a filtered search result.
     var addRow = '';
-    if (q && !shownNames[q] && !exerciseLibrary.find(function(e) { return e.name.toLowerCase() === q; })) {
-      addRow = '<div class="picker-item" data-name="' + esc(query.trim()) + '" data-id="" onclick="selectExercise(this.dataset.name, this.dataset.id)">' +
-        '<div><div class="picker-item-name">+ Add "' + esc(query.trim()) + '"</div>' +
+    if (q && !shownNames[qKey] && !exerciseLibrary.find(function(e) { return e.name.toLowerCase() === qKey; })) {
+      addRow = '<div class="picker-item" data-name="' + esc(q) + '" data-id="" onclick="selectExercise(this.dataset.name, this.dataset.id)">' +
+        '<div class="picker-item-text"><div class="picker-item-name">+ Add “' + esc(q) + '”</div>' +
         '<div class="picker-item-cat">Custom exercise</div></div>' +
         '<span class="picker-item-plus"><i data-lucide="plus" style="width:16px;height:16px;"></i></span>' +
         '</div>';
@@ -1670,7 +1792,87 @@
     var listHtml = (hint ? '<div class="picker-hint">' + hint + '</div>' : '') + rows.join('');
     document.getElementById('pickerList').innerHTML = rows.length
       ? listHtml
-      : (addRow ? '' : '<div class="empty-state">No exercises found.</div>');
+      : (addRow ? '' : (emptyHtml || '<div class="empty-state">No exercises found.</div>'));
+    lucide.createIcons();
+  }
+
+  // Empty-state that always shows the active search text + a reset action when
+  // filters are on, so a stale filter never leaves the picker mysteriously blank.
+  function pickerEmptyHtml(q) {
+    var hasF = (typeof ExerciseFilters !== 'undefined') && ExerciseFilters.hasActiveFilters(pickerFilters);
+    var msg;
+    if (q && hasF)      msg = 'No exercises match <b>“' + esc(q) + '”</b> with these filters.';
+    else if (hasF)      msg = 'No exercises match these filters.';
+    else if (q)         msg = 'No exercises match <b>“' + esc(q) + '”</b>.';
+    else                msg = 'No exercises found.';
+    var reset = hasF ? '<button type="button" class="filter-reset" onclick="resetPickerFilters()">Reset filters</button>' : '';
+    return '<div class="picker-empty">' + msg + (reset ? '<br>' + reset : '') + '</div>';
+  }
+
+  // ── Picker filters (Phase 4.2.1I) ─────────────────────────────────
+  // Re-run discovery with the current search text (after a filter change).
+  function refreshPicker() { filterPicker(document.getElementById('pickerSearch').value); }
+
+  function toggleFilterPanel(force) {
+    filterPanelOpen = (force === undefined) ? !filterPanelOpen : !!force;
+    var panel = document.getElementById('pickerFilterPanel');
+    var btn = document.getElementById('pickerFilterBtn');
+    panel.hidden = !filterPanelOpen;
+    btn.setAttribute('aria-expanded', filterPanelOpen ? 'true' : 'false');
+    if (filterPanelOpen) lucide.createIcons();
+  }
+
+  function togglePickerFilter(category, key) {
+    if (typeof ExerciseFilters === 'undefined') return;
+    pickerFilters = ExerciseFilters.toggleFilter(pickerFilters, category, key);
+    renderFilterUI();
+    refreshPicker();
+  }
+  function removeActiveFilter(category, key) { togglePickerFilter(category, key); }
+
+  function resetPickerFilters() {
+    if (typeof ExerciseFilters === 'undefined') return;
+    pickerFilters = ExerciseFilters.emptyFilters();
+    renderFilterUI();
+    refreshPicker();
+  }
+
+  // Render the filter panel (chip groups), the count badge, and the active-chip
+  // bar from the current pickerFilters — one function keeps all three in sync.
+  // The vocab (which chips exist) is owned by ExerciseFilters, never hardcoded here.
+  function renderFilterUI() {
+    if (typeof ExerciseFilters === 'undefined') return;
+    var groups = [
+      { cat: 'splits',    label: 'Split',     items: ExerciseFilters.SPLITS },
+      { cat: 'movements', label: 'Movement',  items: ExerciseFilters.MOVEMENTS },
+      { cat: 'equipment', label: 'Equipment', items: ExerciseFilters.EQUIPMENT }
+    ];
+    var html = '';
+    groups.forEach(function(g) {
+      html += '<div class="filter-group"><div class="filter-group-label">' + esc(g.label) + '</div><div class="filter-chips">';
+      g.items.forEach(function(o) {
+        var on = pickerFilters[g.cat].indexOf(o.key) !== -1;
+        html += '<button type="button" class="filter-chip" role="switch" aria-pressed="' + (on ? 'true' : 'false') +
+          '" onclick="togglePickerFilter(\'' + g.cat + '\',\'' + esc(o.key) + '\')">' + esc(o.label) + '</button>';
+      });
+      html += '</div></div>';
+    });
+    var count = ExerciseFilters.countActiveFilters(pickerFilters);
+    html += '<div class="filter-panel-footer"><button type="button" class="filter-reset" onclick="resetPickerFilters()"' +
+      (count ? '' : ' disabled') + '>Reset all</button></div>';
+    document.getElementById('pickerFilterPanel').innerHTML = html;
+
+    var badge = document.getElementById('pickerFilterCount');
+    var btn = document.getElementById('pickerFilterBtn');
+    if (count) { badge.textContent = count; badge.hidden = false; btn.classList.add('has-active'); }
+    else { badge.hidden = true; btn.classList.remove('has-active'); }
+
+    var chips = ExerciseFilters.activeChips(pickerFilters);
+    document.getElementById('pickerActiveFilters').innerHTML = chips.map(function(c) {
+      return '<button type="button" class="active-filter-chip" aria-label="Remove ' + esc(c.label) + ' filter"' +
+        ' onclick="removeActiveFilter(\'' + c.category + '\',\'' + esc(c.key) + '\')">' +
+        esc(c.label) + '<i data-lucide="x"></i></button>';
+    }).join('');
     lucide.createIcons();
   }
 
@@ -2301,9 +2503,9 @@
 
   function openTemplatePicker() {
     pickerMode = 'template';
-    document.getElementById('pickerSearch').value = '';
-    filterPicker('');
+    resetPickerState();
     document.getElementById('pickerModal').classList.add('open');
+    document.addEventListener('keydown', handlePickerKeydown);
     bindPickerViewport();
     setTimeout(function() { document.getElementById('pickerSearch').focus(); }, 80);
   }

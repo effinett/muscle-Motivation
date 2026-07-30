@@ -195,7 +195,7 @@ provider unless a new route is explicitly built on another.
 **Node / tooling:**
 - `package.json`: `npm test` → `node --test`; `npm run bench` → `node benchmarks/run-resolve.js`; `npm run bench:exercise` → `node benchmarks/run-exercise.js`.
 - Dependencies: `@anthropic-ai/sdk`, `stripe`. No build step.
-- Test files: `ai-food-parse.test.js`, `usda-search.test.js`, `nutrition-resolve.test.js`, `food-ranking.test.js`, `food-memory.test.js`, `food-meal.test.js`, `food-portion.test.js`, `nutrition-search-cache.test.js`, `progression.test.js`, `exercise-core.test.js`, `exercise-search.test.js`, `exercise-custom.test.js`.
+- Test files: `ai-food-parse.test.js`, `usda-search.test.js`, `nutrition-resolve.test.js`, `food-ranking.test.js`, `food-memory.test.js`, `food-meal.test.js`, `food-portion.test.js`, `nutrition-search-cache.test.js`, `progression.test.js`, `exercise-core.test.js`, `exercise-search.test.js`, `exercise-custom.test.js`, `exercise-filters.test.js`.
 - Benchmark corpus: `benchmarks/resolve-cases.jsonl` + `benchmarks/fixtures.js`, run by `benchmarks/run-resolve.js` (two-tier runner, Phase 4.2.1d). Exercise resolution: `benchmarks/exercise-cases.jsonl` + `benchmarks/exercise-fixtures.js`, run by `benchmarks/run-exercise.js` (Phase 4.2.1E).
 
 **Supabase notes:**
@@ -414,6 +414,49 @@ and catalog identity never drift).
 - **UI:** a "My Exercises" section on `workout.html` (edit/archive/restore, and
   permanent-delete only for unreferenced archived customs) using the app's modal
   pattern — never native `confirm()`.
+
+### Shared Exercise-Discovery Filter Core — `exercise-filters.js` (`Live`, Phase 4.2.1I)
+
+The discovery sibling of `exercise-core.js` (identity/resolution) and
+`exercise-custom.js` (lifecycle): one pure, DOM-free, fetch-free, DB-free layer
+owning how the picker NARROWS exercises by training **split**, **movement
+pattern**, and **equipment**, and how those filters COMPOSE with the shared
+search/ranking. Browser global `ExerciseFilters` + guarded `module.exports`;
+loaded on `workout.html` AFTER `exercise-core.js` (reuses its `normalizeEquipment`
++ `normalizeExerciseName`, so equipment/identity classification never drifts).
+
+- **Filters CONSTRAIN eligibility; ranking is unchanged.** `runDiscovery` is the
+  ONE composition the picker UI, Node tests, and benchmarks share: it runs
+  `index.search()` (exercise-core ranking — exact > alias > normalized > variant,
+  hard-modifier/unilateral/Smith guards intact) THEN filters the results to the
+  eligible set (order preserved). A highly-ranked non-matching exercise can never
+  bypass an active filter; no auto-selection (the user still taps a row).
+- **Membership is DERIVED from catalog metadata, never scattered name checks.**
+  All maps live in this module. **Split rules (final):** push/vertical-push →
+  Push+Upper; horizontal/vertical-pull → Pull+Upper; squat/hinge/lunge →
+  Legs+Lower; core/rotation → Core; carry/gait → Full Body; isolation → by
+  primary-muscle region (chest/triceps/shoulders → Push+Upper; back/biceps/rear-
+  delts → Pull+Upper; quads/hams/glutes/calves → Legs+Lower; abs → Core). Every
+  one of the 141 canonicals gets ≥1 and ≤2 splits (verified in tests).
+  **Movement filters (final):** Squat, Hinge, Horizontal/Vertical Push,
+  Horizontal/Vertical Pull, Lunge, Carry, Isolation, Core (rotation folds into
+  Core; `gait`/treadmill has no movement chip by design). **Equipment filters
+  (final):** Barbell, Dumbbell, Cable, Machine, Bodyweight, Smith Machine,
+  Kettlebell, Resistance Band (exercise-core's normalized vocab; Smith ≠ Machine).
+  Within a category the selected keys OR; across categories they AND.
+- **Customs stay outside metadata filters.** A user custom carries no taxonomy,
+  so it is searchable by name when NO filter is active and invisible to any active
+  metadata filter — never assigned a fabricated split/movement/equipment. This
+  never weakens the Phase 4.2.1H lifecycle/ownership rules (the caller passes only
+  the user's ACTIVE customs; archived/foreign customs are simply absent).
+- **Filter state is session-scoped, never persisted** (no DB, per the phase
+  scope): reset each time the picker opens, preserved while it stays open.
+- **UI:** an inline collapsible filter panel beside the picker search (a "Filters"
+  button with an active-count badge → chip groups + Reset all), plus a removable
+  active-chip bar and a filters-aware empty state — using the app's design system,
+  never native dialogs. Result rows wrap long names (no mobile overflow/clipping).
+  Covered by `exercise-filters.test.js` and `discovery`-tagged
+  `benchmarks/exercise-cases.jsonl` cases (collision assertions, not just presence).
 
 ### Other shared modules (`Live`)
 
