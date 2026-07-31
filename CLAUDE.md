@@ -193,9 +193,9 @@ At the end of implementation tasks, provide:
 provider unless a new route is explicitly built on another.
 
 **Node / tooling:**
-- `package.json`: `npm test` → `node --test`; `npm run bench` → `node benchmarks/run-resolve.js`; `npm run bench:exercise` → `node benchmarks/run-exercise.js`.
+- `package.json`: `npm test` → `node --test`; `npm run bench` → `node benchmarks/run-resolve.js`; `npm run bench:exercise` → `node benchmarks/run-exercise.js`; `npm run eval:nutrition` → `node nutrition-evaluation/runner.js` (Phase 4.2.9 pre-release nutrition evaluation).
 - Dependencies: `@anthropic-ai/sdk`, `stripe`. No build step.
-- Test files: `ai-food-parse.test.js`, `usda-search.test.js`, `nutrition-resolve.test.js`, `food-ranking.test.js`, `food-memory.test.js`, `food-meal.test.js`, `food-portion.test.js`, `nutrition-search-cache.test.js`, `progression.test.js`, `exercise-core.test.js`, `exercise-search.test.js`, `exercise-custom.test.js`, `exercise-filters.test.js`, `exercise-log.test.js`.
+- Test files: `ai-food-parse.test.js`, `usda-search.test.js`, `nutrition-resolve.test.js`, `food-ranking.test.js`, `food-memory.test.js`, `food-meal.test.js`, `food-portion.test.js`, `food-display.test.js`, `nutrition-search-cache.test.js`, `progression.test.js`, `exercise-core.test.js`, `exercise-search.test.js`, `exercise-custom.test.js`, `exercise-filters.test.js`, `exercise-log.test.js`, and the Phase 4.2.9 eval tests `nutrition-eval-schema.test.js`, `nutrition-eval-scoring.test.js`, `nutrition-eval-report.test.js`.
 - Benchmark corpus: `benchmarks/resolve-cases.jsonl` + `benchmarks/fixtures.js`, run by `benchmarks/run-resolve.js` (two-tier runner, Phase 4.2.1d). Exercise resolution: `benchmarks/exercise-cases.jsonl` + `benchmarks/exercise-fixtures.js`, run by `benchmarks/run-exercise.js` (Phase 4.2.1E).
 
 **Supabase notes:**
@@ -521,6 +521,44 @@ loaded on `workout.html` and `workout-history.html` AFTER `exercise-core.js`
   tagged `benchmarks/exercise-cases.jsonl` cases (real-catalog identity + literal
   custom refs), scored inline by `run-exercise.js`.
 
+### Nutrition Evaluation Suite — `nutrition-evaluation/` (`Live`, Phase 4.2.9)
+
+A broad, repeatable, **diagnostic** evaluation of the whole nutrition pipeline —
+the report to run **before every nutrition release**. Full reference:
+`nutrition-evaluation/README.md`; baseline summary: `nutrition-evaluation/BASELINE.md`.
+
+- **Command:** `npm run eval:nutrition` (deterministic, offline; no network/DB/keys,
+  no production writes, no test-account dependency). `--no-gate` / `--json` /
+  `--update-baseline` / `--prod-changed`. Artifacts → `reports/nutrition-evaluation/`
+  (git-ignored); durable record → `nutrition-evaluation/baseline.json`.
+- **Measures production, never a re-implementation.** `engine.js` wires the exact
+  pure seams (`food-core`/`food-ranking`/`food-memory`/`food-meal`/`food-portion`/
+  `food-display`) the way the app does — `rankFoodCandidates` stays the sole
+  ranking authority; the resolver still trusts `foods[0]`. Reuses
+  `benchmarks/fixtures.js` pools verbatim (never edited) + `pools.js` extensions.
+- **Ten categories** (parsing/retrieval/ranking/confidence/clarification/portion/
+  meal/correction/display + a `regression` manifest pinning every 4.2.1–4.2.8 fix
+  with `via`+`phase`). **Preferred vs acceptable** candidates are distinguished;
+  **earliest-failure diagnostic staging** never cascades a retrieval miss into a
+  ranking fault. Metrics: Top-1, acceptable-candidate, recall@1/3/5/10,
+  clarification P/R, **false-confidence rate**, portion, meal case+item, parsing
+  case+field, display. AI meal split/merge is out of scope (non-deterministic).
+- **Guardrail (binding):** this suite is a **measurement instrument, not a target**.
+  **Never change ranking/parsing/retrieval/confidence logic merely to make a case
+  pass** — a lower honest baseline beats an artificially perfect one. Fixtures
+  encode expected semantics; divergences are recorded (scored failure or
+  `informational` triaged case) and deferred to a hardening phase. Release gate
+  (default): fixture-validity + no-crash + no non-informational `regression`
+  failure + no committed-metric regression >1.0 pct vs baseline. Newly-added
+  non-regression failures are informational until reviewed. `baseline.json` is
+  **never auto-overwritten** (`--update-baseline` only). Covered by
+  `nutrition-eval-{schema,scoring,report}.test.js`.
+- **Phase 4.2.9 baseline (SHA 47b9736):** 237 cases, overall 99.6% (228/229),
+  false-confidence 5% (1/20). Documented open items → a confidence-hardening
+  phase (bare "coffee" auto-resolves to "Coffee cake" — the sole false-confidence
+  case) and a display over-simplification cleanup (folds in the deferred
+  `Cinnamon Cinnamon Granola` de-dup). No production logic changed.
+
 ### Other shared modules (`Live`)
 
 - `metrics.js`, `snapshot.js` — dashboard snapshot/metrics.
@@ -601,6 +639,7 @@ almost no new intelligence — only a new way into the existing engine.
 | 4.2.6 | Meal-Level Reasoning | Understand whole meals, not isolated foods (burgers, sandwiches, salads, pasta, burritos, pizza, breakfast plates) — sides, sauces, toppings, duplicate prevention, cross-food reasoning. |
 | 4.2.7 | Food-Resolution Benchmark Suite | Industry-leading evaluation — thousands of cases, regression suite, continuous evaluation, confidence calibration. Every improvement must be measurable. |
 | 4.2.8 | Nutrition Intelligence Polish | Final hardening and calibration of the nutrition intelligence stack before shifting focus to new surfaces and coaching. |
+| 4.2.9 | Nutrition Evaluation & Regression Expansion | `Live`. Broad diagnostic evaluation suite (`nutrition-evaluation/`) + versioned baseline run before every nutrition release. Evaluation infrastructure only — no production behavior change. See §10 "Nutrition Evaluation Suite". |
 
 ### Parallel foundation track
 

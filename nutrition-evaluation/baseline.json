@@ -1,0 +1,1223 @@
+{
+  "schemaVersion": "4.2.9-1",
+  "caseSetVersion": "4.2.9-1",
+  "sha": "47b973634de280201e9b082df3942e345bdbf216",
+  "generatedAt": "2026-07-31T02:25:47.133Z",
+  "totalCases": 237,
+  "categoryCounts": {
+    "parsing": 19,
+    "retrieval": 25,
+    "ranking": 39,
+    "confidence": 22,
+    "clarification": 12,
+    "portion": 35,
+    "meal": 22,
+    "correction": 9,
+    "display": 54
+  },
+  "metrics": {
+    "overall": 99.6,
+    "top1": 100,
+    "acceptable": 100,
+    "recall@1": 95.8,
+    "recall@3": 100,
+    "recall@5": 100,
+    "recall@10": 100,
+    "clarificationPrecision": 100,
+    "clarificationRecall": 100,
+    "falseConfidence": 5,
+    "portion": 100,
+    "mealCase": 100,
+    "mealItem": 100,
+    "parsingCase": 100,
+    "parsingField": 100,
+    "display": 100
+  },
+  "cases": {
+    "parse-drizzle": {
+      "pass": true,
+      "stage": null,
+      "category": "parsing"
+    },
+    "parse-pinch": {
+      "pass": true,
+      "stage": null,
+      "category": "parsing"
+    },
+    "parse-scoop": {
+      "pass": true,
+      "stage": null,
+      "category": "parsing"
+    },
+    "parse-splash": {
+      "pass": true,
+      "stage": null,
+      "category": "parsing"
+    },
+    "parse-handful": {
+      "pass": true,
+      "stage": null,
+      "category": "parsing"
+    },
+    "parse-some-smallamount": {
+      "pass": true,
+      "stage": null,
+      "category": "parsing"
+    },
+    "parse-bit-smallamount": {
+      "pass": true,
+      "stage": null,
+      "category": "parsing"
+    },
+    "parse-no-false-portion": {
+      "pass": true,
+      "stage": null,
+      "category": "parsing"
+    },
+    "parse-norm-titlecase": {
+      "pass": true,
+      "stage": null,
+      "category": "parsing"
+    },
+    "parse-norm-qty-stripped": {
+      "pass": true,
+      "stage": null,
+      "category": "parsing"
+    },
+    "parse-norm-whitespace": {
+      "pass": true,
+      "stage": null,
+      "category": "parsing"
+    },
+    "parse-norm-punctuation": {
+      "pass": true,
+      "stage": null,
+      "category": "parsing"
+    },
+    "parse-norm-prep-tokens": {
+      "pass": true,
+      "stage": null,
+      "category": "parsing"
+    },
+    "parse-norm-uppercase": {
+      "pass": true,
+      "stage": null,
+      "category": "parsing"
+    },
+    "parse-norm-double-space": {
+      "pass": true,
+      "stage": null,
+      "category": "parsing"
+    },
+    "parse-norm-comma-qualifier": {
+      "pass": true,
+      "stage": null,
+      "category": "parsing"
+    },
+    "parse-norm-qty-prep": {
+      "pass": true,
+      "stage": null,
+      "category": "parsing"
+    },
+    "parse-norm-trailing-dot": {
+      "pass": true,
+      "stage": null,
+      "category": "parsing"
+    },
+    "parse-norm-white-rice": {
+      "pass": true,
+      "stage": null,
+      "category": "parsing"
+    },
+    "retr-chicken-breast": {
+      "pass": true,
+      "stage": null,
+      "category": "retrieval"
+    },
+    "retr-turkey": {
+      "pass": true,
+      "stage": null,
+      "category": "retrieval"
+    },
+    "retr-mayo": {
+      "pass": true,
+      "stage": null,
+      "category": "retrieval"
+    },
+    "retr-rice-generic": {
+      "pass": true,
+      "stage": null,
+      "category": "retrieval"
+    },
+    "retr-fairlife-milk": {
+      "pass": true,
+      "stage": null,
+      "category": "retrieval"
+    },
+    "retr-whole-milk-generic": {
+      "pass": true,
+      "stage": null,
+      "category": "retrieval"
+    },
+    "retr-generic-milk-pair": {
+      "pass": true,
+      "stage": null,
+      "category": "retrieval"
+    },
+    "retr-cream-in-pool": {
+      "pass": true,
+      "stage": null,
+      "category": "retrieval"
+    },
+    "retr-cream-cheese-present": {
+      "pass": true,
+      "stage": null,
+      "category": "retrieval"
+    },
+    "retr-jasmine-rice": {
+      "pass": true,
+      "stage": null,
+      "category": "retrieval"
+    },
+    "retr-double-cheeseburger": {
+      "pass": true,
+      "stage": null,
+      "category": "retrieval"
+    },
+    "retr-maple-syrup": {
+      "pass": true,
+      "stage": null,
+      "category": "retrieval"
+    },
+    "retr-greek-yogurt": {
+      "pass": true,
+      "stage": null,
+      "category": "retrieval"
+    },
+    "retr-peanut-butter": {
+      "pass": true,
+      "stage": null,
+      "category": "retrieval"
+    },
+    "retr-broccoli": {
+      "pass": true,
+      "stage": null,
+      "category": "retrieval"
+    },
+    "retr-restaurant-pizza": {
+      "pass": true,
+      "stage": null,
+      "category": "retrieval"
+    },
+    "retr-spinach": {
+      "pass": true,
+      "stage": null,
+      "category": "retrieval"
+    },
+    "retr-salsa": {
+      "pass": true,
+      "stage": null,
+      "category": "retrieval"
+    },
+    "retr-olive-oil": {
+      "pass": true,
+      "stage": null,
+      "category": "retrieval"
+    },
+    "retr-blueberries": {
+      "pass": true,
+      "stage": null,
+      "category": "retrieval"
+    },
+    "retr-pizza": {
+      "pass": true,
+      "stage": null,
+      "category": "retrieval"
+    },
+    "retr-oats": {
+      "pass": true,
+      "stage": null,
+      "category": "retrieval"
+    },
+    "retr-cola-both": {
+      "pass": true,
+      "stage": null,
+      "category": "retrieval"
+    },
+    "retr-tuna-water-preferred": {
+      "pass": true,
+      "stage": null,
+      "category": "retrieval"
+    },
+    "retr-salad-external-limit": {
+      "pass": false,
+      "stage": "external-data-ambiguity",
+      "category": "retrieval"
+    },
+    "rank-turkey-not-chicken": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-mayo-not-bean": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-rice-generic-not-glutinous": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-glutinous-query-gets-glutinous": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-fairlife-bar-not-milk": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-fairlife-milk": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-whole-milk": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-cream-not-icecream": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-chobani-brand-intent": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-cheese-cheddar": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-almonds": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-banana": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-orange-juice-not-orange": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-restaurant-pizza": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-turkey-sandwich": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-spinach": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-salsa": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-ketchup": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-ranch": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-hummus": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-chips": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-olive-oil": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-blueberries": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-pizza": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-steak": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-tuna-canned": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-shredded-cheese": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-potatoes-raw-first": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-green-beans": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-soup": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-bread-generic": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-pasta-generic": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-hot-sauce": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-coffee-beverage-gap": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "conf-chicken-breast-high": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-jasmine-rice-high": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-glutinous-rice-high": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-fairlife-bar-high": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-greek-yogurt-high": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-maple-syrup-high": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-almonds-high": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-banana-high": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-broccoli-high": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-cheese-high": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-spinach-high": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-peanut-butter-high": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-oats-high": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-hummus-high": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-salsa-high": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-blueberries-high": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-olive-oil-high": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-whole-milk-high": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-double-cheeseburger-choose": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-cola-identity-choose": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-coffee-false-confidence": {
+      "pass": false,
+      "stage": "production-defect",
+      "category": "confidence"
+    },
+    "clar-double-cheeseburger": {
+      "pass": true,
+      "stage": null,
+      "category": "clarification"
+    },
+    "clar-cola": {
+      "pass": true,
+      "stage": null,
+      "category": "clarification"
+    },
+    "clar-chicken-breast-quiet": {
+      "pass": true,
+      "stage": null,
+      "category": "clarification"
+    },
+    "clar-jasmine-rice-quiet": {
+      "pass": true,
+      "stage": null,
+      "category": "clarification"
+    },
+    "clar-glutinous-rice-quiet": {
+      "pass": true,
+      "stage": null,
+      "category": "clarification"
+    },
+    "clar-greek-yogurt-quiet": {
+      "pass": true,
+      "stage": null,
+      "category": "clarification"
+    },
+    "clar-fairlife-bar-quiet": {
+      "pass": true,
+      "stage": null,
+      "category": "clarification"
+    },
+    "clar-maple-syrup-quiet": {
+      "pass": true,
+      "stage": null,
+      "category": "clarification"
+    },
+    "clar-almonds-quiet": {
+      "pass": true,
+      "stage": null,
+      "category": "clarification"
+    },
+    "clar-banana-quiet": {
+      "pass": true,
+      "stage": null,
+      "category": "clarification"
+    },
+    "clar-coffee-should-ask": {
+      "pass": false,
+      "stage": "production-defect",
+      "category": "clarification"
+    },
+    "pt-handful-nuts": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-scoop-protein": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-pinch-salt": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-drizzle-oil": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-slice-bread": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-bowl-cereal": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-splash-milk": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-plate-pasta-clarify": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-piece-chicken-clarify": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-some-rice": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-a-little-milk": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-raw-splash-milk": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-raw-handful-almonds": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-cup-is-exact-not-vague": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-oz-is-exact-not-vague": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-small-bowl-rice": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-large-bowl-rice": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-small-handful-nuts": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-big-handful-nuts": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-generous-scoop-protein": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-small-plate-pasta": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-bowl-soup-liquid": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-slice-pizza": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-piece-fruit-clarify": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-2-eggs": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-2-toast-slices": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-almonds-cup": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "pt-chicken-6oz-total": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "meal-chicken-rice-broccoli": {
+      "pass": true,
+      "stage": null,
+      "category": "meal"
+    },
+    "meal-steak-eggs-toast": {
+      "pass": true,
+      "stage": null,
+      "category": "meal"
+    },
+    "meal-eggs-toast": {
+      "pass": true,
+      "stage": null,
+      "category": "meal"
+    },
+    "meal-yogurt-berries": {
+      "pass": true,
+      "stage": null,
+      "category": "meal"
+    },
+    "meal-burger-fries": {
+      "pass": true,
+      "stage": null,
+      "category": "meal"
+    },
+    "meal-coffee-milk-beverage": {
+      "pass": true,
+      "stage": null,
+      "category": "meal"
+    },
+    "meal-shake-banana": {
+      "pass": true,
+      "stage": null,
+      "category": "meal"
+    },
+    "meal-eggs-not-beverage": {
+      "pass": true,
+      "stage": null,
+      "category": "meal"
+    },
+    "meal-grilled-chicken-rice-cooked": {
+      "pass": true,
+      "stage": null,
+      "category": "meal"
+    },
+    "meal-raw-not-forced-cooked": {
+      "pass": true,
+      "stage": null,
+      "category": "meal"
+    },
+    "meal-chicken-subtype": {
+      "pass": true,
+      "stage": null,
+      "category": "meal"
+    },
+    "meal-tea-milk": {
+      "pass": true,
+      "stage": null,
+      "category": "meal"
+    },
+    "meal-smoothie-toast": {
+      "pass": true,
+      "stage": null,
+      "category": "meal"
+    },
+    "meal-salmon-vegetables": {
+      "pass": true,
+      "stage": null,
+      "category": "meal"
+    },
+    "meal-oatmeal-berries": {
+      "pass": true,
+      "stage": null,
+      "category": "meal"
+    },
+    "meal-toast-peanut-butter": {
+      "pass": true,
+      "stage": null,
+      "category": "meal"
+    },
+    "meal-rice-beans": {
+      "pass": true,
+      "stage": null,
+      "category": "meal"
+    },
+    "meal-chicken-water-beverage": {
+      "pass": true,
+      "stage": null,
+      "category": "meal"
+    },
+    "meal-juice-eggs": {
+      "pass": true,
+      "stage": null,
+      "category": "meal"
+    },
+    "corr-baseline-no-flip": {
+      "pass": true,
+      "stage": null,
+      "category": "correction"
+    },
+    "corr-exact-flip": {
+      "pass": true,
+      "stage": null,
+      "category": "correction"
+    },
+    "corr-normalized-variant": {
+      "pass": true,
+      "stage": null,
+      "category": "correction"
+    },
+    "corr-reinforced": {
+      "pass": true,
+      "stage": null,
+      "category": "correction"
+    },
+    "corr-conservative-generalization": {
+      "pass": true,
+      "stage": null,
+      "category": "correction"
+    },
+    "corr-no-false-apply": {
+      "pass": true,
+      "stage": null,
+      "category": "correction"
+    },
+    "corr-jasmine-flip": {
+      "pass": true,
+      "stage": null,
+      "category": "correction"
+    },
+    "disp-egg": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-chicken-breast": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-white-bread": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-almonds": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-milk": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-banana": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-broccoli": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-peanut-butter": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-oatmeal": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-rice-white": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-greek-yogurt-keeps-greek": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-cheddar-keeps-cheddar": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-salsa-not-oversimplified": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-mayo-keeps-identity": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-quest-brand": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-fairlife-milk-brand": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-kodiak-no-dup": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-long-name": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-manual-name": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-log-exact-serving": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-log-estimated-compact": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-log-aria": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-ground-beef": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-salmon": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-brown-rice": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-apple": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-strawberries": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-spinach": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-carrots": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-butter": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-avocado": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-almond-butter": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-ground-turkey": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-pork-loin": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-shrimp": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-bagel": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-mozzarella": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-cottage-cheese": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-egg-raw": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-chicken-thigh": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-ground-beef-raw": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-whole-wheat-bread": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-cashews": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-parmesan": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-potato-flesh-artifact": {
+      "pass": false,
+      "stage": "display",
+      "category": "display"
+    },
+    "disp-olive-oil-tail-artifact": {
+      "pass": false,
+      "stage": "display",
+      "category": "display"
+    },
+    "disp-lentils-tail-artifact": {
+      "pass": false,
+      "stage": "display",
+      "category": "display"
+    },
+    "disp-yogurt-whole-milk-artifact": {
+      "pass": false,
+      "stage": "display",
+      "category": "display"
+    },
+    "reg-4.2.1-stated-weight-is-total": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "reg-4.2.1-egg-count-serving": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "reg-4.2.2-maple-syrup-dedupe-brand": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "reg-4.2.3-ambiguous-asks": {
+      "pass": true,
+      "stage": null,
+      "category": "clarification"
+    },
+    "reg-4.2.3-clear-does-not-ask": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "reg-4.2.4-exact-correction-flip": {
+      "pass": true,
+      "stage": null,
+      "category": "correction"
+    },
+    "reg-4.2.4-no-false-application": {
+      "pass": true,
+      "stage": null,
+      "category": "correction"
+    },
+    "reg-4.2.5-handful-estimate": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "reg-4.2.5-splash-milk-ml-recovery": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "reg-4.2.5-dropped-quantifier": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "reg-4.2.5-exact-over-vague": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "reg-4.2.6-beverage-classified": {
+      "pass": true,
+      "stage": null,
+      "category": "meal"
+    },
+    "reg-4.2.6-no-false-beverage-forcing": {
+      "pass": true,
+      "stage": null,
+      "category": "meal"
+    },
+    "reg-4.2.6-cola-solid-safety": {
+      "pass": true,
+      "stage": null,
+      "category": "meal"
+    },
+    "reg-4.2.7-chicken-not-turkey": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "reg-4.2.7-mayo-not-bean": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "reg-4.2.7-fairlife-bar-not-milk": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "reg-4.2.7-rice-generic-not-glutinous": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "reg-4.2.7-milk-not-labeled-cheese": {
+      "pass": true,
+      "stage": null,
+      "category": "portion"
+    },
+    "reg-4.2.8-name-simplification": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "reg-4.2.8-manual-name-preserved": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "reg-4.2.8-compact-estimated-label": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "reg-4.2.8-long-name-safe": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "reg-4.2.8-milk-not-cheese-label": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "reg-4.2.8-cinnamon-duplication": {
+      "pass": false,
+      "stage": "display",
+      "category": "display"
+    }
+  }
+}
