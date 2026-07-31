@@ -1751,6 +1751,7 @@
     setTimeout(function() { document.getElementById('pickerSearch').focus(); }, 80);
   }
   function closePicker() {
+    toggleFilterPanel(false);   // collapse panel + detach the outside-click listener
     document.getElementById('pickerModal').classList.remove('open');
     document.removeEventListener('keydown', handlePickerKeydown);
     unbindPickerViewport();
@@ -1906,7 +1907,39 @@
     var btn = document.getElementById('pickerFilterBtn');
     panel.hidden = !filterPanelOpen;
     btn.setAttribute('aria-expanded', filterPanelOpen ? 'true' : 'false');
-    if (filterPanelOpen) lucide.createIcons();
+    // While the panel is open, an ambient tap outside it should collapse it —
+    // not close the picker (the old behavior, which dismissed the whole dialog).
+    // Capture phase so we can consume the tap before it reaches a picker row or
+    // the overlay-background close. Idempotent add/remove keeps it leak-free.
+    if (filterPanelOpen) {
+      lucide.createIcons();
+      document.addEventListener('click', handlePickerOutsideClick, true);
+    } else {
+      document.removeEventListener('click', handlePickerOutsideClick, true);
+    }
+  }
+
+  // Collapse the open filter panel on a tap outside it (Phase 4.2.1L). The
+  // collapse/consume decision is the shared, tested ExerciseFilters predicate;
+  // this only reads the DOM (which element was tapped) and applies the verdict.
+  // Taps on the Filters toggle or the active-filter chip bar are NOT outside
+  // taps, so those controls keep working while the panel is open.
+  function handlePickerOutsideClick(e) {
+    var panel = document.getElementById('pickerFilterPanel');
+    var btn = document.getElementById('pickerFilterBtn');
+    var activeBar = document.getElementById('pickerActiveFilters');
+    var state = {
+      panelOpen: filterPanelOpen,
+      insidePanel: !!(panel && panel.contains(e.target)),
+      onFilterControl: !!((btn && btn.contains(e.target)) || (activeBar && activeBar.contains(e.target)))
+    };
+    var collapse = (typeof ExerciseFilters !== 'undefined' && ExerciseFilters.shouldCollapseOnOutsideClick)
+      ? ExerciseFilters.shouldCollapseOnOutsideClick(state)
+      : (state.panelOpen && !state.insidePanel && !state.onFilterControl);
+    if (!collapse) return;
+    e.stopPropagation();   // don't let the tap close the picker or select a row
+    e.preventDefault();
+    toggleFilterPanel(false);
   }
 
   function togglePickerFilter(category, key) {
@@ -1914,6 +1947,13 @@
     pickerFilters = ExerciseFilters.toggleFilter(pickerFilters, category, key);
     renderFilterUI();
     refreshPicker();
+    // Mobile-first: selecting a filter immediately collapses the panel so the
+    // filtered list becomes the focus. Filters stay active (badge + active-chip
+    // bar remain); reopening restores every selection. Decision owned by the
+    // shared module so the contract is regression-tested.
+    var stayOpen = (typeof ExerciseFilters !== 'undefined' && ExerciseFilters.panelStaysOpenAfterFilterToggle)
+      ? ExerciseFilters.panelStaysOpenAfterFilterToggle() : false;
+    if (!stayOpen) toggleFilterPanel(false);
   }
   function removeActiveFilter(category, key) { togglePickerFilter(category, key); }
 

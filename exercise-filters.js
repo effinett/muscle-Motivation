@@ -409,7 +409,41 @@
     return an < bn ? -1 : (an > bn ? 1 : 0);
   }
 
-  /* ── 6. Public surface ─────────────────────────────────────────────────── */
+  /* ── 6. Picker filter-panel interaction (Phase 4.2.1L) ─────────────────────
+   * Pure decisions for the mobile filter-panel UX. Whether the collapsible
+   * panel is OPEN or COLLAPSED is UI state, not filtering — so it is defined
+   * here (one place, testable, DOM-free), exactly like every other picker
+   * decision, and consumed by the thin DOM handlers in workout.html. Nothing in
+   * this section touches eligibility, ranking, or membership.
+   *
+   * Two rules:
+   *   • A filter selection immediately collapses the panel, so after a tap the
+   *     filtered exercise list — not the menu — is the focus (mobile-first).
+   *   • An ambient tap outside the panel collapses it ONLY; it must never close
+   *     the picker or select a row. Taps on the panel's own filter controls
+   *     (the Filters toggle, the active-filter chips) are NOT outside taps. */
+
+  // After the user toggles a filter chip, the panel always collapses. A named
+  // predicate (rather than a bare literal at the call site) so the contract is
+  // pinned by a test: flipping this to keep the panel open is a deliberate,
+  // test-visible change, never an accident.
+  function panelStaysOpenAfterFilterToggle() { return false; }
+
+  // Should an ambient click collapse an OPEN panel? True only when the panel is
+  // open AND the click landed outside the panel AND not on one of its filter
+  // controls (the Filters toggle button or the active-filter chip bar, which
+  // must keep working while the panel is open). When true the consumer collapses
+  // the panel and consumes the click so it neither closes the picker nor selects
+  // an exercise row.
+  function shouldCollapseOnOutsideClick(state) {
+    state = state || {};
+    if (!state.panelOpen) return false;
+    if (state.insidePanel) return false;
+    if (state.onFilterControl) return false;
+    return true;
+  }
+
+  /* ── 7. Public surface ─────────────────────────────────────────────────── */
 
   var ExerciseFilters = {
     // vocabularies
@@ -429,7 +463,10 @@
     // eligibility + composition
     exerciseMatchesFilters: exerciseMatchesFilters,
     filterList: filterList,
-    runDiscovery: runDiscovery
+    runDiscovery: runDiscovery,
+    // filter-panel interaction (Phase 4.2.1L)
+    panelStaysOpenAfterFilterToggle: panelStaysOpenAfterFilterToggle,
+    shouldCollapseOnOutsideClick: shouldCollapseOnOutsideClick
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = ExerciseFilters;

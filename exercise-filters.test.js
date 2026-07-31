@@ -415,3 +415,60 @@ test('limit caps rows and reports counts', () => {
   assert.ok(r.counts.total > 5);
   assert.ok(r.counts.filtered > 0);
 });
+
+/* ── Filter-panel interaction (Phase 4.2.1L) ─────────────────────────────────
+ * The mobile filter-panel UX contract. workout.html holds the DOM; these pure
+ * predicates own the collapse/dismiss decisions and are what the DOM handlers
+ * consume, so the interaction is regression-tested without a browser. */
+
+test('panel collapses after a filter toggle (mobile: list is the focus)', () => {
+  // A filter selection never leaves the panel open — the filtered list, not the
+  // menu, is what the user should see next.
+  assert.equal(EF.panelStaysOpenAfterFilterToggle(), false);
+});
+
+test('outside tap collapses an open panel', () => {
+  assert.equal(EF.shouldCollapseOnOutsideClick({
+    panelOpen: true, insidePanel: false, onFilterControl: false
+  }), true);
+});
+
+test('tap inside the panel never collapses it (chip taps handled by the panel)', () => {
+  assert.equal(EF.shouldCollapseOnOutsideClick({
+    panelOpen: true, insidePanel: true, onFilterControl: false
+  }), false);
+});
+
+test('tap on a filter control (toggle / active chip) is not an outside tap', () => {
+  // The Filters button and the active-filter chip bar must keep working while
+  // the panel is open — they are never treated as a dismiss-the-panel tap.
+  assert.equal(EF.shouldCollapseOnOutsideClick({
+    panelOpen: true, insidePanel: false, onFilterControl: true
+  }), false);
+});
+
+test('a closed panel is never collapsed by an outside tap (picker-close passes through)', () => {
+  // When the panel is closed, an overlay tap must fall through to the normal
+  // picker-close path rather than being consumed here.
+  assert.equal(EF.shouldCollapseOnOutsideClick({
+    panelOpen: false, insidePanel: false, onFilterControl: false
+  }), false);
+});
+
+test('outside-click decision tolerates missing / junk state', () => {
+  assert.doesNotThrow(() => EF.shouldCollapseOnOutsideClick());
+  assert.equal(EF.shouldCollapseOnOutsideClick(), false);
+  assert.equal(EF.shouldCollapseOnOutsideClick(null), false);
+});
+
+test('collapsing the panel is orthogonal to filter state (filters survive)', () => {
+  // The panel-collapse decisions carry no filter state, so collapsing can never
+  // clear or change active filters — a selection made before collapse persists.
+  let f = EF.toggleFilter(EF.emptyFilters(), 'splits', 'legs');
+  f = EF.toggleFilter(f, 'equipment', 'machine');
+  assert.equal(EF.countActiveFilters(f), 2);
+  // Simulate the DOM sequence: toggle → auto-collapse. State is unchanged.
+  assert.equal(EF.panelStaysOpenAfterFilterToggle(), false);
+  assert.equal(EF.countActiveFilters(f), 2);
+  assert.deepEqual(EF.activeChips(f).map((c) => c.key), ['legs', 'machine']);
+});
