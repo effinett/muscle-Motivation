@@ -5,6 +5,7 @@
   "scripts": {
     "test": "node --test",
     "bench": "node benchmarks/run-resolve.js",
+    "bench:food": "node benchmarks/run-resolve.js",
     "bench:exercise": "node benchmarks/run-exercise.js",
     "eval:nutrition": "node nutrition-evaluation/runner.js"
   },
