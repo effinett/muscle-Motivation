@@ -32,6 +32,39 @@ module.exports = [
   D('disp-rice-white', { description: 'Rice, white, long-grain, regular, enriched, cooked', brand: '', group: 'generic' },
     { nameRegex: 'rice', notRegex: 'enriched|regular' }, { subcategory: 'simplify', tags: ['simplify'] }),
 
+  /* adjacent duplicate-word collapse (Phase 4.2.10a §3) — generalizable, not per-food */
+  D('disp-maple-dup', { description: 'Maple Maple Syrup', brand: '', group: 'branded' },
+    { name: 'Maple Syrup' }, { subcategory: 'dedupe-word', tags: ['simplify', 'dedupe'] }),
+  D('disp-sourdough-dup', { description: 'Sourdough Sourdough Bread', brand: '', group: 'branded' },
+    { name: 'Sourdough Bread' }, { subcategory: 'dedupe-word', tags: ['simplify', 'dedupe'] }),
+  D('disp-cinnamon-dup', { description: 'Cinnamon Cinnamon Granola', brand: '', group: 'branded' },
+    { name: 'Cinnamon Granola', notRegex: 'Cinnamon Cinnamon' }, { subcategory: 'dedupe-word', tags: ['simplify', 'dedupe'] }),
+  D('disp-egg-size-grade', { description: 'Egg, whole, raw, fresh, large, Grade A', brand: '', group: 'generic' },
+    { name: 'Egg' }, { subcategory: 'simplify', tags: ['simplify'],
+      notes: 'size grade ("large") + USDA quality grade ("Grade A") carry no nutritional identity.' }),
+
+  /* contextual redundant-modifier reduction (Phase 4.2.10a) — scoped, NOT global */
+  D('disp-cottage-creamed', { description: 'Cheese, cottage, creamed, large or small curd', brand: '', group: 'generic' },
+    { name: 'Cottage Cheese' }, { subcategory: 'context-reduce', tags: ['simplify'],
+      notes: '"creamed" is redundant for cottage cheese (its default form).' }),
+  D('disp-creamed-corn-kept', { description: 'Corn, sweet, creamed', brand: '', group: 'generic' },
+    { nameRegex: 'creamed' }, { subcategory: 'no-oversimplify', tags: ['simplify', 'identity'],
+      notes: '"creamed" is a distinct dish for corn — the cottage rule is contextual, so it is preserved here.' }),
+  D('disp-creamed-spinach-kept', { description: 'Creamed Spinach', brand: '', group: 'generic' },
+    { nameRegex: 'creamed' }, { subcategory: 'no-oversimplify', tags: ['simplify', 'identity'],
+      notes: 'creamed spinach keeps "creamed".' }),
+
+  /* species/variety as SECONDARY metadata + evidence-gated lox (Phase 4.2.10a) */
+  D('disp-salmon-species-secondary', { description: 'Chinook Smoked Salmon', brand: '', group: 'generic' },
+    { name: 'Smoked Salmon', notRegex: 'lox|chinook', varietyIncludes: 'Chinook' }, { subcategory: 'variety-secondary', tags: ['simplify', 'variety'],
+      notes: 'species "Chinook" → secondary metadata (still on model.variety); lox NOT inferred from smoked salmon.' }),
+  D('disp-salmon-lox-explicit', { description: 'Salmon, Chinook, smoked, (lox), regional', brand: '', group: 'generic' },
+    { name: 'Smoked Salmon (Lox)' }, { subcategory: 'variety-secondary', tags: ['simplify', 'variety'],
+      notes: 'explicit lox in the canonical name stays visible.' }),
+  D('disp-salmon-generic-no-lox', { description: 'Salmon, Atlantic, smoked', brand: '', group: 'generic' },
+    { name: 'Smoked Salmon', notRegex: 'lox' }, { subcategory: 'variety-secondary', tags: ['simplify', 'variety'],
+      notes: 'generic smoked salmon never gains "(Lox)".' }),
+
   /* preparation state preserved where it matters */
   D('disp-greek-yogurt-keeps-greek', { description: 'Yogurt, Greek, plain, nonfat', brand: '', group: 'generic' },
     { nameRegex: 'greek', notRegex: '^Yogurt$' }, { subcategory: 'prep-preserved', tags: ['simplify', 'prep'] }),
@@ -42,13 +75,19 @@ module.exports = [
   D('disp-mayo-keeps-identity', { description: 'Salad dressing, mayonnaise, regular', brand: '', group: 'generic' },
     { nameRegex: 'mayonnaise' }, { subcategory: 'no-oversimplify', tags: ['simplify', 'identity'] }),
 
-  /* brand preservation */
+  /* brand presentation (Phase 4.2.10a §4): brand is SECONDARY metadata — the
+     primary name says what the food is; the brand lives on model.brand only. */
   D('disp-quest-brand', { description: 'QUEST CHOCOLATE CHIP COOKIE DOUGH BAR', brand: 'Quest Nutrition', group: 'branded' },
-    { nameRegex: 'quest' }, { subcategory: 'brand', tags: ['brand'] }),
+    { nameRegex: 'cookie|bar', notRegex: 'quest', brandIncludes: 'Quest' }, { subcategory: 'brand', tags: ['brand'] }),
   D('disp-fairlife-milk-brand', { description: 'FAIRLIFE WHOLE MILK', brand: 'fairlife', group: 'branded' },
-    { nameRegex: 'fairlife', servingRegex: '.*' }, { subcategory: 'brand', tags: ['brand'] }),
+    { nameRegex: 'milk', notRegex: 'fairlife', brandIncludes: 'fairlife' }, { subcategory: 'brand', tags: ['brand'] }),
   D('disp-kodiak-no-dup', { description: 'KODIAK CAKES POWER CAKES', brand: 'Kodiak Cakes', group: 'branded' },
-    { nameRegex: 'kodiak' }, { subcategory: 'brand', tags: ['brand'] }),
+    { nameRegex: 'power cakes', notRegex: 'kodiak', brandIncludes: 'Kodiak' }, { subcategory: 'brand', tags: ['brand'] }),
+  D('disp-great-value-secondary', { description: 'Great Value Sourdough Bread', brand: 'Great Value', group: 'branded' },
+    { name: 'Sourdough Bread', brandIncludes: 'Great Value' }, { subcategory: 'brand', tags: ['brand'] }),
+  D('disp-brand-is-identity-kept', { description: 'Coca-Cola Classic', brand: 'Coca-Cola', group: 'branded' },
+    { nameRegex: 'coca', brandIncludes: 'Coca-Cola' }, { subcategory: 'brand', tags: ['brand', 'identity'],
+      notes: 'brand that IS the product identity is preserved in the name (≤1 word would remain).' }),
 
   /* long-name / overflow-safe presentation (name must not be empty, stays a phrase) */
   D('disp-long-name', { description: 'Beverages, Protein powder, whey based, chocolate flavor, ready to drink', brand: '', group: 'branded' },
@@ -112,18 +151,23 @@ module.exports = [
   D('disp-parmesan', { description: 'Cheese, parmesan, grated', brand: '', group: 'generic' },
     { nameRegex: 'parmesan' }, { subcategory: 'simplify', tags: ['simplify', 'dairy'] }),
 
-  /* INFORMATIONAL — over-simplification quality gaps surfaced by the eval (not
-     release-gating; candidates for the deferred display cleanup pass). */
+  /* descriptor-tail cleanup (Phase 4.2.10a §3) — identity-free USDA tails removed
+     WITHOUT destroying food identity (part/botanical-stage/use qualifiers). Were
+     informational quality-gaps at the 4.2.9 baseline; now release-scored. */
   D('disp-potato-flesh-artifact', { description: 'Potatoes, boiled, cooked without skin, flesh', brand: '', group: 'generic' },
-    { notRegex: '^Flesh' }, { subcategory: 'oversimplify-gap', tags: ['simplify', 'defect'], informational: true, diagnosticStage: 'display',
-      notes: 'leading "Flesh" survives ("Flesh Potato Cooked Without Skin") — display cleanup candidate.' }),
+    { name: 'Potatoes', notRegex: 'Flesh|Without Skin' }, { subcategory: 'descriptor-tail', tags: ['simplify'],
+      notes: 'part qualifier "flesh" + absence clause "without skin" carry no identity.' }),
   D('disp-olive-oil-tail-artifact', { description: 'Oil, olive, salad or cooking', brand: '', group: 'generic' },
-    { notRegex: 'Salad Or Cooking' }, { subcategory: 'oversimplify-gap', tags: ['simplify', 'defect'], informational: true, diagnosticStage: 'display',
-      notes: '"salad or cooking" tail retained ("Olive Oil Salad Or Cooking").' }),
+    { name: 'Olive Oil', notRegex: 'Salad Or Cooking' }, { subcategory: 'descriptor-tail', tags: ['simplify'],
+      notes: 'USDA oil-use descriptor "salad or cooking" removed.' }),
   D('disp-lentils-tail-artifact', { description: 'Lentils, mature seeds, cooked, boiled', brand: '', group: 'generic' },
-    { notRegex: 'Mature Seeds' }, { subcategory: 'oversimplify-gap', tags: ['simplify', 'defect'], informational: true, diagnosticStage: 'display',
-      notes: '"mature seeds" retained ("Lentils Mature Seeds").' }),
+    { name: 'Lentils', notRegex: 'Mature Seeds' }, { subcategory: 'descriptor-tail', tags: ['simplify'],
+      notes: 'legume botanical stage "mature seeds" removed.' }),
+
+  /* INFORMATIONAL — DELIBERATELY NOT simplified (Phase 4.2.10a): the milkfat
+     basis of yogurt materially affects macros, so per §3 it is preserved rather
+     than stripped. Flagged for a later reading-order/secondary-metadata pass. */
   D('disp-yogurt-whole-milk-artifact', { description: 'Yogurt, plain, whole milk', brand: '', group: 'generic' },
-    { notRegex: 'Whole Milk' }, { subcategory: 'oversimplify-gap', tags: ['simplify', 'defect'], informational: true, diagnosticStage: 'display',
-      notes: '"whole milk" descriptor surfaces in the label ("Yogurt Whole Milk").' }),
+    { notRegex: 'Whole Milk' }, { subcategory: 'preserve-fat-basis', tags: ['simplify', 'deferred'], informational: true, diagnosticStage: 'display',
+      notes: 'DEFERRED: "whole milk" is a meaningful fat basis for yogurt — not stripped (would misrepresent macros). Candidate for reading-order improvement, not removal.' }),
 ];

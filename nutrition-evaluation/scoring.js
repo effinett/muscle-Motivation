@@ -247,6 +247,7 @@ function scoreDisplay(c, engine) {
   if (exp.servingRegex && !reOf(exp.servingRegex).test(d.serving || '')) bad.push(`serving "${d.serving}" !~ /${exp.servingRegex}/`);
   if ('estimated' in exp && !!d.estimated !== !!exp.estimated) bad.push(`estimated got ${!!d.estimated}, want ${exp.estimated}`);
   if (exp.brandIncludes && !(d.brand || '').includes(exp.brandIncludes)) bad.push(`brand "${d.brand}" missing "${exp.brandIncludes}"`);
+  if (exp.varietyIncludes && !(d.variety || '').includes(exp.varietyIncludes)) bad.push(`variety "${d.variety}" missing "${exp.varietyIncludes}"`);
   if (exp.ariaIncludes && !(d.ariaLabel || '').includes(exp.ariaIncludes)) bad.push(`ariaLabel "${d.ariaLabel}" missing "${exp.ariaIncludes}"`);
   return { pass: bad.length === 0, stage: bad.length ? 'display' : null, detail: bad.join('; '), signals: { name: d.name } };
 }

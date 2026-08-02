@@ -201,12 +201,81 @@ function fdStripBrandSuffix(name, brand) {
   return n;
 }
 
-// Simplified, human-scannable primary name. Brand is stripped first so it is
-// never shown twice; the rest is food-core's class-based USDA simplification.
+// Remove a LEADING brand run so the brand is secondary metadata, never the
+// primary food identity ("Great Value Sourdough Bread" + brand "Great Value" →
+// "Sourdough Bread"; "Fairlife Whole Milk" → "Whole Milk"). Strips only the
+// contiguous leading name tokens that belong to the brand, and ONLY when ≥2
+// meaningful words remain — so a brand that IS the product's identity survives
+// ("Coca-Cola Classic" → "Classic" would be wrong, so it is kept intact, as is
+// bare "Pepsi"). Presentation-only; the canonical name/identity is untouched.
+function _fdBrandNorm(t) { return String(t == null ? '' : t).toLowerCase().replace(/[^a-z0-9]/g, ''); }
+function fdStripBrandPrefix(name, brand) {
+  var n = String(name == null ? '' : name).trim();
+  var b = String(brand == null ? '' : brand).trim();
+  if (!n || !b) return n;
+  var nt = n.split(/\s+/);
+  var bset = {};
+  b.split(/\s+/).forEach(function (t) { var k = _fdBrandNorm(t); if (k) bset[k] = 1; });
+  var i = 0;
+  while (i < nt.length && bset[_fdBrandNorm(nt[i])]) i++;
+  var rest = nt.slice(i);
+  if (i === 0 || rest.length < 2) return n;     // no brand prefix, or too little left → keep as-is
+  return rest.join(' ');
+}
+
+// Simplified, human-scannable primary name. Brand is stripped first (both a
+// trailing "(Brand)" suffix and a leading brand run) so it is never shown twice
+// and is left to the secondary brand line; the rest is food-core's class-based
+// USDA simplification.
 function fdSimplifyName(name, brand) {
   var bare = fdStripBrandSuffix(name, brand);
+  bare = fdStripBrandPrefix(bare, brand);
   var simplified = _fdDisplayName(bare);
   return simplified || _fdTitleCase(bare) || bare;
+}
+
+/* ── species / variety as SECONDARY metadata ────────────────────────────────
+ * Some species/variety words read better as secondary metadata than as a
+ * primary-name prefix ("Smoked Salmon" + variety "Chinook", not "Chinook Smoked
+ * Salmon"). This is CONTEXTUAL — scoped to the base food the species qualifies —
+ * so a variety a user names directly ("Fuji Apple") is never demoted. The
+ * canonical name/identity is untouched; the species stays available on the model
+ * (and always in fullName). Extend the table per recognized construction. */
+var FD_SECONDARY_VARIETY = {
+  salmon: { chinook: 1, king: 1, atlantic: 1, sockeye: 1, red: 1, coho: 1,
+    silver: 1, pink: 1, humpback: 1, chum: 1, keta: 1 },
+};
+
+// Pull a known species/variety token out of the primary name → secondary field,
+// but ONLY when a real multi-word food remains (so "Chinook Salmon" stays whole
+// while "Chinook Smoked Salmon" → "Smoked Salmon" + "Chinook"). Pure, name-only.
+function fdExtractVariety(name) {
+  var n = String(name == null ? '' : name).trim();
+  if (!n) return { name: n, variety: '' };
+  var toks = n.split(/\s+/);
+  var base = toks[toks.length - 1].toLowerCase().replace(/[^a-z]/g, '');
+  var set = FD_SECONDARY_VARIETY[base];
+  if (!set) return { name: n, variety: '' };
+  for (var i = 0; i < toks.length - 1; i++) {
+    var t = toks[i].toLowerCase().replace(/[^a-z]/g, '');
+    if (set[t]) {
+      var rest = toks.slice(0, i).concat(toks.slice(i + 1));
+      if (rest.length >= 2) return { name: rest.join(' '), variety: toks[i] };
+      break;
+    }
+  }
+  return { name: n, variety: '' };
+}
+
+// Append "(Lox)" to a smoked-salmon name ONLY when "lox" is present in an actual
+// identity signal (canonical name, product name, brand, user text, correction
+// memory, source metadata) — NEVER inferred from "smoked salmon" alone.
+function fdApplyLox(name, signals) {
+  var n = String(name == null ? '' : name);
+  if (!/smoked\s+salmon/i.test(n)) return n;   // only smoked salmon is lox
+  if (/\blox\b/i.test(n)) return n;            // already displayed
+  var has = (signals || []).some(function (s) { return /\blox\b/i.test(String(s == null ? '' : s)); });
+  return has ? (n + ' (Lox)') : n;
 }
 
 /* ── macros + calories ────────────────────────────────────────────────────── */
@@ -241,6 +310,11 @@ function buildFoodDisplay(food, opts) {
   var brand = String(food.brand || '').trim();
   var canonical = food.description || food.name || '';
   var name = fdSimplifyName(food.name != null ? food.name : canonical, brand);
+  // Species/variety → secondary metadata (e.g. "Smoked Salmon" + "Chinook").
+  var v = fdExtractVariety(name);
+  name = v.name;
+  // Evidence-gated culinary alias: "(Lox)" only when an identity signal says so.
+  name = fdApplyLox(name, [canonical, food.name, brand, food.manualName, food.query, food.text]);
   var estimated = (food.estimated === true) || fdIsEstimatedServing(food.serving_description);
 
   var serving = fdServingLabel(food, {});
@@ -254,6 +328,7 @@ function buildFoodDisplay(food, opts) {
     name: name || String(canonical).trim() || 'Food',
     fullName: String(canonical).trim() || name || '',
     brand: brand,
+    variety: v.variety || '',
     serving: serving,
     estimated: estimated,
     calories: cals,
@@ -322,6 +397,9 @@ if (typeof module !== 'undefined' && module.exports) {
     fdServingLabel: fdServingLabel,
     fdCompactServing: fdCompactServing,
     fdStripBrandSuffix: fdStripBrandSuffix,
+    fdStripBrandPrefix: fdStripBrandPrefix,
+    fdExtractVariety: fdExtractVariety,
+    fdApplyLox: fdApplyLox,
     fdSimplifyName: fdSimplifyName,
     fdCalories: fdCalories,
     fdMacroSummary: fdMacroSummary,
@@ -342,6 +420,9 @@ if (typeof window !== 'undefined') {
     fdServingLabel: fdServingLabel,
     fdCompactServing: fdCompactServing,
     fdStripBrandSuffix: fdStripBrandSuffix,
+    fdStripBrandPrefix: fdStripBrandPrefix,
+    fdExtractVariety: fdExtractVariety,
+    fdApplyLox: fdApplyLox,
     fdSimplifyName: fdSimplifyName,
     fdCalories: fdCalories,
     fdMacroSummary: fdMacroSummary,

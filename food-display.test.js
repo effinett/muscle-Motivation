@@ -121,6 +121,109 @@ test('fdSimplifyName: brand never appears twice', () => {
   assert.strictEqual(fd.fdSimplifyName('Milk, whole (Fairlife)', 'Fairlife'), 'Milk');
 });
 
+/* ── Phase 4.2.10a: adjacent duplicate-word collapse (generalizable) ─────── */
+test('fdSimplifyName: an immediately-repeated word is collapsed', () => {
+  assert.strictEqual(fd.fdSimplifyName('Maple Maple Syrup'), 'Maple Syrup');
+  assert.strictEqual(fd.fdSimplifyName('Sourdough Sourdough Bread'), 'Sourdough Bread');
+  assert.strictEqual(fd.fdSimplifyName('Cinnamon Cinnamon Granola'), 'Cinnamon Granola');
+});
+test('fdSimplifyName: a legitimate NON-adjacent repeat is preserved', () => {
+  // "Cakes" repeats but is not adjacent → both kept.
+  assert.strictEqual(fd.fdSimplifyName('Power Power Cakes Cakes'), 'Power Cakes');
+  assert.ok(/Cakes/.test(fd.fdSimplifyName('Kodiak Cakes Power Cakes', 'Kodiak Cakes')));
+});
+
+/* ── Phase 4.2.10a: brand is secondary metadata, never the primary name ──── */
+test('fdStripBrandPrefix: strips a leading brand run, leaving the product name', () => {
+  assert.strictEqual(fd.fdStripBrandPrefix('FAIRLIFE WHOLE MILK', 'fairlife'), 'WHOLE MILK');
+  assert.strictEqual(fd.fdStripBrandPrefix('Great Value Sourdough Bread', 'Great Value'), 'Sourdough Bread');
+  assert.strictEqual(fd.fdStripBrandPrefix('KODIAK CAKES POWER CAKES', 'Kodiak Cakes'), 'POWER CAKES');
+});
+test('fdStripBrandPrefix: keeps the brand when it IS the identity (≤1 word left)', () => {
+  // "Classic" alone is not a food → the brand must stay.
+  assert.strictEqual(fd.fdStripBrandPrefix('Coca-Cola Classic', 'Coca-Cola'), 'Coca-Cola Classic');
+  assert.strictEqual(fd.fdStripBrandPrefix('Pepsi', 'Pepsi'), 'Pepsi');
+  // no brand / no prefix match → unchanged
+  assert.strictEqual(fd.fdStripBrandPrefix('Whole Milk', ''), 'Whole Milk');
+  assert.strictEqual(fd.fdStripBrandPrefix('Almond Butter', 'Trader Joe'), 'Almond Butter');
+});
+test('fdSimplifyName: brand-forward USDA name simplifies to the product', () => {
+  assert.strictEqual(fd.fdSimplifyName('FAIRLIFE WHOLE MILK', 'fairlife'), 'Whole Milk');
+  assert.strictEqual(fd.fdSimplifyName('Great Value Sourdough Bread', 'Great Value'), 'Sourdough Bread');
+});
+
+/* ── Phase 4.2.10a: descriptor-tail cleanup (identity preserved) ──────────── */
+test('fdSimplifyName: identity-free USDA descriptor tails are removed', () => {
+  assert.strictEqual(fd.fdSimplifyName('Potatoes, boiled, cooked without skin, flesh'), 'Potatoes');
+  assert.strictEqual(fd.fdSimplifyName('Oil, olive, salad or cooking'), 'Olive Oil');
+  assert.strictEqual(fd.fdSimplifyName('Lentils, mature seeds, cooked, boiled'), 'Lentils');
+  assert.strictEqual(fd.fdSimplifyName('Egg, whole, raw, fresh, large, Grade A'), 'Egg');
+});
+test('fdSimplifyName: meaningful variety/form is NOT over-simplified', () => {
+  // brown vs white rice, greek yogurt, cheddar — distinctions must survive.
+  assert.ok(/brown/i.test(fd.fdSimplifyName('Rice, brown, long-grain, cooked')));
+  assert.ok(/greek/i.test(fd.fdSimplifyName('Yogurt, Greek, plain, nonfat')));
+  assert.ok(/cheddar/i.test(fd.fdSimplifyName('Cheese, cheddar')));
+});
+
+/* ── Phase 4.2.10a: contextual cottage-cheese reduction (not a global drop) ── */
+test('fdSimplifyName: cottage cheese absorbs redundant "creamed"', () => {
+  assert.strictEqual(fd.fdSimplifyName('Cheese, cottage, creamed, large or small curd'), 'Cottage Cheese');
+  assert.strictEqual(fd.fdSimplifyName('Cottage Creamed Cheese'), 'Cottage Cheese');
+});
+test('fdSimplifyName: "creamed" is preserved for other creamed dishes', () => {
+  assert.ok(/creamed/i.test(fd.fdSimplifyName('Creamed Corn')), 'creamed corn keeps creamed');
+  assert.ok(/creamed/i.test(fd.fdSimplifyName('Creamed Spinach')), 'creamed spinach keeps creamed');
+  assert.ok(/creamed/i.test(fd.fdSimplifyName('Creamed Onions')), 'creamed onions keeps creamed');
+  assert.ok(/creamed/i.test(fd.fdSimplifyName('Corn, sweet, creamed')), 'USDA creamed corn keeps creamed');
+});
+
+/* ── Phase 4.2.10a: species as secondary metadata + evidence-gated lox ─────── */
+test('fdExtractVariety: known salmon species moves to secondary (multi-word residue)', () => {
+  assert.deepStrictEqual(fd.fdExtractVariety('Chinook Smoked Salmon'), { name: 'Smoked Salmon', variety: 'Chinook' });
+  assert.deepStrictEqual(fd.fdExtractVariety('Atlantic Smoked Salmon'), { name: 'Smoked Salmon', variety: 'Atlantic' });
+  // 1-word residue → NOT demoted; a directly-named variety (apple) is untouched.
+  assert.deepStrictEqual(fd.fdExtractVariety('Chinook Salmon'), { name: 'Chinook Salmon', variety: '' });
+  assert.deepStrictEqual(fd.fdExtractVariety('Fuji Apple'), { name: 'Fuji Apple', variety: '' });
+});
+test('fdApplyLox: "(Lox)" only with a real lox identity signal, never inferred', () => {
+  assert.strictEqual(fd.fdApplyLox('Smoked Salmon', ['Salmon, Chinook, smoked, (lox)']), 'Smoked Salmon (Lox)');
+  assert.strictEqual(fd.fdApplyLox('Smoked Salmon', ['lox bagel']), 'Smoked Salmon (Lox)');
+  assert.strictEqual(fd.fdApplyLox('Smoked Salmon', ['Salmon, Atlantic, smoked']), 'Smoked Salmon'); // no signal
+  assert.strictEqual(fd.fdApplyLox('Grilled Salmon', ['lox']), 'Grilled Salmon'); // only smoked salmon can be lox
+});
+test('buildFoodDisplay: Chinook smoked salmon → primary "Smoked Salmon", secondary "Chinook"', () => {
+  const m = fd.buildFoodDisplay({ usda_fdc_id: 175168, description: 'Chinook Smoked Salmon', name: 'Chinook Smoked Salmon', brand: '', calories: 117 });
+  assert.strictEqual(m.name, 'Smoked Salmon');
+  assert.strictEqual(m.variety, 'Chinook');
+  assert.ok(!/lox/i.test(m.name), 'no lox is inferred from smoked salmon alone');
+  assert.strictEqual(m.fullName, 'Chinook Smoked Salmon', 'canonical name preserved');
+  assert.strictEqual(m.calories, 117);
+});
+test('buildFoodDisplay: explicit lox stays visible; species available in model', () => {
+  const m = fd.buildFoodDisplay({ usda_fdc_id: 175168, description: 'Salmon, Chinook, smoked, (lox), regional', name: 'Salmon, Chinook, smoked, (lox), regional', brand: '', calories: 117 });
+  assert.strictEqual(m.name, 'Smoked Salmon (Lox)');
+  assert.strictEqual(m.variety, 'Chinook');
+  assert.strictEqual(m.fullName, 'Salmon, Chinook, smoked, (lox), regional', 'canonical + id untouched');
+});
+test('buildFoodDisplay: generic smoked salmon never gains "(Lox)"', () => {
+  const m = fd.buildFoodDisplay({ usda_fdc_id: 175167, description: 'Salmon, Atlantic, smoked', name: 'Salmon, Atlantic, smoked', brand: '', calories: 117 });
+  assert.ok(!/lox/i.test(m.name), 'generic smoked salmon has no lox');
+  assert.strictEqual(m.variety, 'Atlantic');
+});
+
+test('buildFoodDisplay: brand-forward branded food keeps identity out of the name', () => {
+  const m = fd.buildFoodDisplay({
+    usda_fdc_id: 9, description: 'QUEST CHOCOLATE CHIP COOKIE DOUGH BAR', name: 'QUEST CHOCOLATE CHIP COOKIE DOUGH BAR',
+    brand: 'Quest Nutrition', group: 'branded', calories: 190,
+  });
+  assert.strictEqual(m.brand, 'Quest Nutrition');
+  assert.ok(!/quest/i.test(m.name), 'brand must not appear in the primary name');
+  assert.ok(/cookie|bar/i.test(m.name), 'the product name survives');
+  // canonical identity is preserved verbatim for downstream fidelity
+  assert.strictEqual(m.fullName, 'QUEST CHOCOLATE CHIP COOKIE DOUGH BAR');
+});
+
 /* ── macros + calories ──────────────────────────────────────────────────── */
 
 test('fdMacroSummary: one consistent format (whole grams by default)', () => {

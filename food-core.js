@@ -1270,8 +1270,14 @@ var NU_NAME_NOISE = [
   /\d+(\.\d+)?\s*%/,                                    // "3.25% milkfat", "85% lean"
   /\bstyle$/,                                           // "smooth style", "chunk style"
   /^(meat only|meat and skin|skin removed|boneless|skinless|bone-in|skin-on)$/,
+  /^(small|medium|large|extra large|jumbo)$/,          // size grades (eggs, produce) — no nutritional identity
+  /^grade\b/,                                          // USDA quality grade ("Grade A", "Grade AA")
   /^(broilers?|fryers?|roasters?|broilers? or fryers?)\b/,
   /\b(separable|trimmed to)\b/,                         // beef retail-cut boilerplate
+  /^flesh$/,                                            // "Potatoes, …, flesh" — a part with no user-facing identity
+  /^(mature|immature) seeds?$/,                         // legume botanical stage ("Lentils, mature seeds")
+  /(salad or cooking|cooking or salad)/,                // USDA cooking-oil use descriptor ("Oil, olive, salad or cooking")
+  /^all purpose\b/,                                     // "all purpose salad or cooking" oil-use boilerplate
 ];
 
 // Category-echo principals USDA prefixes entries with ("Fast foods,
@@ -1326,10 +1332,36 @@ function nuTitleCase(s) {
   }).join(' ');
 }
 
+// Contextual phrase reductions: a modifier that is REDUNDANT only inside a
+// specific recognized food construction — NOT a global word removal. Each rule
+// fires only when the surrounding identity tokens are ALL present, so a distinct
+// dish that shares the modifier is untouched (e.g. "creamed" is redundant for
+// cottage cheese, which is creamed by default, but "creamed corn"/"creamed
+// spinach"/"creamed onions" are their own foods and keep it). Applied to the
+// already-simplified label so both the USDA comma form ("Cheese, cottage,
+// creamed") and the flattened form ("Cottage Creamed Cheese") reduce identically.
+var NU_NAME_CONTEXT_REDUCE = [
+  { requires: [/\bcottage\b/i, /\bcheese\b/i], drop: /\bcreamed\b/i },
+];
+
+function nuApplyContextReduce(out) {
+  NU_NAME_CONTEXT_REDUCE.forEach(function (rule) {
+    if (rule.requires.every(function (re) { return re.test(out); })) {
+      out = out.replace(rule.drop, '').replace(/\s+/g, ' ').trim();
+    }
+  });
+  return out;
+}
+
 // Friendly row title. Full name is preserved by every caller in title="".
 function nuAiDisplayName(name) {
   var full = String(name == null ? '' : name).trim();
   var segs = full.split(/[,;]/).map(function (s) { return s.trim(); }).filter(Boolean);
+  // Strip a mid-segment absence clause ("cooked without skin" → "cooked") so the
+  // residual prep/part word is then removed by the noise filter below. A
+  // "without …" qualifier describes an absence and never carries positive food
+  // identity, so dropping it is always safe.
+  segs = segs.map(function (s) { return s.replace(/\s*\bwithout\b.*$/i, '').trim(); }).filter(Boolean);
 
   var kept = segs.filter(function (s) {
     var ls = s.toLowerCase();
@@ -1350,6 +1382,14 @@ function nuAiDisplayName(name) {
   if (before.length) principal = nuNameSingular(principal);
 
   var out = nuTitleCase(before.concat([principal]).concat(after).join(' '));
+  // Collapse an immediately-repeated identical word ("Maple Maple Syrup" →
+  // "Maple Syrup", "Cinnamon Cinnamon Granola" → "Cinnamon Granola"). Only
+  // ADJACENT duplicates collapse, so a legitimate non-adjacent repeat (the two
+  // "Cakes" in "Kodiak Cakes Power Cakes") is preserved.
+  out = out.replace(/\b(\w+)(\s+\1\b)+/gi, '$1');
+  // Contextual redundant-modifier reduction ("Cottage Creamed Cheese" →
+  // "Cottage Cheese"), scoped to recognized food constructions only.
+  out = nuApplyContextReduce(out);
   // word-boundary length cap; the CSS two-line clamp is the backstop
   if (out.length > 44) out = out.slice(0, 44).replace(/\s+\S*$/, '');
   return out || full;
