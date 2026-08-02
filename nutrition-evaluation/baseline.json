@@ -1,9 +1,9 @@
 {
   "schemaVersion": "4.2.9-1",
   "caseSetVersion": "4.2.9-1",
-  "sha": "331334993c60e0f878d13bb456a30d719cc4185b",
-  "generatedAt": "2026-08-02T19:53:48.104Z",
-  "totalCases": 285,
+  "sha": "c837e5875c08ff2a9b791c0f213aa43eed10d404",
+  "generatedAt": "2026-08-02T20:49:53.655Z",
+  "totalCases": 288,
   "categoryCounts": {
     "parsing": 19,
     "retrieval": 25,
@@ -13,7 +13,7 @@
     "portion": 35,
     "meal": 22,
     "correction": 9,
-    "display": 74
+    "display": 77
   },
   "metrics": {
     "overall": 100,
@@ -1270,6 +1270,21 @@
       "category": "display"
     },
     "disp-parmesan": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-xmodel-chicken": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-xmodel-salmon": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-xmodel-great-value": {
       "pass": true,
       "stage": null,
       "category": "display"

@@ -1,24 +1,26 @@
-# Nutrition Evaluation — Phase 4.2.10b Baseline
+# Nutrition Evaluation — Phase 4.2.10c Baseline
 
 Durable summary of the recorded baseline. Machine record: `baseline.json`.
 Update deliberately via `node nutrition-evaluation/runner.js --update-baseline`.
 
 - **SHA:** `331334993c60e0f878d13bb456a30d719cc4185b` (Phase 4.2.10a; 4.2.10b metrics recorded pre-commit)
 - **Schema version:** `4.2.9-1`  ·  **Case-set version:** `4.2.9-1`
-- **Total cases:** 285 (scored 283 · informational 2 · known_fail 0)
-- **Production logic changed by this phase:** YES — Phase 4.2.10b (ranking polarity +
-  generic-first parenthetical guard + confidence Path C material-ambiguity escalation).
+- **Total cases:** 288 (scored 286 · informational 2 · known_fail 0)
+- **Production logic changed by this phase:** Phase 4.2.10c is presentation-wiring
+  only (shared food-display model across every nutrition surface); no ranking,
+  confidence, or nutrition-calculation change. (4.2.10b changed ranking/confidence.)
 
 ## Headline metrics
 
 | Metric | Value |
 |---|---|
-| Overall pass rate (scored) | 100% (283/283) |
+| Overall pass rate (scored) | 100% (286/286) |
 | Top-1 accuracy | 100% (19/19) |
 | Acceptable-candidate accuracy | 100% (51/51) |
 | Retrieval recall @1 / @3 / @5 / @10 | 95.8% / 100% / 100% / 100% |
 | Clarification precision / recall | 100% (7/7) / 100% (7/7) |
 | **False-confidence rate** | **0% (0/31)** |
+| Display accuracy | 100% (76/76) |
 | Portion accuracy | 100% (35/35) |
 | Meal accuracy (case / item) | 100% / 100% |
 | Parsing accuracy (case / field) | 100% / 100% |

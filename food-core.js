@@ -1368,31 +1368,9 @@ function nuBuildSaveSrc(o) {
 }
 
 /* ── display names ─────────────────────────────────────────────────────── */
-
-// Display-only chip label: drop a trailing measure ("...,6 oz") and low-info
-// qualifier words ("Fairlife Protein Shake" -> "Fairlife Shake"). Already-short
-// names pass through untouched. The full name is always kept in nu_recentFoods.
-// "protein" and "greek" are intentionally NOT here — they're meaningful food
-// distinctions, not noise. We only strip fat/diet descriptors and packaging words.
-var NU_FILLER = [
-  'pro','organic','original','natural','plain','unsweetened',
-  'nonfat','non-fat','low-fat','lowfat','reduced-fat','reduced','fat-free',
-  'whole','skim','lean','raw','cooked','fresh','grass-fed','free-range',
-  'boneless','skinless'
-];
-function nuShortLabel(name) {
-  var full = String(name == null ? '' : name).trim();
-  var base = full.split(',')[0].trim();          // drop ", 6 oz"-style measures
-  var kept = base.split(/\s+/).filter(function (w) {
-    var lw = w.toLowerCase().replace(/[().]/g, '');
-    if (/^\d+(\.\d+)?%$/.test(lw)) return false;  // 2%, 0%, 1.5%
-    return NU_FILLER.indexOf(lw) === -1;
-  });
-  var short = kept.join(' ').replace(/\s+/g, ' ').trim();
-  // Never hard-truncate (that loses the food's identity) — the chip's CSS
-  // max-width + text-overflow ellipsis handles any pathologically long name.
-  return short || base || full;
-}
+// (The old `nuShortLabel` chip-label simplifier + its `NU_FILLER` table were
+//  removed in Phase 4.2.10c — every surface now uses the ONE shared grammar in
+//  food-display.js (`fdCompactLabel` for chips). No second naming path.)
 
 /* ── Friendly display names (P7) ───────────────────────────────────────────
  * "Apples, fuji, with skin, raw" reads as "Fuji Apple"; "Chicken, broilers
@@ -1595,8 +1573,6 @@ if (typeof module !== 'undefined' && module.exports) {
     nuCreateResolver: nuCreateResolver,
     nuFoodKey: nuFoodKey,
     nuBuildSaveSrc: nuBuildSaveSrc,
-    NU_FILLER: NU_FILLER,
-    nuShortLabel: nuShortLabel,
     nuNameSingular: nuNameSingular,
     nuTitleCase: nuTitleCase,
     nuAiDisplayName: nuAiDisplayName,

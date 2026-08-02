@@ -411,10 +411,13 @@ function nuRenderRecent(foods) {
   var chips = document.getElementById('nuRecentChips');
   if (!wrap || !chips) return;
   if (!nu_recentFoods.length) { wrap.style.display = 'none'; chips.innerHTML = ''; return; }
-  // Chips show a SHORTENED label; the full name is preserved in nu_recentFoods.
+  // Shared compact label — same primary-name grammar as every surface, single
+  // line; the accessible label keeps the full canonical name (+ brand). Canonical
+  // identity in nu_recentFoods is used verbatim on tap (nuPickSaved).
   var html = nu_recentFoods.slice(0, NU_RECENT_VISIBLE).map(function (f, i) {
-    return '<button type="button" class="nu-chip" onclick="nuPickSaved(' + i + ')">' +
-        '<span class="nu-chip-name">' + nuEsc(nuShortLabel(f.name)) + '</span>' +
+    var cl = FoodDisplay.fdCompactLabel(f);
+    return '<button type="button" class="nu-chip" title="' + nuEsc(cl.ariaLabel) + '" aria-label="' + nuEsc(cl.ariaLabel) + '" onclick="nuPickSaved(' + i + ')">' +
+        '<span class="nu-chip-name">' + nuEsc(cl.name) + '</span>' +
       '</button>';
   }).join('');
   if (nu_recentFoods.length > NU_RECENT_VISIBLE) {
@@ -483,14 +486,21 @@ function nuRenderSearchList(q) {
     return;
   }
   list.innerHTML = rows.map(function (o) {
-    return '<button type="button" class="nu-saved-row" onclick="nuPickSaved(' + o.i + ')">' +
-        '<span class="nu-saved-name">' + nuEsc(o.f.name) + '</span>' +
+    // Shared display model (simplified primary name + Brand • Variety secondary);
+    // the original saved food object (o.f) is used verbatim for selection/edit.
+    var dm = FoodDisplay.buildFoodDisplay(o.f);
+    var sec = dm.secondaryParts.map(nuEsc).join(' · ');
+    return '<button type="button" class="nu-saved-row" title="' + nuEsc(dm.fullName) + '" aria-label="' + nuEsc(dm.ariaLabel) + '" onclick="nuPickSaved(' + o.i + ')">' +
+        '<div class="nu-saved-main">' +
+          '<div class="nu-saved-name">' + nuEsc(dm.name) + '</div>' +
+          (sec ? '<div class="nu-saved-sub">' + sec + '</div>' : '') +
+        '</div>' +
         '<span class="nu-saved-cal">' + nuRound(o.f.default_calories) + ' kcal</span>' +
       '</button>';
   }).join('');
 }
 
-// Chip labels (NU_FILLER, nuShortLabel) live in food-core.js.
+// Chip labels use the shared FoodDisplay.fdCompactLabel (food-display.js).
 
 /* ── USDA FoodData Central search ──────────────────────────────────────────
  * The page never sees the USDA key — it calls the /api/usda-search proxy with
@@ -735,8 +745,7 @@ function nuRenderUsdaResults() {
       header = '<div class="nu-usda-group">' + (NU_GROUP_LABELS[group] || 'USDA foods') + '</div>';
     }
     var dm = FoodDisplay.buildFoodDisplay(f);
-    var meta = [];
-    if (dm.brand) meta.push(nuEsc(dm.brand));
+    var meta = dm.secondaryParts.map(nuEsc);   // brand · variety (identity)
     meta.push(nuEsc(dm.serving));
     var sub = '<span class="nu-verified-sm">USDA</span> · ' + meta.join(' · ');
     return header +
@@ -788,8 +797,10 @@ function nuPickUsda(i) {
   cnEl.textContent = cardDm.name;
   cnEl.title = cardDm.fullName;
   var bEl = document.getElementById('nuCardBrand');
-  bEl.textContent = f.brand || '';
-  bEl.style.display = f.brand ? 'inline-block' : 'none';
+  // Brand + variety as secondary identity metadata, from the shared model.
+  var cardMeta = [cardDm.brand, cardDm.variety].filter(Boolean).join(' · ');
+  bEl.textContent = cardMeta;
+  bEl.style.display = cardMeta ? 'inline-block' : 'none';
 
   // Same serving rule as the search list (nuDefaultServingKey). Portions already
   // cached by the row prefetch apply synchronously, so the card opens showing

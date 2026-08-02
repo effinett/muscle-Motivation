@@ -340,3 +340,68 @@ test('contract: malformed optional fields never render null/undefined', () => {
   assert.ok(!/null|undefined|NaN/.test(m.macroSummary));
   assert.ok(!/null|undefined/.test(m.caloriesLabel));
 });
+
+/* ── Phase 4.2.10c: shared presentation contract ─────────────────────────── */
+
+test('fdPresentName: one primary name + extracted variety, canonical preserved', () => {
+  const p = fd.fdPresentName({ description: 'Salmon, Chinook, smoked, (lox), regional' });
+  assert.strictEqual(p.name, 'Smoked Salmon (Lox)');
+  assert.strictEqual(p.variety, 'Chinook');
+  assert.strictEqual(p.fullName, 'Salmon, Chinook, smoked, (lox), regional');
+});
+
+test('buildChoiceDisplay: primary name + Brand · Variety · kcal/100 g', () => {
+  const salmon = fd.buildChoiceDisplay({ description: 'Salmon, Chinook, smoked, (lox), regional', brand: '', nutrients: { kcal: 117 } });
+  assert.strictEqual(salmon.name, 'Smoked Salmon (Lox)');
+  assert.deepStrictEqual(salmon.secondaryParts, ['Chinook', '117 kcal/100 g']);
+  const gv = fd.buildChoiceDisplay({ description: 'Great Value Sourdough Bread', brand: 'Great Value', nutrients: { kcal: 267 } });
+  assert.strictEqual(gv.name, 'Sourdough Bread');
+  assert.deepStrictEqual(gv.secondaryParts, ['Great Value', '267 kcal/100 g']);
+});
+
+test('buildChoiceDisplay: per-100 g basis (NOT the resolved total) — intentional', () => {
+  const c = fd.buildChoiceDisplay({ description: 'Coffee, brewed', brand: '', nutrients: { kcal: 1 } });
+  assert.strictEqual(c.kcalPer100g, 1);
+  assert.strictEqual(c.caloriesBasis, '100g');
+  assert.ok(c.secondaryParts.some((p) => /kcal\/100 g/.test(p)), 'choice shows a normalized 100 g basis');
+});
+
+test('fdSecondaryParts: order, empty omission, and no duplicate-with-name', () => {
+  // brand already in the name → suppressed; variety kept; total kcal.
+  const parts = fd.fdSecondaryParts({ name: 'Coca-Cola Classic', brand: 'Coca-Cola', variety: '', calories: 140 }, { calories: 'total' });
+  assert.ok(!parts.includes('Coca-Cola'), 'brand already in name is not repeated');
+  assert.deepStrictEqual(fd.fdSecondaryParts({ name: 'Smoked Salmon', brand: '', variety: 'Chinook', calories: 117 }, { calories: 'total' }),
+    ['Chinook', '117 kcal']);
+  assert.deepStrictEqual(fd.fdSecondaryParts({ name: 'Bread', brand: '', variety: '' }, {}), []);
+});
+
+test('fdCompactLabel: shared primary name, single value, full accessible label', () => {
+  const cl = fd.fdCompactLabel({ name: 'Chicken, broiler, breast, meat only, cooked, roasted' });
+  assert.strictEqual(cl.name, 'Chicken Breast');
+  assert.ok(/Chicken, broiler, breast/.test(cl.ariaLabel), 'aria keeps the full canonical name');
+});
+
+test('consistency: one food → one primary name across every model', () => {
+  const food = { source: 'usda', usda_fdc_id: 5, description: 'Chicken, broiler, breast, meat only, cooked, roasted',
+    name: 'Chicken, broiler, breast, meat only, cooked, roasted', brand: '', nutrients: { kcal: 165 }, calories: 165, servings: 1 };
+  const a = fd.buildFoodDisplay(food).name;
+  const b = fd.buildChoiceDisplay(food).name;
+  const c = fd.fdCompactLabel(food).name;
+  const d = fd.buildLogDisplay(food).name;
+  assert.strictEqual(a, 'Chicken Breast');
+  assert.ok(a === b && b === c && c === d, `all models agree: ${JSON.stringify([a, b, c, d])}`);
+});
+
+test('log rows now extract variety (consistent with search/choice)', () => {
+  const l = fd.buildLogDisplay({ source: 'usda', name: 'Salmon, Chinook, smoked, (lox), regional', servings: 1, calories: 117 });
+  assert.strictEqual(l.name, 'Smoked Salmon (Lox)');
+  assert.strictEqual(l.variety, 'Chinook');
+});
+
+test('presentation models never mutate the input food + keep canonical identity', () => {
+  const food = Object.freeze({ usda_fdc_id: 9, source: 'usda', description: 'FAIRLIFE WHOLE MILK', name: 'FAIRLIFE WHOLE MILK', brand: 'fairlife', nutrients: Object.freeze({ kcal: 60 }) });
+  // Object.freeze makes any mutation throw — proves the pure layer never writes back.
+  assert.doesNotThrow(() => { fd.buildFoodDisplay(food); fd.buildChoiceDisplay(food); fd.fdCompactLabel(food); });
+  assert.strictEqual(fd.buildChoiceDisplay(food).fullName, 'FAIRLIFE WHOLE MILK', 'canonical fullName preserved verbatim');
+  assert.ok(!/fairlife/i.test(fd.buildChoiceDisplay(food).name), 'brand is secondary, not in the primary name');
+});

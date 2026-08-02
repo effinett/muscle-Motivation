@@ -196,7 +196,10 @@ global.fetch = async (url) => {
 // Phase 4.2.1a: the shared core loads before nutrition.js, same order as the
 // pages (nutrition.html, app.html). Phase 4.2.5: food-portion.js loads after
 // food-core.js (it reuses its globals) and before nutrition.js.
-['food-core.js', 'food-portion.js', 'nutrition.js'].forEach(function (f) {
+// Phase 4.2.10c: food-display.js loads after food-core (reuses its globals),
+// before nutrition.js — same order as the pages — so the shared presentation
+// model (FoodDisplay) is available to the rendering wiring + identity pins.
+['food-core.js', 'food-portion.js', 'food-display.js', 'nutrition.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(__dirname, f), 'utf8'), { filename: f });
 });
 
@@ -415,6 +418,43 @@ test('brand-crowded query asks; picking a candidate resolves fully', async () =>
   assert.strictEqual(picked.food.usda_fdc_id, 999004);
   assert.strictEqual(picked.serving_description, '1 bar');
   assert.strictEqual(picked.perUnit.calories, 200);      // 364/100g × 55
+});
+
+/* ── Phase 4.2.10c: display is presentation-only, identity lives on `raw` ──── */
+test('10c: clarification choices carry the full raw candidate; display never replaces identity', async () => {
+  const bar = await nuAiResolveItem(item({ query: 'protein bar' }));
+  assert.strictEqual(bar.needsChoice, true);
+  bar.choices.forEach(function (c) {
+    assert.ok(c.raw && c.raw.fdcId != null, 'each choice keeps its raw candidate + canonical id');
+    const cd = FoodDisplay.buildChoiceDisplay(c.raw);      // display is DERIVED from raw
+    assert.strictEqual(cd.fullName, c.raw.description, 'display keeps the canonical name verbatim');
+  });
+  // Selecting replays the RAW candidate's identity — not the simplified label.
+  const picked = await nuAiResolveChoice(bar, 2);
+  assert.strictEqual(picked.food.usda_fdc_id, bar.choices[2].raw.fdcId, 'raw fdcId → resolved usda_fdc_id');
+});
+
+test('10c wiring: recents render through the shared compact label grammar', () => {
+  // Mock the two DOM nodes nuRenderRecent writes to, then inspect the HTML.
+  const els = { nuRecentWrap: { style: {} }, nuRecentChips: { innerHTML: '' } };
+  const origGet = document.getElementById;
+  document.getElementById = function (id) { return els[id] || null; };
+  try {
+    nuRenderRecent([{ name: 'Chicken, broiler, breast, meat only, cooked, roasted', usda_fdc_id: 5, source: 'usda' }]);
+  } finally { document.getElementById = origGet; }
+  const visible = els.nuRecentChips.innerHTML.replace(/(?:aria-label|title)="[^"]*"/g, '');
+  assert.ok(/Chicken Breast/.test(visible), 'chip uses the shared grammar');
+  assert.ok(!/broiler|meat only/.test(visible), 'the raw canonical wording is gone from the visible chip (shared grammar only)');
+});
+
+test('10c: a simplified display name never enters the food_key (id-based identity)', () => {
+  const src = { usda_fdc_id: 999004, source: 'usda', name: 'BAREBELLS PROTEIN BAR CARAMEL CASHEW', brand: 'Barebells' };
+  const display = FoodDisplay.buildFoodDisplay(src);
+  assert.notStrictEqual(display.name, src.name, 'the display name IS simplified');
+  // the key is built from the canonical name/id — the simplified label is absent.
+  const key = nuFoodKey({ usda_fdc_id: src.usda_fdc_id, name: src.name });
+  assert.ok(key.indexOf('999004') !== -1, 'food_key is id-based');
+  assert.strictEqual(key.indexOf(display.name), -1, 'simplified label never enters the key');
 });
 
 test('naming the brand restores confidence (quest bar auto-picks)', async () => {

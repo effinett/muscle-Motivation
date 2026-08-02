@@ -296,6 +296,46 @@ function fdMacroSummary(macros, opts) {
   return parts.join(' · ');
 }
 
+/* ── the ONE primary-name pipeline ──────────────────────────────────────────
+ * Every presentation model derives its primary name here so one food yields ONE
+ * name on every surface (search, Review & Add, clarification choices, saved
+ * meals, recents, favorites, log/history): simplify (brand-stripped) → pull a
+ * species/variety out to secondary → evidence-gated "(Lox)". Display-only — the
+ * verbatim canonical `fullName` is always returned alongside. */
+function fdPresentName(food) {
+  food = food || {};
+  var brand = String(food.brand || '').trim();
+  var canonical = food.description || food.name || '';
+  var name = fdSimplifyName(food.name != null ? food.name : canonical, brand);
+  var v = fdExtractVariety(name);
+  name = v.name;
+  name = fdApplyLox(name, [canonical, food.name, brand, food.manualName, food.query, food.text]);
+  return { name: name, variety: v.variety || '', fullName: String(canonical).trim() || name || '' };
+}
+
+/* ── structured secondary metadata ───────────────────────────────────────────
+ * Ordered secondary parts a card renders after the primary name (the UI joins
+ * with " • "). Empty values are omitted, and any value already visible in the
+ * primary name is suppressed (brand/variety never shown twice). The calorie basis
+ * is an INTENTIONAL, documented difference — NOT an inconsistency:
+ *   opts.calories='100g'  → "<n> kcal/100 g"  — CLARIFICATION CHOICES compare
+ *       candidate food records, so they show a normalized per-100 g basis.
+ *   opts.calories='total' → "<n> kcal"        — RESOLVED Review & Add rows and
+ *       logged foods show the actual quantity-adjusted total.
+ * Pure structured strings only — never HTML. */
+function fdSecondaryParts(model, opts) {
+  model = model || {}; opts = opts || {};
+  var parts = [];
+  var name = String(model.name || '').toLowerCase();
+  var inName = function (s) { return s && name.indexOf(String(s).toLowerCase()) !== -1; };
+  if (model.brand && !inName(model.brand)) parts.push(model.brand);
+  if (model.variety && !inName(model.variety)) parts.push(model.variety);
+  if (opts.serving && model.serving) parts.push(model.serving);
+  if (opts.calories === '100g' && model.kcalPer100g != null) parts.push(model.kcalPer100g + ' kcal/100 g');
+  else if (opts.calories === 'total' && model.calories != null) parts.push(model.calories + ' kcal');
+  return parts;
+}
+
 /* ── full display models ──────────────────────────────────────────────────── */
 
 // Build the presentation model for a normalized USDA food (search row / card /
@@ -308,13 +348,8 @@ function buildFoodDisplay(food, opts) {
   food = food || {};
   opts = opts || {};
   var brand = String(food.brand || '').trim();
-  var canonical = food.description || food.name || '';
-  var name = fdSimplifyName(food.name != null ? food.name : canonical, brand);
-  // Species/variety → secondary metadata (e.g. "Smoked Salmon" + "Chinook").
-  var v = fdExtractVariety(name);
-  name = v.name;
-  // Evidence-gated culinary alias: "(Lox)" only when an identity signal says so.
-  name = fdApplyLox(name, [canonical, food.name, brand, food.manualName, food.query, food.text]);
+  var pres = fdPresentName(food);
+  var name = pres.name, canonical = pres.fullName;
   var estimated = (food.estimated === true) || fdIsEstimatedServing(food.serving_description);
 
   var serving = fdServingLabel(food, {});
@@ -328,7 +363,7 @@ function buildFoodDisplay(food, opts) {
     name: name || String(canonical).trim() || 'Food',
     fullName: String(canonical).trim() || name || '',
     brand: brand,
-    variety: v.variety || '',
+    variety: pres.variety,
     serving: serving,
     estimated: estimated,
     calories: cals,
@@ -339,6 +374,9 @@ function buildFoodDisplay(food, opts) {
     macroSummary: fdMacroSummary(food, opts),
     badges: badges,
   };
+  // Identity secondary parts (brand • variety) — the UI appends serving/qty
+  // calories/macros; a resolved row shows the quantity-adjusted TOTAL calories.
+  model.secondaryParts = fdSecondaryParts(model, {});
   model.ariaLabel = fdAria(model);
   return model;
 }
@@ -351,15 +389,17 @@ function buildLogDisplay(row, opts) {
   opts = opts || {};
   var brand = String(row.brand || '').trim();
   var isUsda = row.source === 'usda';
-  // Manual entries keep the user's own words verbatim; USDA rows are simplified.
-  var name = isUsda ? fdSimplifyName(row.name, brand) : String(row.name || '').trim();
+  // Manual entries keep the user's own words verbatim; USDA rows go through the
+  // ONE shared name pipeline (same primary name + variety as every other surface).
+  var pres = isUsda ? fdPresentName(row) : { name: String(row.name || '').trim(), variety: '', fullName: String(row.name || '').trim() };
   var servings = (+row.servings > 0) ? +row.servings : 1;
   var compact = fdCompactServing(row);
   var cals = fdCalories(row.calories);
   var model = {
-    name: name || 'Food',
-    fullName: String(row.name || '').trim(),
+    name: pres.name || 'Food',
+    fullName: pres.fullName,
     brand: brand,
+    variety: pres.variety,
     servings: servings,
     servingsLabel: (servings === 1) ? '' : (fdQty(servings) + '×'),
     serving: compact.text,
@@ -369,8 +409,48 @@ function buildLogDisplay(row, opts) {
     macroSummary: fdMacroSummary(row, opts),
     hasServingText: !!(row.serving_description && String(row.serving_description).trim()),
   };
+  model.secondaryParts = fdSecondaryParts(model, {});
   model.ariaLabel = fdAria(model);
   return model;
+}
+
+// Clarification-CHOICE model — built from the full RAW candidate so the chooser
+// and the resolved row share one grammar. Primary name + brand/variety secondary,
+// with a per-100 g calorie basis (a normalized comparison across records — see
+// fdSecondaryParts). Display-only: the caller keeps `raw` and resolves from IT.
+function buildChoiceDisplay(candidate) {
+  candidate = candidate || {};
+  var pres = fdPresentName(candidate);
+  var brand = String(candidate.brand || '').trim();
+  var kcalRaw = (candidate.nutrients && candidate.nutrients.kcal != null) ? candidate.nutrients.kcal
+              : (candidate.kcal != null ? candidate.kcal : null);
+  var model = {
+    name: pres.name || 'Food',
+    fullName: pres.fullName,
+    brand: brand,
+    variety: pres.variety,
+    kcalPer100g: (kcalRaw != null && isFinite(+kcalRaw)) ? _fdRound(kcalRaw) : null,
+    caloriesBasis: '100g',
+  };
+  model.secondaryParts = fdSecondaryParts(model, { calories: '100g' });
+  var aria = [model.fullName || model.name];
+  if (model.brand && aria[0].toLowerCase().indexOf(model.brand.toLowerCase()) === -1) aria.push(model.brand);
+  if (model.variety && aria[0].toLowerCase().indexOf(model.variety.toLowerCase()) === -1) aria.push(model.variety);
+  if (model.kcalPer100g != null) aria.push(model.kcalPer100g + ' kcal/100 g');
+  model.ariaLabel = aria.filter(Boolean).join(', ');
+  return model;
+}
+
+// Compact single-line label for chips (recents, saved-meal card preview): the
+// shared simplified primary name only — no two-line card. The accessible label
+// retains the full canonical name (+ brand) so a truncated chip stays identifiable.
+function fdCompactLabel(food) {
+  food = food || {};
+  var pres = fdPresentName(food);
+  var brand = String(food.brand || '').trim();
+  var aria = [pres.fullName || pres.name];
+  if (brand && aria[0].toLowerCase().indexOf(brand.toLowerCase()) === -1) aria.push(brand);
+  return { name: pres.name || 'Food', variety: pres.variety, ariaLabel: aria.filter(Boolean).join(', ') };
 }
 
 // Accessible one-line description of a display model. Uses the FULL canonical
@@ -403,8 +483,12 @@ if (typeof module !== 'undefined' && module.exports) {
     fdSimplifyName: fdSimplifyName,
     fdCalories: fdCalories,
     fdMacroSummary: fdMacroSummary,
+    fdPresentName: fdPresentName,
+    fdSecondaryParts: fdSecondaryParts,
     buildFoodDisplay: buildFoodDisplay,
     buildLogDisplay: buildLogDisplay,
+    buildChoiceDisplay: buildChoiceDisplay,
+    fdCompactLabel: fdCompactLabel,
   };
 }
 
@@ -426,7 +510,11 @@ if (typeof window !== 'undefined') {
     fdSimplifyName: fdSimplifyName,
     fdCalories: fdCalories,
     fdMacroSummary: fdMacroSummary,
+    fdPresentName: fdPresentName,
+    fdSecondaryParts: fdSecondaryParts,
     buildFoodDisplay: buildFoodDisplay,
     buildLogDisplay: buildLogDisplay,
+    buildChoiceDisplay: buildChoiceDisplay,
+    fdCompactLabel: fdCompactLabel,
   };
 }

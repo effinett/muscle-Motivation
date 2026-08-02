@@ -249,6 +249,16 @@ function scoreDisplay(c, engine) {
   if (exp.brandIncludes && !(d.brand || '').includes(exp.brandIncludes)) bad.push(`brand "${d.brand}" missing "${exp.brandIncludes}"`);
   if (exp.varietyIncludes && !(d.variety || '').includes(exp.varietyIncludes)) bad.push(`variety "${d.variety}" missing "${exp.varietyIncludes}"`);
   if (exp.ariaIncludes && !(d.ariaLabel || '').includes(exp.ariaIncludes)) bad.push(`ariaLabel "${d.ariaLabel}" missing "${exp.ariaIncludes}"`);
+  // Phase 4.2.10c: the SAME candidate must produce the SAME primary name across
+  // every presentation model (search/resolved, clarification choice, compact chip).
+  if (exp.crossModel && c.input.food) {
+    const names = [
+      engine.display.buildFoodDisplay(c.input.food).name,
+      engine.display.buildChoiceDisplay(c.input.food).name,
+      engine.display.fdCompactLabel(c.input.food).name,
+    ];
+    if (!names.every((n) => n === names[0])) bad.push(`cross-model primary names diverged: ${JSON.stringify(names)}`);
+  }
   return { pass: bad.length === 0, stage: bad.length ? 'display' : null, detail: bad.join('; '), signals: { name: d.name } };
 }
 

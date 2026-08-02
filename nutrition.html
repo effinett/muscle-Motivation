@@ -288,7 +288,9 @@
       background: var(--surface-2); border: 1px solid var(--border-2);
       border-radius: 10px; padding: 9px 12px;
     }
+    .sm-item-main { flex: 1 1 auto; min-width: 0; }
     .sm-item-name { font-size: 13px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sm-item-sub { font-size: 11px; color: var(--text-muted); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .sm-item-kcal { font-size: 12px; color: var(--text-muted); font-weight: 600; flex-shrink: 0; }
     .sm-totals { font-size: 12px; color: var(--text-2); margin-bottom: 16px; }
 
@@ -387,9 +389,14 @@
       border-radius: 10px; padding: 11px 14px; transition: border-color .2s;
     }
     .nu-saved-row:hover { border-color: var(--red-border); }
+    .nu-saved-main { flex: 1 1 auto; min-width: 0; }
     .nu-saved-name {
       font-family: 'Barlow', sans-serif; font-size: 14px; font-weight: 600; color: var(--text);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .nu-saved-sub {
+      font-family: 'Barlow', sans-serif; font-size: 11px; color: var(--text-muted);
+      margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .nu-saved-cal {
       font-family: 'Bebas Neue', sans-serif; font-size: 15px; letter-spacing: 0.5px;
@@ -878,11 +885,14 @@
       // here was per-serving and could mismatch what the user remembers logging
       // (fractional servings) — exact macros appear in the card on tap anyway.
       // Title/aria still carry the full name + calories.
+      // Shared compact label — same primary-name grammar as every surface, single
+      // line; the accessible label keeps the full canonical name + calories.
+      var cl = FoodDisplay.fdCompactLabel({ name: it.name, brand: it.brand, usda_fdc_id: it.usda_fdc_id });
       var full = nuEsc(it.name);
       return '<button type="button" class="nu-chip" title="' + full + '"' +
-          ' aria-label="' + full + ', ' + nuRound(it.calories) + ' calories"' +
+          ' aria-label="' + nuEsc(cl.ariaLabel) + ', ' + nuRound(it.calories) + ' calories"' +
           ' onclick="' + pickFn + '(' + i + ')">' +
-          '<span class="nu-chip-name">' + nuEsc(nuShortLabel(it.name)) + '</span>' +
+          '<span class="nu-chip-name">' + nuEsc(cl.name) + '</span>' +
         '</button>';
     }).join('');
   }
@@ -944,14 +954,18 @@
     document.getElementById('mealSheetItems').innerHTML = m.items.map(function (it) {
       var q = (+it.servings > 0) ? +it.servings : 1;
       var qty = q === 1 ? '' : FoodDisplay.fdQty(q) + '× ';
-      // DISPLAY-ONLY friendly name for USDA items (shared model, same rule as
-      // the meal rows); snapshot names/identity are untouched — re-adding
-      // replays the stored items verbatim.
-      var disp = (it.usda_fdc_id != null)
-        ? FoodDisplay.fdSimplifyName(it.name, it.brand)
-        : it.name;
+      // Shared display model (same primary name + brand/variety as every surface);
+      // manual entries keep the user's own words. Snapshot names/identity are
+      // untouched — re-adding replays the stored items verbatim (quantity-adjusted
+      // TOTAL calories shown, never recalculated per-100 g).
+      var smd = FoodDisplay.buildFoodDisplay({ name: it.name, brand: it.brand, usda_fdc_id: it.usda_fdc_id });
+      var disp = (it.usda_fdc_id != null) ? smd.name : it.name;
+      var smSec = (it.usda_fdc_id != null) ? smd.secondaryParts.map(nuEsc).join(' · ') : '';
       return '<div class="sm-item">' +
-        '<div class="sm-item-name" title="' + nuEsc(it.name) + '" aria-label="' + nuEsc(qty + it.name) + '">' + nuEsc(qty + disp) + '</div>' +
+        '<div class="sm-item-main">' +
+          '<div class="sm-item-name" title="' + nuEsc(it.name) + '" aria-label="' + nuEsc(qty + it.name) + '">' + nuEsc(qty + disp) + '</div>' +
+          (smSec ? '<div class="sm-item-sub">' + smSec + '</div>' : '') +
+        '</div>' +
         '<div class="sm-item-kcal">' + nuRound((+it.calories || 0) * q) + ' kcal</div>' +
       '</div>';
     }).join('');
@@ -1167,14 +1181,15 @@
             '<button type="button" class="ai-item-x" onclick="aiRemove(' + i + ')" aria-label="Remove">✕</button>' +
           '</div>' +
           it.choices.map(function (c, ci) {
-            // brand + per-100g kcal on the right — same-named options (dry vs
-            // cooked basis) must explain WHY they're being offered
-            var meta = [];
-            if (c.brand) meta.push(nuEsc(c.brand));
-            if (c.kcal != null) meta.push(nuRound(c.kcal) + ' kcal/100g');
-            return '<button type="button" class="ai-choice" title="' + nuEsc(c.name) + '" onclick="aiChoose(' + i + ',' + ci + ')">' +
-              '<span class="ai-choice-name">' + nuEsc(FoodDisplay.fdSimplifyName(c.name, c.brand)) + '</span>' +
-              (meta.length ? '<span class="ai-choice-brand">' + meta.join(' · ') + '</span>' : '') +
+            // Shared choice model from the FULL raw candidate (one grammar with
+            // every other surface): primary name + "Brand • Variety • kcal/100 g".
+            // The per-100 g basis is intentional — choices COMPARE records; the
+            // resolved row shows the quantity-adjusted total (see food-display.js).
+            var cd = FoodDisplay.buildChoiceDisplay(c.raw || c);
+            var sec = cd.secondaryParts.map(nuEsc).join(' · ');
+            return '<button type="button" class="ai-choice" title="' + nuEsc(cd.fullName) + '" aria-label="' + nuEsc(cd.ariaLabel) + '" onclick="aiChoose(' + i + ',' + ci + ')">' +
+              '<span class="ai-choice-name">' + nuEsc(cd.name) + '</span>' +
+              (sec ? '<span class="ai-choice-brand">' + sec + '</span>' : '') +
             '</button>';
           }).join('') +
           '<div class="ai-item-bottom">' +
@@ -1229,8 +1244,10 @@
         calories: total.calories, protein: total.protein, carbs: total.carbs, fat: total.fat,
       });
       var fullName = dm.fullName;
-      var sub = [];
-      if (dm.brand) sub.push(nuEsc(dm.brand));
+      // Identity secondary parts from the shared model (Brand • Variety, brand
+      // never duplicated with the name); the UI appends serving + the
+      // quantity-adjusted TOTAL calories + protein from the same model.
+      var sub = dm.secondaryParts.map(nuEsc);
       // Phase 4.2.5: honestly mark an inferred vague-portion amount as estimated
       // (the serving text already carries "~"); the explanation is on hover.
       var servingCell = nuEsc(dm.serving);
@@ -1239,8 +1256,8 @@
         servingCell += ' <span class="ai-est-badge" title="' + nuEsc(exp) + '">Estimated</span>';
       }
       sub.push(servingCell);
-      sub.push(nuRound(total.calories) + ' kcal');
-      sub.push('P ' + nuRound(total.protein));
+      sub.push(dm.caloriesLabel);
+      sub.push('P ' + dm.protein);
       return '<div class="sm-item ai-item">' +
         '<div class="ai-item-top">' +
           '<div class="ai-item-name" title="' + nuEsc(fullName) + '" aria-label="' + nuEsc(fullName) + '">' + nuEsc(dm.name) + '</div>' +

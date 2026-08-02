@@ -23,7 +23,7 @@
 
 **`nutrition.js` (2 337 lines; browser globals, no exports; tested by evaluating the whole file in a Node VM with stubbed `document`/`supabaseClient`/`fetch`):**
 
-- *Pure resolution intelligence (extraction candidates):* `nuRound`, `nuRound1`, `nuScaleMacros`, `nuScalePer100`, `nuNormalizeUsdaFood`, `nuBuildServingOptions`, `nuDefaultServingKey`, `nuAiLabelCount`, `nuAiChooseServing`, `NU_APPROX_UNITS`, `NU_VOLUME_ML`, `NU_CUP_GRAMS`, `nuAiCupServing`, `NU_ASK_CATEGORIES`, `nuAiIsConfident`, `nuAiChoicesAlike`, `NU_SIG_FILLER`, `nuAiNameSig`, `nuAiDedupeChoices`, `nuAiTotals`, `nuFoodKey` (identity), friendly names (`NU_NAME_NOISE/DROP/CUTS/KEEP_PLURAL`, `nuNameSingular`, `nuTitleCase`, `nuAiDisplayName`), chip labels (`NU_FILLER`, `nuShortLabel`)
+- *Pure resolution intelligence (extraction candidates):* `nuRound`, `nuRound1`, `nuScaleMacros`, `nuScalePer100`, `nuNormalizeUsdaFood`, `nuBuildServingOptions`, `nuDefaultServingKey`, `nuAiLabelCount`, `nuAiChooseServing`, `NU_APPROX_UNITS`, `NU_VOLUME_ML`, `NU_CUP_GRAMS`, `nuAiCupServing`, `NU_ASK_CATEGORIES`, `nuAiIsConfident`, `nuAiChoicesAlike`, `NU_SIG_FILLER`, `nuAiNameSig`, `nuAiDedupeChoices`, `nuAiTotals`, `nuFoodKey` (identity), friendly names (`NU_NAME_NOISE/DROP/CUTS/KEEP_PLURAL`, `nuNameSingular`, `nuTitleCase`, `nuAiDisplayName`)
 - *Resolution orchestrators (async, currently reach global fetch wrappers):* `nuAiResolveItem`, `nuAiResolveFood`, `nuAiResolveChoice`
 - *Source adapters (browser-specific: Supabase token + fetch):* `nuUsdaSearch`, `nuFetchUsdaDetail` (+ `nu_detailCache`), `nuAiParse`, `nuBarcodeLookup`
 - *Save boundary (NOT resolution — stays untouched in 4.2.1):* `nuSaveLog`, `nuUpsertFood`, `nuDeleteLog`, `nuFetchLogs`, `nuDayTotals`; replay sites `nuLogSavedMeal`, `nuAiLogItems`; saved-meals/favorites/recents data access (`nuSnapshotMealItems`, `nuUpsertSavedMeal`, `nuFetchSavedMeals`, `nuLoadFavorites`, `nuToggleFavorite`, `nuFavCandidate`, `nuFetchRecentLogged`, `nuFetchRecentFoods`)
@@ -60,7 +60,7 @@ Internal layers (sections within the one file, mirroring nutrition.js's existing
 | **D. Confidence & chooser** | `NU_ASK_CATEGORIES`, `nuAiIsConfident`, `nuAiChoicesAlike`, `NU_SIG_FILLER`, `nuAiNameSig`, `nuAiDedupeChoices` |
 | **E. Resolution orchestrator** | `nuCreateResolver(source)` factory wrapping today's `nuAiResolveFood` / `nuAiResolveItem` / `nuAiResolveChoice` bodies (see §4) |
 | **F. Identity** | `nuFoodKey` |
-| **G. Display names** | `nuAiDisplayName` + its four tables + `nuNameSingular` + `nuTitleCase`; `nuShortLabel` + `NU_FILLER` |
+| **G. Display names** | `nuAiDisplayName` + its four tables + `nuNameSingular` + `nuTitleCase` (chip / compact labels now live in food-display.js `fdCompactLabel`) |
 | **H. Totals** | `nuAiTotals` |
 
 **What deliberately does NOT move in 4.2.1:**
@@ -181,7 +181,7 @@ If 4.2.1E starts meanwhile, it runs on its own branch touching only exercise fil
 | **MOVE verbatim** (4.2.1a) | Layers A–D, F–H listed in §2 — every function and config table by name |
 | **WRAP** (4.2.1b) | `nuAiResolveItem`, `nuAiResolveFood`, `nuAiResolveChoice` — bodies move into the factory; globals become delegates |
 | **STAY source-specific** | `nuUsdaSearch`, `nuFetchUsdaDetail` + `nu_detailCache`, `nuAiParse`, `nuBarcodeLookup` + scanner, all modal/UI code, `nuApplyServing`, `nuApplyDefaultPortion`, `nuPrefetchPortions`, entire save/favorites/recents/saved-meals persistence, all of api/* |
-| **DELETE later** (explicitly NOT in 4.2.1) | (a) duplicated `getUserFromToken` across four api files — server cleanup when 4.2.2 touches that tier; (b) the three overlapping name-simplification systems (`NU_FILLER` chips vs `NU_SIG_FILLER` signatures vs `NU_NAME_NOISE` display) — consolidation candidate once benchmarks can prove equivalence; (c) VM-evaluation of nutrition.js in tests — shrinks naturally as coverage shifts to `require()`d core |
+| **DELETE later** (explicitly NOT in 4.2.1) | (a) duplicated `getUserFromToken` across four api files — server cleanup when 4.2.2 touches that tier; (b) the `NU_FILLER` chip simplifier was consolidated into the shared food-display grammar (Phase 4.2.10c); `NU_SIG_FILLER` (signatures) and `NU_NAME_NOISE` (display) remain distinct by purpose; (c) VM-evaluation of nutrition.js in tests — shrinks naturally as coverage shifts to `require()`d core |
 
 ---
 

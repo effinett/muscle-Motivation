@@ -151,6 +151,16 @@ module.exports = [
   D('disp-parmesan', { description: 'Cheese, parmesan, grated', brand: '', group: 'generic' },
     { nameRegex: 'parmesan' }, { subcategory: 'simplify', tags: ['simplify', 'dairy'] }),
 
+  /* cross-model primary-name consistency (Phase 4.2.10c) — the same candidate
+     yields the SAME primary name in search/resolved, clarification choice, and
+     compact chip models (one grammar, every surface). */
+  D('disp-xmodel-chicken', { description: 'Chicken, broiler, breast, meat only, cooked, roasted', brand: '', group: 'generic' },
+    { name: 'Chicken Breast', crossModel: true }, { subcategory: 'cross-model', tags: ['simplify', 'consistency'] }),
+  D('disp-xmodel-salmon', { description: 'Salmon, Chinook, smoked, (lox), regional', brand: '', group: 'generic' },
+    { name: 'Smoked Salmon (Lox)', crossModel: true, varietyIncludes: 'Chinook' }, { subcategory: 'cross-model', tags: ['simplify', 'variety', 'consistency'] }),
+  D('disp-xmodel-great-value', { description: 'Great Value Sourdough Bread', brand: 'Great Value', group: 'branded' },
+    { name: 'Sourdough Bread', crossModel: true, brandIncludes: 'Great Value' }, { subcategory: 'cross-model', tags: ['brand', 'consistency'] }),
+
   /* descriptor-tail cleanup (Phase 4.2.10a §3) — identity-free USDA tails removed
      WITHOUT destroying food identity (part/botanical-stage/use qualifiers). Were
      informational quality-gaps at the 4.2.9 baseline; now release-scored. */
