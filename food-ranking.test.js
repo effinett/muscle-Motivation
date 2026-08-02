@@ -111,6 +111,48 @@ test('annotation parentheticals are not identity: no phrase match through "(incl
   assert.match(out.foods[0].description, /^Bread/);
 });
 
+/* ── Phase 4.2.10b: explicit-polarity + identity metadata ────────────────── */
+
+test('explicit sweetness polarity: an asserted polarity never resolves to its opposite', () => {
+  const pool = () => [
+    food({ description: 'Tea, iced, unsweetened, brewed', foodCategory: 'Beverages', nutrients: { kcal: 1, protein: 0, carbs: 0, fat: 0, sugar: 0 } }),
+    food({ description: 'Tea, iced, sweetened with sugar', foodCategory: 'Beverages', nutrients: { kcal: 30, protein: 0, carbs: 8, fat: 0, sugar: 7 } }),
+  ];
+  assert.match(rankFoodCandidates('sweet tea', pool()).foods[0].description, /sweetened with sugar/,
+    '"sweet" must not land on unsweetened');
+  assert.match(rankFoodCandidates('sweetened tea', pool()).foods[0].description, /sweetened with sugar/);
+  assert.match(rankFoodCandidates('unsweetened tea', pool()).foods[0].description, /unsweetened/,
+    '"unsweetened" must not land on sweetened');
+});
+
+test('polarity is silent when the query asserts no polarity (bare term untouched)', () => {
+  const f = food({ description: 'Tea, iced, sweetened with sugar', foodCategory: 'Beverages' });
+  assert.strictEqual(ranking.explainCandidate('tea', f).parts.polarity, 0);
+  assert.strictEqual(ranking.explainCandidate('iced tea', f).parts.polarity, 0);
+});
+
+test('ranking stamps identityScore, demoting an unrequested specialty subtype', () => {
+  const out = rankFoodCandidates('rice', [
+    food({ description: 'Rice, white, cooked', foodCategory: 'Cereal Grains and Pasta', nutrients: { kcal: 130, protein: 2.7, carbs: 28, fat: 0.3, sugar: 0.1 } }),
+    food({ description: 'Rice, white, glutinous, cooked', foodCategory: 'Cereal Grains and Pasta', nutrients: { kcal: 97, protein: 2, carbs: 21, fat: 0.2, sugar: 0 } }),
+  ]);
+  const white = out.foods.find((f) => !/glutinous/.test(f.description));
+  const glut = out.foods.find((f) => /glutinous/.test(f.description));
+  assert.strictEqual(typeof white.identityScore, 'number', 'identityScore is stamped on the Candidate');
+  assert.ok(white.identityScore > glut.identityScore,
+    'the unrequested specialty has a strictly weaker identity signal — the confidence default guard');
+});
+
+test('generic-first: a query word only in a parenthetical annotation does not hijack ordering', () => {
+  // "protein" appears only in "(high protein)" on the generic → it must NOT force
+  // the generic ahead of the higher-scored branded protein powder.
+  const out = rankFoodCandidates('protein', [
+    food({ description: 'Yogurt, Greek, plain, nonfat (high protein)', foodCategory: 'Dairy and Egg Products', nutrients: { kcal: 59, protein: 10, carbs: 3.6, fat: 0.4, sugar: 3.2 } }),
+    branded({ description: 'Protein powder, whey', brand: 'ON', foodCategory: 'Sports Nutrition', nutrients: { kcal: 400, protein: 80, carbs: 8, fat: 6, sugar: 4 } }),
+  ]);
+  assert.match(out.foods[0].description, /Protein powder/, 'the annotation does not silently replace the true top');
+});
+
 /* ── base-food and subtype intelligence ─────────────────────────────────── */
 
 test('common base food outranks obscure parts and derivatives', () => {

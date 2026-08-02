@@ -1,22 +1,22 @@
 {
   "schemaVersion": "4.2.9-1",
   "caseSetVersion": "4.2.9-1",
-  "sha": "47b973634de280201e9b082df3942e345bdbf216",
-  "generatedAt": "2026-07-31T02:25:47.133Z",
-  "totalCases": 237,
+  "sha": "331334993c60e0f878d13bb456a30d719cc4185b",
+  "generatedAt": "2026-08-02T19:53:48.104Z",
+  "totalCases": 285,
   "categoryCounts": {
     "parsing": 19,
     "retrieval": 25,
-    "ranking": 39,
-    "confidence": 22,
-    "clarification": 12,
+    "ranking": 42,
+    "confidence": 38,
+    "clarification": 21,
     "portion": 35,
     "meal": 22,
     "correction": 9,
-    "display": 54
+    "display": 74
   },
   "metrics": {
-    "overall": 99.6,
+    "overall": 100,
     "top1": 100,
     "acceptable": 100,
     "recall@1": 95.8,
@@ -25,7 +25,7 @@
     "recall@10": 100,
     "clarificationPrecision": 100,
     "clarificationRecall": 100,
-    "falseConfidence": 5,
+    "falseConfidence": 0,
     "portion": 100,
     "mealCase": 100,
     "mealItem": 100,
@@ -419,7 +419,22 @@
       "stage": null,
       "category": "ranking"
     },
-    "rank-coffee-beverage-gap": {
+    "rank-coffee-brewed-leads": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-sweet-tea-sweetened": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-unsweetened-tea": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-tea-cake-identity": {
       "pass": true,
       "stage": null,
       "category": "ranking"
@@ -524,9 +539,89 @@
       "stage": null,
       "category": "confidence"
     },
-    "conf-coffee-false-confidence": {
-      "pass": false,
-      "stage": "production-defect",
+    "conf-coffee-brewed-decisive": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-coffee-rich-brewed": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-tea-rich-brewed": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-soup-material-choose": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-cereal-material-choose": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-protein-family-choose": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-shake-family-choose": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-bar-family-choose": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-protein-powder-family": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-protein-shake-family": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-protein-bar-family": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-tomato-soup-auto": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-oat-cereal-auto": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-coffee-cake-auto": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-chicken-p10b-auto": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-apple-p10b-auto": {
+      "pass": true,
+      "stage": null,
+      "category": "confidence"
+    },
+    "conf-sweet-tea-auto": {
+      "pass": true,
+      "stage": null,
       "category": "confidence"
     },
     "clar-double-cheeseburger": {
@@ -579,9 +674,54 @@
       "stage": null,
       "category": "clarification"
     },
-    "clar-coffee-should-ask": {
-      "pass": false,
-      "stage": "production-defect",
+    "clar-coffee-quiet": {
+      "pass": true,
+      "stage": null,
+      "category": "clarification"
+    },
+    "clar-soup-ask": {
+      "pass": true,
+      "stage": null,
+      "category": "clarification"
+    },
+    "clar-protein-ask": {
+      "pass": true,
+      "stage": null,
+      "category": "clarification"
+    },
+    "clar-shake-ask": {
+      "pass": true,
+      "stage": null,
+      "category": "clarification"
+    },
+    "clar-bar-ask": {
+      "pass": true,
+      "stage": null,
+      "category": "clarification"
+    },
+    "clar-tea-quiet": {
+      "pass": true,
+      "stage": null,
+      "category": "clarification"
+    },
+    "clar-sweet-tea-quiet": {
+      "pass": true,
+      "stage": null,
+      "category": "clarification"
+    },
+    "clar-tomato-soup-quiet": {
+      "pass": true,
+      "stage": null,
+      "category": "clarification"
+    },
+    "clar-chicken-p10b-quiet": {
+      "pass": true,
+      "stage": null,
+      "category": "clarification"
+    },
+    "clar-apple-quiet": {
+      "pass": true,
+      "stage": null,
       "category": "clarification"
     },
     "pt-handful-nuts": {
@@ -904,6 +1044,56 @@
       "stage": null,
       "category": "display"
     },
+    "disp-maple-dup": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-sourdough-dup": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-cinnamon-dup": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-egg-size-grade": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-cottage-creamed": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-creamed-corn-kept": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-creamed-spinach-kept": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-salmon-species-secondary": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-salmon-lox-explicit": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-salmon-generic-no-lox": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
     "disp-greek-yogurt-keeps-greek": {
       "pass": true,
       "stage": null,
@@ -935,6 +1125,16 @@
       "category": "display"
     },
     "disp-kodiak-no-dup": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-great-value-secondary": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "disp-brand-is-identity-kept": {
       "pass": true,
       "stage": null,
       "category": "display"
@@ -1075,18 +1275,18 @@
       "category": "display"
     },
     "disp-potato-flesh-artifact": {
-      "pass": false,
-      "stage": "display",
+      "pass": true,
+      "stage": null,
       "category": "display"
     },
     "disp-olive-oil-tail-artifact": {
-      "pass": false,
-      "stage": "display",
+      "pass": true,
+      "stage": null,
       "category": "display"
     },
     "disp-lentils-tail-artifact": {
-      "pass": false,
-      "stage": "display",
+      "pass": true,
+      "stage": null,
       "category": "display"
     },
     "disp-yogurt-whole-milk-artifact": {
@@ -1215,8 +1415,48 @@
       "category": "display"
     },
     "reg-4.2.8-cinnamon-duplication": {
-      "pass": false,
-      "stage": "display",
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "reg-4.2.10-duplicate-word-collapse": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "reg-4.2.10-brand-secondary": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "reg-4.2.10-brand-identity-preserved": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "reg-4.2.10-descriptor-tail-removed": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "reg-4.2.10-cottage-cheese-contextual": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "reg-4.2.10-creamed-dish-preserved": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "reg-4.2.10-salmon-species-secondary": {
+      "pass": true,
+      "stage": null,
+      "category": "display"
+    },
+    "reg-4.2.10-salmon-lox-explicit-only": {
+      "pass": true,
+      "stage": null,
       "category": "display"
     }
   }

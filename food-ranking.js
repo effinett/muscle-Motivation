@@ -80,6 +80,8 @@ const RANK_WEIGHTS = {
   canonicalNegative: -200,    // per unqueried derivative descriptor (salad/juice/bar…)
   canonicalNegativeCap: 3,
   preferredCut: 250,          // unqueried preferred cut/type (breast, fillet, sirloin)
+  polarityMismatch: -400,     // query asserts an explicit polarity (sweet/unsweetened);
+                              //   candidate asserts the OPPOSITE → penalize (symmetric)
 
   // food-specific intent (FOOD_INTENT maps)
   intentPrefer: 600,          // carries a preferred form the user did not type
@@ -975,9 +977,16 @@ function isWholeCategory(f) {
   return WHOLE_FOOD_CATEGORIES.has((f.foodCategory || '').toLowerCase());
 }
 
-// Every query token present somewhere in the brand+description (stem-aware).
+// Every query token present in the food's IDENTITY text (brand+description),
+// stem-aware — but EXCLUDING parenthetical annotations. A query word appearing
+// only inside "(…)" is a descriptor, not the food's identity ("protein" in
+// "Yogurt, Greek, plain, nonfat (high protein)"), so it must NOT qualify a generic
+// to lead a higher-scored branded set (the group-order safety the confidence layer
+// depends on). Non-parenthetical identity words (the "hamburger" in "Fast foods,
+// hamburger; single patty") still match. Used only by the generic-first decision.
 function matchesAll(f, qStems) {
-  const hayStems = stemTokens(((f.brand || '') + ' ' + (f.description || '')).toLowerCase().split(/\s+/));
+  const idText = ((f.brand || '') + ' ' + (f.description || '')).replace(/\([^)]*\)/g, ' ');
+  const hayStems = stemTokens(idText.toLowerCase().split(/\s+/));
   return qStems.every(function (t) { return hayStems.indexOf(t) >= 0; });
 }
 
@@ -1343,6 +1352,32 @@ function scoreProductForm(f, ft, ctx) {
   return ft.formMismatch ? RANK_WEIGHTS.productFormMismatch : 0;
 }
 
+// Explicit-polarity intent. When the query asserts one side of a polar attribute
+// (sweetened vs UNsweetened), a candidate asserting the OPPOSITE side is
+// penalized — symmetrically in both directions ("sweet tea" must not land on
+// unsweetened tea, and "unsweetened tea" must not land on sweetened). Generalizable
+// antonym table (positive marker + its "un-" negation), word-boundary matched so
+// "sweet" never matches inside "unsweetened". Silent when the query asserts no
+// polarity (bare "tea"/"iced tea" are untouched) or the candidate is neutral —
+// so it never fabricates a mismatch. NOT a hard-coded product string.
+var RANK_POLARITY = [
+  { pos: /\bsweet(ened|en)?\b/, neg: /\bunsweeten(ed)?\b/ },
+];
+function polarityFacet(text, p) {
+  if (p.neg.test(text)) return 'neg';
+  return p.pos.test(text) ? 'pos' : null;   // 'pos' only when NOT negated
+}
+function scorePolarity(f, ft, ctx) {
+  var s = 0;
+  for (var i = 0; i < RANK_POLARITY.length; i++) {
+    var qf = polarityFacet(ctx.qLower, RANK_POLARITY[i]);
+    if (!qf) continue;                        // query asserts no polarity here
+    var cf = polarityFacet(ft.desc, RANK_POLARITY[i]);
+    if (cf && cf !== qf) s += RANK_WEIGHTS.polarityMismatch;
+  }
+  return s;
+}
+
 // Tier 2 — brand asymmetry. The user EXPLICITLY named a known brand; a candidate
 // that is NOT that brand (generic, or a different brand) pays a penalty. Purely
 // asymmetric: with no brand named this is silent, so a generic query never
@@ -1396,6 +1431,7 @@ function scoreBreakdown(f, ft, ctx) {
     species:          scoreSpecies(f, ft, ctx),
     familyIdentity:   scoreFamilyIdentity(f, ft, ctx),
     productForm:      scoreProductForm(f, ft, ctx),
+    polarity:         scorePolarity(f, ft, ctx),
     brandAsymmetry:   scoreBrandAsymmetry(f, ft, ctx),
     specialtySubtype: scoreSpecialtySubtype(f, ft, ctx),
     servingQuality:   scoreServingQuality(f, ft, ctx),
@@ -1459,6 +1495,18 @@ function rankPool(pool, group, strict, cap, ctx) {
     // sole-survivor (e.g. Fairlife MILK for "fairlife protein BAR") is never a
     // confident auto-resolve. Provider-neutral boolean on the shared Candidate.
     f.mismatch = !!ft.hardMismatch;
+    // Identity/default signal strength (Phase 4.2.10b): the sum of the SEMANTIC
+    // canonical/intent contributions (canonical-generic + preferred/base
+    // descriptors + food-intent) — i.e. HOW STRONGLY this candidate is the
+    // canonical/preferred/intended form of the query, excluding generic phrase/
+    // token match quality. The confidence layer reads it to tell a defensible
+    // default (chicken→breast has a real preferred-cut edge over thigh) from an
+    // arbitrary pick among tied material subtypes (soup→tomato ties vegetable/
+    // cream exactly). Inspectable metadata on the shared Candidate, like
+    // `mismatch`/`servingQuality`.
+    f.identityScore = scoreGenericCanonical(f, ft, ctx) +
+      scoreCanonicalTerms(f, ft, ctx) + scoreFoodIntent(f, ft, ctx) +
+      scoreSpecialtySubtype(f, ft, ctx);   // demote an unrequested specialty (glutinous rice for "rice")
     scored.push(f);
   }
   // Highest score first; tie-break toward the shorter (less cluttered) name —

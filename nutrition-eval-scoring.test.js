@@ -154,3 +154,85 @@ test('baseline compare treats a missing baseline as firstRun', () => {
   const cmp = baseline.compare(null, { records: [], metrics: {}, schemaVersion: '', caseSetVersion: '', sha: '', generatedAt: '' });
   assert.strictEqual(cmp.firstRun, true);
 });
+
+/* ── Phase 4.2.10b: correction-memory scenarios (evidence, dynamic pool ids) ──
+ * The eval engine wires nmCorrectionSignal through the SAME options.signals seam
+ * production uses. These pin the conservative correction model against Path C. */
+const { POOLS } = require('./nutrition-evaluation/pools.js');
+function keyOf(pool, re) { const c = POOLS[pool].find((x) => re.test(x.description)); return c ? ('usda:' + c.fdcId) : null; }
+function topAfter(query, pool, corrections) {
+  const r = engine.rankedPool({ input: { text: query, query }, pool, corrections });
+  return r[0] ? r[0].description : null;
+}
+function dispAfter(query, pool, corrections) {
+  return engine.assessConfidence({ input: { text: query, query }, pool, corrections }).disposition;
+}
+
+test('correction: a relevant correction resolves a near-tied case', () => {
+  const before = topAfter('soup', 'p10b-soup', null);
+  const corr = [{ query: 'soup', corrected_key: keyOf('p10b-soup', /vegetable/) }];
+  const after = topAfter('soup', 'p10b-soup', corr);
+  assert.match(after, /vegetable/i, 'the corrected soup floats to the top');
+  assert.notStrictEqual(after, before);
+});
+
+test('correction: explicit "unsweetened" overrides a prior sweet-tea correction', () => {
+  const corr = [{ query: 'tea', corrected_key: keyOf('p10b-tea', /iced, sweetened/) }];
+  assert.match(topAfter('unsweetened tea', 'p10b-tea', corr), /unsweetened/i,
+    'the explicit query wins over the older correction');
+});
+
+test('correction: explicit "coffee with milk" is not hijacked by a prior black-coffee correction', () => {
+  const corr = [{ query: 'coffee', corrected_key: keyOf('p10b-coffee', /brewed, prepared/) }];
+  assert.match(topAfter('coffee with milk', 'p10b-coffee', corr), /milk/i,
+    'the explicit modifier query keeps its own resolution');
+});
+
+test('correction: a prior branded selection does not force that brand on an explicit generic query', () => {
+  // correcting bare "yogurt" to a branded item must not override "plain yogurt".
+  const corr = [{ query: 'yogurt', corrected_key: keyOf('p10b-yogurt', /Yoplait|Strawberry/) }];
+  const top = topAfter('plain yogurt', 'p10b-yogurt', corr);
+  assert.doesNotMatch(top, /Yoplait|Strawberry/i, 'explicit "plain" is not overridden by a branded correction');
+});
+
+test('correction: a bounded correction cannot flip a decisively-dominant canonical', () => {
+  // correcting "coffee" to the branded bottled drink cannot beat brewed's ~2000-pt lead.
+  const corr = [{ query: 'coffee', corrected_key: keyOf('p10b-coffee', /STARBUCKS/) }];
+  assert.match(topAfter('coffee', 'p10b-coffee', corr), /brewed/i, 'conservative: identity is not fabricated');
+});
+
+test('correction: a broad query still clarifies when one correction is insufficient', () => {
+  // a single correction on bare "protein" does not collapse the genuine family ambiguity.
+  const corr = [{ query: 'protein', corrected_key: keyOf('p10b-protein', /bar/) }];
+  assert.strictEqual(dispAfter('protein', 'p10b-protein', corr), 'choose_candidate');
+});
+
+/* ── Phase 4.2.10b: paraphrase stability (production-shaped normalized queries) ─
+ * The AI parser strips leading/trailing QUANTITY words before resolution, so
+ * equivalent phrasings reduce to the same normalized query. `normQ` models that
+ * deterministic reduction; we assert the raw paraphrases converge AND share a
+ * disposition. Word-ORDER variants ("coffee black", "milk tea") are a separate
+ * ranking-order sensitivity documented in the report — the parser does not
+ * reorder tokens, so they are NOT confidence paraphrases and are excluded here. */
+function normQ(s) {
+  return String(s)
+    .replace(/^(a|one) (bowl|scoop|cup|glass|piece)( of)?\s+/i, '')
+    .replace(/^(a|an|one|some)\s+/i, '')
+    .replace(/\s+(one|a) (bowl|scoop|cup|glass|piece)$/i, '')
+    .trim();
+}
+test('paraphrase: quantity-word variants normalize to one query with a stable disposition', () => {
+  const groups = [
+    { pool: 'p10b-coffee', raw: ['coffee', 'a coffee', 'one coffee'] },
+    { pool: 'p10b-soup', raw: ['chicken soup', 'a bowl of chicken soup', 'chicken soup one bowl'] },
+    { pool: 'p10b-protein', raw: ['protein powder', 'one scoop protein powder', 'a scoop of protein powder'] },
+  ];
+  for (const g of groups) {
+    const normed = g.raw.map(normQ);
+    assert.ok(normed.every((q) => q === normed[0]),
+      `normalization diverged: ${JSON.stringify(g.raw)} → ${JSON.stringify(normed)}`);
+    const disps = normed.map((q) => dispAfter(q, g.pool, null));
+    assert.ok(disps.every((d) => d === disps[0]),
+      `normalized paraphrases ${JSON.stringify(normed)} diverged: ${JSON.stringify(disps)}`);
+  }
+});

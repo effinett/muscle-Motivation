@@ -532,6 +532,14 @@ var NU_CONFIDENCE = {
   // increases clarifications — with it false, meal context influences RANKING and
   // provenance only, and the disposition is byte-for-byte today's.
   mealContext: false,
+  // Material-ambiguity escalation (Phase 4.2.10b, Path C). A generic AUTO lead
+  // that is an arbitrary pick among tied, materially-different subtypes with NO
+  // defensible default (soup→tomato ties vegetable/cream) becomes a bounded
+  // chooser. Ships ON: it is narrowly guarded (requires ranking-stamped
+  // identityScore, a CLOSE material rival, and the absence of a defensible-default
+  // reason), so immaterial clusters (coffee→brewed) and preferred/canonical
+  // defaults (chicken→breast, apple→raw) are never turned into questions.
+  materialAmbiguity: true,
 };
 
 // Effective policy for one assessment: an explicit per-call override (used by
@@ -545,6 +553,8 @@ function nuResolvePolicy(policy) {
       ? !!policy.targetedClarification : NU_CONFIDENCE.targetedClarification,
     mealContext: (policy && 'mealContext' in policy)
       ? !!policy.mealContext : NU_CONFIDENCE.mealContext,
+    materialAmbiguity: (policy && 'materialAmbiguity' in policy)
+      ? !!policy.materialAmbiguity : NU_CONFIDENCE.materialAmbiguity,
   };
 }
 
@@ -661,6 +671,105 @@ function nuConfBrandState(request, top) {
   return String((top && top.brand) || '').toLowerCase().indexOf(b) !== -1 ? 'matched' : 'mismatched';
 }
 
+/* ── Material-ambiguity escalation (Phase 4.2.10b, Path C) ───────────────────
+ * A generic AUTO lead is UNSAFE only when it is an arbitrary pick among tied,
+ * materially-different subtypes. These pure helpers decide that from the shared
+ * ordered candidates (score + nutrients + ranking-stamped `identityScore`) — no
+ * ranking internals, no nutrition engine. Each returns STRUCTURED, inspectable
+ * evidence so tests can assert WHY a result escalated or was preserved. */
+
+// The distinct candidates (excluding the top) that are BOTH materially different
+// from the top (not nutritionally alike) AND close on score (the score lead has
+// not resolved the ambiguity). A CLOSE MATERIAL RIVAL is what makes an auto pick
+// arbitrary; a decisively-beaten or nutritionally-alike candidate is not a rival.
+function nuCloseMaterialRivals(top, distinct) {
+  var ts = (top && typeof top.score === 'number' && isFinite(top.score)) ? top.score : null;
+  var out = [];
+  for (var i = 1; i < distinct.length; i++) {
+    var c = distinct[i];
+    if (nuAiChoicesAlike([top, c])) continue;                       // immaterial → not a rival
+    if (ts != null && typeof c.score === 'number' && (ts - c.score) >= NU_CONFIDENCE.gapDecisive) continue; // decisively beaten
+    out.push(c);
+  }
+  return out;
+}
+
+// A query term is satisfied by a candidate when a description token equals it or
+// starts with it ("sweet" → "sweetened", but NOT "unsweetened"). Prefix, so an
+// explicit polarity/modifier matches its inflected form without matching its
+// antonym.
+function nuTermInDesc(descTokens, term) {
+  for (var i = 0; i < descTokens.length; i++) {
+    if (descTokens[i] === term || descTokens[i].indexOf(term) === 0) return true;
+  }
+  return false;
+}
+
+// Does the query carry an explicit MODIFIER (a non-stopword term that is NOT
+// shared by every distinct candidate — so it identifies a subtype) that the TOP
+// satisfies? Then the query is SPECIFIC, not broad, and the user's own words
+// resolve the ambiguity ("sweet tea" → the sweetened candidate; "tomato soup" →
+// tomato) — it must not escalate. Bare base terms ("soup", every candidate shares
+// "soup") carry no such modifier.
+function nuQueryModifierSatisfied(request, distinct) {
+  var qtoks = nuClarNorm((request && request.query) || '').split(' ')
+    .filter(function (t) { return t && !NU_DESC_STOP[t]; });
+  if (!qtoks.length) return false;
+  var tokSets = distinct.map(function (c) { return nuClarNorm(c.description).split(' ').filter(Boolean); });
+  for (var i = 0; i < qtoks.length; i++) {
+    var t = qtoks[i];
+    var inAll = tokSets.every(function (toks) { return nuTermInDesc(toks, t); });
+    if (!inAll && nuTermInDesc(tokSets[0], t)) return true;   // top satisfies a distinguishing modifier
+  }
+  return false;
+}
+
+// Structured DEFAULT evidence: is the top a defensible default over its close
+// material rivals? Accepted reasons (never a bare score margin):
+//   • explicit_query_modifier — the query names a subtype/modifier the top
+//     satisfies ("sweet tea", "tomato soup"); the user's own words resolve it.
+//   • immaterial_nearest — the NEAREST distinct competitor is nutritionally alike
+//     to the top (a coherent top cluster; the visible ambiguity is immaterial —
+//     brewed vs decaf coffee), so the pick is safe.
+//   • stronger_identity  — the top's ranking-stamped identity/default signal is
+//     STRICTLY greater than every close material rival's (a real preferred/
+//     canonical edge — chicken breast's preferred-cut over thigh), so the lead is
+//     EXPLAINED, not a tie. `identityScore` sums the canonical/preferred/intent
+//     signals; a bare tie (soup tomato == vegetable) yields neither reason.
+function nuDefaultEvidence(request, top, distinct, rivals) {
+  var reasons = [];
+  if (nuQueryModifierSatisfied(request, distinct)) reasons.push('explicit_query_modifier');
+  if (distinct.length >= 2 && nuAiChoicesAlike([top, distinct[1]])) reasons.push('immaterial_nearest');
+  var topId = (top && typeof top.identityScore === 'number') ? top.identityScore : 0;
+  var stronger = rivals.length > 0 && rivals.every(function (c) {
+    var cid = (typeof c.identityScore === 'number') ? c.identityScore : 0;
+    return topId > cid;
+  });
+  if (stronger) reasons.push('stronger_identity');
+  return { defensible: reasons.length > 0, reasons: reasons };
+}
+
+// Structured MATERIAL-AMBIGUITY reason between the top and its nearest rival:
+// the smallest meaningful axis of difference, using existing vocab.
+function nuAmbiguityReason(top, rival) {
+  var td = String((top && top.description) || '').toLowerCase();
+  var rd = String((rival && rival.description) || '').toLowerCase();
+  var isSweet = function (s) { return /\bsweet/.test(s) && !/\bunsweeten/.test(s); };
+  var isUnsweet = function (s) { return /\bunsweeten/.test(s); };
+  if ((isSweet(td) && isUnsweet(rd)) || (isUnsweet(td) && isSweet(rd))) return 'sweetness_ambiguity';
+  var prepOf = function (s) {
+    var toks = s.replace(/[^a-z0-9]+/g, ' ').split(' ');
+    for (var i = 0; i < toks.length; i++) if (NU_PREP_STATE[toks[i]]) return NU_PREP_STATE[toks[i]];
+    return null;
+  };
+  var pt = prepOf(td), pr = prepOf(rd);
+  if (pt && pr && pt !== pr) return 'preparation_ambiguity';
+  var ct = String((top && top.foodCategory) || '').toLowerCase();
+  var cr = String((rival && rival.foodCategory) || '').toLowerCase();
+  if (ct && cr && ct !== cr) return 'product_family_ambiguity';
+  return 'material_subtype_tie';
+}
+
 // The BASE (Checkpoint 2 parity) disposition for a ≥2-distinct set: the identity/
 // brand decision nuAiIsConfident used to make. The two score-gap escalations are
 // gated by policy.scoreEscalation (ship OFF → today's auto-pick). Returned as a
@@ -751,6 +860,20 @@ function nuAssessConfidence(request, foods, policy) {
       request, list, policy);
   }
 
+  // (1c) Explicit-intent family consistency (Phase 4.2.10b). A candidate that HARD-
+  //      mismatches an explicitly-named form / species / identity (ranking stamped
+  //      `mismatch`) is never a valid clarification OPTION — "protein powder" must
+  //      not offer greek yogurt, "protein shake" must not offer a bar. The
+  //      leading candidate is family-consistent here (the mismatched-TOP case was
+  //      handled in 1b), so dropping the mismatched non-top options makes the
+  //      chooser and the top agree on the explicit family; if only the family-
+  //      consistent lead survives, it auto-resolves. High precision — with no
+  //      explicit form/species/identity the `mismatch` flag is false, so a bare
+  //      generic query ("protein") keeps every family and still clarifies.
+  if (distinct.some(function (c) { return c.mismatch === true; })) {
+    distinct = distinct.filter(function (c) { return c.mismatch !== true; });
+  }
+
   // (2) One distinct food after dedupe → no identity ambiguity → auto-resolve.
   //     (Parity: resolveItem auto-picks when dedupe collapses to a single
   //     option, e.g. a lone branded "milk" with no brand named.)
@@ -768,6 +891,27 @@ function nuAssessConfidence(request, foods, policy) {
   // BASE disposition (the Checkpoint 2 parity decision), built but not yet
   // returned so the clarification refinement can inspect it below.
   var base = nuBaseDisposition(request, top, distinct, branded, brand, material, evidence, policy);
+
+  // (4b) Material-ambiguity escalation (Phase 4.2.10b, Path C). A generic AUTO
+  //      lead that is an arbitrary pick among tied, materially-different subtypes
+  //      — a CLOSE material rival exists AND the top has NO defensible-default
+  //      reason — becomes a bounded chooser. Guarded to ranking-stamped identity
+  //      evidence so hand-built candidates (older tests) and immaterial clusters/
+  //      preferred defaults are never turned into questions.
+  if (policy.materialAmbiguity && base.disposition === 'auto_resolve' &&
+      top && typeof top.identityScore === 'number' && distinct.length >= 2) {
+    var rivals = nuCloseMaterialRivals(top, distinct);
+    if (rivals.length) {
+      var def = nuDefaultEvidence(request, top, distinct, rivals);
+      if (!def.defensible) {
+        var ambReason = nuAmbiguityReason(top, rivals[0]);
+        return nuFinalizeMeal(nuVerdict('choose_candidate', top, distinct, [ambReason],
+          [{ code: 'material_ambiguity_escalation', detail: ambReason }], true, evidence),
+          request, list, policy);
+      }
+      base.reasons.push({ code: 'default_preserved', detail: def.reasons.join(',') });
+    }
+  }
 
   // (5) Targeted-clarification refinement (active by default; skipped when
   //     policy.targetedClarification is disabled).
@@ -1437,6 +1581,10 @@ if (typeof module !== 'undefined' && module.exports) {
     NU_PREP_STATE: NU_PREP_STATE,
     nuResolvePolicy: nuResolvePolicy,
     nuAssessConfidence: nuAssessConfidence,
+    nuCloseMaterialRivals: nuCloseMaterialRivals,
+    nuDefaultEvidence: nuDefaultEvidence,
+    nuAmbiguityReason: nuAmbiguityReason,
+    nuQueryModifierSatisfied: nuQueryModifierSatisfied,
     nuDetectClarification: nuDetectClarification,
     nuApplyClarification: nuApplyClarification,
     nuPatchQuery: nuPatchQuery,

@@ -76,11 +76,26 @@ module.exports = [
   C('rank-pasta-generic', 'pasta', { acceptableNameRegex: 'pasta' }, { subcategory: 'generic', tags: ['ranking'] }),
   C('rank-hot-sauce', 'hot sauce', { acceptableNameRegex: 'hot|sriracha|chile' }, { subcategory: 'condiment', tags: ['ranking', 'condiment'] }),
 
-  /* INFORMATIONAL — a bare beverage-term ("coffee") ranks the same-named cake
-     first without a beverage/meal cue, mirroring the cola design (the app floats
-     the drink via meal context). Documented, not release-gating. */
-  C('rank-coffee-beverage-gap', 'coffee',
-    { acceptableNameRegex: 'coffee', topNotRegex: 'cake' },
-    { subcategory: 'beverage-term-gap', tags: ['ranking', 'beverage'], informational: true, diagnosticStage: 'ranking',
-      notes: 'bare "coffee" ranks "Coffee cake" over "Coffee, brewed" absent a beverage cue — same shape as the cola design (resolved via meal context, not standalone ranking).' }),
+  /* GATING (corrected in Phase 4.2.10b evidence): bare "coffee" ranks the
+     canonical brewed beverage ABOVE coffee cake via nameIsQuery (+2000) — the
+     earlier "cake ranks first" note was stale. Pins that the generic beverage
+     wins standalone (no meal cue needed). */
+  C('rank-coffee-brewed-leads', 'coffee',
+    { topNotRegex: 'cake', acceptableNameRegex: 'brewed' },
+    { subcategory: 'beverage-term', tags: ['ranking', 'beverage'],
+      notes: 'bare "coffee" → "Coffee, brewed" leads over "Coffee cake" standalone (nameIsQuery). Contrast cola (branded, tied).' }),
+
+  /* Phase 4.2.10b — explicit sweetness polarity (rich tea pool). */
+  Cp('rank-sweet-tea-sweetened', 'sweet tea', 'p10b-tea',
+    { topNameRegex: 'sweetened with sugar', topNotRegex: 'unsweetened|cake' },
+    { subcategory: 'polarity', tags: ['ranking', 'beverage', 'polarity'],
+      notes: '"sweet tea" must rank the sweetened candidate first — never unsweetened.' }),
+  Cp('rank-unsweetened-tea', 'unsweetened tea', 'p10b-tea',
+    { topNameRegex: 'unsweetened', topNotRegex: 'sweetened with sugar' },
+    { subcategory: 'polarity', tags: ['ranking', 'beverage', 'polarity'],
+      notes: '"unsweetened tea" must rank the unsweetened candidate first.' }),
+  Cp('rank-tea-cake-identity', 'tea cake', 'p10b-tea',
+    { topNameRegex: 'cake' },
+    { subcategory: 'food-identity', tags: ['ranking', 'beverage'],
+      notes: 'tea cake resolves to its baked identity, not a tea beverage.' }),
 ];

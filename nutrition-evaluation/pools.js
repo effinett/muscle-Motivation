@@ -86,8 +86,11 @@ const EXTRA_PORTIONS = {
   8800303: [{ label: '1 tbsp', gramWeight: 14, amount: 1 }],
 };
 
+// Phase 4.2.10b evidence pools (isolated `p10b-*` keys — never shadow anything).
+const { SEARCHES_10B, PORTIONS_10B } = require('./pools-10b.js');
+
 // Existing benchmark pools win on any accidental key clash (frozen corpus first).
-const POOLS = Object.assign({}, EXTRA_SEARCHES, base.FIXTURE_SEARCHES);
-const PORTIONS = Object.assign({}, EXTRA_PORTIONS, base.FIXTURE_PORTIONS);
+const POOLS = Object.assign({}, EXTRA_SEARCHES, SEARCHES_10B, base.FIXTURE_SEARCHES);
+const PORTIONS = Object.assign({}, EXTRA_PORTIONS, PORTIONS_10B, base.FIXTURE_PORTIONS);
 
 module.exports = { POOLS, PORTIONS, EXTRA_SEARCHES, EXTRA_PORTIONS };

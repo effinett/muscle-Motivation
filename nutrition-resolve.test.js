@@ -606,6 +606,128 @@ test('parity: score-gap escalation ships DORMANT (flag off → no new behavior)'
   assert.strictEqual(v.disposition, 'auto_resolve', 'generic lead auto-resolves exactly as today');
 });
 
+/* ── Path C: material-ambiguity escalation (Phase 4.2.10b) ───────────────── */
+// A candidate carrying the ranking-stamped `identityScore` the escalation reads.
+let _pcId = 990000;
+function pc(desc, cat, score, idScore, n) {
+  return { fdcId: ++_pcId, description: desc, brand: '', group: 'generic',
+    foodCategory: cat, score: score, identityScore: idScore, nutrients: n };
+}
+const SOUP_TIE = () => [
+  pc('Soup, tomato, canned', 'Soups, Sauces, and Gravies', 4050, 2000, { kcal: 60, protein: 1.7, carbs: 13, fat: 0.6, sugar: 8 }),
+  pc('Soup, vegetable, canned', 'Soups, Sauces, and Gravies', 4050, 2000, { kcal: 40, protein: 1.5, carbs: 7, fat: 0.9, sugar: 2 }),
+  pc('Soup, cream of mushroom, canned', 'Soups, Sauces, and Gravies', 4050, 2000, { kcal: 79, protein: 1.8, carbs: 7, fat: 5, sugar: 1 }),
+];
+
+test('Path C: tied material subtypes, no defensible default → choose_candidate', () => {
+  const v = nuAssessConfidence(item({ query: 'soup' }), SOUP_TIE());
+  assert.strictEqual(v.disposition, 'choose_candidate');
+  assert.strictEqual(v.reasons[0].code, 'material_ambiguity_escalation');
+  assert.strictEqual(v.ambiguity[0], 'material_subtype_tie');
+  assert.strictEqual(v.material, true);
+});
+
+test('Path C: a stronger-identity preferred default stays auto (chicken→breast)', () => {
+  const pool = [
+    pc('Chicken, breast, roasted', 'Poultry Products', 7300, 5250, { kcal: 165, protein: 31, carbs: 0, fat: 3.6, sugar: 0 }),
+    pc('Chicken, thigh, cooked', 'Poultry Products', 7200, 4950, { kcal: 209, protein: 26, carbs: 0, fat: 10.9, sugar: 0 }),
+  ];
+  const v = nuAssessConfidence(item({ query: 'chicken' }), pool);
+  assert.strictEqual(v.disposition, 'auto_resolve');
+  assert.ok(v.reasons.some((r) => r.code === 'default_preserved'), 'records why the default was kept');
+});
+
+test('Path C: an immaterial top cluster stays auto (coffee→brewed)', () => {
+  const pool = [
+    pc('Coffee, brewed, decaffeinated', 'Beverages', 4150, 2100, { kcal: 0, protein: 0.1, carbs: 0, fat: 0, sugar: 0 }),
+    pc('Coffee, brewed, prepared', 'Beverages', 4150, 2100, { kcal: 1, protein: 0.1, carbs: 0, fat: 0, sugar: 0 }),
+    pc('Coffee, with milk and sugar', 'Beverages', 4050, 2000, { kcal: 56, protein: 3, carbs: 7, fat: 2, sugar: 6 }),
+  ];
+  const v = nuAssessConfidence(item({ query: 'coffee' }), pool);
+  assert.strictEqual(v.disposition, 'auto_resolve');
+});
+
+test('Path C: an explicit query modifier keeps a specific query auto (sweet tea)', () => {
+  // sweetened tea wins on total score (polarity) but not on identityScore — the
+  // explicit "sweet" modifier is what keeps it from escalating against tea cake.
+  const pool = [
+    pc('Tea, iced, sweetened with sugar', 'Beverages', 410, 0, { kcal: 30, protein: 0, carbs: 8, fat: 0, sugar: 7 }),
+    pc('Tea cake, sweet', 'Baked Products', 210, -200, { kcal: 350, protein: 5, carbs: 55, fat: 12, sugar: 30 }),
+    pc('Tea, iced, unsweetened', 'Beverages', 110, 100, { kcal: 1, protein: 0, carbs: 0, fat: 0, sugar: 0 }),
+  ];
+  const v = nuAssessConfidence(item({ query: 'sweet tea' }), pool);
+  assert.strictEqual(v.disposition, 'auto_resolve');
+});
+
+test('Path C: a decisively-beaten material competitor never escalates (apple→raw)', () => {
+  const pool = [
+    pc('Apples, raw, with skin', 'Fruits and Fruit Juices', 6200, 4300, { kcal: 52, protein: 0.3, carbs: 14, fat: 0.2, sugar: 10 }),
+    pc('Apple pie, prepared', 'Baked Products', 2000, 100, { kcal: 265, protein: 2.4, carbs: 37, fat: 12, sugar: 16 }),
+  ];
+  const v = nuAssessConfidence(item({ query: 'apple' }), pool);
+  assert.strictEqual(v.disposition, 'auto_resolve', 'the material rival is far below → no ambiguity');
+});
+
+test('Path C: NOT applied without ranking-stamped identityScore (legacy parity)', () => {
+  const pool = SOUP_TIE().map((f) => { const g = Object.assign({}, f); delete g.identityScore; return g; });
+  const v = nuAssessConfidence(item({ query: 'soup' }), pool);
+  assert.strictEqual(v.disposition, 'auto_resolve', 'no identity evidence → pre-4.2.10b behavior preserved');
+});
+
+test('Path C: policy flag off → escalation dormant', () => {
+  const v = nuAssessConfidence(item({ query: 'soup' }), SOUP_TIE(), { materialAmbiguity: false });
+  assert.strictEqual(v.disposition, 'auto_resolve');
+});
+
+/* ── Explicit-family consistency (Phase 4.2.10b) ──────────────────────────── */
+test('explicit family: a hard-mismatched family is never a clarification option', () => {
+  // "protein powder" must not offer greek yogurt (ranking stamps mismatch=true on
+  // the incompatible form) — the only eligible candidate is the powder → auto.
+  const pool = [
+    { fdcId: 1, description: 'Protein powder, whey', brand: 'ON', group: 'branded', foodCategory: 'Sports Nutrition', mismatch: false, score: 3000, identityScore: 1000, nutrients: { kcal: 400, protein: 80, carbs: 8, fat: 6, sugar: 4 } },
+    { fdcId: 2, description: 'Yogurt, Greek, plain, nonfat', brand: '', group: 'generic', foodCategory: 'Dairy and Egg Products', mismatch: true, score: -200, identityScore: 0, nutrients: { kcal: 59, protein: 10, carbs: 3.6, fat: 0.4, sugar: 3.2 } },
+  ];
+  const v = nuAssessConfidence(item({ query: 'protein powder' }), pool);
+  assert.strictEqual(v.disposition, 'auto_resolve', 'only the powder is eligible → auto');
+  assert.ok(!v.alternatives.some((a) => /Yogurt/i.test(a.description)), 'yogurt never appears as an option');
+});
+
+test('explicit family: several same-family brands still clarify (no forced auto)', () => {
+  const pool = [
+    { fdcId: 1, description: 'Whey Protein Powder', brand: 'ON', group: 'branded', foodCategory: 'Sports Nutrition', mismatch: false, score: 3000, identityScore: 1000, nutrients: { kcal: 400, protein: 80, carbs: 8, fat: 6, sugar: 4 } },
+    { fdcId: 2, description: 'Plant Protein Powder', brand: 'Vega', group: 'branded', foodCategory: 'Sports Nutrition', mismatch: false, score: 2900, identityScore: 1000, nutrients: { kcal: 380, protein: 24, carbs: 30, fat: 8, sugar: 5 } },
+    { fdcId: 3, description: 'Protein bar, chocolate', brand: 'Quest', group: 'branded', foodCategory: 'Sports Nutrition', mismatch: true, score: 1000, identityScore: 500, nutrients: { kcal: 350, protein: 33, carbs: 45, fat: 14, sugar: 3 } },
+  ];
+  const v = nuAssessConfidence(item({ query: 'protein powder' }), pool);
+  assert.ok(v.disposition === 'choose_candidate' || v.disposition === 'clarify_input',
+    'two distinct powder brands remain → asks (never a forced auto)');
+  assert.ok(!v.alternatives.some((a) => /bar/i.test(a.description)), 'the bar (wrong family) is excluded');
+  assert.strictEqual(v.alternatives.length, 2, 'both powders offered, brand choice within the family');
+});
+
+test('bare "protein" (no explicit form) keeps every family and still clarifies', () => {
+  const pool = [
+    { fdcId: 1, description: 'Protein powder, whey', brand: 'ON', group: 'branded', foodCategory: 'Sports Nutrition', mismatch: false, score: 2750, identityScore: 800, nutrients: { kcal: 400, protein: 80, carbs: 8, fat: 6, sugar: 4 } },
+    { fdcId: 2, description: 'Protein bar, chocolate', brand: 'Quest', group: 'branded', foodCategory: 'Sports Nutrition', mismatch: false, score: 2350, identityScore: 700, nutrients: { kcal: 350, protein: 33, carbs: 45, fat: 14, sugar: 3 } },
+  ];
+  const v = nuAssessConfidence(item({ query: 'protein' }), pool);
+  assert.strictEqual(v.disposition, 'choose_candidate', 'no explicit form → families are not filtered');
+  assert.strictEqual(v.alternatives.length, 2);
+});
+
+test('Path C helpers: structured default-evidence + ambiguity reasons', () => {
+  const soup = SOUP_TIE();
+  const rivals = nuCloseMaterialRivals(soup[0], soup);
+  assert.ok(rivals.length >= 1, 'vegetable/cream are close material rivals of tomato');
+  const def = nuDefaultEvidence(item({ query: 'soup' }), soup[0], soup, rivals);
+  assert.strictEqual(def.defensible, false, 'a bare tie has no defensible default');
+  assert.strictEqual(nuAmbiguityReason(soup[0], soup[1]), 'material_subtype_tie');
+  // sweetness axis
+  const sweet = pc('Tea, sweetened', 'Beverages', 1, 1, { kcal: 30, sugar: 7 });
+  const unsweet = pc('Tea, unsweetened', 'Beverages', 1, 1, { kcal: 1, sugar: 0 });
+  assert.strictEqual(nuAmbiguityReason(sweet, unsweet), 'sweetness_ambiguity');
+});
+
 test('confidence contract: nuAiIsConfident TRUE ⟹ auto_resolve (superset parity)', () => {
   const cases = [
     item({ query: 'egg' }), item({ query: 'chicken breast' }),

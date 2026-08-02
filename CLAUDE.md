@@ -301,6 +301,23 @@ The pure candidate-reranking intelligence behind every food search — extracted
   (`nuAssessConfidence`): a top candidate that hard-mismatches an explicitly-requested
   form/species/identity is never a confident auto-resolve (choose_candidate if alternatives exist,
   else `unresolved`) — so a query with no valid candidate is never confidently mis-logged.
+- **Path C — canonical-default-aware ambiguity + explicit-family consistency
+  (`Live`, Phase 4.2.10b).** `rankFoodCandidates` stamps a third inspectable
+  Candidate field, **`identityScore`** — the sum of the SEMANTIC identity/default
+  signals (canonical-generic + preferred/base descriptors + food-intent − specialty
+  demotion), NOT raw phrase/token match quality. `nuAssessConfidence` reads it under
+  the pure, deterministic `NU_CONFIDENCE.materialAmbiguity` policy to escalate a
+  generic auto-resolve to a chooser ONLY when a *close, materially-different* rival
+  exists AND the top has no defensible-default reason (`explicit_query_modifier` /
+  `immaterial_nearest` / `stronger_identity`, via `nuDefaultEvidence`) — so broad
+  ties (soup, protein) clarify while preferred/canonical defaults and explicit
+  subtypes (chicken→breast, apple→raw, tomato soup) stay auto. The same pass drops
+  any `mismatch`-flagged candidate from the clarification OPTIONS, so an explicit
+  product-family query (`protein powder`) never offers an incompatible family. A
+  caller that bypasses `rankFoodCandidates` receives no `identityScore` and
+  intentionally falls back to legacy (pre-4.2.10b) confidence behavior; any future
+  ranking adapter MUST preserve `identityScore` and its meaning, and
+  `materialAmbiguity` must remain deterministic and pure.
 
 ### Shared Correction Memory Core — `food-memory.js` (`Live`, Phase 4.2.4)
 
