@@ -148,6 +148,7 @@ A task or phase is complete only when all applicable requirements are satisfied:
 - Existing behavior is preserved unless a change was approved.
 - Relevant tests are added or updated.
 - The complete test suite passes (`npm test`).
+- The full CI gate is green locally (`npm run verify`) — the same sequence the **Continuous Evaluation** workflow (`verify` check) runs; baselines are never updated to force it green (governance: `nutrition-evaluation/README.md`).
 - No regressions are found.
 - New shared logic is actually consumed where intended.
 - Dead or duplicate code is removed only when safe.
@@ -194,8 +195,10 @@ provider unless a new route is explicitly built on another.
 
 **Node / tooling:**
 - `package.json`: `npm test` → `node --test`; `npm run bench` → `node benchmarks/run-resolve.js`; `npm run bench:exercise` → `node benchmarks/run-exercise.js`; `npm run eval:nutrition` → `node nutrition-evaluation/runner.js` (Phase 4.2.9 pre-release nutrition evaluation).
+- **`npm run verify` is the canonical pre-commit / pre-release gate (Phase 4.2.11)** — runs, in order: `npm test` → `npm run eval:nutrition` (gated) → `npm run bench:food:strict` → `npm run bench:exercise:strict`; nonzero on any failure. Strict benchmarks: `bench:food:strict` (`--strict --fixture-only`), `bench:exercise:strict` (`--strict`), `bench:all` (both). **CI benchmarks are deterministic fixture-only** — `bench:food:strict` never hits USDA even if a `USDA_API_KEY` secret is added (`--fixture-only` / `BENCH_FIXTURE_ONLY=1`). Non-strict `bench`/`bench:food` and `bench:food:live` are exploratory only, never gates.
+- **CI (Phase 4.2.11):** `.github/workflows/ci.yml`, workflow **Continuous Evaluation**, single job / required-check name **`verify`**, runs the `npm run verify` sequence on every PR to `main` and push to `main` (Ubuntu, Node 24, `npm ci`, `contents: read`, no secrets). **CI never runs `--update-baseline`** and never commits. Branch protection (require the `verify` check) is a deferred manual step — not configured yet. Node is pinned via `.nvmrc` = `24` for local/CI parity.
 - Dependencies: `@anthropic-ai/sdk`, `stripe`. No build step.
-- Test files: `ai-food-parse.test.js`, `usda-search.test.js`, `nutrition-resolve.test.js`, `food-ranking.test.js`, `food-memory.test.js`, `food-meal.test.js`, `food-portion.test.js`, `food-display.test.js`, `nutrition-search-cache.test.js`, `progression.test.js`, `exercise-core.test.js`, `exercise-search.test.js`, `exercise-custom.test.js`, `exercise-filters.test.js`, `exercise-log.test.js`, and the Phase 4.2.9 eval tests `nutrition-eval-schema.test.js`, `nutrition-eval-scoring.test.js`, `nutrition-eval-report.test.js`.
+- Test files: `ai-food-parse.test.js`, `usda-search.test.js`, `nutrition-resolve.test.js`, `food-ranking.test.js`, `food-memory.test.js`, `food-meal.test.js`, `food-portion.test.js`, `food-display.test.js`, `nutrition-search-cache.test.js`, `progression.test.js`, `exercise-core.test.js`, `exercise-search.test.js`, `exercise-custom.test.js`, `exercise-filters.test.js`, `exercise-log.test.js`, and the Phase 4.2.9 eval tests `nutrition-eval-schema.test.js`, `nutrition-eval-scoring.test.js`, `nutrition-eval-report.test.js`, plus the Phase 4.2.11 `nutrition-eval-gate.test.js`.
 - Benchmark corpus: `benchmarks/resolve-cases.jsonl` + `benchmarks/fixtures.js`, run by `benchmarks/run-resolve.js` (two-tier runner, Phase 4.2.1d). Exercise resolution: `benchmarks/exercise-cases.jsonl` + `benchmarks/exercise-fixtures.js`, run by `benchmarks/run-exercise.js` (Phase 4.2.1E).
 
 **Supabase notes:**
@@ -566,10 +569,19 @@ the report to run **before every nutrition release**. Full reference:
   encode expected semantics; divergences are recorded (scored failure or
   `informational` triaged case) and deferred to a hardening phase. Release gate
   (default): fixture-validity + no-crash + no non-informational `regression`
-  failure + no committed-metric regression >1.0 pct vs baseline. Newly-added
-  non-regression failures are informational until reviewed. `baseline.json` is
-  **never auto-overwritten** (`--update-baseline` only). Covered by
-  `nutrition-eval-{schema,scoring,report}.test.js`.
+  failure + no committed-metric regression >1.0 pct in its **direction** vs
+  baseline. Newly-added non-regression failures are informational until reviewed.
+  `baseline.json` is **never auto-overwritten** (`--update-baseline` only; never
+  in CI). Covered by `nutrition-eval-{schema,scoring,report,gate}.test.js`.
+- **Direction-aware gate (Phase 4.2.11):** `gate.js` declares each metric's
+  direction — accuracy/recall/clarification/display/portion/meal/parsing are
+  `higher_is_better` (drop = regression); **false-confidence is `lower_is_better`
+  (rise = regression)**; an undeclared metric fails safe. Baseline **governance**
+  (when `--update-baseline` is allowed, case add/remove, informational/known_fail,
+  intentional decreases) and the **production-failure → `reg-*` case** playbook
+  are authoritative in `nutrition-evaluation/README.md` — not restated here.
+  Approved-milestone timeline: `nutrition-evaluation/HISTORY.md` (append-only,
+  never written by CI).
 - **Phase 4.2.9 baseline (SHA 47b9736):** 237 cases, overall 99.6% (228/229),
   false-confidence 5% (1/20). Documented open items → a confidence-hardening
   phase (bare "coffee" auto-resolves to "Coffee cake" — the sole false-confidence
