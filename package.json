@@ -7,7 +7,12 @@
     "bench": "node benchmarks/run-resolve.js",
     "bench:food": "node benchmarks/run-resolve.js",
     "bench:exercise": "node benchmarks/run-exercise.js",
-    "eval:nutrition": "node nutrition-evaluation/runner.js"
+    "bench:food:strict": "node benchmarks/run-resolve.js --strict --fixture-only",
+    "bench:food:live": "node benchmarks/run-resolve.js --strict",
+    "bench:exercise:strict": "node benchmarks/run-exercise.js --strict",
+    "bench:all": "npm run bench:food:strict && npm run bench:exercise:strict",
+    "eval:nutrition": "node nutrition-evaluation/runner.js",
+    "verify": "npm test && npm run eval:nutrition && npm run bench:food:strict && npm run bench:exercise:strict"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",

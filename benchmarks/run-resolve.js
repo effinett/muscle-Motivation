@@ -1,8 +1,13 @@
 // Resolve benchmark runner (Phase 4.2.1d) — scores the SHARED resolver
 // (food-core.js nuCreateResolver) against benchmarks/resolve-cases.jsonl.
 //
-//   node benchmarks/run-resolve.js            # report, always exits 0
-//   node benchmarks/run-resolve.js --strict   # exit 1 on any unexpected failure
+//   node benchmarks/run-resolve.js                    # report, always exits 0
+//   node benchmarks/run-resolve.js --strict           # exit 1 on any unexpected failure
+//   node benchmarks/run-resolve.js --strict --fixture-only  # CI gate: NEVER touches
+//     the network — live-tier cases are skipped even if USDA_API_KEY is present
+//     (env BENCH_FIXTURE_ONLY=1 is equivalent). This is the deterministic mode
+//     `npm run bench:food:strict` and CI use, so a repo/org secret added later
+//     can never make the required food benchmark non-deterministic.
 //
 // Two tiers, selected per case by its "tier" field:
 //   • fixture — deterministic canned pools (benchmarks/fixtures.js). No
@@ -61,7 +66,11 @@ const mealmod = require('../food-meal.js');
 const { FIXTURE_SEARCHES, FIXTURE_PORTIONS } = require('./fixtures.js');
 
 const STRICT = process.argv.includes('--strict');
-const HAS_KEY = !!process.env.USDA_API_KEY;
+// Deterministic CI mode: force fixture-only so live-tier cases are skipped even
+// when USDA_API_KEY is present. This is an EXPLICIT switch — CI does not rely on
+// merely the absence of the key. (--fixture-only flag OR BENCH_FIXTURE_ONLY=1.)
+const FIXTURE_ONLY = process.argv.includes('--fixture-only') || process.env.BENCH_FIXTURE_ONLY === '1';
+const HAS_KEY = !FIXTURE_ONLY && !!process.env.USDA_API_KEY;
 
 /* ── source adapters ───────────────────────────────────────────────────── */
 
@@ -300,10 +309,11 @@ function normalizeInput(input) {
     else { fail++; failures.push({ id: c.id, tier: c.tier, mismatches }); }
   }
 
-  console.log('\nresolve benchmark —', new Date().toISOString().slice(0, 10));
+  console.log('\nresolve benchmark —', new Date().toISOString().slice(0, 10) +
+    (FIXTURE_ONLY ? ' [fixture-only: live-tier cases skipped, no network]' : ''));
   console.log(`cases: ${cases.length} | pass: ${pass} | fail: ${fail} | known_fail: ${knownFail}` +
     (nowPassing ? ` | NOW-PASSING: ${nowPassing}` : '') +
-    (skipped ? ` | skipped (no USDA_API_KEY): ${skipped}` : ''));
+    (skipped ? ` | skipped (${FIXTURE_ONLY ? 'fixture-only' : 'no USDA_API_KEY'}): ${skipped}` : ''));
   const scored = pass + fail;
   if (scored) console.log(`accuracy (excl. known_fail/skipped): ${(100 * pass / scored).toFixed(1)}%`);
 

@@ -1,0 +1,75 @@
+# Phase 4.2.11 — Continuous Evaluation CI.
+#
+# Automatic regression enforcement for every PR to main and every push to main.
+# One sequential job ("verify") runs the exact gate `npm run verify` runs locally:
+# unit tests → nutrition evaluation (gated) → strict fixture-only food benchmark →
+# strict exercise benchmark → working-tree cleanliness. Fully offline and
+# secret-free: no production secrets, no external APIs, no DB.
+#
+# Branch protection is NOT configured here (deferred, per the 4.2.11 checkpoint).
+# When enabled, require the check named "verify".
+name: Continuous Evaluation
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Least privilege: the gate only reads the repo.
+permissions:
+  contents: read
+
+# Cancel superseded runs on the SAME PR (by number) or the same pushed ref.
+# Using the PR number keeps unrelated PRs from cancelling one another.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+      # Later diagnostic steps still run after an earlier failure (!cancelled),
+      # so one run surfaces every failure — while the job overall stays failed.
+      - name: Nutrition evaluation (gated)
+        if: ${{ !cancelled() }}
+        run: npm run eval:nutrition
+
+      - name: Food benchmark (strict, fixture-only, no network)
+        if: ${{ !cancelled() }}
+        run: npm run bench:food:strict
+
+      - name: Exercise benchmark (strict)
+        if: ${{ !cancelled() }}
+        run: npm run bench:exercise:strict
+
+      # Verification must leave the tree clean. git status --porcelain respects
+      # .gitignore, so the git-ignored reports/nutrition-evaluation/ artifacts are
+      # not flagged; any OTHER new/changed tracked or untracked file fails the gate.
+      - name: Working tree clean
+        if: ${{ !cancelled() }}
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Verification left unexpected working-tree changes:"
+            git status --porcelain
+            exit 1
+          fi
+          echo "Working tree clean."

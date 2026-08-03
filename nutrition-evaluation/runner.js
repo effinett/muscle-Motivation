@@ -15,6 +15,8 @@
 //   • no case may crash                                            → exit 2
 //   • no NON-informational regression-category case may fail       → exit 1
 //   • no committed metric may regress by more than METRIC_TOL pct  → exit 1
+//     (direction-aware via gate.js: accuracy/recall drops AND a false-confidence
+//      RISE both trip the gate)
 // Newly-added, non-regression failing cases are INFORMATIONAL until reviewed.
 
 'use strict';
@@ -30,6 +32,7 @@ const diagnostics = require('./diagnostics.js');
 const metricsMod = require('./metrics.js');
 const report = require('./report.js');
 const baselineMod = require('./baseline.js');
+const gate = require('./gate.js');
 const { load: loadFixtures, CASE_SET_VERSION } = require('./fixtures/index.js');
 
 const METRIC_TOL = 1.0; // pct a committed metric may drop before the gate trips
@@ -145,12 +148,12 @@ async function run() {
     console.error(`GATE: ${failingRegressions.length} regression case(s) failing: ${failingRegressions.map((r) => r.id).join(', ')}`);
   }
   if (!cmp.firstRun) {
-    for (const k of Object.keys(cmp.metricDeltas)) {
-      const d = cmp.metricDeltas[k];
-      if (typeof d === 'number' && d < -METRIC_TOL) {
-        gateFail = true;
-        console.error(`GATE: metric "${k}" regressed ${d} pct (tolerance -${METRIC_TOL})`);
-      }
+    // Metric-direction-aware gate (Phase 4.2.11): higher_is_better metrics fail on
+    // a drop; false-confidence (lower_is_better) fails on a RISE; an undeclared
+    // metric fails safe on any movement beyond tolerance. See gate.js.
+    for (const v of gate.checkMetricDeltas(cmp.metricDeltas, METRIC_TOL)) {
+      gateFail = true;
+      console.error('GATE: ' + v.message);
     }
     if (cmp.regressions.length) {
       gateFail = true;
