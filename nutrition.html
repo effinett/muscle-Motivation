@@ -216,10 +216,15 @@
     }
     .ai-item-x:hover { color: var(--text); }
     .ai-item-warn { font-size: 11px; color: var(--text-2); margin-top: 5px; line-height: 1.4; }
-    .ai-item-bottom { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; }
+    /* Metadata + stepper: the meta block wraps (flex-wrap) so identity and
+       nutrition sit on one line where there's room and stack into two readable
+       rows when there isn't — calories/protein never truncate. The stepper stays
+       top-right (flex-shrink:0) and never overlaps the text (align-items:flex-start). */
+    .ai-item-bottom { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-top: 6px; }
+    .ai-item-meta { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; }
     .ai-item-sub {
       font-size: 12px; color: var(--text-muted); font-weight: 600;
-      min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      min-width: 0; overflow-wrap: anywhere;
     }
     .ai-mini-stepper { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
     .ai-mini-step {
@@ -264,7 +269,10 @@
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
       overflow: hidden; overflow-wrap: anywhere;
     }
-    .ai-choice-brand { font-size: 11px; color: var(--text-muted); font-weight: 700; flex-shrink: 0; }
+    /* Secondary line (Brand · Variety · kcal/100 g). NOT flex-shrink:0 — it must
+       yield space / wrap so a long brand+variety never overflows the card; on
+       mobile the whole .ai-choice stacks (see the media query). */
+    .ai-choice-brand { font-size: 11px; color: var(--text-muted); font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
     /* brand-correction free-text (clarification) */
     .ai-clar-free { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
     .ai-clar-flabel {
@@ -282,7 +290,11 @@
 
     /* Saved meals: meal-head actions + the two small sheets */
     .meal-actions { display: flex; gap: 8px; flex-shrink: 0; }
-    .sm-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 12px; max-height: 38vh; overflow-y: auto; }
+    /* Vertical-scroll list; min-width:0 lets its flex children (cards) shrink,
+       max-width:100% keeps a wide card from widening the modal (component-level
+       overflow guard — never relies on body overflow-x:hidden). */
+    .sm-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 12px; max-height: 38vh; overflow-y: auto; min-width: 0; }
+    .sm-item, .ai-item, .ai-choice { max-width: 100%; }
     .sm-item {
       display: flex; align-items: center; justify-content: space-between; gap: 10px;
       background: var(--surface-2); border: 1px solid var(--border-2);
@@ -601,6 +613,24 @@
       .nu-readout-num { font-size: 22px; }
       .nu-readout-cell-sm .nu-readout-num { font-size: 16px; }
       .nu-readout-lab { font-size: 9px; letter-spacing: 0.5px; }
+
+      /* ── Phase 4.2.10d: Review & Add / clarification / modal mobile hardening ── */
+      /* Reclaim ~40px of content width on phones (was 24+20px per side). */
+      .modal-overlay { padding: 12px; }
+      .modal-box { padding: 20px 16px; }
+      /* Clarification choices stack: primary name on line 1, secondary metadata on
+         line 2 — both full width with min-width:0 so a long brand/variety wraps
+         instead of overflowing or squeezing the name into an unusable column. */
+      .ai-choice { flex-direction: column; align-items: stretch; gap: 3px; }
+      .ai-choice-name { -webkit-line-clamp: 3; }
+      .ai-choice-brand { white-space: normal; }
+    }
+    @media (max-width: 360px) {
+      /* Tighten only spacing where 320–360px genuinely still presses. The
+         reclaimed padding is enough that the 32×32 stepper controls stay full
+         size — tap targets are never shrunk to fit. */
+      .modal-overlay { padding: 8px; }
+      .modal-box { padding: 18px 13px; }
     }
   </style>
   <link rel="stylesheet" href="safe-area.css">
@@ -1244,20 +1274,19 @@
         calories: total.calories, protein: total.protein, carbs: total.carbs, fat: total.fat,
       });
       var fullName = dm.fullName;
-      // Identity secondary parts from the shared model (Brand • Variety, brand
-      // never duplicated with the name); the UI appends serving + the
-      // quantity-adjusted TOTAL calories + protein from the same model.
-      var sub = dm.secondaryParts.map(nuEsc);
-      // Phase 4.2.5: honestly mark an inferred vague-portion amount as estimated
-      // (the serving text already carries "~"); the explanation is on hover.
+      // Two metadata groups from the shared model so mobile can stack them into
+      // two readable rows (identity + nutrition) that WRAP — calories/protein are
+      // never truncated behind an ellipsis. On desktop they flow on one line.
+      // IDENTITY: USDA badge · brand · variety (brand never duplicated with name).
+      var idParts = dm.secondaryParts.map(nuEsc);
+      var idHtml = '<span class="nu-verified-sm">USDA</span>' + (idParts.length ? ' · ' + idParts.join(' · ') : '');
+      // NUTRITION: serving · total kcal · protein. Phase 4.2.5 estimate badge kept.
       var servingCell = nuEsc(dm.serving);
       if (it.estimated) {
         var exp = (it.portion && it.portion.explanation) || 'Estimated portion — adjust if needed.';
         servingCell += ' <span class="ai-est-badge" title="' + nuEsc(exp) + '">Estimated</span>';
       }
-      sub.push(servingCell);
-      sub.push(dm.caloriesLabel);
-      sub.push('P ' + dm.protein);
+      var nutHtml = [servingCell, nuEsc(dm.caloriesLabel), 'P ' + dm.protein].join(' · ');
       return '<div class="sm-item ai-item">' +
         '<div class="ai-item-top">' +
           '<div class="ai-item-name" title="' + nuEsc(fullName) + '" aria-label="' + nuEsc(fullName) + '">' + nuEsc(dm.name) + '</div>' +
@@ -1269,7 +1298,10 @@
             nuEsc(it.serving_description || '1 serving') + '. Adjust below if needed.</div>'
           : '') +
         '<div class="ai-item-bottom">' +
-          '<div class="ai-item-sub"><span class="nu-verified-sm">USDA</span> · ' + sub.join(' · ') + '</div>' +
+          '<div class="ai-item-meta">' +
+            '<span class="ai-item-sub">' + idHtml + '</span>' +
+            '<span class="ai-item-sub">' + nutHtml + '</span>' +
+          '</div>' +
           '<div class="ai-mini-stepper">' +
             '<button type="button" class="ai-mini-step" onclick="aiQtyStep(' + i + ',-1)" aria-label="Decrease quantity">−</button>' +
             '<span class="ai-mini-qty">' + (Math.round(it.servings * 100) / 100) + '</span>' +
