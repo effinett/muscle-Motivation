@@ -217,7 +217,7 @@
       if (!data || typeof data !== 'object' || data.type !== 'SKIP_WAITING') return;
       var settled;
       try {
-        settled = Promise.resolve(doSkipWaiting());
+        settled = Promise.resolve(doSkipWaiting());  // invoke the self-bound skipWaiting
       } catch (e) {
         settled = Promise.resolve(); // sync throw contained
       }
@@ -225,6 +225,15 @@
       try {
         if (event && typeof event.waitUntil === 'function') event.waitUntil(settled);
       } catch (e) { /* waitUntil unavailable/throwing → response unaffected */ }
+      // Acknowledge receipt of the exact command through the transferred port, so
+      // the page has PROOF of receipt (postMessage's synchronous return is not
+      // proof). Sent AFTER skipWaiting was invoked. Ack failure can never prevent
+      // skipWaiting; a missing / throwing port is safe; no private data is sent.
+      try {
+        var ports = event && event.ports;
+        var port = (ports && ports.length) ? ports[0] : null;
+        if (port && typeof port.postMessage === 'function') port.postMessage({ type: 'SKIP_WAITING_ACK' });
+      } catch (e) { /* ack failure contained — never blocks activation */ }
     }
 
     return {

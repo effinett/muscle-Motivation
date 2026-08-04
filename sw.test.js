@@ -733,6 +733,52 @@ test('receiver: waitUntil is optional — activation still runs when the event l
   assert.strictEqual(g.skipWaitingCalls, 1, 'skipWaiting still invoked without waitUntil');
 });
 
+// ── F3. Worker acknowledgment (SKIP_WAITING_ACK through event.ports[0]) ───────
+
+function fakeAckPort() {
+  const p = { posted: [], _throws: false, postMessage(m) { if (p._throws) throw new Error('port'); p.posted.push(m); } };
+  return p;
+}
+
+test('ack: worker sends { type: "SKIP_WAITING_ACK" } through event.ports[0] after skipWaiting', () => {
+  const g = receiverSensitiveScope();
+  const { app } = runtimeWith(function () { return g.skipWaiting(); });
+  const port = fakeAckPort();
+  const waited = [];
+  app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [port], waitUntil: (pr) => waited.push(pr) });
+  assert.strictEqual(g.skipWaitingCalls, 1, 'skipWaiting invoked (before the ack)');
+  assert.strictEqual(waited.length, 1, 'waitUntil received the skipWaiting promise');
+  assert.strictEqual(port.posted.length, 1, 'acknowledgment sent');
+  assert.deepStrictEqual(port.posted[0], { type: 'SKIP_WAITING_ACK' });
+});
+
+test('ack: a missing port is safe — no throw, and skipWaiting still runs', () => {
+  const g = receiverSensitiveScope();
+  const { app } = runtimeWith(function () { return g.skipWaiting(); });
+  assert.doesNotThrow(() => app.onMessage({ data: { type: 'SKIP_WAITING' } }));               // no ports
+  assert.doesNotThrow(() => app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [] }));     // empty ports
+  assert.strictEqual(g.skipWaitingCalls, 2, 'skipWaiting invoked both times');
+});
+
+test('ack: a throwing ack port is contained and never blocks skipWaiting', () => {
+  const g = receiverSensitiveScope();
+  const { app } = runtimeWith(function () { return g.skipWaiting(); });
+  const port = fakeAckPort(); port._throws = true;
+  assert.doesNotThrow(() => app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [port] }));
+  assert.strictEqual(g.skipWaitingCalls, 1, 'skipWaiting still invoked despite ack failure');
+});
+
+test('ack: an unknown message sends no ack and invokes no skipWaiting', () => {
+  const g = receiverSensitiveScope();
+  const { app } = runtimeWith(function () { return g.skipWaiting(); });
+  const port = fakeAckPort();
+  for (const ev of [{ data: { type: 'NOPE' }, ports: [port] }, { data: null, ports: [port] }, {}]) {
+    app.onMessage(ev);
+  }
+  assert.strictEqual(g.skipWaitingCalls, 0);
+  assert.strictEqual(port.posted.length, 0);
+});
+
 // ── G. Static safety scans ───────────────────────────────────────────────────
 
 const FORBIDDEN_BOTH = [
