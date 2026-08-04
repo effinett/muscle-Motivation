@@ -178,19 +178,54 @@ test('vercel.json serves the manifest with the correct content type', () => {
   assert.ok(ct && /application\/manifest\+json/.test(ct.value), 'Content-Type is application/manifest+json');
 });
 
-test('NO service worker or caching code was introduced anywhere in the repo', () => {
+// Phase 4.3.2 amendment. A TESTED, UNREGISTERED service-worker file may now
+// exist (Checkpoint 2), but the Phase 4.3.1 guarantees are preserved: no page
+// registers a worker, no registration module exists, and Cache Storage usage is
+// confined to the dedicated worker runtime files — nowhere else. The rule
+// changed from "no service worker exists" to "a worker file may exist, but no
+// runtime registration or unsafe caching is allowed yet."
+test('a service worker may exist but stays unregistered with no unsafe caching', () => {
+  // Cache Storage is permitted ONLY inside these dedicated worker runtime files.
+  const WORKER_FILES = new Set(['sw.js', 'sw-runtime.js']);
+
   const scan = (dir) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'reports') continue;
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) { scan(full); continue; }
       if (!/\.(html|js|mjs)$/.test(entry.name)) continue;
-      if (full === path.join(ROOT, 'pwa-manifest.test.js')) continue; // this file references the terms
+      // Test files legitimately reference these terms as assertions.
+      if (/\.test\.js$/.test(entry.name)) continue;
       const txt = fs.readFileSync(full, 'utf8');
+      // No runtime registration anywhere — Checkpoint 3 introduces it.
       assert.ok(!/serviceWorker\s*\.\s*register/.test(txt), `${entry.name}: no serviceWorker.register`);
-      assert.ok(!/\bcaches\s*\.\s*(open|match)\b/.test(txt), `${entry.name}: no Cache Storage usage`);
+      assert.ok(!/navigator\s*\.\s*serviceWorker/.test(txt), `${entry.name}: no navigator.serviceWorker`);
+      // Cache Storage usage is confined to the worker runtime files.
+      if (!WORKER_FILES.has(entry.name)) {
+        assert.ok(!/\bcaches\s*\.\s*(open|match|keys|delete)\b/.test(txt),
+          `${entry.name}: no Cache Storage usage outside the worker`);
+      }
     }
   };
   scan(ROOT);
-  assert.ok(!exists('sw.js') && !exists('service-worker.js'), 'no service worker file at root');
+
+  // The tested worker files exist; no registration shim; no legacy sw filename.
+  assert.ok(exists('sw.js'), 'sw.js exists');
+  assert.ok(exists('sw-policy.js'), 'sw-policy.js exists');
+  assert.ok(exists('sw-runtime.js'), 'sw-runtime.js exists');
+  assert.ok(!exists('sw-register.js'), 'no registration module yet (Checkpoint 3)');
+  assert.ok(!exists('service-worker.js'), 'no alternate service-worker file');
+
+  // No HTML page loads or registers the worker (worker stays inert).
+  for (const page of htmlPages) {
+    const html = read(page);
+    assert.ok(!/serviceWorker/.test(html), `${page}: no service worker reference`);
+    assert.ok(!/\bsw\.js\b/.test(html), `${page}: does not load sw.js`);
+  }
+
+  // The approved static allowlist still contains no API or HTML path.
+  const policy = require('./sw-policy.js');
+  for (const p of policy.STATIC_ALLOWLIST) {
+    assert.ok(!p.includes('/api/') && !/\.html$/.test(p), `allowlist entry ${p} is not API/HTML`);
+  }
 });

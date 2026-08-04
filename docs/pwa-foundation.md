@@ -74,3 +74,53 @@ authenticated or API content**. Any future caching MUST:
 Until a service worker is intentionally designed against these constraints, the
 app remains a standard online-only installable web app — exactly the safe state
 this checkpoint establishes.
+
+## Phase 4.3.2 — Service-worker foundation (in progress, NOT registered)
+
+Phase 4.3.2 builds the service-worker foundation in small checkpoints. **No
+production/runtime behavior has changed: no page registers or loads the worker,
+so it is inert.** The app is still the online-only installable PWA described
+above.
+
+| Checkpoint | Status | Artifact | Purpose |
+|---|---|---|---|
+| 1 | `Live` (committed) | `sw-policy.js`, `sw-policy.test.js` | Pure cache-policy core: the frozen static allowlist, `mm-static-vN` cache naming/ownership, and default-deny request eligibility (same-origin GET, no `Authorization`, exact allowlisted path). Single source of truth. |
+| 2 | present, **unregistered** | `sw.js`, `sw-runtime.js`, `sw.test.js` | The worker runtime + a thin entrypoint. Exists and is fully tested but is **not registered by any page**. |
+| 3 | not started | (`sw-register.js`, UI) | Registration, update detection, and the user-controlled refresh flow. |
+
+**Checkpoint 2 behavior (worker file only, still unregistered):**
+
+- `sw.js` is a thin entrypoint: `importScripts('/sw-policy.js')` +
+  `importScripts('/sw-runtime.js')`, then injects the real worker globals
+  (`self.caches`, `fetch`, `self.skipWaiting`, `self.location.origin`) into the
+  deterministic runtime and attaches the lifecycle listeners. It hard-codes no
+  allowlist, cache name, or classification — `sw-policy.js` remains authoritative.
+  If the policy/runtime fails to load or the policy contract is incomplete, it
+  attaches **no** listeners (fails safe → normal browser networking).
+- **install** precaches **only** the approved static icon/favicon allowlist into
+  `SWPolicy.CURRENT_STATIC_CACHE`, all-or-nothing (a partial cache never
+  activates). It does **not** call `skipWaiting()` and deletes nothing.
+- **activate** deletes only obsolete owned `mm-static-*` caches, never the
+  current one and never any unrelated cache. It does **not** call
+  `clients.claim()`, does not reload, and never touches Local Storage,
+  IndexedDB, cookies, or any non–Cache-Storage state.
+- **fetch** is default pass-through: it intercepts **only** requests the policy
+  approves (same-origin GET for an allowlisted static asset, no `Authorization`
+  header), serving them cache-first from the current cache only. On a miss, the
+  network response is **returned immediately**; the optional cache repair is
+  protected with the fetch event's `waitUntil()` (so the write can complete
+  without the worker being killed first) and **repair failure never blocks or
+  rejects the response**. **HTML navigation stays network-only** (never
+  intercepted), and **API, Supabase, cross-origin, authorization-bearing,
+  non-GET, and unknown requests are never cached and never intercepted.**
+  Classification errors fail closed.
+- **message** supports only `{ type: 'SKIP_WAITING' }` (the future
+  controlled-refresh hook) → the injected `skipWaiting`; everything else is
+  ignored. This is the sole `skipWaiting()` path — never automatic, never at
+  install.
+
+The worker is documented here as **inert and unregistered**; it is **not
+shipped, active, installed, or production-validated**. Automatic activation and
+`clients.claim()` remain prohibited. Registration and the controlled update UI
+are Checkpoint 3. **Android validation remains deferred** (from Phase 4.3.1) and
+does not block this work.
