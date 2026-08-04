@@ -20,6 +20,10 @@
 
 'use strict';
 
+// Preview retest marker (Phase 4.3.2 Checkpoint 4): a non-functional byte change
+// so this worker file differs and installs as a new waiting worker on the shared
+// branch-alias preview, enabling a clean one-click activation retest. No behavior,
+// cache policy, cache version, registration, or acknowledgment change.
 importScripts('/sw-policy.js');
 importScripts('/sw-runtime.js');
 
