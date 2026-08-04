@@ -204,17 +204,27 @@
 
     // ── message ──────────────────────────────────────────────────────────────
     // Only the exact controlled-refresh hook. Everything else is ignored. Never
-    // deletes caches, claims clients, reloads, or unregisters. Fire-and-forget,
-    // but every failure path is internally contained: a synchronous throw, a
-    // rejected promise, or a non-promise return from skipWaiting() can never
+    // deletes caches, claims clients, reloads, or unregisters. The injected
+    // skipWaiting is the SELF-BOUND wrapper from sw.js, so the native receiver is
+    // preserved. The returned promise is attached to event.waitUntil() so the
+    // browser keeps this worker alive until activation settles — otherwise the
+    // worker can be terminated before skipWaiting() finishes and the waiting
+    // worker never activates. Every failure path — a synchronous throw, a
+    // rejected promise, or a non-promise return — is contained and can never
     // surface as an unhandled rejection.
     function onMessage(event) {
       var data = event && event.data;
-      if (data && typeof data === 'object' && data.type === 'SKIP_WAITING') {
-        try {
-          Promise.resolve(doSkipWaiting()).catch(function () {});
-        } catch (e) { /* sync throw from skipWaiting() → contained */ }
+      if (!data || typeof data !== 'object' || data.type !== 'SKIP_WAITING') return;
+      var settled;
+      try {
+        settled = Promise.resolve(doSkipWaiting());
+      } catch (e) {
+        settled = Promise.resolve(); // sync throw contained
       }
+      settled = settled.then(function () {}, function () {}); // rejection contained
+      try {
+        if (event && typeof event.waitUntil === 'function') event.waitUntil(settled);
+      } catch (e) { /* waitUntil unavailable/throwing → response unaffected */ }
     }
 
     return {

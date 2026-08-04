@@ -653,6 +653,86 @@ test('skipWaiting: unknown message never invokes skipWaiting even with a throwin
   assert.strictEqual(skip.count, 0, 'skipWaiting not called for a non-SKIP_WAITING message');
 });
 
+// ── F2. Native receiver binding (Checkpoint 4 controlled-update defect guard) ──
+// The browser's real self.skipWaiting is a receiver-sensitive native method: it
+// throws "Illegal invocation" unless called with the ServiceWorkerGlobalScope as
+// its receiver. If sw.js injected it UNBOUND (skipWaiting: self.skipWaiting) the
+// runtime's `doSkipWaiting()` call would run it with `this === undefined`, it
+// would throw, the throw would be contained, and the waiting worker would NEVER
+// activate — exactly the observed browser symptom. sw.js instead injects the
+// self-bound wrapper `function () { return self.skipWaiting(); }`. These tests
+// prove the wrapper preserves the receiver AND that an unbound injection is
+// genuinely detectable (the effect never happens).
+
+// A stand-in for self.skipWaiting: throws unless invoked with `g` as receiver,
+// and only records the activation effect when it is correctly bound.
+function receiverSensitiveScope() {
+  const g = { skipWaitingCalls: 0, activated: false };
+  g.skipWaiting = function () {
+    if (this !== g) throw new TypeError('Illegal invocation');
+    g.skipWaitingCalls += 1;
+    g.activated = true;
+    return Promise.resolve();
+  };
+  return g;
+}
+function runtimeWith(skipWaiting) {
+  const env = cacheEnv();
+  const app = SWRuntime.createRuntime({
+    policy: SWPolicy, caches: env.caches,
+    fetch: () => Promise.resolve(response()), skipWaiting, origin: APP
+  });
+  return { app, env };
+}
+
+test('receiver: self-bound wrapper (as in sw.js) preserves the receiver → activation runs', async () => {
+  const g = receiverSensitiveScope();
+  const { app } = runtimeWith(function () { return g.skipWaiting(); }); // sw.js form
+  const waited = [];
+  app.onMessage({ data: { type: 'SKIP_WAITING' }, waitUntil: (p) => waited.push(p) });
+  assert.strictEqual(g.skipWaitingCalls, 1, 'native skipWaiting actually invoked');
+  assert.strictEqual(g.activated, true, 'waiting-worker activation effect happened');
+  assert.strictEqual(waited.length, 1, 'skipWaiting promise handed to event.waitUntil');
+  await waited[0]; // contained → resolves
+});
+
+test('receiver: UNBOUND native-style injection fails to activate (this test would catch the regression)', () => {
+  const g = receiverSensitiveScope();
+  const { app } = runtimeWith(g.skipWaiting); // WRONG: unbound → this !== g → throws
+  // The runtime contains the throw (no crash), but the activation effect never
+  // happens — reproducing the "waiting worker never activates" defect.
+  assert.doesNotThrow(() => app.onMessage({ data: { type: 'SKIP_WAITING' }, waitUntil: () => {} }));
+  assert.strictEqual(g.skipWaitingCalls, 0, 'unbound call threw before any effect');
+  assert.strictEqual(g.activated, false, 'waiting worker never activated');
+});
+
+test('receiver: only exact {type:"SKIP_WAITING"} invokes the bound native method', () => {
+  const g = receiverSensitiveScope();
+  const { app } = runtimeWith(function () { return g.skipWaiting(); });
+  for (const ev of [{ data: { type: 'NOPE' } }, {}, { data: null }, { data: 'SKIP_WAITING' }, { data: 5 }, undefined]) {
+    app.onMessage(ev);
+  }
+  assert.strictEqual(g.skipWaitingCalls, 0, 'no other message type activates');
+});
+
+test('receiver: sync throw and rejected promise stay contained with waitUntil present', async () => {
+  const throwing = runtimeWith(function () { throw new Error('sync'); });
+  const w = [];
+  assert.doesNotThrow(() => throwing.app.onMessage({ data: { type: 'SKIP_WAITING' }, waitUntil: (p) => w.push(p) }));
+  if (w.length) await w[0]; // contained → resolves, never rejects
+
+  const rejecting = runtimeWith(function () { return Promise.reject(new Error('async')); });
+  await expectNoUnhandled(() =>
+    rejecting.app.onMessage({ data: { type: 'SKIP_WAITING' }, waitUntil: () => {} }));
+});
+
+test('receiver: waitUntil is optional — activation still runs when the event lacks it', () => {
+  const g = receiverSensitiveScope();
+  const { app } = runtimeWith(function () { return g.skipWaiting(); });
+  assert.doesNotThrow(() => app.onMessage({ data: { type: 'SKIP_WAITING' } })); // no waitUntil
+  assert.strictEqual(g.skipWaitingCalls, 1, 'skipWaiting still invoked without waitUntil');
+});
+
 // ── G. Static safety scans ───────────────────────────────────────────────────
 
 const FORBIDDEN_BOTH = [

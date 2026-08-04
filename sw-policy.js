@@ -37,13 +37,14 @@
   // Bump this integer whenever the cached static shell changes. It is the sole
   // input that changes CURRENT_STATIC_CACHE, giving each SW release a distinct,
   // deterministic cache name (obsolete-cache cleanup is a LATER checkpoint).
-  // Phase 4.3.2 Checkpoint 4: TEMPORARILY restored to 1 so the shared branch-alias
-  // preview serves Version A (mm-static-v1) for the human to register on that
-  // origin; a later prompt bumps it back to 2 to drive the real A->B update test.
-  // The STATIC_ALLOWLIST and all privacy/classification rules are unchanged.
-  var CACHE_VERSION = 1;
+  // Phase 4.3.2 Checkpoint 4: set to 2 (Version B) so the shared branch-alias
+  // preview produces genuinely different worker bytes than the registered
+  // Version A (mm-static-v1), driving the real A->B waiting-worker / update-banner
+  // / Update now / one-time reload / old-cache-cleanup validation. The
+  // STATIC_ALLOWLIST and all privacy/classification rules are unchanged.
+  var CACHE_VERSION = 2;
 
-  // Deterministic current static cache name, e.g. "mm-static-v1".
+  // Deterministic current static cache name, e.g. "mm-static-v2".
   var CURRENT_STATIC_CACHE = CACHE_PREFIX + 'v' + CACHE_VERSION;
 
   // True ONLY for strings that begin with the exact `mm-static-` prefix.
