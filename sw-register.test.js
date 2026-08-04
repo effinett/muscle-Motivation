@@ -35,12 +35,13 @@ function makeWorker() {
       w.posted.push(m);
       w.ports.push(transfer && transfer.length ? transfer[0] : null);
     },
-    // Simulate the real worker: after receiving SKIP_WAITING it acks through the
-    // transferred port (event.ports[0]).
-    _sendAck(i) {
+    // Simulate the real worker replying through the transferred port (ports[0]).
+    _reply(type, i) {
       const port = w.ports[i == null ? w.ports.length - 1 : i];
-      if (port && typeof port.postMessage === 'function') port.postMessage({ type: 'SKIP_WAITING_ACK' });
+      if (port && typeof port.postMessage === 'function') port.postMessage({ type: type });
     },
+    _sendAck(i) { w._reply('SKIP_WAITING_ACK', i); },
+    _sendError(i) { w._reply('SKIP_WAITING_ERROR', i); },
     _setState(s) { w.state = s; w._emit('statechange', {}); }
   });
   return w;
@@ -657,7 +658,7 @@ test('ack: duplicate controllers attach only one active handler → one command'
   const ctrl2 = SWRegister.createUpdateController({
     navigator: s.navigator, document: s.doc, window: s.win, storage: s.storage,
     reload: s.reload.fn, now: () => s.nowRef.t,
-    setTimer: s.timers.setTimer, clearTimer: s.timers.clearTimer, MessageChannel: () => fakeChannel()
+    setTimer: s.timers.setTimer, clearTimer: s.timers.clearTimer, MessageChannel: function () { return fakeChannel(); }
   });
   ctrl2._state.registration = s.registration;
   s.ctrl.onRegistered(s.registration);
@@ -845,6 +846,160 @@ test('grace: retry during the grace window replaces the prior attempt cleanly', 
   assert.strictEqual(s.ctrl._state.accepted, true);
   s.ctrl.handleControllerChange();
   assert.strictEqual(s.reload.count, 1, 'reloads once for the fresh attempt');
+});
+
+// ── F2f. SKIP_WAITING_ERROR handling (skipWaiting threw/rejected) ──────────────
+
+test('error: ACK still enters accepted, keeps the button disabled, and never reloads by itself', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  const btn = s.doc.getElementById('mm-sw-update-btn');
+  btn.click();
+  s.worker._sendAck();
+  assert.strictEqual(s.ctrl._state.accepted, true);
+  assert.strictEqual(btn.disabled, true, 'ACK keeps button disabled awaiting controllerchange');
+  assert.strictEqual(s.reload.count, 0, 'ACK itself never reloads');
+});
+
+test('error: SKIP_WAITING_ERROR rolls back requesting/accepted, clears marker, restores button', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  const btn = s.doc.getElementById('mm-sw-update-btn');
+  btn.click();
+  s.worker._sendError();                         // worker reports skipWaiting threw/rejected
+  assert.strictEqual(s.ctrl._state.requesting, false, 'requesting cleared');
+  assert.strictEqual(s.ctrl._state.accepted, false, 'accepted cleared');
+  assert.ok(!(SS_KEY in s.storage._map), 'session marker cleared');
+  assert.strictEqual(btn.disabled, false, 'button re-enabled');
+  assert.ok(!('aria-disabled' in btn._attrs), 'aria-disabled removed');
+  assert.strictEqual(btn.textContent, 'Update now', 'copy restored');
+  assert.ok(s.doc.getElementById('mm-sw-update-banner'), 'banner kept visible');
+});
+
+test('error: SKIP_WAITING_ERROR never reloads and does NOT open a grace window', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  s.doc.getElementById('mm-sw-update-btn').click();
+  s.worker._sendError();
+  assert.strictEqual(s.ctrl._state.timedOutAttemptPending, false, 'no grace after an explicit error');
+  assert.strictEqual(s.timers.pending(), 0, 'no ack/grace timer left running');
+  s.ctrl.handleControllerChange();
+  assert.strictEqual(s.reload.count, 0, 'a failed request can never authorize a reload');
+});
+
+test('error: retry after ERROR sends exactly one fresh request (fresh channel + attemptId)', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  const btn = s.doc.getElementById('mm-sw-update-btn');
+  btn.click();
+  const idAfter1 = s.ctrl._state.attemptId;
+  s.worker._sendError();                         // attempt 1 failed → retryable
+  btn.click();                                   // one deliberate retry
+  assert.strictEqual(s.worker.posted.length, 2, 'exactly one fresh command');
+  assert.strictEqual(s.ctrl._state.attemptId, idAfter1 + 1, 'fresh attemptId');
+  assert.strictEqual(s.worker.ports.length, 2, 'fresh channel/port');
+  s.worker._sendAck();                            // retry acknowledged
+  assert.strictEqual(s.ctrl._state.accepted, true);
+});
+
+test('error: a stale ERROR from attempt 1 cannot affect attempt 2', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  const btn = s.doc.getElementById('mm-sw-update-btn');
+  btn.click();                                   // attempt 1 (ports[0])
+  s.timers.fireAll();                            // attempt 1 times out → grace
+  btn.click();                                   // attempt 2 (ports[1])
+  s.worker._sendError(0);                        // LATE error from attempt 1's port
+  assert.strictEqual(s.ctrl._state.requesting, true, 'attempt 2 unaffected by stale error');
+  s.worker._sendAck(1);                          // attempt 2 real ack
+  assert.strictEqual(s.ctrl._state.accepted, true);
+});
+
+test('error: a stale ACK from attempt 1 cannot affect attempt 2', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  const btn = s.doc.getElementById('mm-sw-update-btn');
+  btn.click(); s.timers.fireAll();               // attempt 1 → grace
+  btn.click();                                   // attempt 2
+  s.worker._sendAck(0);                          // LATE ack from attempt 1
+  assert.strictEqual(s.ctrl._state.accepted, false, 'attempt 1 ack ignored');
+  assert.strictEqual(s.ctrl._state.requesting, true, 'attempt 2 still awaiting its own response');
+});
+
+test('error: an unknown response message does nothing', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  s.doc.getElementById('mm-sw-update-btn').click();
+  s.worker._reply('SOMETHING_ELSE');             // unknown response type
+  assert.strictEqual(s.ctrl._state.requesting, true, 'still awaiting a real ACK/ERROR');
+  assert.strictEqual(s.ctrl._state.accepted, false);
+  assert.strictEqual(s.reload.count, 0);
+});
+
+// ── F2g. Preview-only client diagnostics ([MM SW CLIENT]) ─────────────────────
+
+function diagController(hostname, search) {
+  const worker = makeWorker();
+  const registration = makeRegistration({ waiting: worker });
+  const container = makeContainer({ controller: {}, registration });
+  const doc = fakeDoc();
+  const timers = fakeTimers();
+  const logs = [];
+  const con = { log: (m) => logs.push(m), warn: () => {} };
+  const ctrl = SWRegister.createUpdateController({
+    navigator: { serviceWorker: container }, document: doc, window: fakeWindow(800),
+    location: { hostname, search, protocol: 'https:' }, storage: fakeStorage(),
+    reload: () => {}, console: con, now: () => 1000,
+    setTimer: timers.setTimer, clearTimer: timers.clearTimer, MessageChannel: function () { return fakeChannel(); }
+  });
+  return { ctrl, doc, worker, registration, logs, timers };
+}
+
+test('client-diag: disabled on the production apex (no logs)', () => {
+  const d = diagController('musclemotivation.fit', '');
+  d.ctrl.onRegistered(d.registration);
+  d.doc.getElementById('mm-sw-update-btn').click();
+  d.worker._sendAck();
+  assert.strictEqual(d.logs.length, 0, 'no client diagnostics on production');
+});
+
+test('client-diag: on Vercel requires the ?mm_sw_preview=1 override', () => {
+  const off = diagController('mm-x.vercel.app', '');               // no override
+  off.ctrl.onRegistered(off.registration);
+  off.doc.getElementById('mm-sw-update-btn').click();
+  assert.strictEqual(off.logs.length, 0, 'no logs without the preview override');
+
+  const on = diagController('mm-x.vercel.app', '?mm_sw_preview=1'); // with override
+  on.ctrl.onRegistered(on.registration);
+  on.doc.getElementById('mm-sw-update-btn').click();
+  assert.ok(on.logs.some((l) => l.indexOf('[MM SW CLIENT] update_click') === 0), 'logs enabled with override');
+});
+
+test('client-diag: enabled on localhost', () => {
+  const d = diagController('localhost', '');
+  d.ctrl.onRegistered(d.registration);
+  d.doc.getElementById('mm-sw-update-btn').click();
+  assert.ok(d.logs.some((l) => l.indexOf('[MM SW CLIENT] postmessage_sent') === 0));
+});
+
+test('client-diag: only fixed event names + attemptId (no query/user/private data)', () => {
+  const d = diagController('mm-x.vercel.app', '?mm_sw_preview=1&secret=shhh');
+  d.ctrl.onRegistered(d.registration);
+  const btn = d.doc.getElementById('mm-sw-update-btn');
+  btn.click(); d.worker._sendError(); btn.click(); d.worker._sendAck(); d.ctrl.handleControllerChange();
+  assert.ok(d.logs.length > 0, 'some diagnostics emitted');
+  for (const line of d.logs) {
+    assert.match(line, /^\[MM SW CLIENT\] [a-z_]+ attempt=\d+$/, `safe fixed name only: ${line}`);
+    assert.ok(line.indexOf('secret') === -1 && line.indexOf('shhh') === -1, 'no URL query contents');
+  }
+});
+
+test('client-diag: diagnostics do not alter behavior (ACK still accepts + reloads once)', () => {
+  const d = diagController('localhost', '');
+  d.ctrl.onRegistered(d.registration);
+  d.doc.getElementById('mm-sw-update-btn').click();
+  d.worker._sendAck();
+  assert.strictEqual(d.ctrl._state.accepted, true, 'ACK behavior unchanged with diagnostics on');
 });
 
 // ── F3. Bottom-control clearance ─────────────────────────────────────────────

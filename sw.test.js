@@ -577,10 +577,21 @@ for (const [label, res] of [
 
 // ── F. Message ───────────────────────────────────────────────────────────────
 
-test('message: {type:"SKIP_WAITING"} calls skipWaiting exactly once', () => {
+const settle = () => new Promise((r) => setImmediate(r));
+// Deliver a SKIP_WAITING message and return the call-and-response chain promise
+// (captured via waitUntil) so tests can await ACK/ERROR delivery.
+function deliver(app, data, ports) {
+  const waited = [];
+  app.onMessage({ data, ports, waitUntil: (p) => waited.push(p) });
+  return waited.length ? waited[0] : null;
+}
+
+test('message: {type:"SKIP_WAITING"} calls skipWaiting exactly once (async chain)', async () => {
   const env = cacheEnv();
   const { app, skip } = makeRuntime(env);
-  app.onMessage({ data: { type: 'SKIP_WAITING' } });
+  const chain = deliver(app, { type: 'SKIP_WAITING' });
+  assert.strictEqual(skip.count, 0, 'skipWaiting invoked in a microtask, not synchronously');
+  await chain;
   assert.strictEqual(skip.count, 1);
   assert.strictEqual(env.log.delete.length, 0, 'no cache deletion from message');
   assert.strictEqual(env.log.open.length, 0, 'no cache open from message');
@@ -632,17 +643,20 @@ test('skipWaiting: rejected promise is swallowed (no unhandled rejection)', asyn
   assert.strictEqual(skip.count, 1);
 });
 
-test('skipWaiting: synchronous throw is contained', () => {
+test('skipWaiting: synchronous throw is contained (chain resolves, no unhandled rejection)', async () => {
   const env = cacheEnv();
   const { app, skip } = makeRuntime(env, { skipReturn: () => { throw new Error('sync'); } });
-  assert.doesNotThrow(() => app.onMessage({ data: { type: 'SKIP_WAITING' } }));
+  let chain;
+  await expectNoUnhandled(() => { chain = deliver(app, { type: 'SKIP_WAITING' }); });
+  await chain;                    // must resolve, never reject
   assert.strictEqual(skip.count, 1);
 });
 
-test('skipWaiting: non-promise return is accepted without error', () => {
+test('skipWaiting: non-promise return is accepted (chain resolves)', async () => {
   const env = cacheEnv();
   const { app, skip } = makeRuntime(env, { skipReturn: () => 42 });
-  assert.doesNotThrow(() => app.onMessage({ data: { type: 'SKIP_WAITING' } }));
+  const chain = deliver(app, { type: 'SKIP_WAITING' });
+  await chain;
   assert.strictEqual(skip.count, 1);
 });
 
@@ -688,95 +702,224 @@ function runtimeWith(skipWaiting) {
 test('receiver: self-bound wrapper (as in sw.js) preserves the receiver → activation runs', async () => {
   const g = receiverSensitiveScope();
   const { app } = runtimeWith(function () { return g.skipWaiting(); }); // sw.js form
-  const waited = [];
-  app.onMessage({ data: { type: 'SKIP_WAITING' }, waitUntil: (p) => waited.push(p) });
+  const chain = deliver(app, { type: 'SKIP_WAITING' });
+  assert.strictEqual(g.skipWaitingCalls, 0, 'invoked in a microtask, not synchronously');
+  assert.ok(chain, 'the full chain was handed to event.waitUntil');
+  await chain;
   assert.strictEqual(g.skipWaitingCalls, 1, 'native skipWaiting actually invoked');
   assert.strictEqual(g.activated, true, 'waiting-worker activation effect happened');
-  assert.strictEqual(waited.length, 1, 'skipWaiting promise handed to event.waitUntil');
-  await waited[0]; // contained → resolves
 });
 
-test('receiver: UNBOUND native-style injection fails to activate (this test would catch the regression)', () => {
+test('receiver: UNBOUND native-style injection fails to activate (this test would catch the regression)', async () => {
   const g = receiverSensitiveScope();
+  const port = fakeAckPort();
   const { app } = runtimeWith(g.skipWaiting); // WRONG: unbound → this !== g → throws
-  // The runtime contains the throw (no crash), but the activation effect never
-  // happens — reproducing the "waiting worker never activates" defect.
-  assert.doesNotThrow(() => app.onMessage({ data: { type: 'SKIP_WAITING' }, waitUntil: () => {} }));
+  const chain = deliver(app, { type: 'SKIP_WAITING' }, [port]);
+  await chain;                     // chain resolves (throw contained)
   assert.strictEqual(g.skipWaitingCalls, 0, 'unbound call threw before any effect');
   assert.strictEqual(g.activated, false, 'waiting worker never activated');
+  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ERROR' }], 'an unbound throw reports ERROR, never ACK');
 });
 
-test('receiver: only exact {type:"SKIP_WAITING"} invokes the bound native method', () => {
+test('receiver: only exact {type:"SKIP_WAITING"} invokes the bound native method', async () => {
   const g = receiverSensitiveScope();
   const { app } = runtimeWith(function () { return g.skipWaiting(); });
   for (const ev of [{ data: { type: 'NOPE' } }, {}, { data: null }, { data: 'SKIP_WAITING' }, { data: 5 }, undefined]) {
     app.onMessage(ev);
   }
+  await settle();
   assert.strictEqual(g.skipWaitingCalls, 0, 'no other message type activates');
 });
 
-test('receiver: sync throw and rejected promise stay contained with waitUntil present', async () => {
-  const throwing = runtimeWith(function () { throw new Error('sync'); });
-  const w = [];
-  assert.doesNotThrow(() => throwing.app.onMessage({ data: { type: 'SKIP_WAITING' }, waitUntil: (p) => w.push(p) }));
-  if (w.length) await w[0]; // contained → resolves, never rejects
-
-  const rejecting = runtimeWith(function () { return Promise.reject(new Error('async')); });
-  await expectNoUnhandled(() =>
-    rejecting.app.onMessage({ data: { type: 'SKIP_WAITING' }, waitUntil: () => {} }));
-});
-
-test('receiver: waitUntil is optional — activation still runs when the event lacks it', () => {
+test('receiver: waitUntil is optional — activation still runs when the event lacks it', async () => {
   const g = receiverSensitiveScope();
   const { app } = runtimeWith(function () { return g.skipWaiting(); });
   assert.doesNotThrow(() => app.onMessage({ data: { type: 'SKIP_WAITING' } })); // no waitUntil
+  await settle();
   assert.strictEqual(g.skipWaitingCalls, 1, 'skipWaiting still invoked without waitUntil');
 });
 
-// ── F3. Worker acknowledgment (SKIP_WAITING_ACK through event.ports[0]) ───────
+// ── F3. Worker ACK/ERROR protocol (ACK on resolution, ERROR on failure) ───────
 
 function fakeAckPort() {
   const p = { posted: [], _throws: false, postMessage(m) { if (p._throws) throw new Error('port'); p.posted.push(m); } };
   return p;
 }
+function deferred() {
+  let resolve, reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+}
 
-test('ack: worker sends { type: "SKIP_WAITING_ACK" } through event.ports[0] after skipWaiting', () => {
-  const g = receiverSensitiveScope();
-  const { app } = runtimeWith(function () { return g.skipWaiting(); });
+test('protocol: resolved skipWaiting sends exactly SKIP_WAITING_ACK', async () => {
+  const calls = { n: 0 };
+  const { app } = runtimeWith(function () { calls.n++; return Promise.resolve(); });
   const port = fakeAckPort();
-  const waited = [];
-  app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [port], waitUntil: (pr) => waited.push(pr) });
-  assert.strictEqual(g.skipWaitingCalls, 1, 'skipWaiting invoked (before the ack)');
-  assert.strictEqual(waited.length, 1, 'waitUntil received the skipWaiting promise');
-  assert.strictEqual(port.posted.length, 1, 'acknowledgment sent');
+  const chain = deliver(app, { type: 'SKIP_WAITING' }, [port]);
+  await chain;
+  assert.strictEqual(calls.n, 1);
+  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ACK' }]);
+});
+
+test('protocol: ACK is NOT sent before the skipWaiting promise resolves', async () => {
+  const d = deferred();
+  const calls = { n: 0 };
+  const { app } = runtimeWith(function () { calls.n++; return d.promise; });
+  const port = fakeAckPort();
+  const chain = deliver(app, { type: 'SKIP_WAITING' }, [port]);
+  await settle();
+  assert.strictEqual(calls.n, 1, 'skipWaiting invoked');
+  assert.strictEqual(port.posted.length, 0, 'no ACK before resolution');
+  d.resolve();
+  await chain;
+  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ACK' }]);
+});
+
+test('protocol: synchronous throw sends SKIP_WAITING_ERROR and never ACK', async () => {
+  const { app } = runtimeWith(function () { throw new Error('sync'); });
+  const port = fakeAckPort();
+  await deliver(app, { type: 'SKIP_WAITING' }, [port]);
+  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ERROR' }]);
+});
+
+test('protocol: rejected promise sends SKIP_WAITING_ERROR and never ACK', async () => {
+  const { app } = runtimeWith(function () { return Promise.reject(new Error('async')); });
+  const port = fakeAckPort();
+  await deliver(app, { type: 'SKIP_WAITING' }, [port]);
+  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ERROR' }]);
+});
+
+test('protocol: ERROR is NOT sent before rejection', async () => {
+  const d = deferred();
+  const { app } = runtimeWith(function () { return d.promise; });
+  const port = fakeAckPort();
+  const chain = deliver(app, { type: 'SKIP_WAITING' }, [port]);
+  await settle();
+  assert.strictEqual(port.posted.length, 0, 'no ERROR before rejection');
+  d.reject(new Error('later'));
+  await chain;
+  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ERROR' }]);
+});
+
+test('protocol: waitUntil receives the full chain and it resolves AFTER ACK delivery', async () => {
+  const { app } = runtimeWith(function () { return Promise.resolve(); });
+  const port = fakeAckPort();
+  const chain = deliver(app, { type: 'SKIP_WAITING' }, [port]);
+  assert.ok(chain, 'the full invocation-and-response chain was handed to waitUntil');
+  await chain;
+  assert.strictEqual(port.posted.length, 1, 'response delivered by the time waitUntil resolves');
   assert.deepStrictEqual(port.posted[0], { type: 'SKIP_WAITING_ACK' });
 });
 
-test('ack: a missing port is safe — no throw, and skipWaiting still runs', () => {
-  const g = receiverSensitiveScope();
-  const { app } = runtimeWith(function () { return g.skipWaiting(); });
-  assert.doesNotThrow(() => app.onMessage({ data: { type: 'SKIP_WAITING' } }));               // no ports
-  assert.doesNotThrow(() => app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [] }));     // empty ports
-  assert.strictEqual(g.skipWaitingCalls, 2, 'skipWaiting invoked both times');
+test('protocol: the chain resolves AFTER ERROR delivery and never rejects', async () => {
+  const { app } = runtimeWith(function () { return Promise.reject(new Error('x')); });
+  const port = fakeAckPort();
+  let chain;
+  await expectNoUnhandled(() => { chain = deliver(app, { type: 'SKIP_WAITING' }, [port]); });
+  await chain;                     // resolves, never rejects
+  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ERROR' }]);
 });
 
-test('ack: a throwing ack port is contained and never blocks skipWaiting', () => {
-  const g = receiverSensitiveScope();
-  const { app } = runtimeWith(function () { return g.skipWaiting(); });
+test('protocol: a missing / empty response port is safe (skipWaiting still runs)', async () => {
+  const calls = { n: 0 };
+  const { app } = runtimeWith(function () { calls.n++; return Promise.resolve(); });
+  await deliver(app, { type: 'SKIP_WAITING' });               // no ports
+  await deliver(app, { type: 'SKIP_WAITING' }, []);           // empty ports
+  assert.strictEqual(calls.n, 2, 'skipWaiting invoked both times, no throw');
+});
+
+test('protocol: a throwing response port is contained (does not block or reject)', async () => {
+  const calls = { n: 0 };
+  const { app } = runtimeWith(function () { calls.n++; return Promise.resolve(); });
   const port = fakeAckPort(); port._throws = true;
-  assert.doesNotThrow(() => app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [port] }));
-  assert.strictEqual(g.skipWaitingCalls, 1, 'skipWaiting still invoked despite ack failure');
+  let chain;
+  await expectNoUnhandled(() => { chain = deliver(app, { type: 'SKIP_WAITING' }, [port]); });
+  await chain;
+  assert.strictEqual(calls.n, 1, 'skipWaiting invoked despite ack-send failure');
+  assert.strictEqual(port.posted.length, 0, 'nothing recorded (postMessage threw)');
 });
 
-test('ack: an unknown message sends no ack and invokes no skipWaiting', () => {
-  const g = receiverSensitiveScope();
-  const { app } = runtimeWith(function () { return g.skipWaiting(); });
+test('protocol: waitUntil throwing is contained; the chain still delivers the response', async () => {
+  const { app } = runtimeWith(function () { return Promise.resolve(); });
+  const port = fakeAckPort();
+  assert.doesNotThrow(() => app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [port], waitUntil: () => { throw new Error('wu'); } }));
+  await settle();
+  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ACK' }]);
+});
+
+test('protocol: an unknown message sends neither response and never invokes skipWaiting', async () => {
+  const calls = { n: 0 };
+  const { app } = runtimeWith(function () { calls.n++; return Promise.resolve(); });
   const port = fakeAckPort();
   for (const ev of [{ data: { type: 'NOPE' }, ports: [port] }, { data: null, ports: [port] }, {}]) {
     app.onMessage(ev);
   }
-  assert.strictEqual(g.skipWaitingCalls, 0);
+  await settle();
+  assert.strictEqual(calls.n, 0);
   assert.strictEqual(port.posted.length, 0);
+});
+
+// ── F3b. Worker preview diagnostics ([MM SW WORKER], gated by origin) ──────────
+
+function workerConsole() { const c = { logs: [] }; c.log = (m) => c.logs.push(m); return c; }
+function runtimeAt(origin, con, skipWaiting) {
+  const env = cacheEnv();
+  const app = SWRuntime.createRuntime({
+    policy: SWPolicy, caches: env.caches, fetch: () => Promise.resolve(response()),
+    skipWaiting: skipWaiting || (() => Promise.resolve()), origin, console: con
+  });
+  return { app, env };
+}
+
+test('worker-diag: disabled on the production apex (no logs)', async () => {
+  const con = workerConsole();
+  const { app } = runtimeAt('https://musclemotivation.fit', con);
+  const port = fakeAckPort();
+  await deliver(app, { type: 'SKIP_WAITING' }, [port]);
+  assert.strictEqual(con.logs.length, 0, 'no worker diagnostics on production');
+});
+
+test('worker-diag: enabled on a *.vercel.app preview origin', async () => {
+  const con = workerConsole();
+  const { app } = runtimeAt('https://mm-x.vercel.app', con);
+  const port = fakeAckPort();
+  await deliver(app, { type: 'SKIP_WAITING' }, [port]);
+  assert.ok(con.logs.includes('[MM SW WORKER] message_received'));
+  assert.ok(con.logs.includes('[MM SW WORKER] command_valid'));
+  assert.ok(con.logs.includes('[MM SW WORKER] skipwaiting_resolved'));
+  assert.ok(con.logs.includes('[MM SW WORKER] ack_sent'));
+});
+
+test('worker-diag: enabled on localhost', async () => {
+  const con = workerConsole();
+  const { app } = runtimeAt('http://localhost:3000', con);
+  await deliver(app, { type: 'SKIP_WAITING' }, [fakeAckPort()]);
+  assert.ok(con.logs.some((l) => l === '[MM SW WORKER] command_valid'));
+});
+
+test('worker-diag: failure path logs sync-throw + error_sent (never ack)', async () => {
+  const con = workerConsole();
+  const { app } = runtimeAt('https://mm-x.vercel.app', con, () => { throw new Error('boom'); });
+  await deliver(app, { type: 'SKIP_WAITING' }, [fakeAckPort()]);
+  assert.ok(con.logs.includes('[MM SW WORKER] skipwaiting_sync_throw'));
+  assert.ok(con.logs.includes('[MM SW WORKER] error_sent'));
+  assert.ok(!con.logs.includes('[MM SW WORKER] ack_sent'), 'no ACK on failure');
+});
+
+test('worker-diag: only fixed safe event names are logged (no payloads / URLs / errors)', async () => {
+  const con = workerConsole();
+  const { app } = runtimeAt('https://mm-x.vercel.app', con);
+  await deliver(app, { type: 'SKIP_WAITING' }, [fakeAckPort()]);
+  for (const line of con.logs) {
+    assert.match(line, /^\[MM SW WORKER\] [a-z_]+$/, `safe fixed event name only: ${line}`);
+  }
+});
+
+test('worker-diag: diagnostics do not alter behavior (ACK still delivered)', async () => {
+  const port = fakeAckPort();
+  const { app } = runtimeAt('https://mm-x.vercel.app', workerConsole());
+  await deliver(app, { type: 'SKIP_WAITING' }, [port]);
+  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ACK' }]);
 });
 
 // ── G. Static safety scans ───────────────────────────────────────────────────

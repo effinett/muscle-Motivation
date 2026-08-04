@@ -116,6 +116,29 @@
       : function (id) { clearTimeout(id); };
     var ChannelCtor = typeof deps.MessageChannel === 'function' ? deps.MessageChannel
       : (typeof MessageChannel !== 'undefined' ? MessageChannel : null);
+    var loc = deps.location || (typeof location !== 'undefined' ? location : null);
+
+    // ── preview-only diagnostics ─────────────────────────────────────────────
+    // Console-only, fixed event names + attemptId (safe technical metadata only —
+    // never URL query contents, account/session/auth data, or food/workout data).
+    // Enabled ONLY on localhost, or on a *.vercel.app preview WITH ?mm_sw_preview=1
+    // (matching the registration preview gate). NEVER on the production apex.
+    function clientDiagEligible() {
+      try {
+        if (!loc) return false;
+        var h = loc.hostname;
+        if (h === 'localhost' || h === '127.0.0.1' || h === '[::1]') return true;
+        return /\.vercel\.app$/.test(h) && hasPreviewFlag(loc.search);
+      } catch (e) { return false; }
+    }
+    var clientDiagOn = clientDiagEligible();
+    var clientCon = deps.console || (typeof console !== 'undefined' ? console : null);
+    function clientDiag(evt) {
+      if (!clientDiagOn) return;
+      try {
+        if (clientCon && typeof clientCon.log === 'function') clientCon.log('[MM SW CLIENT] ' + evt + ' attempt=' + state.attemptId);
+      } catch (e) { /* contained */ }
+    }
 
     var state = {
       started: false,
@@ -468,6 +491,7 @@
     // window in case the worker still activates momentarily. No auto re-post.
     function onAckTimeout(id) {
       if (id !== state.attemptId) return;
+      clientDiag('ack_timeout');
       teardownAckChannel();
       state.requesting = false;
       state.accepted = false;
@@ -477,12 +501,29 @@
       state.timedOutAttemptPending = true; // grace: a late controllerchange still reloads once
       startGraceTimeout(id);
     }
+    // The worker reported SKIP_WAITING_ERROR (skipWaiting threw/rejected): the
+    // command WILL NOT activate the worker, so — unlike a timeout — there is NO
+    // grace window. Roll back to a retryable state; controllerchange stays the
+    // only reload trigger and cannot fire from this failed request.
+    function onActivationError(id) {
+      if (id !== state.attemptId) return;
+      clearAckTimeout();
+      teardownAckChannel();
+      clearGrace();
+      state.requesting = false;
+      state.accepted = false;
+      ssRemove(SS_ACCEPTED_KEY);
+      enableUpdateButton();
+      setUpdateButtonText('Update now');   // banner stays; one deliberate retry allowed; no reload
+    }
     function startGraceTimeout(id) {
       clearGraceTimer();
+      clientDiag('grace_started');
       try {
         state.graceTimer = setTimer(function () {
           state.graceTimer = null;
           if (id !== state.attemptId) return;   // stale attempt → ignore
+          clientDiag('grace_expired');
           state.timedOutAttemptPending = false; // grace expired → no more reload eligibility
         }, GRACE_TIMEOUT_MS);
       } catch (e) { state.graceTimer = null; }
@@ -523,6 +564,7 @@
         // bumps the generation so old callbacks can never mutate this one.
         clearGrace();
         var myId = ++state.attemptId;
+        clientDiag('update_click');
 
         var reg = state.registration;
         var waiting = reg && reg.waiting;  // re-read the LIVE waiting worker at click time
@@ -533,6 +575,7 @@
           hideBanner();
           return;                 // no reload, no throw
         }
+        clientDiag('waiting_worker_present');
 
         // Enter the "requesting" state: lock re-entry, ensure the activation
         // listener exists, truly disable the button, show progress copy. A fresh
@@ -544,25 +587,30 @@
         disableUpdateButton();
         setUpdateButtonText('Updating…');
 
-        // Acknowledgment channel: the worker acks receipt through the transferred
-        // port. If MessageChannel is unavailable we still post and fall back to
-        // controllerchange / the ack timeout.
+        // Acknowledgment channel: the worker replies through the transferred port
+        // with SKIP_WAITING_ACK (skipWaiting resolved) or SKIP_WAITING_ERROR
+        // (skipWaiting threw/rejected). If MessageChannel is unavailable we still
+        // post and fall back to controllerchange / the ack timeout.
         var transfer = null;
         var channel = createChannel();
         if (channel && channel.port1 && channel.port2) {
           state.ackChannel = channel;
-          var onAck = function (ev) {
+          clientDiag('channel_created');
+          var onResponse = function (ev) {
             if (myId !== state.attemptId) return;   // stale attempt → ignore
             var d = ev && ev.data;
-            if (d && typeof d === 'object' && d.type === 'SKIP_WAITING_ACK') onAcknowledged(myId);
+            if (!d || typeof d !== 'object') return; // unknown/malformed → nothing
+            if (d.type === 'SKIP_WAITING_ACK') { clientDiag('ack_received'); onAcknowledged(myId); }
+            else if (d.type === 'SKIP_WAITING_ERROR') { clientDiag('error_received'); onActivationError(myId); }
+            // any other type → do nothing
           };
-          state.ackListener = onAck;
+          state.ackListener = onResponse;
           try {
             if (typeof channel.port1.addEventListener === 'function') {
-              channel.port1.addEventListener('message', onAck);
+              channel.port1.addEventListener('message', onResponse);
               if (typeof channel.port1.start === 'function') channel.port1.start();
             } else {
-              channel.port1.onmessage = onAck;
+              channel.port1.onmessage = onResponse;
             }
           } catch (e) { /* contained */ }
           transfer = [channel.port2];
@@ -570,6 +618,7 @@
 
         var posted = false;
         try {
+          clientDiag('postmessage_attempt');
           if (transfer) waiting.postMessage({ type: 'SKIP_WAITING' }, transfer);
           else waiting.postMessage({ type: 'SKIP_WAITING' });
           posted = true;
@@ -578,8 +627,9 @@
         }
 
         if (!posted) { rollbackNoGrace(myId); return; } // immediate rollback → retryable
+        clientDiag('postmessage_sent');
 
-        startAckTimeout(myId);    // bounded, single-shot wait for SKIP_WAITING_ACK
+        startAckTimeout(myId);    // bounded, single-shot wait for a response
       } catch (e) { /* contained */ }
     }
 
@@ -588,6 +638,7 @@
       // eligibility, so a late controllerchange caused by the cancelled attempt
       // can never reload this page.
       state.dismissed = true;       // suppress re-render for this page execution only
+      clientDiag('dismiss');
       state.attemptId++;            // invalidate the current attempt's callbacks
       clearAckTimeout();
       teardownAckChannel();
@@ -608,6 +659,7 @@
       // controllerchange before the ack), or a timed-out attempt still inside its
       // grace window. Never an unrelated cross-tab / post-grace change.
       if (!(state.accepted || state.requesting || state.timedOutAttemptPending)) return;
+      clientDiag('controllerchange');
       state.hasReloaded = true;
       state.attemptId++;             // consume the current attempt exactly once
       clearAckTimeout();
@@ -688,6 +740,7 @@
         navigator: navigator,
         document: document,
         window: window,
+        location: location,
         storage: storage,
         reload: function () { location.reload(); },
         console: (typeof console !== 'undefined') ? console : null,

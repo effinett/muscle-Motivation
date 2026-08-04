@@ -88,6 +88,31 @@
     var doSkipWaiting = deps.skipWaiting;
     var origin = deps.origin;
 
+    // ── preview-only diagnostics ─────────────────────────────────────────────
+    // Console-only, fixed event names, no payloads/URLs/user data. Enabled ONLY
+    // on localhost or a *.vercel.app preview origin — NEVER on the production apex.
+    var DIAG_LOCAL = { localhost: 1, '127.0.0.1': 1, '[::1]': 1 };
+    function diagEligible(o) {
+      try {
+        var h = new URL(o).hostname;
+        return DIAG_LOCAL[h] === 1 || /\.vercel\.app$/.test(h);
+      } catch (e) { return false; }
+    }
+    var diagOn = diagEligible(origin);
+    var diagCon = deps.console || (typeof console !== 'undefined' ? console : null);
+    function diag(evt) {
+      if (!diagOn) return;
+      try { if (diagCon && typeof diagCon.log === 'function') diagCon.log('[MM SW WORKER] ' + evt); } catch (e) {}
+    }
+
+    // Contained response delivery: a missing / throwing port is safe.
+    function postResponse(port, message) {
+      try {
+        if (port && typeof port.postMessage === 'function') { port.postMessage(message); return true; }
+      } catch (e) { /* contained */ }
+      return false;
+    }
+
     // ── install ────────────────────────────────────────────────────────────
     // Open ONLY the current static cache and addAll the exact approved list.
     // addAll is all-or-nothing: any failed entry rejects the whole install, so a
@@ -213,27 +238,51 @@
     // rejected promise, or a non-promise return — is contained and can never
     // surface as an unhandled rejection.
     function onMessage(event) {
+      diag('message_received');
       var data = event && event.data;
       if (!data || typeof data !== 'object' || data.type !== 'SKIP_WAITING') return;
-      var settled;
+      diag('command_valid');
+
+      var port = null;
+      try { var ports = event && event.ports; port = (ports && ports.length) ? ports[0] : null; } catch (e) { port = null; }
+
+      // ONE call-and-response chain: invoke skipWaiting inside a promise (so a
+      // synchronous throw becomes a rejection), wait for it to SETTLE, and only
+      // then send the response — SKIP_WAITING_ACK if the browser RESOLVED the
+      // skipWaiting request, SKIP_WAITING_ERROR if it threw or rejected. Neither
+      // means activation completed (controllerchange is the only such signal).
+      // The chain never rejects (both handlers are contained), so it is safe to
+      // attach to waitUntil, which keeps the worker alive until the response is
+      // delivered.
+      var threwSync = false;
+      var chain = Promise.resolve()
+        .then(function () {
+          diag('skipwaiting_call_start');
+          var r;
+          try {
+            r = doSkipWaiting();
+          } catch (e) {
+            threwSync = true;
+            diag('skipwaiting_sync_throw');
+            throw e;                      // → rejection handler → ERROR
+          }
+          diag('skipwaiting_call_returned');
+          return r;                        // if this rejects → rejection handler → ERROR
+        })
+        .then(
+          function () {
+            diag('skipwaiting_resolved');
+            if (postResponse(port, { type: 'SKIP_WAITING_ACK' })) diag('ack_sent'); else diag('ack_send_failed');
+          },
+          function () {
+            if (!threwSync) diag('skipwaiting_rejected');
+            if (postResponse(port, { type: 'SKIP_WAITING_ERROR' })) diag('error_sent'); else diag('error_send_failed');
+          }
+        );
+
       try {
-        settled = Promise.resolve(doSkipWaiting());  // invoke the self-bound skipWaiting
-      } catch (e) {
-        settled = Promise.resolve(); // sync throw contained
-      }
-      settled = settled.then(function () {}, function () {}); // rejection contained
-      try {
-        if (event && typeof event.waitUntil === 'function') event.waitUntil(settled);
+        if (event && typeof event.waitUntil === 'function') event.waitUntil(chain);
       } catch (e) { /* waitUntil unavailable/throwing → response unaffected */ }
-      // Acknowledge receipt of the exact command through the transferred port, so
-      // the page has PROOF of receipt (postMessage's synchronous return is not
-      // proof). Sent AFTER skipWaiting was invoked. Ack failure can never prevent
-      // skipWaiting; a missing / throwing port is safe; no private data is sent.
-      try {
-        var ports = event && event.ports;
-        var port = (ports && ports.length) ? ports[0] : null;
-        if (port && typeof port.postMessage === 'function') port.postMessage({ type: 'SKIP_WAITING_ACK' });
-      } catch (e) { /* ack failure contained — never blocks activation */ }
     }
 
     return {
