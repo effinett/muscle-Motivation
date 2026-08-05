@@ -46,17 +46,16 @@
   // persists across browser sessions; never stores user/auth data.
   var SS_ACCEPTED_KEY = 'mm_sw_update_accepted';
   var FOREGROUND_MIN_MS = 60000; // debounce foreground update checks (no polling)
-  // Bounded, single-shot wait for the worker's SKIP_WAITING_ACK before we treat
-  // the activation request as un-acknowledged and re-enable the button for one
-  // retry. Not a poll and not an auto-retry — one shot per request. 10s tolerates
-  // a slow / just-woken waiting worker (installed iPhone PWA resume) without a
-  // false timeout.
-  var ACK_TIMEOUT_MS = 10000;
-  // After an un-acknowledged request times out, a narrowly bounded grace window
-  // during which a (late) controllerchange from THAT request still reloads once —
-  // so a slow-but-real activation doesn't leave the page on stale assets. Also
-  // single-shot; expiry ends reload eligibility.
-  var GRACE_TIMEOUT_MS = 15000;
+  // Bounded, single-shot wait for the worker's SKIP_WAITING_ACCEPTED (or
+  // SKIP_WAITING_ERROR) — proof it received the command and invoked skipWaiting.
+  // If NO response arrives in time we re-enable the button for one deliberate
+  // retry. Not a poll, not an auto-retry — one shot per request.
+  var COMMAND_TIMEOUT_MS = 10000;
+  // After ACCEPTED, a bounded wait for `controllerchange` (the only completion
+  // signal). skipWaiting()'s promise can stay pending indefinitely in some
+  // browsers, so we DO NOT block on it — we wait up to this long for activation,
+  // then re-enable the button for one deliberate retry. Single-shot.
+  var ACTIVATION_TIMEOUT_MS = 30000;
 
   // Does the URL search string carry the explicit preview-validation override?
   function hasPreviewFlag(search) {
@@ -147,12 +146,12 @@
       hasReloaded: false,            // one reload per accepted transition
       bannerShown: false,
       dismissed: false,              // dismissed for this page execution
-      requesting: false,             // an activation request is in flight (awaiting ack)
+      requesting: false,             // command sent, awaiting ACCEPTED/ERROR/timeout
+      commandAccepted: false,        // ACCEPTED received, awaiting controllerchange
       attemptId: 0,                  // generation token — every new request bumps it
-      ackTimer: null,                // single-shot ack-timeout handle
-      graceTimer: null,              // single-shot post-timeout grace-window handle
-      timedOutAttemptPending: false, // a timed-out request is in its grace window
-      ackChannel: null,              // MessageChannel awaiting SKIP_WAITING_ACK
+      commandTimer: null,            // single-shot command-response timeout handle
+      activationTimer: null,         // single-shot post-ACCEPTED activation timeout
+      ackChannel: null,              // MessageChannel awaiting the ACCEPTED/ERROR response
       ackListener: null,             // its port1 'message' listener (for teardown)
       lastForegroundCheck: null,     // timestamp of last foreground update check
       controllerListenerBound: false, // controllerchange listener installed once
@@ -430,25 +429,18 @@
     }
     // One-shot: remove the click handler so the button cannot re-invoke
     // acceptUpdate. Called ONLY after acknowledgment / controllerchange — NEVER
-    // merely because postMessage returned — so a lost request stays retryable.
-    function detachUpdateHandler() {
-      try {
-        var btn = updateButton();
-        if (btn && typeof btn.removeEventListener === 'function') btn.removeEventListener('click', acceptUpdate);
-      } catch (e) { /* contained */ }
-    }
+    // merely because postMessage returned.
 
     // ── accept / dismiss ─────────────────────────────────────────────────────
-    // Acknowledged, retryable activation with a per-attempt generation token
-    // (`attemptId`). A synchronous postMessage return is NOT proof of worker
-    // receipt, so we transfer a MessageChannel port and wait for the worker's
-    // SKIP_WAITING_ACK (or a controllerchange). Success commits only on
-    // ack/controllerchange. A sync throw rolls back immediately; an ack timeout
-    // rolls back AND opens a bounded grace window (a late controllerchange from
-    // that request still reloads once). Every ack/timeout/grace callback captures
-    // its attemptId and no-ops unless it is still the active attempt, so a stale
-    // callback can never mutate a newer attempt. States: idle → requesting →
-    // (accepted → activating) | (timed-out → grace → idle).
+    // Immediate-ACCEPTED handshake with a per-attempt generation token
+    // (`attemptId`). We transfer a MessageChannel port and the worker replies
+    // SKIP_WAITING_ACCEPTED as soon as it invokes skipWaiting WITHOUT a sync
+    // throw (its promise can stay pending in some browsers, so we never block on
+    // it), or SKIP_WAITING_ERROR on a sync throw. States: idle → requesting →
+    // (ACCEPTED → activation-wait) → activating(reload once on controllerchange).
+    // Two bounded single-shot timers: COMMAND (no response) and ACTIVATION (no
+    // controllerchange after ACCEPTED). Every response/timer callback captures
+    // its attemptId and no-ops unless still current; every rollback bumps the id.
     function createChannel() {
       try { return ChannelCtor ? new ChannelCtor() : null; } catch (e) { return null; }
     }
@@ -466,131 +458,103 @@
         }
       } catch (e) { /* contained */ }
     }
-    function clearAckTimeout() {
-      if (state.ackTimer != null) { try { clearTimer(state.ackTimer); } catch (e) {} state.ackTimer = null; }
+    function clearCommandTimeout() {
+      if (state.commandTimer != null) { try { clearTimer(state.commandTimer); } catch (e) {} state.commandTimer = null; }
     }
-    function clearGraceTimer() {
-      if (state.graceTimer != null) { try { clearTimer(state.graceTimer); } catch (e) {} state.graceTimer = null; }
+    function clearActivationTimeout() {
+      if (state.activationTimer != null) { try { clearTimer(state.activationTimer); } catch (e) {} state.activationTimer = null; }
     }
-    function clearGrace() {
-      clearGraceTimer();
-      state.timedOutAttemptPending = false;
-    }
-    function startAckTimeout(id) {
-      clearAckTimeout();
-      try {
-        state.ackTimer = setTimer(function () {
-          state.ackTimer = null;
-          if (id !== state.attemptId) return;               // stale attempt → ignore
-          if (state.accepted || state.hasReloaded) return;  // already resolved another way
-          onAckTimeout(id);
-        }, ACK_TIMEOUT_MS);
-      } catch (e) { state.ackTimer = null; }
-    }
-    // Un-acknowledged within the bound: roll back to retryable, then open a grace
-    // window in case the worker still activates momentarily. No auto re-post.
-    function onAckTimeout(id) {
-      if (id !== state.attemptId) return;
-      clientDiag('ack_timeout');
+    // Unified rollback to a retryable idle state. Invalidates the attempt (bumps
+    // the generation) so no stale response/timer callback can affect anything,
+    // and a retry starts fresh. Banner stays; never reloads; never re-posts.
+    function rollbackAttempt(id) {
+      if (id !== state.attemptId) return;   // stale → ignore
+      clearCommandTimeout();
+      clearActivationTimeout();
       teardownAckChannel();
+      state.attemptId++;
       state.requesting = false;
-      state.accepted = false;
-      ssRemove(SS_ACCEPTED_KEY);
-      enableUpdateButton();
-      setUpdateButtonText('Update now');   // banner stays; one deliberate retry allowed
-      state.timedOutAttemptPending = true; // grace: a late controllerchange still reloads once
-      startGraceTimeout(id);
-    }
-    // The worker reported SKIP_WAITING_ERROR (skipWaiting threw/rejected): the
-    // command WILL NOT activate the worker, so — unlike a timeout — there is NO
-    // grace window. Roll back to a retryable state; controllerchange stays the
-    // only reload trigger and cannot fire from this failed request.
-    function onActivationError(id) {
-      if (id !== state.attemptId) return;
-      clearAckTimeout();
-      teardownAckChannel();
-      clearGrace();
-      state.requesting = false;
-      state.accepted = false;
-      ssRemove(SS_ACCEPTED_KEY);
-      enableUpdateButton();
-      setUpdateButtonText('Update now');   // banner stays; one deliberate retry allowed; no reload
-    }
-    function startGraceTimeout(id) {
-      clearGraceTimer();
-      clientDiag('grace_started');
-      try {
-        state.graceTimer = setTimer(function () {
-          state.graceTimer = null;
-          if (id !== state.attemptId) return;   // stale attempt → ignore
-          clientDiag('grace_expired');
-          state.timedOutAttemptPending = false; // grace expired → no more reload eligibility
-        }, GRACE_TIMEOUT_MS);
-      } catch (e) { state.graceTimer = null; }
-    }
-    // Immediate rollback for a synchronous post failure — the command never left,
-    // so there is NO grace window (the worker cannot activate from it).
-    function rollbackNoGrace(id) {
-      if (id !== state.attemptId) return;
-      clearAckTimeout();
-      teardownAckChannel();
-      clearGrace();
-      state.requesting = false;
-      state.accepted = false;
+      state.commandAccepted = false;
       ssRemove(SS_ACCEPTED_KEY);
       enableUpdateButton();
       setUpdateButtonText('Update now');
     }
-    function onAcknowledged(id) {
-      if (id !== state.attemptId) return;  // stale attempt → ignore
-      if (state.accepted) return;          // ack at most once
-      clearAckTimeout();
+    function startCommandTimeout(id) {
+      clearCommandTimeout();
+      try {
+        state.commandTimer = setTimer(function () {
+          state.commandTimer = null;
+          if (id !== state.attemptId) return;                        // stale → ignore
+          if (state.commandAccepted || state.hasReloaded) return;    // already resolved
+          clientDiag('command_timeout');
+          rollbackAttempt(id);      // no worker response → retryable (no auto-repost)
+        }, COMMAND_TIMEOUT_MS);
+      } catch (e) { state.commandTimer = null; }
+    }
+    function startActivationTimeout(id) {
+      clearActivationTimeout();
+      clientDiag('activation_timeout_started');
+      try {
+        state.activationTimer = setTimer(function () {
+          state.activationTimer = null;
+          if (id !== state.attemptId) return;   // stale → ignore
+          if (state.hasReloaded) return;         // controllerchange already reloaded
+          clientDiag('activation_timeout');
+          rollbackAttempt(id);      // ACCEPTED but no controllerchange in time → retryable
+        }, ACTIVATION_TIMEOUT_MS);
+      } catch (e) { state.activationTimer = null; }
+    }
+    // SKIP_WAITING_ACCEPTED: the worker received the command and invoked
+    // skipWaiting without a synchronous throw. NOT proof of activation — we keep
+    // the button disabled/"Updating…" and wait for controllerchange, bounded by
+    // the activation timeout.
+    function onAccepted(id) {
+      if (id !== state.attemptId) return;  // stale → ignore
+      if (state.commandAccepted) return;   // once
+      clearCommandTimeout();
       teardownAckChannel();
-      clearGrace();
-      state.accepted = true;
       state.requesting = false;
-      state.hasReloaded = false;           // this acknowledged accept permits exactly one reload
+      state.commandAccepted = true;
       ssSet(SS_ACCEPTED_KEY, '1');
-      detachUpdateHandler();               // safe to make one-shot ONLY after acknowledgment
-      // keep the button disabled; wait for controllerchange to reload once
+      startActivationTimeout(id);          // await controllerchange within the bound
+      // button stays disabled + "Updating…"; do NOT reload from ACCEPTED alone
     }
 
     function acceptUpdate() {
       try {
-        // One request per execution: block re-entry while accepted OR requesting.
-        if (state.accepted || state.requesting) return;
+        // One request per execution: block re-entry while requesting OR waiting
+        // for activation after ACCEPTED.
+        if (state.commandAccepted || state.requesting) return;
 
-        // A fresh user action supersedes any prior (timed-out/grace) attempt and
-        // bumps the generation so old callbacks can never mutate this one.
-        clearGrace();
+        // A fresh user action supersedes any prior attempt and bumps the
+        // generation so old callbacks can never mutate this one.
         var myId = ++state.attemptId;
         clientDiag('update_click');
 
         var reg = state.registration;
         var waiting = reg && reg.waiting;  // re-read the LIVE waiting worker at click time
         if (!waiting || typeof waiting.postMessage !== 'function') {
-          // missing / stale / malformed worker: no accepted state, clear any stale
-          // marker, no reload eligibility, reset the stale banner.
+          // missing / stale / malformed worker: no state, clear any stale marker,
+          // no reload eligibility, reset the stale banner.
           ssRemove(SS_ACCEPTED_KEY);
           hideBanner();
           return;                 // no reload, no throw
         }
         clientDiag('waiting_worker_present');
 
-        // Enter the "requesting" state: lock re-entry, ensure the activation
-        // listener exists, truly disable the button, show progress copy. A fresh
-        // user-initiated request re-permits exactly one reload (a prior consumed
-        // marker may have set hasReloaded=true to block an unrelated re-reload).
+        // Enter "requesting": lock re-entry, ensure the activation listener
+        // exists, truly disable the button, show progress copy. A fresh
+        // user-initiated request re-permits exactly one reload.
         bindControllerChange();
         state.requesting = true;
         state.hasReloaded = false;
         disableUpdateButton();
         setUpdateButtonText('Updating…');
 
-        // Acknowledgment channel: the worker replies through the transferred port
-        // with SKIP_WAITING_ACK (skipWaiting resolved) or SKIP_WAITING_ERROR
-        // (skipWaiting threw/rejected). If MessageChannel is unavailable we still
-        // post and fall back to controllerchange / the ack timeout.
+        // Response channel: the worker replies SKIP_WAITING_ACCEPTED (command
+        // received + skipWaiting invoked) or SKIP_WAITING_ERROR (sync throw). If
+        // MessageChannel is unavailable we still post and fall back to
+        // controllerchange / the command timeout.
         var transfer = null;
         var channel = createChannel();
         if (channel && channel.port1 && channel.port2) {
@@ -600,8 +564,8 @@
             if (myId !== state.attemptId) return;   // stale attempt → ignore
             var d = ev && ev.data;
             if (!d || typeof d !== 'object') return; // unknown/malformed → nothing
-            if (d.type === 'SKIP_WAITING_ACK') { clientDiag('ack_received'); onAcknowledged(myId); }
-            else if (d.type === 'SKIP_WAITING_ERROR') { clientDiag('error_received'); onActivationError(myId); }
+            if (d.type === 'SKIP_WAITING_ACCEPTED') { clientDiag('accepted_received'); onAccepted(myId); }
+            else if (d.type === 'SKIP_WAITING_ERROR') { clientDiag('error_received'); rollbackAttempt(myId); }
             // any other type → do nothing
           };
           state.ackListener = onResponse;
@@ -626,10 +590,10 @@
           posted = false;         // synchronous postMessage failure
         }
 
-        if (!posted) { rollbackNoGrace(myId); return; } // immediate rollback → retryable
+        if (!posted) { rollbackAttempt(myId); return; } // immediate rollback → retryable
         clientDiag('postmessage_sent');
 
-        startAckTimeout(myId);    // bounded, single-shot wait for a response
+        startCommandTimeout(myId); // bounded, single-shot wait for ACCEPTED/ERROR
       } catch (e) { /* contained */ }
     }
 
@@ -639,32 +603,31 @@
       // can never reload this page.
       state.dismissed = true;       // suppress re-render for this page execution only
       clientDiag('dismiss');
-      state.attemptId++;            // invalidate the current attempt's callbacks
-      clearAckTimeout();
+      clearCommandTimeout();
+      clearActivationTimeout();
       teardownAckChannel();
-      clearGrace();
+      state.attemptId++;            // invalidate the current attempt's callbacks
       state.requesting = false;
-      state.accepted = false;
+      state.commandAccepted = false;
       ssRemove(SS_ACCEPTED_KEY);
       enableUpdateButton();         // restore button state if the banner lingers briefly
       setUpdateButtonText('Update now');
       hideBanner();                 // no message, no reload, no unregister, no cache change
     }
 
-    // ── controllerchange → one-time reload ───────────────────────────────────
+    // ── controllerchange → one-time reload (the ONLY completion signal) ───────
     function handleControllerChange() {
       if (state.hasReloaded) return;   // in-memory guard: at most one reload / execution
       // Reload only when THIS page execution has an OUTSTANDING user-initiated
-      // request — accepted (ack received), requesting (browser ordered the
-      // controllerchange before the ack), or a timed-out attempt still inside its
-      // grace window. Never an unrelated cross-tab / post-grace change.
-      if (!(state.accepted || state.requesting || state.timedOutAttemptPending)) return;
+      // attempt — commandAccepted (awaiting activation) OR requesting (the browser
+      // ordered controllerchange before the response). Never an unrelated change.
+      if (!(state.commandAccepted || state.requesting)) return;
       clientDiag('controllerchange');
       state.hasReloaded = true;
       state.attemptId++;             // consume the current attempt exactly once
-      clearAckTimeout();
+      clearCommandTimeout();
+      clearActivationTimeout();
       teardownAckChannel();
-      clearGrace();
       ssSet(SS_ACCEPTED_KEY, '1');   // ensure the transition marker is consumed post-reload
       try { reload(); } catch (e) { /* contained */ }
     }

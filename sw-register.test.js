@@ -40,7 +40,8 @@ function makeWorker() {
       const port = w.ports[i == null ? w.ports.length - 1 : i];
       if (port && typeof port.postMessage === 'function') port.postMessage({ type: type });
     },
-    _sendAck(i) { w._reply('SKIP_WAITING_ACK', i); },
+    _sendAccepted(i) { w._reply('SKIP_WAITING_ACCEPTED', i); },
+    _sendAck(i) { w._reply('SKIP_WAITING_ACCEPTED', i); },   // alias — the accepted handshake
     _sendError(i) { w._reply('SKIP_WAITING_ERROR', i); },
     _setState(s) { w.state = s; w._emit('statechange', {}); }
   });
@@ -481,7 +482,7 @@ test('ack: synchronous postMessage return alone does NOT mark success', () => {
   s.ctrl.onRegistered(s.registration);
   s.doc.getElementById('mm-sw-update-btn').click();
   assert.strictEqual(s.ctrl._state.requesting, true, 'still requesting (awaiting ack)');
-  assert.strictEqual(s.ctrl._state.accepted, false, 'not accepted on sync return');
+  assert.strictEqual(s.ctrl._state.commandAccepted, false, 'not accepted on sync return');
   assert.ok(!(SS_KEY in s.storage._map), 'no session marker before ack');
 });
 
@@ -491,7 +492,7 @@ test('ack: acknowledgment marks accepted, writes the marker, keeps button disabl
   const btn = s.doc.getElementById('mm-sw-update-btn');
   btn.click();
   s.worker._sendAck();                 // worker acks through the transferred port
-  assert.strictEqual(s.ctrl._state.accepted, true, 'accepted on ack');
+  assert.strictEqual(s.ctrl._state.commandAccepted, true, 'accepted on ack');
   assert.strictEqual(s.ctrl._state.requesting, false);
   assert.strictEqual(s.storage._map[SS_KEY], '1', 'session marker written on ack');
   assert.strictEqual(btn.disabled, true, 'button stays disabled awaiting controllerchange');
@@ -526,7 +527,7 @@ test('ack: timeout re-enables the button and clears requesting/accepted/marker',
   assert.strictEqual(s.timers.pending(), 1, 'one bounded ack timeout scheduled');
   s.timers.fireAll();                  // ack never arrived → timeout fires
   assert.strictEqual(s.ctrl._state.requesting, false, 'requesting cleared');
-  assert.strictEqual(s.ctrl._state.accepted, false, 'accepted cleared');
+  assert.strictEqual(s.ctrl._state.commandAccepted, false, 'accepted cleared');
   assert.ok(!(SS_KEY in s.storage._map), 'marker cleared');
   assert.strictEqual(btn.disabled, false, 'button re-enabled for retry');
   assert.ok(!('aria-disabled' in btn._attrs), 'aria-disabled removed');
@@ -545,21 +546,19 @@ test('ack: retry after timeout sends exactly one new command, then reloads once'
   btn.click();                         // one deliberate retry
   assert.strictEqual(s.worker.posted.length, 2, 'exactly one new command on retry');
   s.worker._sendAck();                 // worker acks the retry
-  assert.strictEqual(s.ctrl._state.accepted, true);
+  assert.strictEqual(s.ctrl._state.commandAccepted, true);
   s.ctrl.handleControllerChange();
   assert.strictEqual(s.reload.count, 1, 'successful retry reloads once');
 });
 
-test('ack: no automatic retries — timeout fires once, schedules only the grace timer, never re-posts', () => {
+test('ack: no automatic retries — the command timeout fires once and never re-posts', () => {
   const s = setup({ controller: true, waiting: true });
   s.ctrl.onRegistered(s.registration);
   s.doc.getElementById('mm-sw-update-btn').click();
-  s.timers.fireAll();                        // ack timeout fires → opens the grace window
-  assert.strictEqual(s.timers.pending(), 1, 'exactly one grace timer (no poll / no rescheduled ack)');
+  assert.strictEqual(s.timers.pending(), 1, 'one command-response timeout scheduled');
+  s.timers.fireAll();                        // command timeout fires → rollback (no grace)
+  assert.strictEqual(s.timers.pending(), 0, 'no rescheduled timer (no poll, no grace)');
   assert.strictEqual(s.worker.posted.length, 1, 'no automatic re-post on timeout');
-  s.timers.fireAll();                        // grace timer fires → expires
-  assert.strictEqual(s.timers.pending(), 0, 'no further timers after grace (no poll)');
-  assert.strictEqual(s.worker.posted.length, 1, 'no re-post on grace expiry');
 });
 
 test('ack: duplicate clicks while requesting do nothing (single command)', () => {
@@ -599,7 +598,7 @@ test('ack: synchronous postMessage throw rolls back immediately (retryable)', ()
   s.ctrl.onRegistered(s.registration);
   const btn = s.doc.getElementById('mm-sw-update-btn');
   btn.click();
-  assert.strictEqual(s.ctrl._state.accepted, false);
+  assert.strictEqual(s.ctrl._state.commandAccepted, false);
   assert.strictEqual(s.ctrl._state.requesting, false, 'in-flight lock released');
   assert.ok(!(SS_KEY in s.storage._map), 'marker cleared');
   assert.strictEqual(btn.disabled, false, 'button re-enabled');
@@ -625,7 +624,7 @@ test('ack: missing waiting worker leaves no accepted state or marker', () => {
   s.storage._map[SS_KEY] = '1';
   s.registration.waiting = null;
   s.doc.getElementById('mm-sw-update-btn').click();
-  assert.strictEqual(s.ctrl._state.accepted, false);
+  assert.strictEqual(s.ctrl._state.commandAccepted, false);
   assert.strictEqual(s.ctrl._state.requesting, false);
   assert.ok(!(SS_KEY in s.storage._map), 'stale marker cleared');
   assert.strictEqual(s.doc.getElementById('mm-sw-update-banner'), null, 'stale banner hidden');
@@ -639,7 +638,7 @@ test('ack: malformed worker (no postMessage) leaves no accepted state or marker'
   s.ctrl._state.registration = s.registration;
   s.storage._map[SS_KEY] = '1';
   assert.doesNotThrow(() => s.ctrl.acceptUpdate());
-  assert.strictEqual(s.ctrl._state.accepted, false);
+  assert.strictEqual(s.ctrl._state.commandAccepted, false);
   assert.ok(!(SS_KEY in s.storage._map));
 });
 
@@ -680,7 +679,7 @@ test('ack: a future legitimate update remains possible after a timed-out attempt
   btn.click();
   assert.strictEqual(next.posted.length, 1, 'new update can still be requested');
   next._sendAck();
-  assert.strictEqual(s.ctrl._state.accepted, true);
+  assert.strictEqual(s.ctrl._state.commandAccepted, true);
 });
 
 // ── F2c. Dismissal ("Later") during an in-flight request ──────────────────────
@@ -692,10 +691,9 @@ test('later: dismiss while requesting clears requesting/accepted and all reload 
   assert.strictEqual(s.ctrl._state.requesting, true);
   s.ctrl.dismiss();                                      // "Later"
   assert.strictEqual(s.ctrl._state.requesting, false, 'requesting cleared');
-  assert.strictEqual(s.ctrl._state.accepted, false, 'accepted cleared');
-  assert.strictEqual(s.ctrl._state.timedOutAttemptPending, false, 'no grace eligibility');
+  assert.strictEqual(s.ctrl._state.commandAccepted, false, 'commandAccepted cleared');
   assert.ok(!(SS_KEY in s.storage._map), 'session marker removed');
-  assert.strictEqual(s.timers.pending(), 0, 'ack + grace timers cleared');
+  assert.strictEqual(s.timers.pending(), 0, 'command + activation timers cleared');
   assert.strictEqual(s.doc.getElementById('mm-sw-update-banner'), null, 'banner removed');
 });
 
@@ -716,7 +714,7 @@ test('later: dismiss closes the ack channel (a late ack cannot re-accept)', () =
   s.doc.getElementById('mm-sw-update-btn').click();
   s.ctrl.dismiss();
   s.worker._sendAck();                                   // late ack from the cancelled attempt
-  assert.strictEqual(s.ctrl._state.accepted, false, 'closed channel + stale id → no re-accept');
+  assert.strictEqual(s.ctrl._state.commandAccepted, false, 'closed channel + stale id → no re-accept');
   assert.ok(!(SS_KEY in s.storage._map));
 });
 
@@ -743,122 +741,147 @@ test('identity: each new request bumps attemptId; dismiss and controllerchange a
   assert.strictEqual(s.ctrl._state.attemptId, 2, 'dismiss bumps attemptId');
 });
 
-test('identity: a late ack from a superseded attempt cannot affect a newer attempt', () => {
+test('identity: a late ACCEPTED from a superseded attempt cannot affect a newer attempt', () => {
   const s = setup({ controller: true, waiting: true });
   s.ctrl.onRegistered(s.registration);
   const btn = s.doc.getElementById('mm-sw-update-btn');
   btn.click();                       // attempt 1 (worker.ports[0])
-  s.timers.fireAll();                // attempt 1 times out → rollback + grace
+  s.timers.fireAll();                // attempt 1 command-times-out → rollback (bumps id)
   btn.click();                       // attempt 2 (fresh channel/id)
-  s.worker._sendAck(0);              // LATE ack delivered to attempt 1's port
-  // attempt 2 must be unaffected (still awaiting its OWN ack).
-  assert.strictEqual(s.ctrl._state.accepted, false, 'attempt 1 ack ignored');
-  assert.strictEqual(s.ctrl._state.requesting, true, 'attempt 2 still in flight');
-  s.worker._sendAck(1);              // attempt 2's real ack
-  assert.strictEqual(s.ctrl._state.accepted, true);
+  s.worker._sendAccepted(0);         // LATE ACCEPTED delivered to attempt 1's (closed) port
+  assert.strictEqual(s.ctrl._state.commandAccepted, false, 'attempt 1 response ignored');
+  assert.strictEqual(s.ctrl._state.requesting, true, 'attempt 2 still awaiting its own response');
+  s.worker._sendAccepted(1);         // attempt 2's real ACCEPTED
+  assert.strictEqual(s.ctrl._state.commandAccepted, true);
 });
 
-test('identity: a stale ack-timeout callback (dismissed attempt) is ignored by the generation guard', () => {
+test('identity: a stale command-timeout callback (dismissed attempt) is ignored by the generation guard', () => {
   const s = setup({ controller: true, waiting: true });
   s.ctrl.onRegistered(s.registration);
   s.doc.getElementById('mm-sw-update-btn').click();
-  const staleAckTimer = s.timers.lastId();   // attempt 1's ack timeout
+  const staleTimer = s.timers.lastId();        // attempt 1's command timeout
   s.ctrl.dismiss();                            // bumps attemptId, clears the timer
-  s.timers.fireStale(staleAckTimer);           // browser had already dispatched it
-  assert.strictEqual(s.ctrl._state.timedOutAttemptPending, false, 'no grace opened by a stale timeout');
+  s.timers.fireStale(staleTimer);              // browser had already dispatched it
   assert.strictEqual(s.ctrl._state.requesting, false);
+  assert.strictEqual(s.ctrl._state.commandAccepted, false);
   s.ctrl.handleControllerChange();
   assert.strictEqual(s.reload.count, 0, 'stale timeout created no reload eligibility');
 });
 
-test('identity: a stale grace callback cannot clear a newer attempt', () => {
+test('identity: a stale activation-timeout callback cannot affect a newer attempt', () => {
   const s = setup({ controller: true, waiting: true });
   s.ctrl.onRegistered(s.registration);
   const btn = s.doc.getElementById('mm-sw-update-btn');
-  btn.click(); s.timers.fireAll();             // attempt 1 → timeout → grace
-  const staleGrace = s.timers.lastId();        // attempt 1's grace timer
-  btn.click();                                 // attempt 2 (bumps id, clears grace)
-  assert.strictEqual(s.ctrl._state.requesting, true, 'attempt 2 in flight');
-  s.timers.fireStale(staleGrace);              // fire the old grace callback anyway
-  assert.strictEqual(s.ctrl._state.requesting, true, 'attempt 2 untouched by stale grace');
-  s.worker._sendAck();                          // attempt 2 ack
-  assert.strictEqual(s.ctrl._state.accepted, true);
+  btn.click(); s.worker._sendAccepted();       // attempt 1 → ACCEPTED → activation timer
+  const staleActivation = s.timers.lastId();
+  s.ctrl.dismiss();                            // bumps id, clears the activation timer
+  btn.click();                                 // attempt 2
+  s.timers.fireStale(staleActivation);         // fire the old activation callback anyway
+  assert.strictEqual(s.ctrl._state.requesting, true, 'attempt 2 untouched by the stale callback');
+  s.worker._sendAccepted();                    // attempt 2 ACCEPTED
+  assert.strictEqual(s.ctrl._state.commandAccepted, true);
 });
 
-test('identity: retry creates a fresh attempt id, channel, and ack timeout', () => {
+test('identity: retry after a command timeout creates a fresh id, channel, and command timeout', () => {
   const s = setup({ controller: true, waiting: true });
   s.ctrl.onRegistered(s.registration);
   const btn = s.doc.getElementById('mm-sw-update-btn');
-  btn.click(); s.timers.fireAll();             // attempt 1 timed out → grace timer pending
+  btn.click(); s.timers.fireAll();             // attempt 1 command-times-out → rollback (no timer left)
+  assert.strictEqual(s.timers.pending(), 0, 'no lingering timer after rollback');
   const idBefore = s.ctrl._state.attemptId;
   btn.click();                                 // retry
   assert.strictEqual(s.ctrl._state.attemptId, idBefore + 1, 'fresh attemptId');
   assert.strictEqual(s.worker.ports.length, 2, 'fresh channel/port transferred');
-  assert.strictEqual(s.timers.pending(), 1, 'fresh ack timeout (grace replaced)');
+  assert.strictEqual(s.timers.pending(), 1, 'fresh command timeout');
 });
 
-// ── F2e. Post-timeout grace window ────────────────────────────────────────────
+// ── F2e. Post-ACCEPTED activation timeout (30s; replaces the grace window) ─────
 
-test('grace: controllerchange INSIDE the grace window reloads once', () => {
+test('activation: controllerchange after ACCEPTED reloads exactly once', () => {
   const s = setup({ controller: true, waiting: true });
   s.ctrl.onRegistered(s.registration);
   s.doc.getElementById('mm-sw-update-btn').click();
-  s.timers.fireAll();                          // ack timeout → grace window open
-  assert.strictEqual(s.ctrl._state.timedOutAttemptPending, true, 'in grace');
-  s.ctrl.handleControllerChange();             // worker activated late, within grace
-  assert.strictEqual(s.reload.count, 1, 'late activation still reloads once');
+  s.worker._sendAccepted();                    // ACCEPTED → activation-wait
+  assert.strictEqual(s.timers.pending(), 1, 'one activation timeout scheduled');
+  s.ctrl.handleControllerChange();
+  assert.strictEqual(s.reload.count, 1, 'controllerchange reloads once');
   s.ctrl.handleControllerChange();
   assert.strictEqual(s.reload.count, 1, 'never twice');
 });
 
-test('grace: controllerchange AFTER the grace window expires does not reload', () => {
+test('activation: the 30s activation timeout restores the button and clears state (no reload)', () => {
   const s = setup({ controller: true, waiting: true });
   s.ctrl.onRegistered(s.registration);
-  s.doc.getElementById('mm-sw-update-btn').click();
-  s.timers.fireAll();                          // ack timeout → grace scheduled
-  s.timers.fireAll();                          // grace expires
-  assert.strictEqual(s.ctrl._state.timedOutAttemptPending, false, 'grace expired');
-  s.ctrl.handleControllerChange();
-  assert.strictEqual(s.reload.count, 0, 'no reload after grace expiry');
+  const btn = s.doc.getElementById('mm-sw-update-btn');
+  btn.click(); s.worker._sendAccepted();       // ACCEPTED → activation-wait
+  assert.strictEqual(btn.disabled, true, 'disabled while awaiting activation');
+  s.timers.fireAll();                          // activation timeout fires
+  assert.strictEqual(s.ctrl._state.commandAccepted, false, 'commandAccepted cleared');
+  assert.strictEqual(s.ctrl._state.requesting, false);
+  assert.ok(!(SS_KEY in s.storage._map), 'marker cleared');
+  assert.strictEqual(btn.disabled, false, 'button re-enabled');
+  assert.strictEqual(btn.textContent, 'Update now', 'copy restored');
+  assert.ok(s.doc.getElementById('mm-sw-update-banner'), 'banner kept');
+  assert.strictEqual(s.reload.count, 0, 'activation timeout never reloads');
+  assert.strictEqual(s.timers.pending(), 0, 'no rescheduled timer (no poll)');
 });
 
-test('grace: Later during the grace window cancels reload eligibility', () => {
+test('activation: controllerchange AFTER the activation timeout does not reload', () => {
   const s = setup({ controller: true, waiting: true });
   s.ctrl.onRegistered(s.registration);
   s.doc.getElementById('mm-sw-update-btn').click();
-  s.timers.fireAll();                          // → grace
-  s.ctrl.dismiss();                            // Later during grace
-  assert.strictEqual(s.ctrl._state.timedOutAttemptPending, false);
-  assert.strictEqual(s.timers.pending(), 0, 'grace timer cleared');
+  s.worker._sendAccepted();
+  s.timers.fireAll();                          // activation timeout → rollback (bumps id)
+  s.ctrl.handleControllerChange();
+  assert.strictEqual(s.reload.count, 0, 'no reload after the activation window closed');
+});
+
+test('activation: Later during activation-wait cancels reload eligibility', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  s.doc.getElementById('mm-sw-update-btn').click();
+  s.worker._sendAccepted();
+  s.ctrl.dismiss();                            // Later while awaiting activation
+  assert.strictEqual(s.timers.pending(), 0, 'activation timer cleared');
   s.ctrl.handleControllerChange();
   assert.strictEqual(s.reload.count, 0);
 });
 
-test('grace: retry during the grace window replaces the prior attempt cleanly', () => {
+test('activation: retry after activation timeout replaces the attempt cleanly and can reload once', () => {
   const s = setup({ controller: true, waiting: true });
   s.ctrl.onRegistered(s.registration);
   const btn = s.doc.getElementById('mm-sw-update-btn');
-  btn.click(); s.timers.fireAll();             // attempt 1 → grace
-  btn.click();                                 // retry replaces grace with a fresh attempt
-  assert.strictEqual(s.ctrl._state.timedOutAttemptPending, false, 'prior grace dropped');
+  btn.click(); s.worker._sendAccepted(); s.timers.fireAll();   // attempt 1 accepted → activation timeout → rollback
+  btn.click();                                                 // retry
   assert.strictEqual(s.ctrl._state.requesting, true, 'fresh attempt requesting');
-  s.worker._sendAck();
-  assert.strictEqual(s.ctrl._state.accepted, true);
+  s.worker._sendAccepted();
+  assert.strictEqual(s.ctrl._state.commandAccepted, true);
   s.ctrl.handleControllerChange();
   assert.strictEqual(s.reload.count, 1, 'reloads once for the fresh attempt');
 });
 
+test('activation: no automatic resend across the whole timeout path', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  s.doc.getElementById('mm-sw-update-btn').click();
+  s.worker._sendAccepted();
+  s.timers.fireAll();                          // activation timeout
+  assert.strictEqual(s.worker.posted.length, 1, 'no automatic re-post');
+  assert.strictEqual(s.timers.pending(), 0, 'no interval / poll');
+});
+
 // ── F2f. SKIP_WAITING_ERROR handling (skipWaiting threw/rejected) ──────────────
 
-test('error: ACK still enters accepted, keeps the button disabled, and never reloads by itself', () => {
+test('error: ACCEPTED enters activation-wait, keeps the button disabled, and never reloads by itself', () => {
   const s = setup({ controller: true, waiting: true });
   s.ctrl.onRegistered(s.registration);
   const btn = s.doc.getElementById('mm-sw-update-btn');
   btn.click();
-  s.worker._sendAck();
-  assert.strictEqual(s.ctrl._state.accepted, true);
-  assert.strictEqual(btn.disabled, true, 'ACK keeps button disabled awaiting controllerchange');
-  assert.strictEqual(s.reload.count, 0, 'ACK itself never reloads');
+  s.worker._sendAccepted();
+  assert.strictEqual(s.ctrl._state.commandAccepted, true);
+  assert.strictEqual(btn.disabled, true, 'ACCEPTED keeps button disabled awaiting controllerchange');
+  assert.strictEqual(btn.textContent, 'Updating…', 'copy stays Updating… during activation-wait');
+  assert.strictEqual(s.reload.count, 0, 'ACCEPTED itself never reloads');
 });
 
 test('error: SKIP_WAITING_ERROR rolls back requesting/accepted, clears marker, restores button', () => {
@@ -868,7 +891,7 @@ test('error: SKIP_WAITING_ERROR rolls back requesting/accepted, clears marker, r
   btn.click();
   s.worker._sendError();                         // worker reports skipWaiting threw/rejected
   assert.strictEqual(s.ctrl._state.requesting, false, 'requesting cleared');
-  assert.strictEqual(s.ctrl._state.accepted, false, 'accepted cleared');
+  assert.strictEqual(s.ctrl._state.commandAccepted, false, 'accepted cleared');
   assert.ok(!(SS_KEY in s.storage._map), 'session marker cleared');
   assert.strictEqual(btn.disabled, false, 'button re-enabled');
   assert.ok(!('aria-disabled' in btn._attrs), 'aria-disabled removed');
@@ -876,13 +899,13 @@ test('error: SKIP_WAITING_ERROR rolls back requesting/accepted, clears marker, r
   assert.ok(s.doc.getElementById('mm-sw-update-banner'), 'banner kept visible');
 });
 
-test('error: SKIP_WAITING_ERROR never reloads and does NOT open a grace window', () => {
+test('error: SKIP_WAITING_ERROR rolls back immediately and never reloads', () => {
   const s = setup({ controller: true, waiting: true });
   s.ctrl.onRegistered(s.registration);
   s.doc.getElementById('mm-sw-update-btn').click();
   s.worker._sendError();
-  assert.strictEqual(s.ctrl._state.timedOutAttemptPending, false, 'no grace after an explicit error');
-  assert.strictEqual(s.timers.pending(), 0, 'no ack/grace timer left running');
+  assert.strictEqual(s.ctrl._state.commandAccepted, false);
+  assert.strictEqual(s.timers.pending(), 0, 'no command/activation timer left running');
   s.ctrl.handleControllerChange();
   assert.strictEqual(s.reload.count, 0, 'a failed request can never authorize a reload');
 });
@@ -896,10 +919,11 @@ test('error: retry after ERROR sends exactly one fresh request (fresh channel + 
   s.worker._sendError();                         // attempt 1 failed → retryable
   btn.click();                                   // one deliberate retry
   assert.strictEqual(s.worker.posted.length, 2, 'exactly one fresh command');
-  assert.strictEqual(s.ctrl._state.attemptId, idAfter1 + 1, 'fresh attemptId');
+  // attempt 1 ERROR rollback bumps the id, and the retry bumps it again.
+  assert.strictEqual(s.ctrl._state.attemptId, idAfter1 + 2, 'fresh attemptId');
   assert.strictEqual(s.worker.ports.length, 2, 'fresh channel/port');
-  s.worker._sendAck();                            // retry acknowledged
-  assert.strictEqual(s.ctrl._state.accepted, true);
+  s.worker._sendAccepted();                       // retry accepted
+  assert.strictEqual(s.ctrl._state.commandAccepted, true);
 });
 
 test('error: a stale ERROR from attempt 1 cannot affect attempt 2', () => {
@@ -907,12 +931,12 @@ test('error: a stale ERROR from attempt 1 cannot affect attempt 2', () => {
   s.ctrl.onRegistered(s.registration);
   const btn = s.doc.getElementById('mm-sw-update-btn');
   btn.click();                                   // attempt 1 (ports[0])
-  s.timers.fireAll();                            // attempt 1 times out → grace
+  s.timers.fireAll();                            // attempt 1 command-times-out → rollback
   btn.click();                                   // attempt 2 (ports[1])
-  s.worker._sendError(0);                        // LATE error from attempt 1's port
+  s.worker._sendError(0);                        // LATE error from attempt 1's (closed) port
   assert.strictEqual(s.ctrl._state.requesting, true, 'attempt 2 unaffected by stale error');
-  s.worker._sendAck(1);                          // attempt 2 real ack
-  assert.strictEqual(s.ctrl._state.accepted, true);
+  s.worker._sendAccepted(1);                     // attempt 2 real ACCEPTED
+  assert.strictEqual(s.ctrl._state.commandAccepted, true);
 });
 
 test('error: a stale ACK from attempt 1 cannot affect attempt 2', () => {
@@ -922,7 +946,7 @@ test('error: a stale ACK from attempt 1 cannot affect attempt 2', () => {
   btn.click(); s.timers.fireAll();               // attempt 1 → grace
   btn.click();                                   // attempt 2
   s.worker._sendAck(0);                          // LATE ack from attempt 1
-  assert.strictEqual(s.ctrl._state.accepted, false, 'attempt 1 ack ignored');
+  assert.strictEqual(s.ctrl._state.commandAccepted, false, 'attempt 1 ack ignored');
   assert.strictEqual(s.ctrl._state.requesting, true, 'attempt 2 still awaiting its own response');
 });
 
@@ -932,7 +956,7 @@ test('error: an unknown response message does nothing', () => {
   s.doc.getElementById('mm-sw-update-btn').click();
   s.worker._reply('SOMETHING_ELSE');             // unknown response type
   assert.strictEqual(s.ctrl._state.requesting, true, 'still awaiting a real ACK/ERROR');
-  assert.strictEqual(s.ctrl._state.accepted, false);
+  assert.strictEqual(s.ctrl._state.commandAccepted, false);
   assert.strictEqual(s.reload.count, 0);
 });
 
@@ -999,7 +1023,7 @@ test('client-diag: diagnostics do not alter behavior (ACK still accepts + reload
   d.ctrl.onRegistered(d.registration);
   d.doc.getElementById('mm-sw-update-btn').click();
   d.worker._sendAck();
-  assert.strictEqual(d.ctrl._state.accepted, true, 'ACK behavior unchanged with diagnostics on');
+  assert.strictEqual(d.ctrl._state.commandAccepted, true, 'ACK behavior unchanged with diagnostics on');
 });
 
 // ── F3. Bottom-control clearance ─────────────────────────────────────────────
@@ -1218,7 +1242,8 @@ test('source scan: reload is only reachable from controllerchange, not registrat
 test('source scan: SKIP_WAITING message shape is exact (both port and fallback forms)', () => {
   assert.ok(/postMessage\(\s*\{\s*type:\s*'SKIP_WAITING'\s*\}\s*\)/.test(SRC), 'fallback (no-port) form');
   assert.ok(/postMessage\(\s*\{\s*type:\s*'SKIP_WAITING'\s*\}\s*,\s*transfer\s*\)/.test(SRC), 'port-transfer form');
-  assert.ok(/SKIP_WAITING_ACK/.test(SRC), 'listens for the exact ack type');
+  assert.ok(/SKIP_WAITING_ACCEPTED/.test(SRC), 'listens for the exact ACCEPTED response');
+  assert.ok(/SKIP_WAITING_ERROR/.test(SRC), 'listens for the exact ERROR response');
 });
 
 // ── vercel.json revalidation headers ─────────────────────────────────────────

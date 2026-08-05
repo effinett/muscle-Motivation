@@ -246,43 +246,46 @@
       var port = null;
       try { var ports = event && event.ports; port = (ports && ports.length) ? ports[0] : null; } catch (e) { port = null; }
 
-      // ONE call-and-response chain: invoke skipWaiting inside a promise (so a
-      // synchronous throw becomes a rejection), wait for it to SETTLE, and only
-      // then send the response — SKIP_WAITING_ACK if the browser RESOLVED the
-      // skipWaiting request, SKIP_WAITING_ERROR if it threw or rejected. Neither
-      // means activation completed (controllerchange is the only such signal).
-      // The chain never rejects (both handlers are contained), so it is safe to
-      // attach to waitUntil, which keeps the worker alive until the response is
-      // delivered.
-      var threwSync = false;
-      var chain = Promise.resolve()
-        .then(function () {
-          diag('skipwaiting_call_start');
-          var r;
-          try {
-            r = doSkipWaiting();
-          } catch (e) {
-            threwSync = true;
-            diag('skipwaiting_sync_throw');
-            throw e;                      // → rejection handler → ERROR
-          }
-          diag('skipwaiting_call_returned');
-          return r;                        // if this rejects → rejection handler → ERROR
-        })
-        .then(
-          function () {
-            diag('skipwaiting_resolved');
-            if (postResponse(port, { type: 'SKIP_WAITING_ACK' })) diag('ack_sent'); else diag('ack_send_failed');
-          },
-          function () {
-            if (!threwSync) diag('skipwaiting_rejected');
-            if (postResponse(port, { type: 'SKIP_WAITING_ERROR' })) diag('error_sent'); else diag('error_send_failed');
-          }
-        );
-
+      // Invoke skipWaiting SYNCHRONOUSLY inside try/catch. self.skipWaiting()'s
+      // returned promise can stay PENDING indefinitely in some browsers, so we
+      // must NOT wait for it to settle before responding — that deadlocks the
+      // handshake. Instead:
+      //   • synchronous return  → send SKIP_WAITING_ACCEPTED immediately ("command
+      //     received and skipWaiting invoked without a sync throw" — NOT proof of
+      //     activation; controllerchange is the only completion signal).
+      //   • synchronous throw    → send SKIP_WAITING_ERROR.
+      // The response is delivered synchronously (postMessage enqueues it before
+      // this handler returns), so NO waitUntil is needed and NO indefinitely
+      // pending promise is ever attached to it.
+      diag('skipwaiting_call_start');
+      var returned, threw = false;
       try {
-        if (event && typeof event.waitUntil === 'function') event.waitUntil(chain);
-      } catch (e) { /* waitUntil unavailable/throwing → response unaffected */ }
+        returned = doSkipWaiting();
+        diag('skipwaiting_call_returned');
+      } catch (e) {
+        threw = true;
+        diag('skipwaiting_sync_throw');
+      }
+
+      if (threw) {
+        if (postResponse(port, { type: 'SKIP_WAITING_ERROR' })) diag('error_sent'); else diag('error_send_failed');
+        return;
+      }
+
+      if (postResponse(port, { type: 'SKIP_WAITING_ACCEPTED' })) diag('accepted_sent'); else diag('accepted_send_failed');
+
+      // DIAGNOSTICS ONLY: observe the returned promise's eventual settlement.
+      // This is NOT a handshake message — it sends no second response, mutates no
+      // client state, and is deliberately NOT attached to event.waitUntil (it may
+      // never settle). Contained so a rejection can never become unhandled.
+      if (returned && typeof returned.then === 'function') {
+        try {
+          Promise.resolve(returned).then(
+            function () { diag('skipwaiting_resolved'); },
+            function () { diag('skipwaiting_rejected'); }
+          );
+        } catch (e) { /* contained */ }
+      }
     }
 
     return {

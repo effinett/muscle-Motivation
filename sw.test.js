@@ -578,21 +578,31 @@ for (const [label, res] of [
 // ── F. Message ───────────────────────────────────────────────────────────────
 
 const settle = () => new Promise((r) => setImmediate(r));
-// Deliver a SKIP_WAITING message and return the call-and-response chain promise
-// (captured via waitUntil) so tests can await ACK/ERROR delivery.
-function deliver(app, data, ports) {
+// The worker responds SYNCHRONOUSLY (ACCEPTED on invocation / ERROR on sync
+// throw) and attaches NO waitUntil; `waited` proves nothing is held open.
+function deliverEv(app, data, ports) {
   const waited = [];
   app.onMessage({ data, ports, waitUntil: (p) => waited.push(p) });
-  return waited.length ? waited[0] : null;
+  return waited;                 // must remain empty (no pending promise held)
+}
+function deliver(app, data, ports) { app.onMessage({ data, ports }); }
+function fakeAckPort() {
+  const p = { posted: [], _throws: false, postMessage(m) { if (p._throws) throw new Error('port'); p.posted.push(m); } };
+  return p;
+}
+function deferred() {
+  let resolve, reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
 }
 
-test('message: {type:"SKIP_WAITING"} calls skipWaiting exactly once (async chain)', async () => {
+test('message: {type:"SKIP_WAITING"} invokes skipWaiting once (synchronously) and sends ACCEPTED', () => {
   const env = cacheEnv();
   const { app, skip } = makeRuntime(env);
-  const chain = deliver(app, { type: 'SKIP_WAITING' });
-  assert.strictEqual(skip.count, 0, 'skipWaiting invoked in a microtask, not synchronously');
-  await chain;
-  assert.strictEqual(skip.count, 1);
+  const port = fakeAckPort();
+  app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [port] });
+  assert.strictEqual(skip.count, 1, 'skipWaiting invoked synchronously');
+  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ACCEPTED' }], 'ACCEPTED sent immediately');
   assert.strictEqual(env.log.delete.length, 0, 'no cache deletion from message');
   assert.strictEqual(env.log.open.length, 0, 'no cache open from message');
 });
@@ -629,35 +639,40 @@ async function expectNoUnhandled(fn) {
   assert.deepStrictEqual(caught, [], 'no unhandled rejection surfaced');
 }
 
-test('skipWaiting: resolved promise creates no rejection', async () => {
+test('skipWaiting: a resolving promise → ACCEPTED sent, no rejection, no second message', async () => {
   const env = cacheEnv();
   const { app, skip } = makeRuntime(env, { skipReturn: () => Promise.resolve() });
-  await expectNoUnhandled(() => app.onMessage({ data: { type: 'SKIP_WAITING' } }));
+  const port = fakeAckPort();
+  await expectNoUnhandled(() => app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [port] }));
   assert.strictEqual(skip.count, 1);
+  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ACCEPTED' }], 'exactly one response');
 });
 
-test('skipWaiting: rejected promise is swallowed (no unhandled rejection)', async () => {
+test('skipWaiting: a rejecting promise → ACCEPTED still sent; rejection contained; no second message', async () => {
   const env = cacheEnv();
   const { app, skip } = makeRuntime(env, { skipReturn: () => Promise.reject(new Error('skip')) });
-  await expectNoUnhandled(() => app.onMessage({ data: { type: 'SKIP_WAITING' } }));
+  const port = fakeAckPort();
+  await expectNoUnhandled(() => app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [port] }));
   assert.strictEqual(skip.count, 1);
+  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ACCEPTED' }], 'no ERROR after ACCEPTED on eventual rejection');
 });
 
-test('skipWaiting: synchronous throw is contained (chain resolves, no unhandled rejection)', async () => {
+test('skipWaiting: a synchronous throw → ERROR (never ACCEPTED), contained', async () => {
   const env = cacheEnv();
   const { app, skip } = makeRuntime(env, { skipReturn: () => { throw new Error('sync'); } });
-  let chain;
-  await expectNoUnhandled(() => { chain = deliver(app, { type: 'SKIP_WAITING' }); });
-  await chain;                    // must resolve, never reject
-  assert.strictEqual(skip.count, 1);
+  const port = fakeAckPort();
+  await expectNoUnhandled(() => app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [port] }));
+  assert.strictEqual(skip.count, 1, 'skipWaiting was invoked (then threw)');
+  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ERROR' }]);
 });
 
-test('skipWaiting: non-promise return is accepted (chain resolves)', async () => {
+test('skipWaiting: a non-promise return → ACCEPTED', () => {
   const env = cacheEnv();
   const { app, skip } = makeRuntime(env, { skipReturn: () => 42 });
-  const chain = deliver(app, { type: 'SKIP_WAITING' });
-  await chain;
+  const port = fakeAckPort();
+  app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [port] });
   assert.strictEqual(skip.count, 1);
+  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ACCEPTED' }]);
 });
 
 test('skipWaiting: unknown message never invokes skipWaiting even with a throwing impl', () => {
@@ -699,162 +714,120 @@ function runtimeWith(skipWaiting) {
   return { app, env };
 }
 
-test('receiver: self-bound wrapper (as in sw.js) preserves the receiver → activation runs', async () => {
-  const g = receiverSensitiveScope();
-  const { app } = runtimeWith(function () { return g.skipWaiting(); }); // sw.js form
-  const chain = deliver(app, { type: 'SKIP_WAITING' });
-  assert.strictEqual(g.skipWaitingCalls, 0, 'invoked in a microtask, not synchronously');
-  assert.ok(chain, 'the full chain was handed to event.waitUntil');
-  await chain;
-  assert.strictEqual(g.skipWaitingCalls, 1, 'native skipWaiting actually invoked');
-  assert.strictEqual(g.activated, true, 'waiting-worker activation effect happened');
-});
-
-test('receiver: UNBOUND native-style injection fails to activate (this test would catch the regression)', async () => {
+test('receiver: self-bound wrapper (as in sw.js) preserves the receiver → ACCEPTED', () => {
   const g = receiverSensitiveScope();
   const port = fakeAckPort();
-  const { app } = runtimeWith(g.skipWaiting); // WRONG: unbound → this !== g → throws
-  const chain = deliver(app, { type: 'SKIP_WAITING' }, [port]);
-  await chain;                     // chain resolves (throw contained)
-  assert.strictEqual(g.skipWaitingCalls, 0, 'unbound call threw before any effect');
-  assert.strictEqual(g.activated, false, 'waiting worker never activated');
-  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ERROR' }], 'an unbound throw reports ERROR, never ACK');
+  const { app } = runtimeWith(function () { return g.skipWaiting(); }); // sw.js form
+  app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [port] });
+  assert.strictEqual(g.skipWaitingCalls, 1, 'native skipWaiting invoked synchronously');
+  assert.strictEqual(g.activated, true, 'skipWaiting effect happened (no Illegal invocation)');
+  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ACCEPTED' }]);
 });
 
-test('receiver: only exact {type:"SKIP_WAITING"} invokes the bound native method', async () => {
+test('receiver: UNBOUND native-style injection reports ERROR (would catch the regression)', () => {
+  const g = receiverSensitiveScope();
+  const port = fakeAckPort();
+  const { app } = runtimeWith(g.skipWaiting); // WRONG: unbound → this !== g → sync throw
+  app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [port] });
+  assert.strictEqual(g.skipWaitingCalls, 0, 'unbound call threw before any effect');
+  assert.strictEqual(g.activated, false);
+  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ERROR' }], 'an unbound throw reports ERROR, never ACCEPTED');
+});
+
+test('receiver: only exact {type:"SKIP_WAITING"} invokes the bound native method', () => {
   const g = receiverSensitiveScope();
   const { app } = runtimeWith(function () { return g.skipWaiting(); });
   for (const ev of [{ data: { type: 'NOPE' } }, {}, { data: null }, { data: 'SKIP_WAITING' }, { data: 5 }, undefined]) {
     app.onMessage(ev);
   }
-  await settle();
-  assert.strictEqual(g.skipWaitingCalls, 0, 'no other message type activates');
+  assert.strictEqual(g.skipWaitingCalls, 0, 'no other message type invokes it');
 });
 
-test('receiver: waitUntil is optional — activation still runs when the event lacks it', async () => {
-  const g = receiverSensitiveScope();
-  const { app } = runtimeWith(function () { return g.skipWaiting(); });
-  assert.doesNotThrow(() => app.onMessage({ data: { type: 'SKIP_WAITING' } })); // no waitUntil
-  await settle();
-  assert.strictEqual(g.skipWaitingCalls, 1, 'skipWaiting still invoked without waitUntil');
-});
+// ── F3. Worker ACCEPTED/ERROR protocol (immediate ACCEPTED on invocation) ─────
 
-// ── F3. Worker ACK/ERROR protocol (ACK on resolution, ERROR on failure) ───────
-
-function fakeAckPort() {
-  const p = { posted: [], _throws: false, postMessage(m) { if (p._throws) throw new Error('port'); p.posted.push(m); } };
-  return p;
-}
-function deferred() {
-  let resolve, reject;
-  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
-  return { promise, resolve, reject };
-}
-
-test('protocol: resolved skipWaiting sends exactly SKIP_WAITING_ACK', async () => {
+test('protocol: successful synchronous invocation sends SKIP_WAITING_ACCEPTED immediately', () => {
   const calls = { n: 0 };
   const { app } = runtimeWith(function () { calls.n++; return Promise.resolve(); });
   const port = fakeAckPort();
-  const chain = deliver(app, { type: 'SKIP_WAITING' }, [port]);
-  await chain;
+  app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [port] });   // synchronous
   assert.strictEqual(calls.n, 1);
-  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ACK' }]);
+  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ACCEPTED' }]);
 });
 
-test('protocol: ACK is NOT sent before the skipWaiting promise resolves', async () => {
-  const d = deferred();
-  const calls = { n: 0 };
-  const { app } = runtimeWith(function () { calls.n++; return d.promise; });
-  const port = fakeAckPort();
-  const chain = deliver(app, { type: 'SKIP_WAITING' }, [port]);
-  await settle();
-  assert.strictEqual(calls.n, 1, 'skipWaiting invoked');
-  assert.strictEqual(port.posted.length, 0, 'no ACK before resolution');
-  d.resolve();
-  await chain;
-  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ACK' }]);
-});
-
-test('protocol: synchronous throw sends SKIP_WAITING_ERROR and never ACK', async () => {
-  const { app } = runtimeWith(function () { throw new Error('sync'); });
-  const port = fakeAckPort();
-  await deliver(app, { type: 'SKIP_WAITING' }, [port]);
-  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ERROR' }]);
-});
-
-test('protocol: rejected promise sends SKIP_WAITING_ERROR and never ACK', async () => {
-  const { app } = runtimeWith(function () { return Promise.reject(new Error('async')); });
-  const port = fakeAckPort();
-  await deliver(app, { type: 'SKIP_WAITING' }, [port]);
-  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ERROR' }]);
-});
-
-test('protocol: ERROR is NOT sent before rejection', async () => {
+test('protocol: ACCEPTED is sent BEFORE the returned promise settles', () => {
   const d = deferred();
   const { app } = runtimeWith(function () { return d.promise; });
   const port = fakeAckPort();
-  const chain = deliver(app, { type: 'SKIP_WAITING' }, [port]);
+  app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [port] });
+  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ACCEPTED' }], 'ACCEPTED without awaiting settlement');
+});
+
+test('protocol: a FOREVER-PENDING skipWaiting promise does not suppress ACCEPTED', async () => {
+  const { app } = runtimeWith(function () { return new Promise(function () { /* never settles */ }); });
+  const port = fakeAckPort();
+  app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [port] });
   await settle();
-  assert.strictEqual(port.posted.length, 0, 'no ERROR before rejection');
-  d.reject(new Error('later'));
-  await chain;
+  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ACCEPTED' }], 'ACCEPTED sent despite a pending promise');
+});
+
+test('protocol: a synchronous throw sends SKIP_WAITING_ERROR and never ACCEPTED', () => {
+  const { app } = runtimeWith(function () { throw new Error('sync'); });
+  const port = fakeAckPort();
+  app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [port] });
   assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ERROR' }]);
 });
 
-test('protocol: waitUntil receives the full chain and it resolves AFTER ACK delivery', async () => {
-  const { app } = runtimeWith(function () { return Promise.resolve(); });
+test('protocol: eventual promise RESOLUTION sends no second protocol message', async () => {
+  const d = deferred();
+  const { app } = runtimeWith(function () { return d.promise; });
   const port = fakeAckPort();
-  const chain = deliver(app, { type: 'SKIP_WAITING' }, [port]);
-  assert.ok(chain, 'the full invocation-and-response chain was handed to waitUntil');
-  await chain;
-  assert.strictEqual(port.posted.length, 1, 'response delivered by the time waitUntil resolves');
-  assert.deepStrictEqual(port.posted[0], { type: 'SKIP_WAITING_ACK' });
+  app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [port] });
+  d.resolve();
+  await settle();
+  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ACCEPTED' }], 'only the single ACCEPTED');
 });
 
-test('protocol: the chain resolves AFTER ERROR delivery and never rejects', async () => {
-  const { app } = runtimeWith(function () { return Promise.reject(new Error('x')); });
+test('protocol: eventual promise REJECTION is contained and sends no second message', async () => {
+  const d = deferred();
+  const { app } = runtimeWith(function () { return d.promise; });
   const port = fakeAckPort();
-  let chain;
-  await expectNoUnhandled(() => { chain = deliver(app, { type: 'SKIP_WAITING' }, [port]); });
-  await chain;                     // resolves, never rejects
-  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ERROR' }]);
+  await expectNoUnhandled(() => {
+    app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [port] });
+    d.reject(new Error('later'));
+  });
+  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ACCEPTED' }], 'no ERROR after ACCEPTED on later rejection');
 });
 
-test('protocol: a missing / empty response port is safe (skipWaiting still runs)', async () => {
+test('protocol: NO indefinitely pending promise is attached to waitUntil', () => {
+  const { app } = runtimeWith(function () { return new Promise(function () {}); });
+  const waited = deliverEv(app, { type: 'SKIP_WAITING' }, [fakeAckPort()]);
+  assert.strictEqual(waited.length, 0, 'waitUntil was never called (response is synchronous)');
+});
+
+test('protocol: a missing / empty response port is safe (skipWaiting still runs)', () => {
   const calls = { n: 0 };
   const { app } = runtimeWith(function () { calls.n++; return Promise.resolve(); });
-  await deliver(app, { type: 'SKIP_WAITING' });               // no ports
-  await deliver(app, { type: 'SKIP_WAITING' }, []);           // empty ports
-  assert.strictEqual(calls.n, 2, 'skipWaiting invoked both times, no throw');
+  assert.doesNotThrow(() => app.onMessage({ data: { type: 'SKIP_WAITING' } }));               // no ports
+  assert.doesNotThrow(() => app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [] }));     // empty ports
+  assert.strictEqual(calls.n, 2);
 });
 
-test('protocol: a throwing response port is contained (does not block or reject)', async () => {
+test('protocol: a throwing response port is contained (no throw, no unhandled)', async () => {
   const calls = { n: 0 };
   const { app } = runtimeWith(function () { calls.n++; return Promise.resolve(); });
   const port = fakeAckPort(); port._throws = true;
-  let chain;
-  await expectNoUnhandled(() => { chain = deliver(app, { type: 'SKIP_WAITING' }, [port]); });
-  await chain;
-  assert.strictEqual(calls.n, 1, 'skipWaiting invoked despite ack-send failure');
+  await expectNoUnhandled(() => app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [port] }));
+  assert.strictEqual(calls.n, 1, 'skipWaiting invoked despite response-send failure');
   assert.strictEqual(port.posted.length, 0, 'nothing recorded (postMessage threw)');
 });
 
-test('protocol: waitUntil throwing is contained; the chain still delivers the response', async () => {
-  const { app } = runtimeWith(function () { return Promise.resolve(); });
-  const port = fakeAckPort();
-  assert.doesNotThrow(() => app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [port], waitUntil: () => { throw new Error('wu'); } }));
-  await settle();
-  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ACK' }]);
-});
-
-test('protocol: an unknown message sends neither response and never invokes skipWaiting', async () => {
+test('protocol: an unknown message sends neither response and never invokes skipWaiting', () => {
   const calls = { n: 0 };
   const { app } = runtimeWith(function () { calls.n++; return Promise.resolve(); });
   const port = fakeAckPort();
   for (const ev of [{ data: { type: 'NOPE' }, ports: [port] }, { data: null, ports: [port] }, {}]) {
     app.onMessage(ev);
   }
-  await settle();
   assert.strictEqual(calls.n, 0);
   assert.strictEqual(port.posted.length, 0);
 });
@@ -871,55 +844,56 @@ function runtimeAt(origin, con, skipWaiting) {
   return { app, env };
 }
 
-test('worker-diag: disabled on the production apex (no logs)', async () => {
+test('worker-diag: disabled on the production apex (no logs)', () => {
   const con = workerConsole();
   const { app } = runtimeAt('https://musclemotivation.fit', con);
-  const port = fakeAckPort();
-  await deliver(app, { type: 'SKIP_WAITING' }, [port]);
+  app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [fakeAckPort()] });
   assert.strictEqual(con.logs.length, 0, 'no worker diagnostics on production');
 });
 
-test('worker-diag: enabled on a *.vercel.app preview origin', async () => {
+test('worker-diag: enabled on a *.vercel.app preview origin (accepted path)', async () => {
   const con = workerConsole();
   const { app } = runtimeAt('https://mm-x.vercel.app', con);
-  const port = fakeAckPort();
-  await deliver(app, { type: 'SKIP_WAITING' }, [port]);
+  app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [fakeAckPort()] });
+  await settle();                 // let the diagnostics-only promise observation log
   assert.ok(con.logs.includes('[MM SW WORKER] message_received'));
   assert.ok(con.logs.includes('[MM SW WORKER] command_valid'));
-  assert.ok(con.logs.includes('[MM SW WORKER] skipwaiting_resolved'));
-  assert.ok(con.logs.includes('[MM SW WORKER] ack_sent'));
+  assert.ok(con.logs.includes('[MM SW WORKER] skipwaiting_call_returned'));
+  assert.ok(con.logs.includes('[MM SW WORKER] accepted_sent'));
+  assert.ok(con.logs.includes('[MM SW WORKER] skipwaiting_resolved'), 'diagnostics-only settlement observed');
 });
 
-test('worker-diag: enabled on localhost', async () => {
+test('worker-diag: enabled on localhost', () => {
   const con = workerConsole();
   const { app } = runtimeAt('http://localhost:3000', con);
-  await deliver(app, { type: 'SKIP_WAITING' }, [fakeAckPort()]);
+  app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [fakeAckPort()] });
   assert.ok(con.logs.some((l) => l === '[MM SW WORKER] command_valid'));
 });
 
-test('worker-diag: failure path logs sync-throw + error_sent (never ack)', async () => {
+test('worker-diag: failure path logs sync-throw + error_sent (never accepted)', () => {
   const con = workerConsole();
   const { app } = runtimeAt('https://mm-x.vercel.app', con, () => { throw new Error('boom'); });
-  await deliver(app, { type: 'SKIP_WAITING' }, [fakeAckPort()]);
+  app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [fakeAckPort()] });
   assert.ok(con.logs.includes('[MM SW WORKER] skipwaiting_sync_throw'));
   assert.ok(con.logs.includes('[MM SW WORKER] error_sent'));
-  assert.ok(!con.logs.includes('[MM SW WORKER] ack_sent'), 'no ACK on failure');
+  assert.ok(!con.logs.includes('[MM SW WORKER] accepted_sent'), 'no ACCEPTED on failure');
 });
 
 test('worker-diag: only fixed safe event names are logged (no payloads / URLs / errors)', async () => {
   const con = workerConsole();
   const { app } = runtimeAt('https://mm-x.vercel.app', con);
-  await deliver(app, { type: 'SKIP_WAITING' }, [fakeAckPort()]);
+  app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [fakeAckPort()] });
+  await settle();
   for (const line of con.logs) {
     assert.match(line, /^\[MM SW WORKER\] [a-z_]+$/, `safe fixed event name only: ${line}`);
   }
 });
 
-test('worker-diag: diagnostics do not alter behavior (ACK still delivered)', async () => {
+test('worker-diag: diagnostics do not alter behavior (ACCEPTED still delivered)', () => {
   const port = fakeAckPort();
   const { app } = runtimeAt('https://mm-x.vercel.app', workerConsole());
-  await deliver(app, { type: 'SKIP_WAITING' }, [port]);
-  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ACK' }]);
+  app.onMessage({ data: { type: 'SKIP_WAITING' }, ports: [port] });
+  assert.deepStrictEqual(port.posted, [{ type: 'SKIP_WAITING_ACCEPTED' }]);
 });
 
 // ── G. Static safety scans ───────────────────────────────────────────────────
