@@ -231,12 +231,16 @@
     // Only the exact controlled-refresh hook. Everything else is ignored. Never
     // deletes caches, claims clients, reloads, or unregisters. The injected
     // skipWaiting is the SELF-BOUND wrapper from sw.js, so the native receiver is
-    // preserved. The returned promise is attached to event.waitUntil() so the
-    // browser keeps this worker alive until activation settles — otherwise the
-    // worker can be terminated before skipWaiting() finishes and the waiting
-    // worker never activates. Every failure path — a synchronous throw, a
-    // rejected promise, or a non-promise return — is contained and can never
-    // surface as an unhandled rejection.
+    // preserved. SKIP_WAITING_ACCEPTED is sent SYNCHRONOUSLY, as soon as
+    // skipWaiting() returns without a synchronous throw — it means "command
+    // received and skipWaiting invoked", NOT that activation completed
+    // (controllerchange remains the sole activation-completion signal on the
+    // client). The promise skipWaiting() returns is observed ONLY for diagnostics
+    // and is deliberately NOT attached to event.waitUntil(): it can stay pending
+    // indefinitely in some browsers, so waiting on it would deadlock the
+    // handshake. Every failure path — a synchronous throw, a rejected promise, or
+    // a non-promise return — is contained and can never surface as an unhandled
+    // rejection.
     function onMessage(event) {
       diag('message_received');
       var data = event && event.data;
