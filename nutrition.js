@@ -358,6 +358,9 @@ async function nuSave() {
     if (res.error) throw res.error;
     document.getElementById('foodModal').classList.remove('open');
     showToast('Food logged!');
+    // PWA install onboarding (Phase 4.3.3): emit only AFTER a confirmed food_logs
+    // write. Narrow signal — no logged food content is included.
+    try { window.dispatchEvent(new CustomEvent('mm:pwa-value', { detail: { type: 'loggedFood' } })); } catch (e) {}
     if (typeof window.onFoodSaved === 'function') await window.onFoodSaved();
   } catch (err) {
     console.error('nuSave error:', err);

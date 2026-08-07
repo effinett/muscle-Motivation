@@ -189,6 +189,9 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <script src="sw-register.js" defer></script>
+  <script src="pwa-install.js" defer></script>
+  <script src="pwa-install-ui.js" defer></script>
+  <script src="pwa-install-register.js" defer></script>
   <link rel="stylesheet" href="safe-area.css">
 </head>
 <body>
@@ -305,6 +308,9 @@
       if(!id){ showFallback('No workout was specified.'); return; }
       var data = await loadAll(id);
       if(!data){ showFallback("We couldn't load that workout."); return; }
+      // PWA install onboarding (Phase 4.3.3): reaching the recap means a workout
+      // was just completed & persisted — an approved meaningful-value moment.
+      try { window.dispatchEvent(new CustomEvent('mm:pwa-value', { detail: { type: 'completedWorkout' } })); } catch(e){}
       render(data);
       document.getElementById('authGate').style.display='none';
       document.getElementById('content').style.display='block';

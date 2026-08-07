@@ -243,6 +243,9 @@ async function wlSave() {
     await wlSyncProfileWeight(uid); // keep profiles.weight_lbs on the latest weigh-in
     document.getElementById('weightModal').classList.remove('open');
     showToast('Weight logged!');
+    // PWA install onboarding (Phase 4.3.3): emit only AFTER a confirmed
+    // body_weight_logs write. Narrow signal — no body-metric value is included.
+    try { window.dispatchEvent(new CustomEvent('mm:pwa-value', { detail: { type: 'loggedWeight' } })); } catch (e) {}
     if (typeof window.onWeightSaved === 'function') await window.onWeightSaved();
   } catch (err) {
     console.error('wlSave error:', err);
