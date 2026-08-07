@@ -57,6 +57,16 @@
   // then re-enable the button for one deliberate retry. Single-shot.
   var ACTIVATION_TIMEOUT_MS = 30000;
 
+  // User-facing banner copy for each disposition (Phase 4.3.3, Checkpoint 4).
+  // Plain product language only — never exposes SKIP_WAITING / controllerchange /
+  // cache names / raw errors, and never claims success before controllerchange.
+  // These live in the aria-live="polite" banner, so each change is announced once.
+  var MSG_READY = 'A new version of Muscle Motivation is ready.';
+  var MSG_BUSY = 'Updating Muscle Motivation…';
+  var MSG_COMMAND_TIMEOUT = 'The update didn’t start. Try again.';
+  var MSG_ACTIVATION_TIMEOUT = 'The update is taking longer than expected. Try again.';
+  var MSG_ERROR = 'We couldn’t apply the update. Try again.';
+
   // Does the URL search string carry the explicit preview-validation override?
   function hasPreviewFlag(search) {
     if (typeof search !== 'string' || !search) return false;
@@ -359,7 +369,8 @@
         var title = doc.createElement('strong');
         title.textContent = 'Update available';
         var sub = doc.createElement('span');
-        sub.textContent = 'A new version of Muscle Motivation is ready.';
+        sub.setAttribute('data-mm-sw-message', '');
+        sub.textContent = MSG_READY;
         text.appendChild(title);
         text.appendChild(sub);
 
@@ -427,6 +438,15 @@
     function setUpdateButtonText(txt) {
       try { var btn = updateButton(); if (btn) btn.textContent = txt; } catch (e) { /* contained */ }
     }
+    // Update the banner's accessible sub-text (the aria-live message). Contained;
+    // a missing banner/element is a safe no-op.
+    function setBannerMessage(txt) {
+      try {
+        var b = getBanner();
+        var el = b && b.querySelector ? b.querySelector('[data-mm-sw-message]') : null;
+        if (el) el.textContent = txt;
+      } catch (e) { /* contained */ }
+    }
     // One-shot: remove the click handler so the button cannot re-invoke
     // acceptUpdate. Called ONLY after acknowledgment / controllerchange — NEVER
     // merely because postMessage returned.
@@ -467,7 +487,7 @@
     // Unified rollback to a retryable idle state. Invalidates the attempt (bumps
     // the generation) so no stale response/timer callback can affect anything,
     // and a retry starts fresh. Banner stays; never reloads; never re-posts.
-    function rollbackAttempt(id) {
+    function rollbackAttempt(id, message) {
       if (id !== state.attemptId) return;   // stale → ignore
       clearCommandTimeout();
       clearActivationTimeout();
@@ -478,6 +498,10 @@
       ssRemove(SS_ACCEPTED_KEY);
       enableUpdateButton();
       setUpdateButtonText('Update now');
+      // Announce WHAT happened (once, via the aria-live banner) so a bounded
+      // failure is never a silent, ambiguous button flip. The banner stays
+      // available and the same primary action retries.
+      if (typeof message === 'string' && message) setBannerMessage(message);
     }
     function startCommandTimeout(id) {
       clearCommandTimeout();
@@ -487,7 +511,7 @@
           if (id !== state.attemptId) return;                        // stale → ignore
           if (state.commandAccepted || state.hasReloaded) return;    // already resolved
           clientDiag('command_timeout');
-          rollbackAttempt(id);      // no worker response → retryable (no auto-repost)
+          rollbackAttempt(id, MSG_COMMAND_TIMEOUT);  // no worker response → retryable
         }, COMMAND_TIMEOUT_MS);
       } catch (e) { state.commandTimer = null; }
     }
@@ -500,7 +524,7 @@
           if (id !== state.attemptId) return;   // stale → ignore
           if (state.hasReloaded) return;         // controllerchange already reloaded
           clientDiag('activation_timeout');
-          rollbackAttempt(id);      // ACCEPTED but no controllerchange in time → retryable
+          rollbackAttempt(id, MSG_ACTIVATION_TIMEOUT);  // ACCEPTED but no controllerchange → retryable
         }, ACTIVATION_TIMEOUT_MS);
       } catch (e) { state.activationTimer = null; }
     }
@@ -550,6 +574,7 @@
         state.hasReloaded = false;
         disableUpdateButton();
         setUpdateButtonText('Updating…');
+        setBannerMessage(MSG_BUSY);   // busy copy; also clears any prior error message on retry
 
         // Response channel: the worker replies SKIP_WAITING_ACCEPTED (command
         // received + skipWaiting invoked) or SKIP_WAITING_ERROR (sync throw). If
@@ -565,7 +590,7 @@
             var d = ev && ev.data;
             if (!d || typeof d !== 'object') return; // unknown/malformed → nothing
             if (d.type === 'SKIP_WAITING_ACCEPTED') { clientDiag('accepted_received'); onAccepted(myId); }
-            else if (d.type === 'SKIP_WAITING_ERROR') { clientDiag('error_received'); rollbackAttempt(myId); }
+            else if (d.type === 'SKIP_WAITING_ERROR') { clientDiag('error_received'); rollbackAttempt(myId, MSG_ERROR); }
             // any other type → do nothing
           };
           state.ackListener = onResponse;
@@ -590,7 +615,7 @@
           posted = false;         // synchronous postMessage failure
         }
 
-        if (!posted) { rollbackAttempt(myId); return; } // immediate rollback → retryable
+        if (!posted) { rollbackAttempt(myId, MSG_ERROR); return; } // immediate rollback → retryable
         clientDiag('postmessage_sent');
 
         startCommandTimeout(myId); // bounded, single-shot wait for ACCEPTED/ERROR

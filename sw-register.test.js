@@ -1280,3 +1280,212 @@ test('html: no inline navigator.serviceWorker.register in any page', () => {
       `${f} has no inline registration`);
   }
 });
+
+// ── Phase 4.3.3 Checkpoint 4 — update-UX polish ──────────────────────────────
+// Accessible status messaging for every user-facing disposition, plus explicit
+// coverage of the states the audit mapped. No protocol/timing change.
+
+const MSGSEL = '[data-mm-sw-message]';
+function msgOf(s) {
+  const b = s.doc.getElementById('mm-sw-update-banner');
+  const el = b && b.querySelector ? b.querySelector(MSGSEL) : null;
+  return el ? el.textContent : null;
+}
+
+test('c4/copy: ready state announces an available update in plain language', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  assert.strictEqual(msgOf(s), 'A new version of Muscle Motivation is ready.');
+});
+
+test('c4/copy: busy state announces Updating… while the attempt is in flight', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  s.doc.getElementById('mm-sw-update-btn').click();
+  assert.strictEqual(msgOf(s), 'Updating Muscle Motivation…');
+  assert.strictEqual(s.doc.getElementById('mm-sw-update-btn').textContent, 'Updating…');
+});
+
+test('c4/copy: command timeout explains the failure and stays retryable', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  const btn = s.doc.getElementById('mm-sw-update-btn');
+  btn.click();
+  s.timers.fireAll();                       // no acknowledgement arrives
+  assert.strictEqual(msgOf(s), 'The update didn’t start. Try again.');
+  assert.strictEqual(btn.disabled, false, 'retryable');
+  assert.strictEqual(btn.textContent, 'Update now');
+  assert.strictEqual(s.reload.count, 0);
+});
+
+test('c4/copy: activation timeout explains the delay and stays retryable', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  const btn = s.doc.getElementById('mm-sw-update-btn');
+  btn.click();
+  s.worker._sendAccepted();                 // ACCEPTED, then no controllerchange
+  s.timers.fireAll();
+  assert.strictEqual(msgOf(s), 'The update is taking longer than expected. Try again.');
+  assert.strictEqual(btn.disabled, false);
+  assert.strictEqual(s.reload.count, 0);
+});
+
+test('c4/copy: worker-reported error explains the failure without jargon', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  const btn = s.doc.getElementById('mm-sw-update-btn');
+  btn.click();
+  s.worker._sendError();
+  assert.strictEqual(msgOf(s), 'We couldn’t apply the update. Try again.');
+  assert.strictEqual(btn.disabled, false);
+});
+
+test('c4/copy: a synchronous postMessage failure explains the failure', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  s.worker._postThrows = true;
+  const btn = s.doc.getElementById('mm-sw-update-btn');
+  btn.click();
+  assert.strictEqual(msgOf(s), 'We couldn’t apply the update. Try again.');
+  assert.strictEqual(btn.disabled, false, 'not left stuck disabled');
+});
+
+test('c4/copy: retry after a failure clears the error message back to busy', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  const btn = s.doc.getElementById('mm-sw-update-btn');
+  btn.click();
+  s.timers.fireAll();                       // command timeout → error copy
+  assert.strictEqual(msgOf(s), 'The update didn’t start. Try again.');
+  btn.click();                              // deliberate retry
+  assert.strictEqual(msgOf(s), 'Updating Muscle Motivation…', 'stale error cleared');
+  assert.strictEqual(s.worker.posted.length, 2, 'exactly one new message per retry');
+});
+
+test('c4/copy: no service-worker jargon or raw internals in user-facing strings', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  const banner = s.doc.getElementById('mm-sw-update-banner');
+  const texts = [];
+  (function collect(n) { if (n.textContent) texts.push(n.textContent); (n._children || []).forEach(collect); })(banner);
+  const all = texts.join(' ');
+  for (const jargon of ['SKIP_WAITING', 'controllerchange', 'serviceWorker', 'mm-static-', 'skipWaiting', 'postMessage']) {
+    assert.strictEqual(all.indexOf(jargon), -1, `must not expose ${jargon}`);
+  }
+});
+
+test('c4/copy: success is never claimed before controllerchange', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  s.doc.getElementById('mm-sw-update-btn').click();
+  s.worker._sendAccepted();                 // receipt only — NOT activation
+  assert.strictEqual(msgOf(s), 'Updating Muscle Motivation…', 'still in progress');
+  assert.strictEqual(s.reload.count, 0, 'no reload on acknowledgement alone');
+});
+
+test('c4/a11y: the banner is a polite status region and the message lives inside it', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  const b = s.doc.getElementById('mm-sw-update-banner');
+  assert.strictEqual(b.getAttribute('role'), 'status');
+  assert.strictEqual(b.getAttribute('aria-live'), 'polite');
+  assert.ok(b.querySelector(MSGSEL), 'message element is inside the live region');
+});
+
+test('c4/a11y: busy attempt exposes disabled + aria-disabled on the primary action', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  const btn = s.doc.getElementById('mm-sw-update-btn');
+  btn.click();
+  assert.strictEqual(btn.disabled, true);
+  assert.strictEqual(btn.getAttribute('aria-disabled'), 'true');
+});
+
+test('c4/a11y: Later remains a real keyboard-usable button and never posts a message', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  const later = s.doc.getElementById('mm-sw-later-btn');
+  assert.strictEqual(later.tagName, 'button');
+  assert.strictEqual(later.type, 'button');
+  later.click();
+  assert.strictEqual(s.worker.posted.length, 0, 'Later never messages the worker');
+  assert.strictEqual(s.reload.count, 0, 'Later never reloads');
+  assert.ok(!(SS_KEY in s.storage._map), 'Later never sets the reload marker');
+  assert.strictEqual(s.doc.getElementById('mm-sw-update-banner'), null, 'banner hidden');
+});
+
+test('c4/state: Later does not destroy the waiting worker (a later load can update)', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  s.doc.getElementById('mm-sw-later-btn').click();
+  assert.ok(s.registration.waiting, 'waiting worker untouched by Later');
+});
+
+test('c4/state: a stale banner is removed when the waiting worker is gone at click time', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  s.registration.waiting = null;            // worker activated/redundant elsewhere
+  s.doc.getElementById('mm-sw-update-btn').click();
+  assert.strictEqual(s.doc.getElementById('mm-sw-update-banner'), null, 'no dead Update button left');
+  assert.strictEqual(s.reload.count, 0);
+  assert.ok(!(SS_KEY in s.storage._map));
+});
+
+test('c4/state: first install (no controller) shows no banner and no message', () => {
+  const s = setup({ controller: false, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  assert.strictEqual(s.doc.getElementById('mm-sw-update-banner'), null);
+});
+
+test('c4/state: an already-waiting worker at load renders exactly one banner', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  s.ctrl.showUpdateIfReady();               // a later updatefound for the same worker
+  s.ctrl.showUpdateIfReady();
+  let count = 0;
+  (function scan(n) { if (n.id === 'mm-sw-update-banner') count++; (n._children || []).forEach(scan); })(s.doc.body);
+  assert.strictEqual(count, 1, 'no duplicate banner root');
+});
+
+test('c4/timers: no timer survives a successful activation', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  s.doc.getElementById('mm-sw-update-btn').click();
+  s.worker._sendAccepted();
+  s.navigator.serviceWorker._emit('controllerchange', {});
+  assert.strictEqual(s.timers.pending(), 0, 'all timers cleared on reload');
+  assert.strictEqual(s.reload.count, 1, 'reloaded exactly once');
+});
+
+test('c4/timers: no timer survives dismissal', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  s.doc.getElementById('mm-sw-update-btn').click();
+  s.doc.getElementById('mm-sw-later-btn').click();
+  assert.strictEqual(s.timers.pending(), 0);
+});
+
+test('c4/marker: the reload marker is never set merely by showing the banner', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  assert.ok(!(SS_KEY in s.storage._map));
+});
+
+test('c4/marker: unavailable storage never breaks the flow or blocks reload', () => {
+  const s = setup({ controller: true, waiting: true, storage: null });
+  s.ctrl.onRegistered(s.registration);
+  const btn = s.doc.getElementById('mm-sw-update-btn');
+  assert.doesNotThrow(() => btn.click());
+  s.worker._sendAccepted();
+  s.navigator.serviceWorker._emit('controllerchange', {});
+  assert.strictEqual(s.reload.count, 1);
+});
+
+test('c4/layout: banner CSS clears bottom controls, safe area, and small widths', () => {
+  const css = SWRegister.BANNER_CSS;
+  assert.ok(css.indexOf('--mm-sw-bottom-clearance') !== -1, 'measured clearance var');
+  assert.ok(css.indexOf('env(safe-area-inset-bottom') !== -1, 'home-indicator safe area');
+  assert.ok(css.indexOf('position:fixed') !== -1);
+  assert.ok(css.indexOf('@media (max-width:520px)') !== -1, 'narrow-viewport stacking');
+  assert.ok(css.indexOf('min-width:0') !== -1, 'text can shrink → no horizontal overflow');
+});
