@@ -178,19 +178,81 @@ test('vercel.json serves the manifest with the correct content type', () => {
   assert.ok(ct && /application\/manifest\+json/.test(ct.value), 'Content-Type is application/manifest+json');
 });
 
-test('NO service worker or caching code was introduced anywhere in the repo', () => {
+// Phase 4.3.2 amendment (Checkpoint 3). Runtime registration now exists, but it
+// is confined to ONE approved module (`sw-register.js`) and to the approved
+// authenticated pages. Every other guarantee is preserved: no OTHER file
+// registers a worker, no page has an INLINE registration, Cache Storage stays in
+// the worker runtime files, and the static allowlist still holds no HTML/API.
+test('service-worker registration is confined to sw-register.js and approved pages', () => {
+  // Cache Storage is permitted ONLY inside these worker runtime files; the
+  // registration API is permitted ONLY inside the registration module.
+  const WORKER_FILES = new Set(['sw.js', 'sw-runtime.js']);
+  const REGISTER_FILE = 'sw-register.js';
+
   const scan = (dir) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'reports') continue;
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) { scan(full); continue; }
       if (!/\.(html|js|mjs)$/.test(entry.name)) continue;
-      if (full === path.join(ROOT, 'pwa-manifest.test.js')) continue; // this file references the terms
+      // Test files legitimately reference these terms as assertions.
+      if (/\.test\.js$/.test(entry.name)) continue;
       const txt = fs.readFileSync(full, 'utf8');
-      assert.ok(!/serviceWorker\s*\.\s*register/.test(txt), `${entry.name}: no serviceWorker.register`);
-      assert.ok(!/\bcaches\s*\.\s*(open|match)\b/.test(txt), `${entry.name}: no Cache Storage usage`);
+      // Registration API is allowed ONLY in the dedicated registration module.
+      if (entry.name !== REGISTER_FILE) {
+        assert.ok(!/serviceWorker\s*\.\s*register/.test(txt), `${entry.name}: no serviceWorker.register`);
+        assert.ok(!/navigator\s*\.\s*serviceWorker/.test(txt), `${entry.name}: no navigator.serviceWorker`);
+      }
+      // Cache Storage usage is confined to the worker runtime files.
+      if (!WORKER_FILES.has(entry.name)) {
+        assert.ok(!/\bcaches\s*\.\s*(open|match|keys|delete)\b/.test(txt),
+          `${entry.name}: no Cache Storage usage outside the worker`);
+      }
     }
   };
   scan(ROOT);
-  assert.ok(!exists('sw.js') && !exists('service-worker.js'), 'no service worker file at root');
+
+  // Worker + registration modules exist; no legacy/alternate filenames.
+  assert.ok(exists('sw.js'), 'sw.js exists');
+  assert.ok(exists('sw-policy.js'), 'sw-policy.js exists');
+  assert.ok(exists('sw-runtime.js'), 'sw-runtime.js exists');
+  assert.ok(exists('sw-register.js'), 'registration module exists (Checkpoint 3)');
+  assert.ok(!exists('service-worker.js'), 'no alternate service-worker file');
+
+  // No HTML page has an INLINE registration (registration is external only).
+  for (const page of htmlPages) {
+    const html = read(page);
+    assert.ok(!/navigator\s*\.\s*serviceWorker/.test(html), `${page}: no inline registration`);
+    assert.ok(!/\bsw\.js\b/.test(html), `${page}: does not load sw.js directly`);
+  }
+
+  // The approved static allowlist still contains no API or HTML path.
+  const policy = require('./sw-policy.js');
+  for (const p of policy.STATIC_ALLOWLIST) {
+    assert.ok(!p.includes('/api/') && !/\.html$/.test(p), `allowlist entry ${p} is not API/HTML`);
+  }
+});
+
+// Phase 4.3.2 Checkpoint 3 — registration rollout scope + registration shape.
+test('sw-register.js is loaded on exactly the approved authenticated pages', () => {
+  const INCLUDED = ['app.html', 'nutrition.html', 'workout.html', 'workout-history.html',
+    'workout-complete.html', 'weight-history.html', 'onboarding.html'];
+  const EXCLUDED = ['auth.html', 'reset-password.html', 'index.html', 'store.html',
+    'get-fit-guide.html', 'program-fat-loss.html', 'program-muscle-gain.html',
+    'program-glute-builder.html'];
+  const loads = /<script[^>]+src="sw-register\.js"[^>]*\bdefer\b[^>]*><\/script>/;
+  for (const p of INCLUDED) assert.match(read(p), loads, `${p} loads sw-register.js (deferred)`);
+  for (const p of EXCLUDED) assert.ok(!/sw-register\.js/.test(read(p)), `${p} does NOT load sw-register.js`);
+  // calculator.html is never modified (CLAUDE.md §3).
+  assert.ok(!/sw-register\.js/.test(read('calculator.html')), 'calculator.html untouched');
+
+  // Registration targets exactly /sw.js at scope '/'; no install-onboarding prompt.
+  const SWRegister = require('./sw-register.js');
+  assert.strictEqual(SWRegister.SW_URL, '/sw.js', 'registers /sw.js');
+  assert.strictEqual(SWRegister.SW_SCOPE, '/', 'scope is /');
+  assert.strictEqual(SWRegister.SW_UPDATE_VIA_CACHE, 'none', 'imports revalidated (updateViaCache none)');
+  const reg = fs.readFileSync(path.join(ROOT, 'sw-register.js'), 'utf8');
+  assert.match(reg, /register\(\s*SW_URL\s*,\s*\{[^}]*scope:\s*SW_SCOPE[^}]*\}\s*\)/, 'registers SW_URL at { scope: SW_SCOPE, ... }');
+  assert.match(reg, /updateViaCache:\s*SW_UPDATE_VIA_CACHE/, 'passes updateViaCache');
+  assert.ok(!/beforeinstallprompt/.test(reg), 'no install-onboarding prompt');
 });
