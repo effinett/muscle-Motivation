@@ -504,19 +504,34 @@
     };
   }
 
+  // Pure, testable bootstrap gate (mirrors sw-register's shouldRegisterServiceWorker
+  // idiom). One guarded singleton bootstrap happens ONLY when a real browser is
+  // present AND both deferred dependencies have loaded — so Node, missing-window,
+  // missing-document, and missing-dependency environments stay fully inert.
+  function shouldAutoBootstrap(env) {
+    env = env || {};
+    return !!(env.hasWindow && env.hasDocument && env.PWAInstall && env.PWAInstallUI);
+  }
+
   // Module-scope singleton guard: repeated script evaluation never double-inits.
   var booted = false;
   var singleton = null;
   function autoStart() {
     try {
-      if (booted) return;
+      if (booted) return;                    // repeated evaluation → no second controller
       booted = true;
-      if (typeof window === 'undefined' || typeof document === 'undefined') return;
+      var core = (typeof PWAInstall !== 'undefined') ? PWAInstall : null;
+      var uimod = (typeof PWAInstallUI !== 'undefined') ? PWAInstallUI : null;
+      if (!shouldAutoBootstrap({
+        hasWindow: typeof window !== 'undefined',
+        hasDocument: typeof document !== 'undefined',
+        PWAInstall: core,
+        PWAInstallUI: uimod
+      })) return;                            // inert unless every dependency is present
       singleton = createInstallLifecycleController({
         window: window, document: document,
         navigator: (typeof navigator !== 'undefined' ? navigator : null),
-        PWAInstall: (typeof PWAInstall !== 'undefined' ? PWAInstall : null),
-        PWAInstallUI: (typeof PWAInstallUI !== 'undefined' ? PWAInstallUI : null),
+        PWAInstall: core, PWAInstallUI: uimod,
         logger: (typeof console !== 'undefined') ? console : null
       });
       singleton.start();
@@ -525,6 +540,7 @@
 
   var PWAInstallRegister = Object.freeze({
     createInstallLifecycleController: createInstallLifecycleController,
+    shouldAutoBootstrap: shouldAutoBootstrap,
     getInstance: function () { return singleton; }
   });
 

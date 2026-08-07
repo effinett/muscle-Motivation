@@ -801,3 +801,141 @@ test('html: authenticated pages emit only approved value signals (no logged cont
   const wc = read('workout-complete.html');
   assert.ok(wc.indexOf('completedWorkout') !== -1, 'workout-complete emits completedWorkout');
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// Verification 1 — guarded browser auto-bootstrap contract
+// ════════════════════════════════════════════════════════════════════════════
+
+test('bootstrap: shouldAutoBootstrap requires window + document + PWAInstall + PWAInstallUI', () => {
+  const g = PWAInstallRegister.shouldAutoBootstrap;
+  assert.strictEqual(typeof g, 'function');
+  assert.strictEqual(g({ hasWindow: true, hasDocument: true, PWAInstall: {}, PWAInstallUI: {} }), true);
+  assert.strictEqual(g({ hasWindow: false, hasDocument: true, PWAInstall: {}, PWAInstallUI: {} }), false, 'no window → inert');
+  assert.strictEqual(g({ hasWindow: true, hasDocument: false, PWAInstall: {}, PWAInstallUI: {} }), false, 'no document → inert');
+  assert.strictEqual(g({ hasWindow: true, hasDocument: true, PWAInstall: null, PWAInstallUI: {} }), false, 'no core → inert');
+  assert.strictEqual(g({ hasWindow: true, hasDocument: true, PWAInstall: {}, PWAInstallUI: null }), false, 'no UI → inert');
+  assert.strictEqual(g({}), false);
+  assert.strictEqual(g(), false);
+});
+
+test('bootstrap: Node evaluation creates no controller (getInstance null) and no import-time listeners', () => {
+  // Required in this file at top; being in Node (no window/document) it must be inert.
+  assert.strictEqual(PWAInstallRegister.getInstance(), null);
+});
+
+test('bootstrap: re-requiring the module returns the same frozen singleton surface', () => {
+  const again = require('./pwa-install-register.js');
+  assert.strictEqual(again, PWAInstallRegister);
+  assert.strictEqual(again.getInstance(), null); // still inert under Node
+});
+
+test('bootstrap: source uses a booted guard so repeated evaluation cannot double-init', () => {
+  assert.ok(/var booted = false;/.test(CODE));
+  assert.ok(/if \(booted\) return;/.test(CODE));
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Verification 2 — workout completion signal authenticity (source contract)
+// ════════════════════════════════════════════════════════════════════════════
+
+test('workout-signal: loadAll selects the completed column', () => {
+  const wc = read('workout-complete.html');
+  const sel = wc.match(/\.select\('id,user_id,completed,[^']*workout_exercises/);
+  assert.ok(sel, 'workouts select must include the completed column');
+});
+
+test('workout-signal: emit is gated on a genuinely completed, owned record', () => {
+  const wc = read('workout-complete.html');
+  // Ownership is enforced in loadAll (user_id === user.id); the emit itself is
+  // guarded by completed === true.
+  assert.ok(/w\.user_id !== user\.id\) return null;/.test(wc), 'loadAll enforces ownership');
+  assert.ok(/data\.w && data\.w\.completed === true/.test(wc), 'emit gated on completed === true');
+  // The dispatch must appear AFTER the completed guard (no ungated dispatch).
+  const guardIdx = wc.indexOf('data.w.completed === true');
+  const dispIdx = wc.indexOf("type: 'completedWorkout'");
+  assert.ok(guardIdx !== -1 && dispIdx !== -1 && guardIdx < dispIdx, 'dispatch is inside the completed guard');
+});
+
+test('workout-signal: exactly one dispatch and its detail carries no private content', () => {
+  const wc = read('workout-complete.html');
+  const dispatches = wc.match(/mm:pwa-value/g) || [];
+  assert.strictEqual(dispatches.length, 1, 'exactly one value dispatch on the recap page');
+  // detail is exactly { type: 'completedWorkout' } — no id/user/set/duration data.
+  assert.ok(/detail: \{ type: 'completedWorkout' \}/.test(wc));
+  const detail = wc.slice(wc.indexOf("detail: { type: 'completedWorkout' }"), wc.indexOf("detail: { type: 'completedWorkout' }") + 60);
+  for (const bad of ['user_id', 'workout_id', 'duration', 'set', 'reps', 'weight']) {
+    assert.strictEqual(detail.indexOf(bad), -1, `detail must not include ${bad}`);
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Verification 3 — session suppression vs active-surface retry
+// ════════════════════════════════════════════════════════════════════════════
+
+test('retry: onShown writes session suppression once and showCount once', () => {
+  const h = openableAndroid();
+  assert.strictEqual(h.ctrl.getState().sessionSuppressed, true);
+  assert.strictEqual(parseLs(h.ls).showCount, 1);
+  // A reevaluation in the same session neither reopens nor re-persists.
+  h.ctrl.evaluate('reeval');
+  assert.strictEqual(h.ui.opened, 1);
+  assert.strictEqual(parseLs(h.ls).showCount, 1);
+});
+
+test('retry: synchronous prompt throw leaves the surface open and recoverable', async () => {
+  const h = openableAndroid({ bipOpts: { promptThrows: true } });
+  await assert.rejects(() => h.ui._install());
+  assert.strictEqual(h.ui.isOpen(), true, 'surface stays open for retry');
+  assert.strictEqual(h.ui.opened, 1);
+});
+
+test('retry: async prompt rejection leaves the surface open and recoverable', async () => {
+  const h = openableAndroid({ bipOpts: { promptRejects: true } });
+  await assert.rejects(() => h.ui._install());
+  await tick();
+  assert.strictEqual(h.ui.isOpen(), true);
+  assert.strictEqual(h.ui.opened, 1);
+});
+
+test('retry: evaluate() during the error state does NOT close the open surface via suppression', async () => {
+  const h = openableAndroid({ bipOpts: { promptRejects: true } });
+  await assert.rejects(() => h.ui._install());
+  await tick();
+  // session is suppressed (from onShown); a reevaluation must leave the open surface alone.
+  assert.strictEqual(h.ctrl.getState().sessionSuppressed, true);
+  h.ctrl.evaluate('reeval-during-error');
+  assert.strictEqual(h.ui.isOpen(), true, 'not closed by session suppression');
+  assert.strictEqual(h.ui.opened, 1, 'no second root');
+  assert.strictEqual(parseLs(h.ls).showCount, 1, 'no second showCount');
+  assert.strictEqual(parseLs(h.ls).lastShownAt, NOW, 'lastShownAt not rewritten');
+});
+
+test('retry: a consumed event cannot be reused', async () => {
+  const h = openableAndroid({ bipOpts: { outcome: 'accepted' } });
+  await h.ui._install(); await tick();
+  assert.strictEqual(h.ctrl.getState().hasDeferredPrompt, false);
+  await assert.rejects(() => h.ui._install(), /no-prompt/);
+});
+
+test('retry: a newly captured event restores an install-ready state without reopening', async () => {
+  const h = openableAndroid({ bipOpts: { promptRejects: true } });
+  await assert.rejects(() => h.ui._install()); await tick();
+  assert.strictEqual(h.ctrl.getState().hasDeferredPrompt, false, 'consumed event cleared');
+  // A fresh browser event arrives; the surface stays open (not reopened) and the
+  // next activation uses the new event.
+  const fresh = bip({ outcome: 'accepted' });
+  h.win._emit('beforeinstallprompt', fresh);
+  assert.strictEqual(h.ui.opened, 1, 'no reopen — still the same surface');
+  assert.strictEqual(h.ctrl.getState().hasDeferredPrompt, true);
+  await h.ui._install(); await tick();
+  assert.strictEqual(fresh.prompted, 1, 'the fresh event is now usable');
+});
+
+test('retry: closing then reevaluating in the same session stays suppressed', () => {
+  const h = openableAndroid();
+  h.ui._dismiss('close-button');
+  assert.strictEqual(h.ui.isOpen(), false);
+  h.ui.opened = 0;
+  h.ctrl.evaluate('post-close');
+  assert.strictEqual(h.ui.opened, 0, 'no reopen after a same-session dismissal');
+});

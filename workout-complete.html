@@ -308,9 +308,13 @@
       if(!id){ showFallback('No workout was specified.'); return; }
       var data = await loadAll(id);
       if(!data){ showFallback("We couldn't load that workout."); return; }
-      // PWA install onboarding (Phase 4.3.3): reaching the recap means a workout
-      // was just completed & persisted — an approved meaningful-value moment.
-      try { window.dispatchEvent(new CustomEvent('mm:pwa-value', { detail: { type: 'completedWorkout' } })); } catch(e){}
+      // PWA install onboarding (Phase 4.3.3): emit ONLY for a genuinely completed,
+      // current-user workout. loadAll already enforced existence + ownership
+      // (w.user_id === user.id); require completed === true so an in-progress /
+      // abandoned record never counts. Narrow signal only — no workout content.
+      if (data.w && data.w.completed === true) {
+        try { window.dispatchEvent(new CustomEvent('mm:pwa-value', { detail: { type: 'completedWorkout' } })); } catch(e){}
+      }
       render(data);
       document.getElementById('authGate').style.display='none';
       document.getElementById('content').style.display='block';
@@ -325,7 +329,7 @@
     // Current workout + its exercises + sets (RLS scopes to this user).
     var { data: w } = await supabaseClient
       .from('workouts')
-      .select('id,user_id,name,created_at,date,duration_minutes,program_slug,session_key,mode, workout_exercises(id,exercise_name,exercise_id,user_exercise_id,order_index, workout_sets(set_number,weight_lbs,reps,completed,is_warmup))')
+      .select('id,user_id,completed,name,created_at,date,duration_minutes,program_slug,session_key,mode, workout_exercises(id,exercise_name,exercise_id,user_exercise_id,order_index, workout_sets(set_number,weight_lbs,reps,completed,is_warmup))')
       .eq('id', workoutId).maybeSingle();
     if(!w || w.user_id !== user.id) return null;
 
