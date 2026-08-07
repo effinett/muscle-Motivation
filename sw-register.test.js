@@ -1392,13 +1392,26 @@ test('c4/a11y: the banner is a polite status region and the message lives inside
   assert.ok(b.querySelector(MSGSEL), 'message element is inside the live region');
 });
 
-test('c4/a11y: busy attempt exposes disabled + aria-disabled on the primary action', () => {
+test('c4/a11y: busy attempt exposes disabled + aria-disabled + aria-busy on the primary action', () => {
   const s = setup({ controller: true, waiting: true });
   s.ctrl.onRegistered(s.registration);
   const btn = s.doc.getElementById('mm-sw-update-btn');
   btn.click();
   assert.strictEqual(btn.disabled, true);
   assert.strictEqual(btn.getAttribute('aria-disabled'), 'true');
+  assert.strictEqual(btn.getAttribute('aria-busy'), 'true');
+});
+
+test('c5/a11y: aria-busy clears when a bounded failure returns the button to retryable', () => {
+  const s = setup({ controller: true, waiting: true });
+  s.ctrl.onRegistered(s.registration);
+  const btn = s.doc.getElementById('mm-sw-update-btn');
+  btn.click();
+  assert.strictEqual(btn.getAttribute('aria-busy'), 'true');
+  s.timers.fireAll();               // command timeout → rollbackAttempt → enableUpdateButton
+  assert.strictEqual(btn.disabled, false);
+  assert.strictEqual(btn.getAttribute('aria-disabled'), undefined);
+  assert.strictEqual(btn.getAttribute('aria-busy'), undefined);
 });
 
 test('c4/a11y: Later remains a real keyboard-usable button and never posts a message', () => {

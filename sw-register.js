@@ -426,13 +426,16 @@
     function disableUpdateButton() {
       try {
         var btn = updateButton();
-        if (btn) { btn.disabled = true; btn.setAttribute('aria-disabled', 'true'); }
+        if (btn) { btn.disabled = true; btn.setAttribute('aria-disabled', 'true'); btn.setAttribute('aria-busy', 'true'); }
       } catch (e) { /* contained */ }
     }
     function enableUpdateButton() {
       try {
         var btn = updateButton();
-        if (btn) { btn.disabled = false; if (btn.removeAttribute) btn.removeAttribute('aria-disabled'); }
+        if (btn) {
+          btn.disabled = false;
+          if (btn.removeAttribute) { btn.removeAttribute('aria-disabled'); btn.removeAttribute('aria-busy'); }
+        }
       } catch (e) { /* contained */ }
     }
     function setUpdateButtonText(txt) {
