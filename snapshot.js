@@ -7,8 +7,10 @@
  * will require() the pure parts of this file and feed the same shape into
  * every conversation, so anything added here becomes coach context for free.
  *
- * Browser: load AFTER weight.js, nutrition.js and metrics.js (uses their
- * stats helpers + supabaseClient). Node: require()s the sibling libraries.
+ * Browser: load AFTER weight.js and metrics.js (uses their stats helpers +
+ * supabaseClient). It does NOT depend on nutrition.js — food_logs are read
+ * directly here, which is why Home can consume nutrition state without loading
+ * the food-resolution stack. Node: require()s the sibling libraries.
  * Pure computation (snComputeSnapshot + helpers) is separated from fetching
  * (buildUserSnapshot) so both runtimes share identical math.
  * ──────────────────────────────────────────────────────────────────────── */
@@ -47,6 +49,35 @@ function dashThisWeekCount(dates) {
     var p = String(ds).split('-'); var d = new Date(+p[0], +p[1] - 1, +p[2]);
     return d >= weekAgo && d <= now;
   }).length;
+}
+
+/* ── weekly training target (pure) ──────────────────────────────────────────
+ * How many sessions the user INTENDS per week, from the global
+ * profiles.training_days setting. Domain state, not presentation: the coach,
+ * reminders, the Train surface and the dashboard all need the same answer.
+ *
+ * Deliberately NOT schedules.js's normalizeTrainingDays(), which buckets any
+ * value into 2–6 to pick a SCHEDULE. Adherence must never invent a target:
+ * "0 — not training yet" or an unset value returns null, and callers show the
+ * completed count alone rather than a fabricated denominator. */
+function snPlannedPerWeek(trainingDays) {
+  var d = parseInt(trainingDays, 10);
+  if (!isFinite(d) || d < 1) return null;
+  return d > 7 ? 7 : d;
+}
+
+// completed vs planned over the same rolling 7-day window dashThisWeekCount
+// uses. `ratio` is null when there is no declared target.
+function snWeekAdherence(completed, trainingDays) {
+  var planned = snPlannedPerWeek(trainingDays);
+  var done = parseInt(completed, 10);
+  if (!isFinite(done) || done < 0) done = 0;
+  return {
+    planned: planned,
+    completed: done,
+    ratio: planned ? Math.round((done / planned) * 100) / 100 : null,
+    met: planned ? done >= planned : null,
+  };
 }
 
 /* ── nutrition compliance (pure) ───────────────────────────────────────── */
@@ -101,6 +132,7 @@ function snComputeSnapshot(inputs) {
   var last = workouts[0] || null;
 
   var week = snWeekNutrition(inputs.foodRows, today);
+  var thisWeekCount = dashThisWeekCount(dates);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -113,6 +145,7 @@ function snComputeSnapshot(inputs) {
       weight_lbs:      p.weight_lbs      != null ? +p.weight_lbs      : null,
       goal_weight_lbs: goalW,
       body_fat_pct:    p.body_fat_pct    != null ? +p.body_fat_pct    : null,
+      training_days:   p.training_days   != null ? +p.training_days   : null,
     },
     weight: weight,                                   // + goal / toGoal above
     bodyFat: bfStats(inputs.bfLogs || [], p.body_fat_pct),
@@ -124,7 +157,8 @@ function snComputeSnapshot(inputs) {
     training: {
       trainedToday: seen[today] === true,
       streak: dashDayStreak(new Set(dates)),
-      thisWeekCount: dashThisWeekCount(dates),
+      thisWeekCount: thisWeekCount,
+      weekAdherence: snWeekAdherence(thisWeekCount, p.training_days),
       lastWorkout: last ? { name: last.name || 'Workout', date: last.date } : null,
     },
   };
@@ -183,6 +217,8 @@ if (typeof module !== 'undefined' && module.exports) {
     dashDayStreak: dashDayStreak,
     dashThisWeekCount: dashThisWeekCount,
     snWeekNutrition: snWeekNutrition,
+    snPlannedPerWeek: snPlannedPerWeek,
+    snWeekAdherence: snWeekAdherence,
     snComputeSnapshot: snComputeSnapshot,
   };
 }

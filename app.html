@@ -24,6 +24,7 @@
       --text-2:       #a0a0a0;
       --text-muted:   #555555;
       --green:        #22c55e;
+      --amber:        #e0a800;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -47,549 +48,167 @@
     }
 
     /* Header — header / .header-logo now live in app-shell.css */
-    .header-right { display: flex; align-items: center; gap: 14px; }
-    .user-name { font-size: 13px; color: var(--text-muted); }
-    #signOutBtn {
-      padding: 6px 14px;
-      font-size: 11px; font-family: 'Barlow', sans-serif;
-      font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-      background: transparent; border: 1px solid var(--border-2);
-      color: var(--text-muted); border-radius: 6px; cursor: pointer;
-      transition: border-color 0.2s, color 0.2s;
+    .header-profile {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 44px; height: 44px; margin-right: -10px;
+      color: var(--text-2); text-decoration: none;
+      border-radius: 50%;
+      transition: color 0.2s, background 0.2s;
     }
-    #signOutBtn:hover { border-color: var(--border-3); color: var(--text-2); }
+    .header-profile:hover { color: var(--text); background: var(--surface-2); }
+    .header-profile:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
 
-    /* Container */
     /* Bottom padding = the page's own breathing room + the shared app-shell
        clearance (nav height + home indicator). See app-shell.css. */
     .container {
       max-width: 680px; margin: 0 auto;
-      padding: 28px 16px calc(24px + var(--mm-bottom-clearance, 0px));
+      padding: 20px 16px calc(24px + var(--mm-bottom-clearance, 0px));
     }
 
-    /* Welcome */
-    .welcome { margin-bottom: 36px; }
-    .welcome-greeting {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: clamp(34px, 7vw, 46px);
-      letter-spacing: 1.5px; text-transform: uppercase;
-      line-height: 1.1;
-    }
-    .welcome-greeting span { color: var(--red); }
-    .welcome-sub {
-      font-size: 13px; color: var(--text-muted);
-      margin-top: 5px;
-    }
-
-    /* Section label */
-    .section-label {
-      font-family: 'Barlow', sans-serif;
-      font-size: 11px; font-weight: 700; letter-spacing: 2px;
-      color: var(--red); text-transform: uppercase;
-      margin-bottom: 12px; margin-top: 32px;
-      display: flex; align-items: center; gap: 10px;
-    }
-    .section-label::after {
-      content: ''; flex: 1; height: 1px; background: var(--border-1);
-    }
-
-    /* Card */
-    .card {
-      background: var(--surface-1);
-      border: 1px solid var(--border-2);
-      border-radius: 10px;
-      padding: 20px 22px;
-      margin-bottom: 12px;
-    }
-    .card-featured { border-top: 2px solid var(--red); }
-
-    /* Today card */
-    .today-header {
-      display: flex; align-items: flex-start;
-      justify-content: space-between; gap: 16px;
-      margin-bottom: 16px;
-    }
-    .today-label {
-      font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+    /* ── Shared section rhythm ──────────────────────────────────────────
+       Hierarchy comes from typography, spacing and density — not from a
+       stack of equally-weighted cards. */
+    .eyebrow {
+      font-size: 10px; font-weight: 700; letter-spacing: 2px;
       text-transform: uppercase; color: var(--text-muted);
-      margin-bottom: 6px;
     }
-    .split-badge {
-      display: inline-block;
-      background: var(--red-muted);
-      border: 1px solid var(--red-border);
-      color: var(--red); border-radius: 6px;
-      padding: 4px 10px; font-size: 13px;
-      font-weight: 700;
+    .num {
+      font-family: 'Bebas Neue', sans-serif;
+      letter-spacing: 0.5px; line-height: 1;
     }
-    .goal-tag {
-      font-size: 12px; color: var(--text-muted);
-      font-weight: 600; text-align: right;
-      white-space: nowrap; line-height: 1.5;
-      padding-top: 2px;
-    }
-    .today-divider { height: 1px; background: var(--border-1); margin: 16px 0; }
-    .focus-body { font-size: 15px; line-height: 1.75; color: var(--text-2); }
-    .focus-body strong { color: var(--text); font-weight: 600; }
 
-    /* Numbers card */
-    .numbers-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
+    /* ── A · TODAY — the one thing that matters now ─────────────────────── */
+    .today {
+      padding: 4px 0 26px;
+      border-bottom: 1px solid var(--border-1);
+      margin-bottom: 22px;
     }
-    .stat-cell {
-      background: var(--surface-2);
-      border-radius: 8px; padding: 14px 16px;
-      border-left: 2px solid var(--red);
-    }
-    .stat-cell.full { grid-column: 1 / -1; }
-    .stat-label {
-      font-size: 11px; font-weight: 700;
-      color: var(--text-muted); letter-spacing: 1.5px;
+    .today-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(38px, 10vw, 54px);
+      line-height: 1.02; letter-spacing: 1px;
       text-transform: uppercase;
+      margin: 6px 0 0;
     }
-    .stat-value {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 28px; color: var(--text);
-      margin-top: 4px; line-height: 1;
-      letter-spacing: 0.5px;
-    }
-    .stat-sub { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
-
-    /* Programs card */
-    .plan-item {
-      display: flex; align-items: center;
-      justify-content: space-between; gap: 16px;
-      padding: 14px 0; border-bottom: 1px solid var(--border-1);
-    }
-    .plan-item:last-child { border-bottom: none; }
-    .plan-name { font-size: 14px; font-weight: 600; }
-    .plan-desc { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
-    .plan-price {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 22px; color: var(--red);
-      white-space: nowrap; letter-spacing: 0.5px;
-    }
-    .plan-action { display: flex; align-items: center; gap: 12px; }
-    .btn-buy {
-      padding: 8px 16px; background: var(--red);
-      border: none; border-radius: 6px; color: white;
-      font-size: 12px; font-weight: 700;
-      font-family: 'Barlow', sans-serif;
-      letter-spacing: 1px; text-transform: uppercase;
-      cursor: pointer; transition: opacity 0.2s;
-      white-space: nowrap; text-decoration: none;
-      display: inline-block;
-    }
-    .btn-buy:hover { opacity: 0.85; }
-    .owned-badge {
-      font-size: 12px; font-weight: 700;
-      letter-spacing: 1px; text-transform: uppercase;
-      color: var(--green); white-space: nowrap;
-      text-decoration: none;
-    }
-    a.owned-badge:hover { text-decoration: underline; }
-    .browse-link { padding-top: 14px; text-align: right; }
-    .browse-link a {
-      font-size: 12px; font-weight: 600;
-      color: var(--text-muted); text-decoration: none;
-      transition: color 0.2s;
-    }
-    .browse-link a:hover { color: var(--red); }
-
-    /* Recalculate button */
-    .btn-recalc {
-      width: 100%; margin-top: 14px; padding: 10px;
-      background: transparent; border: 1px solid var(--border-2);
-      border-radius: 8px; color: var(--text-muted);
-      font-size: 11px; font-weight: 700;
-      letter-spacing: 1.5px; text-transform: uppercase;
-      cursor: pointer; transition: border-color 0.2s, color 0.2s;
-    }
-    .btn-recalc:hover { border-color: var(--red); color: var(--red); }
-
-    /* P2 · today's workout status */
-    .workout-status { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; }
-    .workout-status .ws-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
-    .workout-status.done .ws-dot  { background: var(--green); }
-    .workout-status.done .ws-text { color: var(--text); }
-    .workout-status.todo .ws-dot  { background: var(--red); }
-    .workout-status.todo .ws-text { color: var(--text-2); }
-    .workout-status a { color: var(--red); text-decoration: none; font-weight: 700; margin-left: auto; }
-    .workout-status a:hover { text-decoration: underline; }
-    /* Snapshot-fed extras (Phase 4.1): 7-day consistency + body-comp row */
-    .week-consistency { font-size: 12px; color: var(--text-muted); font-weight: 600; margin-top: 10px; }
-    .week-consistency:empty { display: none; }
-    .goal-metrics-row {
-      display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 10px 0 2px;
+    .today-status {
+      display: inline-flex; align-items: center; gap: 7px;
       font-size: 13px; font-weight: 600; color: var(--text-2);
+      margin-top: 8px;
     }
-    .goal-metrics-row:empty { display: none; }
-    .goal-metrics-row a { color: inherit; text-decoration: none; }
-    .goal-metrics-row a:hover { color: var(--text); }
-    .goal-metrics-row .gm-label { color: var(--text-muted); font-weight: 700; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; margin-right: 5px; }
-    .goal-metrics-row .gm-delta { color: var(--text-muted); font-weight: 600; font-size: 12px; }
-
-    /* P4 · momentum streak */
-    /* breathing room when a card sits directly under a card-grid (Recent Activity) */
-    .quick-grid + .card { margin-top: 14px; }
-    .momentum-streak { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
-    .momentum-streak:empty { display: none; }
-    .streak-num {
-      font-family: 'Bebas Neue', sans-serif; font-size: 30px; line-height: 1;
-      letter-spacing: 1px; color: var(--red);
+    .today-status .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--text-muted); flex-shrink: 0;
     }
-    .streak-num.cold { color: var(--text-muted); }
-    .streak-label { font-size: 12px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--text-2); }
-    .streak-week { font-size: 12px; color: var(--text-muted); font-weight: 600; margin-left: auto; }
-
-    /* P5 · reference */
-    .ref-details { margin-bottom: 12px; }
-    .ref-summary {
-      list-style: none; cursor: pointer; user-select: none;
-      padding: 12px 16px; background: var(--surface-1);
-      border: 1px solid var(--border-2); border-radius: 12px;
-      font-size: 13px; font-weight: 700; color: var(--text-2);
-      display: flex; align-items: center; justify-content: space-between;
-    }
-    .ref-summary::-webkit-details-marker { display: none; }
-    .ref-summary::after { content: '▾'; color: var(--text-muted); transition: transform .2s; }
-    .ref-details[open] .ref-summary { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
-    .ref-details[open] .ref-summary::after { transform: rotate(180deg); }
-    .ref-card { border-top: none; border-top-left-radius: 0; border-top-right-radius: 0; }
-    .ref-link-row {
-      display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
-      padding: 14px 16px; background: var(--surface-1);
-      border: 1px solid var(--border-2); border-radius: 12px;
-      text-decoration: none; color: var(--text-2); cursor: default;
-    }
-    .ref-link-label { font-size: 14px; font-weight: 600; }
-    .ref-soon {
-      margin-left: auto; font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
-      text-transform: uppercase; color: var(--text-muted);
-      border: 1px solid var(--border-2); border-radius: 999px; padding: 3px 9px;
-    }
-    .ref-history { display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 4px 4px 8px; }
-    .ref-history a { font-size: 12px; color: var(--text-muted); text-decoration: none; }
-    .ref-history a:hover { color: var(--text-2); text-decoration: underline; }
-
-    /* Recalculate modal */
-    .modal-overlay {
-      display: none; position: fixed; inset: 0; z-index: 200;
-      background: rgba(0,0,0,0.82); backdrop-filter: blur(6px);
-      align-items: center; justify-content: center; padding: 20px;
-    }
-    .modal-overlay.open { display: flex; }
-    .modal-box {
-      background: var(--surface-1); border: 1px solid var(--border-2);
-      border-radius: 14px; padding: 28px 24px;
-      width: 100%; max-width: 420px;
-      max-height: 90vh; overflow-y: auto;
-    }
-    .modal-header {
-      display: flex; align-items: center;
-      justify-content: space-between; margin-bottom: 22px;
-    }
-    .modal-title {
+    .today-status.is-done .dot { background: var(--green); }
+    .today-status.is-live .dot { background: var(--red); }
+    .cta {
+      display: flex; align-items: center; justify-content: center;
+      width: 100%; min-height: 56px; margin-top: 20px;
+      padding: 15px 20px;
+      background: var(--red); border: none; border-radius: 12px;
+      color: #fff; text-align: center; text-decoration: none;
       font-family: 'Bebas Neue', sans-serif;
-      font-size: 24px; letter-spacing: 1.5px;
+      font-size: 21px; letter-spacing: 2.5px; text-transform: uppercase;
+      cursor: pointer; transition: opacity 0.2s;
     }
-    .modal-close {
-      background: none; border: none; color: var(--text-muted);
-      font-size: 18px; cursor: pointer; padding: 4px 8px;
-      transition: color 0.2s;
+    .cta:hover { opacity: 0.88; }
+    .cta:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+    .today-alt {
+      display: inline-flex; align-items: center; min-height: 44px;
+      margin-top: 4px; font-size: 13px; font-weight: 600;
+      color: var(--text-muted); text-decoration: none;
+      background: none; border: none; cursor: pointer;
+      font-family: 'Barlow', sans-serif;
     }
-    .modal-close:hover { color: var(--text); }
-    .field-group { margin-bottom: 14px; }
-    .field-label {
-      display: block; font-size: 11px; font-weight: 700;
-      letter-spacing: 1.5px; text-transform: uppercase;
-      color: var(--text-muted); margin-bottom: 6px;
-    }
-    .field-optional { font-weight: 400; text-transform: none; letter-spacing: 0; }
-    .field-group input, .field-group select {
-      width: 100%; padding: 10px 12px;
-      background: var(--surface-2); border: 1px solid var(--border-2);
-      border-radius: 8px; color: var(--text);
-      font-family: 'Barlow', sans-serif; font-size: 14px;
-      appearance: none; outline: none; transition: border-color 0.2s;
-    }
-    .field-group input:focus, .field-group select:focus { border-color: var(--red); }
-    .btn-calc {
-      width: 100%; margin-top: 8px; padding: 12px;
-      background: var(--red); border: none; border-radius: 8px;
-      color: white; font-family: 'Bebas Neue', sans-serif;
-      font-size: 18px; letter-spacing: 2px; cursor: pointer;
-      transition: opacity 0.2s;
-    }
-    .btn-calc:hover { opacity: 0.85; }
-    .results-grid {
-      display: grid; grid-template-columns: 1fr 1fr;
-      gap: 10px; margin-bottom: 10px;
-    }
-    .result-cell {
-      background: var(--surface-2); border-radius: 8px;
-      padding: 14px 16px; border-left: 2px solid var(--red);
-    }
-    .result-label {
-      font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
-      text-transform: uppercase; color: var(--text-muted);
-    }
-    .result-val {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 26px; color: var(--text);
-      margin-top: 4px; line-height: 1;
-    }
-    .result-sub {
-      font-size: 12px; color: var(--text-muted);
-      margin-bottom: 20px; line-height: 1.5;
-    }
-    .modal-actions { display: flex; gap: 10px; }
-    .btn-back {
-      flex: 1; padding: 11px; background: transparent;
-      border: 1px solid var(--border-2); border-radius: 8px;
-      color: var(--text-muted); font-size: 13px; font-weight: 600;
-      cursor: pointer; transition: border-color 0.2s;
-    }
-    .btn-back:hover { border-color: var(--border-3); }
-    .btn-save {
-      flex: 2; padding: 11px; background: var(--red);
-      border: none; border-radius: 8px; color: white;
-      font-family: 'Bebas Neue', sans-serif; font-size: 18px;
-      letter-spacing: 2px; cursor: pointer; transition: opacity 0.2s;
-    }
-    .btn-save:hover { opacity: 0.85; }
+    .today-alt:hover { color: var(--text-2); }
+    .today-alt:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; border-radius: 6px; }
 
-    /* Start Workout / Browse Programs button */
-    .btn-start {
-      display: block; width: 100%; margin-top: 18px;
-      padding: 13px 20px;
-      background: var(--red); border: none; border-radius: 8px;
-      color: white; text-align: center;
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 18px; letter-spacing: 2px;
-      text-decoration: none; text-transform: uppercase;
-      transition: opacity 0.2s;
-    }
-    .btn-start:hover { opacity: 0.85; }
-    .btn-choose-workout {
-      display: block; width: 100%; margin-top: 10px;
-      padding: 12px 20px;
-      background: transparent; border: 1px solid var(--border-2); border-radius: 8px;
-      color: var(--text); text-align: center;
-      font-family: 'Barlow', sans-serif; font-weight: 700;
-      font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase;
-      text-decoration: none; transition: border-color 0.2s, color 0.2s;
-    }
-    .btn-choose-workout:hover { border-color: var(--red); color: var(--red); }
-
-    /* Active program section */
-    .active-prog-row {
-      display: flex; align-items: flex-start;
-      justify-content: space-between; gap: 12px;
-      margin-top: 16px; padding-top: 16px;
-      border-top: 1px solid var(--border-1);
-    }
-    .active-prog-label {
-      font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
-      text-transform: uppercase; color: var(--text-muted);
-    }
-    .active-prog-name { font-size: 15px; font-weight: 600; margin-top: 3px; }
-    .btn-change-prog {
-      flex-shrink: 0; padding: 6px 12px; background: transparent;
-      border: 1px solid var(--border-2); border-radius: 6px;
-      color: var(--text-muted); font-size: 11px; font-weight: 700;
-      letter-spacing: 1px; text-transform: uppercase;
-      cursor: pointer; font-family: 'Barlow', sans-serif;
-      transition: border-color 0.2s, color 0.2s;
-    }
-    .btn-change-prog:hover { border-color: var(--red); color: var(--red); }
-    .no-program-msg {
-      font-size: 14px; color: var(--text-2); line-height: 1.5;
-      margin-top: 16px; padding-top: 16px;
-      border-top: 1px solid var(--border-1);
-    }
-    .program-picker-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-    .program-picker-btn {
-      display: block; width: 100%; padding: 12px 16px;
-      background: var(--surface-2); border: 1px solid var(--border-2);
-      border-radius: 8px; color: var(--text); font-size: 14px; font-weight: 600;
-      font-family: 'Barlow', sans-serif; text-align: left;
-      cursor: pointer; transition: border-color 0.2s;
-    }
-    .program-picker-btn:hover { border-color: var(--red); }
-    /* ── Workout selector dropdown ─────────────────────────────────── */
-    .workout-selector-label {
-      font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
-      text-transform: uppercase; color: var(--text-muted);
-      margin-top: 18px; margin-bottom: 8px;
-    }
-    .workout-selector-btn {
-      display: flex; align-items: center; justify-content: space-between;
-      width: 100%; padding: 14px 16px;
-      background: var(--surface-2); border: 1.5px solid var(--border-2);
-      border-radius: 10px; color: var(--text);
-      font-family: 'Barlow', sans-serif; font-size: 16px; font-weight: 700;
-      cursor: pointer; transition: border-color 0.2s, background 0.2s;
-      text-align: left;
-    }
-    .workout-selector-btn:hover { border-color: var(--red); }
-    .workout-selector-btn.open { border-color: var(--red); background: rgba(177,18,27,0.06); }
-    .workout-selector-chevron { flex-shrink: 0; transition: transform .2s; color: var(--text-muted); }
-    .workout-selector-btn.open .workout-selector-chevron { transform: rotate(180deg); }
-    .workout-dropdown {
-      display: none; flex-direction: column; gap: 6px; margin-top: 6px;
-    }
-    .workout-dropdown.open { display: flex; }
-    .workout-dropdown-option {
-      display: flex; align-items: center; justify-content: space-between;
-      width: 100%; padding: 12px 16px;
-      background: var(--surface-2); border: 1.5px solid var(--border-2);
-      border-radius: 8px; color: var(--text); font-size: 14px; font-weight: 600;
-      font-family: 'Barlow', sans-serif; text-align: left;
-      cursor: pointer; transition: border-color 0.2s;
-    }
-    .workout-dropdown-option:hover { border-color: var(--red); }
-    .workout-dropdown-option.active { border-color: var(--red); background: rgba(177,18,27,0.08); }
-    .workout-dropdown-tag {
-      font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-      color: var(--red); flex-shrink: 0;
-    }
-    .discard-session-link {
-      font-size: 12px; color: var(--text-muted); text-decoration: none;
-      transition: color .2s;
-    }
-    .discard-session-link:hover { color: var(--red); }
-    .mismatch-hint {
-      margin-top: 12px;
-      background: rgba(177,18,27,0.08); border: 1px solid rgba(177,18,27,0.2);
-      border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--text-2);
-    }
-    .mismatch-hint a { color: var(--red); text-decoration: none; font-weight: 600; }
-    .mismatch-hint a:hover { text-decoration: underline; }
-
-    /* Quick Actions */
-    .quick-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
-    .quick-grid-3 { grid-template-columns: repeat(3, 1fr); }
-    .quick-grid-3 .quick-btn { padding: 16px 8px; }
-    .quick-grid-3 .quick-btn-label { font-size: 10px; }
-    .quick-btn {
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      gap: 8px;
+    /* ── Tappable rows / tiles ──────────────────────────────────────────── */
+    .row {
+      display: block; width: 100%;
+      padding: 15px 16px; margin-bottom: 10px;
       background: var(--surface-1);
       border: 1px solid var(--border-2);
-      border-radius: 10px; padding: 18px 12px;
-      text-decoration: none; color: var(--text);
-      transition: border-color 0.2s, background 0.2s;
-      cursor: pointer;
-    }
-    .quick-btn:hover { border-color: var(--red); background: var(--surface-2); }
-    .quick-btn-icon { color: var(--red); }
-    .quick-btn-label {
-      font-size: 11px; font-weight: 700;
-      letter-spacing: 1.5px; text-transform: uppercase;
-      color: var(--text-2);
-    }
-
-    /* My Activity */
-    .activity-group { margin-bottom: 12px; }
-    .activity-group:last-child { margin-bottom: 0; }
-    .activity-head {
-      display: flex; align-items: center; justify-content: space-between; gap: 12px;
-      margin-bottom: 8px;
-    }
-    .activity-title {
-      font-size: 13px; font-weight: 700; letter-spacing: 0.5px; color: var(--text);
-    }
-    .activity-viewall {
-      font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-      color: var(--red); text-decoration: none; white-space: nowrap; flex-shrink: 0;
-    }
-    .activity-viewall:hover { text-decoration: underline; }
-    .activity-viewall.disabled { color: var(--text-muted); cursor: default; pointer-events: none; }
-    /* Today's Nutrition summary card */
-    .nut-hero { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
-    .nut-hero-num {
-      font-family: 'Bebas Neue', sans-serif; font-size: 40px; line-height: 0.9;
-      letter-spacing: 1px; color: var(--green); flex-shrink: 0;
-    }
-    .nut-hero-num.over { color: #e0a800; }
-    .nut-hero-meta { min-width: 0; }
-    .nut-hero-label {
-      font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
-      text-transform: uppercase; color: var(--text-2);
-    }
-    .nut-hero-sub { font-size: 12px; color: var(--text-muted); font-weight: 600; margin-top: 2px; }
-    .nut-track { height: 6px; background: var(--surface-3); border-radius: 4px; overflow: hidden; }
-    .nut-track-cal { margin-bottom: 14px; }
-    .nut-fill { height: 100%; background: var(--red); border-radius: 4px; transition: width .3s ease; }
-    .nut-fill.cal { background: var(--green); }
-    .nut-fill.over { background: #e0a800; }
-    .nut-macro { margin-top: 10px; }
-    .nut-macro-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 5px; }
-    .nut-macro-label {
-      font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
-      text-transform: uppercase; color: var(--text-2);
-    }
-    .nut-macro-val { font-size: 12px; color: var(--text); font-weight: 600; }
-    .nut-macro-val small { color: var(--text-muted); font-weight: 500; }
-    .nut-note { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
-    .activity-row {
-      display: flex; align-items: center; justify-content: space-between; gap: 12px;
-      background: var(--surface-2); border: 1px solid var(--border-2);
-      border-radius: 8px; padding: 11px 14px; margin-bottom: 6px;
+      border-radius: 12px;
       text-decoration: none; color: var(--text);
       transition: border-color 0.2s;
     }
-    a.activity-row:hover { border-color: var(--red); }
-    .activity-row:last-child { margin-bottom: 0; }
-    .activity-row-main { min-width: 0; }
-    .activity-row-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .activity-row-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-    .activity-row-sub .prog { color: var(--red); font-weight: 600; }
-    .activity-row-date { font-size: 12px; color: var(--text-muted); white-space: nowrap; flex-shrink: 0; }
-    .activity-empty {
-      font-size: 13px; color: var(--text-muted); padding: 6px 2px;
+    .row:hover { border-color: var(--border-3); }
+    .row:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+    .row-head {
+      display: flex; align-items: baseline; justify-content: space-between;
+      gap: 12px;
     }
-    .activity-soon {
-      display: flex; align-items: center; gap: 8px;
-      font-size: 13px; color: var(--text-muted); padding: 11px 14px;
-      background: var(--surface-2); border: 1px dashed var(--border-2); border-radius: 8px;
-    }
-    .activity-soon-badge {
-      font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-      color: var(--text-muted); border: 1px solid var(--border-2); border-radius: 4px;
-      padding: 2px 7px;
-    }
+    .row-value { font-size: 15px; font-weight: 600; white-space: nowrap; }
+    .row-value .sub { color: var(--text-muted); font-weight: 600; font-size: 13px; }
 
-    /* Weigh-in summary strip + delta pills */
-    .wi-summary {
-      display: flex; gap: 8px; margin-bottom: 8px;
+    /* Slim progress track, used by This Week and Nutrition */
+    .track {
+      height: 5px; margin-top: 11px;
+      background: var(--surface-3); border-radius: 3px; overflow: hidden;
     }
-    .wi-stat {
-      flex: 1; background: var(--surface-2); border: 1px solid var(--border-2);
-      border-radius: 8px; padding: 9px 10px; min-width: 0;
+    .fill {
+      height: 100%; border-radius: 3px;
+      background: var(--red);
+      transition: width 0.3s ease;
     }
-    .wi-stat-label {
-      font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-      color: var(--text-muted);
+    .fill.good { background: var(--green); }
+    .fill.over { background: var(--amber); }
+
+    /* ── B · THIS WEEK ──────────────────────────────────────────────────── */
+    .week-value { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 0.5px; }
+    .week-meta { font-size: 12px; color: var(--text-muted); font-weight: 600; margin-top: 8px; }
+    .week-meta:empty { display: none; }
+
+    /* ── C · NUTRITION ──────────────────────────────────────────────────── */
+    .nut { display: flex; align-items: baseline; gap: 10px; margin-top: 6px; }
+    .nut-num { font-size: 42px; color: var(--green); }
+    .nut-num.over { color: var(--amber); }
+    .nut-unit { font-size: 13px; font-weight: 700; color: var(--text-2); letter-spacing: 0.5px; }
+    .nut-macro {
+      display: flex; align-items: baseline; justify-content: space-between;
+      gap: 12px; margin-top: 14px; font-size: 13px; font-weight: 600;
     }
-    .wi-stat-val {
-      font-family: 'Bebas Neue', sans-serif; font-size: 22px; line-height: 1;
-      margin-top: 4px; color: var(--text);
+    .nut-macro .label { color: var(--text-muted); font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; }
+    .nut-empty { font-size: 14px; color: var(--text-2); margin-top: 4px; }
+
+    /* ── D · FOCUS — the permanent Coach seat ───────────────────────────── */
+    .focus {
+      display: flex; align-items: flex-start; gap: 11px;
+      padding: 14px 16px; margin-bottom: 10px;
+      background: var(--surface-1);
+      border: 1px solid var(--border-2);
+      border-left: 2px solid var(--text-muted);
+      border-radius: 12px;
     }
-    .wi-stat-val small { font-family: 'Barlow', sans-serif; font-size: 11px; color: var(--text-muted); font-weight: 600; }
-    .wi-delta {
-      font-size: 12px; font-weight: 700; white-space: nowrap; flex-shrink: 0;
-      color: var(--text-2);
+    .focus[data-tone="behind"] { border-left-color: var(--amber); }
+    .focus[data-tone="good"]   { border-left-color: var(--green); }
+    .focus-icon { color: var(--text-muted); flex-shrink: 0; margin-top: 1px; }
+    .focus-body { min-width: 0; }
+    .focus-text { font-size: 14px; font-weight: 600; color: var(--text); margin-top: 3px; }
+
+    /* ── E · PROGRESS ───────────────────────────────────────────────────── */
+    .prog-value { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 0.5px; }
+    .prog-delta { font-size: 13px; font-weight: 600; color: var(--text-2); }
+    .prog-delta.down { color: var(--green); }
+    .prog-delta.up   { color: var(--amber); }
+
+    /* ── F · SECONDARY ──────────────────────────────────────────────────── */
+    .secondary {
+      display: flex; gap: 10px; margin-top: 18px;
     }
-    .wi-delta.same { color: var(--text-muted); }
+    .secondary-btn {
+      flex: 1; display: inline-flex; align-items: center; justify-content: center;
+      gap: 8px; min-height: 48px; padding: 12px;
+      background: transparent; border: 1px solid var(--border-2);
+      border-radius: 10px; color: var(--text-2);
+      font-family: 'Barlow', sans-serif; font-size: 12px; font-weight: 700;
+      letter-spacing: 1.2px; text-transform: uppercase;
+      text-decoration: none; cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .secondary-btn:hover { border-color: var(--border-3); color: var(--text); }
+    .secondary-btn:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
 
     /* Toast */
     .toast {
@@ -599,13 +218,16 @@
       color: var(--text); padding: 12px 24px;
       border-radius: 8px; font-size: 14px; font-weight: 600;
       transition: transform 0.35s ease, opacity 0.35s ease;
-      opacity: 0; z-index: 999; white-space: nowrap;
+      opacity: 0; z-index: 999; max-width: calc(100vw - 32px);
     }
     .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 
+    @media (prefers-reduced-motion: reduce) {
+      .cta, .row, .fill, .toast, .secondary-btn, .header-profile { transition: none; }
+    }
+
     @media (max-width: 480px) {
-      .container { padding: 20px 12px calc(24px + var(--mm-bottom-clearance, 0px)); }
-      .numbers-grid { grid-template-columns: 1fr 1fr; }
+      .container { padding: 16px 12px calc(24px + var(--mm-bottom-clearance, 0px)); }
     }
   </style>
   <link rel="manifest" href="/manifest.webmanifest">
@@ -645,375 +267,127 @@
       <img src="logow.png" alt="Muscle Motivation">
       <span>Muscle Motivation</span>
     </a>
-    <div class="header-right">
-      <span class="user-name" id="headerName"></span>
-      <button id="signOutBtn" onclick="signOut()">Sign Out</button>
-    </div>
+    <a class="header-profile" href="profile.html" aria-label="Profile and settings">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/>
+      </svg>
+    </a>
   </header>
 
   <main class="container" id="mmMain" tabindex="-1">
+    <h1 class="mm-visually-hidden">Dashboard</h1>
 
-    <!-- Welcome -->
-    <div class="welcome">
-      <h1 class="welcome-greeting">Good to see you, <span id="dashName">—</span></h1>
-      <div class="welcome-sub" id="dashDate"></div>
-    </div>
+    <!-- A · TODAY -->
+    <section class="today" aria-labelledby="todayLabel">
+      <div class="eyebrow" id="todayLabel">Today</div>
+      <div class="today-title" id="todayTitle">&nbsp;</div>
+      <div class="today-status" id="todayStatus" hidden><span class="dot"></span><span id="todayStatusText"></span></div>
+      <a class="cta" id="todayCta" href="workout.html" hidden></a>
+      <button class="today-alt" id="todayAlt" hidden></button>
+    </section>
 
-    <!-- 1 · Today's Workout -->
-    <div class="section-label">Today's Workout</div>
-    <div class="card card-featured">
-      <div class="today-header">
-        <div>
-          <div class="today-label">Training Split</div>
-          <div class="split-badge" id="dashSplit">—</div>
-        </div>
-        <div class="goal-tag" id="dashGoalTag">—</div>
+    <!-- B · THIS WEEK -->
+    <a class="row" id="weekRow" href="workout-history.html" aria-labelledby="weekLabel weekValue">
+      <div class="row-head">
+        <span class="eyebrow" id="weekLabel">This Week</span>
+        <span class="week-value" id="weekValue">—</span>
       </div>
-      <div class="today-divider"></div>
-      <div class="focus-body" id="dashFocusText">—</div>
-
-      <!-- Active program (shown when a program is active) -->
-      <div id="activeProgramSection" style="display:none;">
-        <div class="active-prog-row">
-          <div>
-            <div class="active-prog-label">Active Program</div>
-            <div class="active-prog-name" id="activeProgramName">—</div>
-          </div>
-          <button class="btn-change-prog" id="changeProgramBtn" style="display:none;" onclick="openProgramPicker()">Change</button>
-        </div>
-        <!-- Workout selector (shown when no unfinished session exists) -->
-        <div id="chooseWorkoutWrap" style="display:none;">
-          <div class="workout-selector-label">Today's Workout</div>
-          <button class="workout-selector-btn" id="workoutSelectorBtn" onclick="toggleWorkoutDropdown()">
-            <span id="workoutSelectorLabel">—</span>
-            <svg class="workout-selector-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-          </button>
-          <div id="workoutDropdown" class="workout-dropdown"></div>
-        </div>
-      </div>
-
-      <!-- No programs owned -->
-      <div id="noProgramSection" style="display:none;">
-        <div class="no-program-msg">You don't have an active workout program yet.</div>
-      </div>
-
-      <!-- Multiple programs owned, none active — picker -->
-      <div id="programPickerSection" style="display:none;">
-        <div class="no-program-msg">You own multiple programs — choose one to activate:</div>
-        <div id="programPickerList" class="program-picker-list"></div>
-      </div>
-
-      <!-- CTA buttons (mutually exclusive) -->
-      <a class="btn-start" id="btnStartWorkout" href="#" style="display:none;">Start Workout</a>
-      <a class="btn-start" id="btnBrowsePrograms" href="store.html" style="display:none;">Browse Programs</a>
-      <!-- Discard in-progress session (shown alongside Resume Workout) -->
-      <div id="discardSessionRow" style="display:none; text-align:center; margin-top:10px;">
-        <a href="#" class="discard-session-link" onclick="discardDashboardSession(); return false;">Discard unfinished session</a>
-      </div>
-
-      <!-- Secondary: always-available path to the full workout chooser
-           (recommended program workout, saved templates, one-off, history). -->
-      <a class="btn-choose-workout" href="workout.html">Choose Workout</a>
-
-      <!-- Goal / program mismatch hint -->
-      <div id="mismatchHint" style="display:none;" class="mismatch-hint"></div>
-    </div>
-
-    <!-- 2 · Quick Actions -->
-    <div class="section-label">Quick Actions</div>
-    <div class="quick-grid quick-grid-3">
-      <a class="quick-btn" href="workout.html">
-        <span class="quick-btn-icon"><i data-lucide="dumbbell"></i></span>
-        <span class="quick-btn-label">Log Workout</span>
-      </a>
-      <a class="quick-btn" href="nutrition.html">
-        <span class="quick-btn-icon"><i data-lucide="utensils"></i></span>
-        <span class="quick-btn-label">Log Food</span>
-      </a>
-      <a class="quick-btn" href="#" onclick="wlOpenModal(); return false;">
-        <span class="quick-btn-icon"><i data-lucide="scale"></i></span>
-        <span class="quick-btn-label">Log Weight</span>
-      </a>
-    </div>
-
-    <!-- 3 · Nutrition Progress -->
-    <div class="section-label">Nutrition Progress</div>
-    <div class="card">
-      <div id="nutritionSummary">
-        <div class="activity-empty">Loading…</div>
-      </div>
-      <div class="today-divider"></div>
-      <div id="workoutStatusToday" class="workout-status">
-        <span class="ws-dot"></span>
-        <span class="ws-text">Checking today's workout…</span>
-      </div>
-      <div id="weekConsistency" class="week-consistency"></div>
-    </div>
-
-    <!-- 4 · Recent Activity -->
-    <div class="section-label">Recent Activity</div>
-    <div class="quick-grid quick-grid-3">
-      <a class="quick-btn" href="workout-history.html">
-        <span class="quick-btn-icon"><i data-lucide="history"></i></span>
-        <span class="quick-btn-label">Workout History</span>
-      </a>
-      <a class="quick-btn" href="weight-history.html">
-        <span class="quick-btn-icon"><i data-lucide="trending-up"></i></span>
-        <span class="quick-btn-label">Progress</span>
-      </a>
-      <a class="quick-btn" href="nutrition.html">
-        <span class="quick-btn-icon"><i data-lucide="clipboard-list"></i></span>
-        <span class="quick-btn-label">Nutrition History</span>
-      </a>
-    </div>
-    <div class="card">
-      <div id="momentumStreak" class="momentum-streak"></div>
-      <div class="activity-head">
-        <span class="activity-title">Recent Workouts</span>
-        <a class="activity-viewall" href="workout-history.html">View All →</a>
-      </div>
-      <div id="recentWorkouts">
-        <div class="activity-empty">Loading…</div>
-      </div>
-    </div>
-
-    <!-- 5 · Goal Progress & Weight Trend -->
-    <div class="section-label">Goal Progress</div>
-    <div class="card">
-      <div class="activity-head">
-        <span class="activity-title">Weight</span>
-        <a class="activity-viewall" href="weight-history.html">View All →</a>
-      </div>
-      <div id="weighInSummary"></div>
-      <div id="recentWeighIns">
-        <div class="activity-empty">Loading…</div>
-      </div>
-      <div id="goalMetricsRow" class="goal-metrics-row"></div>
-      <button class="btn-recalc" onclick="openRecalcModal()">Recalculate Goals</button>
-    </div>
-
-    <details class="ref-details">
-      <summary class="ref-summary">Targets &amp; macros</summary>
-      <div class="card ref-card">
-        <div class="numbers-grid">
-          <div class="stat-cell full">
-            <div class="stat-label">Target Calories</div>
-            <div class="stat-value" id="dashCalories">—</div>
-            <div class="stat-sub" id="dashCalSub"></div>
-          </div>
-          <div class="stat-cell">
-            <div class="stat-label">Protein</div>
-            <div class="stat-value" id="dashProtein">—</div>
-            <div class="stat-sub">grams / day</div>
-          </div>
-          <div class="stat-cell">
-            <div class="stat-label">Carbs</div>
-            <div class="stat-value" id="dashCarbs">—</div>
-            <div class="stat-sub">grams / day</div>
-          </div>
-          <div class="stat-cell">
-            <div class="stat-label">Fats</div>
-            <div class="stat-value" id="dashFats">—</div>
-            <div class="stat-sub">grams / day</div>
-          </div>
-          <div class="stat-cell">
-            <div class="stat-label">Current Weight</div>
-            <div class="stat-value" id="dashStartWeight">—</div>
-          </div>
-          <div class="stat-cell">
-            <div class="stat-label">Goal Weight</div>
-            <div class="stat-value" id="dashGoalWeight">—</div>
-          </div>
-        </div>
-      </div>
-    </details>
-
-    <!-- 6 · Programs -->
-    <div class="section-label">Programs</div>
-    <div class="card">
-      <div class="plan-item" data-product="fat_loss_blueprint">
-        <div>
-          <div class="plan-name">90 Day Fat Loss Blueprint</div>
-          <div class="plan-desc">12-week fat loss system</div>
-        </div>
-        <div class="plan-action">
-          <span class="plan-price">$49</span>
-          <a class="btn-buy" href="store.html">Buy</a>
-        </div>
-      </div>
-      <div class="plan-item" data-product="muscle_gain">
-        <div>
-          <div class="plan-name">Muscle Gain</div>
-          <div class="plan-desc">8-week hypertrophy program</div>
-        </div>
-        <div class="plan-action">
-          <span class="plan-price">$59</span>
-          <a class="btn-buy" href="store.html">Buy</a>
-        </div>
-      </div>
-      <div class="plan-item" data-product="glute_builder">
-        <div>
-          <div class="plan-name">Glute Builder</div>
-          <div class="plan-desc">Women's lower-body program</div>
-        </div>
-        <div class="plan-action">
-          <span class="plan-price">$39</span>
-          <a class="btn-buy" href="store.html">Buy</a>
-        </div>
-      </div>
-      <div class="browse-link">
-        <a href="store.html">Browse all programs →</a>
-      </div>
-    </div>
-
-    <!-- Membership (shown only to subscribers) -->
-    <div id="membershipSection" style="display:none;">
-      <div class="section-label">Membership</div>
-      <div class="card">
-        <div class="plan-item">
-          <div>
-            <div class="plan-name">Muscle Motivation Membership</div>
-            <div class="plan-desc" id="membershipStatus">—</div>
-          </div>
-          <div class="plan-action">
-            <button class="btn-buy" id="manageBillingBtn" onclick="manageBilling(this)">Manage</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 7 · AI Coaching -->
-    <div class="section-label">AI Coaching</div>
-    <a class="ref-link-row" href="#" aria-disabled="true" onclick="return false;">
-      <span class="quick-btn-icon"><i data-lucide="bot"></i></span>
-      <span class="ref-link-label">AI Coach</span>
-      <span class="ref-soon">Coming Soon</span>
+      <div class="track" id="weekTrack" hidden><div class="fill" id="weekFill" style="width:0"></div></div>
+      <div class="week-meta" id="weekMeta"></div>
     </a>
 
-  </main><!-- /container -->
+    <!-- C · NUTRITION -->
+    <a class="row" id="nutRow" href="nutrition.html" aria-labelledby="nutLabel nutSummary">
+      <div class="row-head">
+        <span class="eyebrow" id="nutLabel">Nutrition</span>
+        <span class="row-value" id="nutTarget"></span>
+      </div>
+      <div id="nutBody">
+        <div class="nut-empty">Loading&hellip;</div>
+      </div>
+      <span class="mm-visually-hidden" id="nutSummary"></span>
+    </a>
+
+    <!-- D · FOCUS (deterministic; hidden when there is no real evidence) -->
+    <section class="focus" id="focusRow" hidden aria-labelledby="focusLabel">
+      <span class="focus-icon" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+             stroke-linecap="round" stroke-linejoin="round" focusable="false">
+          <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>
+        </svg>
+      </span>
+      <div class="focus-body">
+        <div class="eyebrow" id="focusLabel">Focus</div>
+        <p class="focus-text" id="focusText"></p>
+      </div>
+    </section>
+
+    <!-- E · PROGRESS -->
+    <a class="row" id="progRow" href="weight-history.html" aria-labelledby="progLabel progValue">
+      <div class="row-head">
+        <span class="eyebrow" id="progLabel">Progress</span>
+        <span class="prog-value" id="progValue">—</span>
+      </div>
+      <div class="week-meta" id="progMeta"></div>
+    </a>
+
+    <!-- F · SECONDARY -->
+    <div class="secondary">
+      <button class="secondary-btn" onclick="wlOpenModal()">Log Weight</button>
+      <a class="secondary-btn" href="profile.html">Profile</a>
+    </div>
+
+  </main>
 
   <!-- Shared primary navigation (markup owned by app-nav.js) -->
   <div id="appNavMount"></div>
 </div><!-- /appContent -->
 
-<!-- Recalculate Goals Modal -->
-<div class="modal-overlay" id="recalcModal" onclick="closeRecalcModal(event)">
-  <div class="modal-box">
-    <div class="modal-header">
-      <div class="modal-title">Update Your Goals</div>
-      <button class="modal-close" onclick="document.getElementById('recalcModal').classList.remove('open')">✕</button>
-    </div>
-
-    <div id="recalcForm">
-      <div class="field-group">
-        <label class="field-label">Current Weight (lbs)</label>
-        <input type="number" id="rc-weight" min="50" max="500" placeholder="e.g. 185">
-      </div>
-      <div class="field-group">
-        <label class="field-label">Body Fat % <span class="field-optional">(optional)</span></label>
-        <input type="number" id="rc-bodyfat" min="4" max="60" placeholder="e.g. 22">
-      </div>
-      <div class="field-group">
-        <label class="field-label">Goal</label>
-        <select id="rc-goal">
-          <option value="fatloss">Fat Loss</option>
-          <option value="recomp">Recomposition</option>
-          <option value="muscle">Muscle Gain</option>
-        </select>
-      </div>
-      <div class="field-group">
-        <label class="field-label">Daily Steps</label>
-        <select id="rc-steps">
-          <option value="1.2">Under 4,000 – Sedentary</option>
-          <option value="1.35">4,000–6,000 – Lightly active</option>
-          <option value="1.45">6,000–8,000 – Moderately active</option>
-          <option value="1.55">8,000–10,000 – Active</option>
-          <option value="1.7">10,000+ – Very active</option>
-        </select>
-      </div>
-      <div class="field-group">
-        <label class="field-label">Training Days / Week</label>
-        <select id="rc-training">
-          <option value="0">0 – Not training yet</option>
-          <option value="2">2 days</option>
-          <option value="3">3 days</option>
-          <option value="4">4 days</option>
-          <option value="5">5 days</option>
-          <option value="6">6 days</option>
-        </select>
-      </div>
-      <button class="btn-calc" onclick="runRecalc()">Calculate New Targets</button>
-    </div>
-
-    <div id="recalcResults" style="display:none;">
-      <div class="results-grid">
-        <div class="result-cell" style="grid-column:1/-1;">
-          <div class="result-label">Target Calories</div>
-          <div class="result-val" id="rc-rCals">—</div>
-        </div>
-        <div class="result-cell">
-          <div class="result-label">Protein</div>
-          <div class="result-val" id="rc-rProtein">—</div>
-        </div>
-        <div class="result-cell">
-          <div class="result-label">Carbs</div>
-          <div class="result-val" id="rc-rCarbs">—</div>
-        </div>
-        <div class="result-cell">
-          <div class="result-label">Fats</div>
-          <div class="result-val" id="rc-rFats">—</div>
-        </div>
-      </div>
-      <div class="result-sub" id="rc-rSub"></div>
-      <div class="modal-actions">
-        <button class="btn-back" onclick="document.getElementById('recalcForm').style.display='';document.getElementById('recalcResults').style.display='none';">← Back</button>
-        <button class="btn-save" onclick="saveRecalc()">Save & Update</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <!-- Log / Edit Weight Modal (markup injected by weight.js) -->
 <div id="weightModalMount"></div>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.0/dist/umd/supabase.js" integrity="sha384-3wY11tldQ5+yWqAvmTN4XtQvnjoTva0cV15O/O/O5NTtp0ivVopSzLOzsVXWZse9" crossorigin="anonymous"></script>
 <script src="supabase.js"></script>
 <script src="schedules.js"></script>
+<script src="program-state.js"></script>
 <script src="weight.js"></script>
-<script src="food-core.js"></script>
-<script src="food-display.js"></script>
-<script src="nutrition.js"></script>
 <script src="metrics.js"></script>
 <script src="snapshot.js"></script>
+<script src="dashboard-model.js"></script>
 <script>
 
-  var currentProfile    = null;
-  var currentUserId     = null;
-  var ownedProgramsList = [];
+  // Home consumes SHARED state only: snapshot.js supplies training, nutrition,
+  // weight and body-composition domain state; program-state.js supplies the
+  // active program/session; dashboard-model.js decides priority and fallbacks.
+  // This page owns no fitness intelligence and performs no per-metric queries.
 
-  // Mount the shared Log/Edit Weight modal (markup lives in weight.js).
+  var currentProfile = null;
+  var currentUserId  = null;
+  var inProgressId   = null;
+
   document.getElementById('weightModalMount').innerHTML = wlModalMarkup();
 
-  var GOAL_LABELS = { fatloss: 'Fat Loss', recomp: 'Recomposition', muscle: 'Muscle Gain' };
+  function esc(s) {
+    return String(s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
 
-  var GOAL_PROGRAM_MAP = { fatloss: 'fat_loss_blueprint', muscle: 'muscle_gain' };
+  function showToast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(function () { t.classList.remove('show'); }, 3000);
+  }
 
-  // Session labels (SESSION_LABELS) + PROGRAM_SCHEDULES + getScheduleForDays
-  // all come from schedules.js (single source of truth).
-
-  var PROGRAM_META = {
-    fat_loss_blueprint: { name: '90 Day Fat Loss Blueprint' },
-    muscle_gain:        { name: 'Muscle Gain' },
-    glute_builder:      { name: 'Glute Builder' },
-  };
-
-  window.addEventListener('load', function() {
+  window.addEventListener('load', function () {
     (async () => {
       try {
         var session = await requireAuth();
-        var user    = session.user;
+        var user = session.user;
         currentUserId = user.id;
         var profile = await getProfile(user.id);
         currentProfile = profile;
@@ -1028,56 +402,16 @@
         // Narrow signal only — no logged/user content is included.
         try { window.dispatchEvent(new CustomEvent('mm:pwa-value', { detail: { type: 'dashboard' } })); } catch (e) {}
 
-        var firstName = (profile.full_name || user.email).split(' ')[0];
-        document.getElementById('headerName').textContent = firstName;
-        document.getElementById('dashName').textContent   = firstName;
-
-        document.getElementById('dashDate').textContent = new Date().toLocaleDateString('en-US', {
-          weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
-        });
-
-        var timelineLabels = { aggressive: 'Aggressive', steady: 'Steady', relaxed: 'Long Game' };
-        var goalTag = (GOAL_LABELS[profile.goal] || profile.goal || '—');
-        if (profile.timeline) goalTag += ' · ' + (timelineLabels[profile.timeline] || profile.timeline);
-        document.getElementById('dashGoalTag').textContent = goalTag;
-
-        // Neutral frequency label — never a program-specific split name here
-        document.getElementById('dashSplit').textContent = getFrequencyLabel(profile.training_days);
-
-        document.getElementById('dashCalories').textContent = profile.target_calories
-          ? profile.target_calories.toLocaleString() + ' kcal' : '—';
-
-        if (profile.target_calories && profile.maintenance_calories) {
-          var diff = Math.abs(profile.target_calories - profile.maintenance_calories);
-          document.getElementById('dashCalSub').textContent = profile.target_calories < profile.maintenance_calories
-            ? diff + ' cal deficit from maintenance'
-            : diff + ' cal surplus above maintenance';
-        }
-
-        document.getElementById('dashProtein').textContent    = profile.protein_target ? profile.protein_target + 'g' : '—';
-        document.getElementById('dashCarbs').textContent      = profile.carb_target    ? profile.carb_target + 'g'    : '—';
-        document.getElementById('dashFats').textContent       = profile.fat_target     ? profile.fat_target + 'g'     : '—';
-        document.getElementById('dashStartWeight').textContent = profile.weight_lbs      ? profile.weight_lbs + ' lbs'      : '—';
-        document.getElementById('dashGoalWeight').textContent  = profile.goal_weight_lbs ? profile.goal_weight_lbs + ' lbs' : '—';
-
-        document.getElementById('dashFocusText').innerHTML = buildFocus(profile);
-
-        document.getElementById('authGate').style.display   = 'none';
+        document.getElementById('authGate').style.display = 'none';
         document.getElementById('appContent').style.display = 'block';
+        lucide.createIcons();
 
-        await loadPurchases(user.id);
-        await checkDashboardInProgress(user.id);
-        await loadRecentActivity(user.id);
-        await loadRecentWeighIns(user.id);
-        await loadNutritionSummary(user.id);
-        await loadTrainedToday(user.id);
-        await loadStreak(user.id);
-        loadSnapshotExtras(user.id);   // supplementary lines — never blocks the dashboard
+        await renderDashboard(user.id);
+
         if (new URLSearchParams(window.location.search).get('purchase') === 'success') {
           showToast('Purchase successful — your program is now unlocked.');
           history.replaceState(null, '', window.location.pathname);
         }
-
       } catch (err) {
         console.error('Dashboard error:', err);
         window.location.href = 'auth.html';
@@ -1085,818 +419,209 @@
     })();
   });
 
-  function buildFocus(profile) {
-    var cals    = profile.target_calories ? profile.target_calories.toLocaleString() : null;
-    var protein = profile.protein_target || null;
-    var lead = {
-      fatloss: "You're in a calorie deficit today — fat loss is the mission.",
-      recomp:  'Recomp mode: eat near maintenance and let training drive the change.',
-      muscle:  "You're in a building surplus — fuel up and push your lifts."
-    }[profile.goal] || 'Stay consistent and hit your targets today.';
-    var parts = ['<strong>' + lead + '</strong>'];
-    if (cals && protein) {
-      parts.push('Aim for <strong>' + cals + ' kcal</strong> and lock in <strong>' + protein + 'g of protein</strong> — protein first, everything else follows.');
-    } else if (protein) {
-      parts.push('Lock in <strong>' + protein + 'g of protein</strong> — protein first, everything else follows.');
+  // ONE pass: every section is derived from the same shared state.
+  async function renderDashboard(userId) {
+    var results = await Promise.all([
+      buildUserSnapshot(userId, { profile: currentProfile }).catch(function (e) {
+        console.error('snapshot:', e); return null;
+      }),
+      loadProgramState(userId),
+      loadInProgress(userId),
+    ]);
+
+    var model = DashboardModel.buildDashboardModel({
+      snapshot: results[0],
+      profile: currentProfile,
+      program: results[1],
+      inProgressWorkout: results[2],
+      hourOfDay: new Date().getHours(),
+    });
+
+    renderToday(model.today);
+    renderWeek(model.week);
+    renderNutrition(model.nutrition);
+    renderFocus(model.focus);
+    renderProgress(model.progress);
+  }
+
+  async function loadProgramState(userId) {
+    try {
+      var owned = await pgLoadOwnedPrograms(userId);
+      var activeSlug = await pgResolveActive(userId, currentProfile, owned);
+      if (!activeSlug) return owned.length > 1 ? { needsSelection: true } : null;
+      return await pgResolveSession(userId, activeSlug, currentProfile.training_days);
+    } catch (e) {
+      console.error('loadProgramState:', e);
+      return null;
     }
-    parts.push('Move your body, drink your water, and check in tomorrow.');
-    return parts.join(' ');
   }
 
-  function showToast(msg) {
-    var t = document.getElementById('toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    setTimeout(function() { t.classList.remove('show'); }, 3000);
-  }
-
-  lucide.createIcons();
-
-  const PROGRAM_URLS = {
-    fat_loss_blueprint: 'program-fat-loss.html',
-    muscle_gain:        'program-muscle-gain.html',
-    glute_builder:      'program-glute-builder.html',
-  };
-
-  // ── Recalculate Goals ──────────────────────────────────────────
-  var recalcPlan = null;
-
-  function openRecalcModal() {
-    if (!currentProfile) return;
-    document.getElementById('rc-weight').value   = currentProfile.weight_lbs || '';
-    document.getElementById('rc-bodyfat').value  = currentProfile.body_fat_pct || '';
-    document.getElementById('rc-goal').value     = currentProfile.goal || 'fatloss';
-    document.getElementById('rc-steps').value    = currentProfile.activity_level || '1.35';
-    document.getElementById('rc-training').value = currentProfile.training_days || '3';
-    document.getElementById('recalcForm').style.display    = '';
-    document.getElementById('recalcResults').style.display = 'none';
-    document.getElementById('recalcModal').classList.add('open');
-  }
-
-  function closeRecalcModal(e) {
-    if (e && e.target !== document.getElementById('recalcModal')) return;
-    document.getElementById('recalcModal').classList.remove('open');
-  }
-
-  function rcCalcBMR(weightKg, heightCm, age, gender, bodyfat) {
-    if (bodyfat && bodyfat >= 5 && bodyfat <= 55) {
-      return 370 + (21.6 * weightKg * (1 - bodyfat / 100));
+  async function loadInProgress(userId) {
+    try {
+      // Most recent unfinished workout, regardless of age — an unfinished
+      // session must never become an invisible orphan.
+      var res = await supabaseClient
+        .from('workouts').select('id, name')
+        .eq('user_id', userId).eq('completed', false)
+        .order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (!res.data) return null;
+      inProgressId = res.data.id;
+      return res.data;
+    } catch (e) {
+      console.error('loadInProgress:', e);
+      return null;
     }
-    var base = (10 * weightKg) + (6.25 * heightCm) - (5 * age);
-    return gender === 'male' ? base + 5 : base - 161;
   }
 
-  function rcGetSplit(days) {
-    // Delegate to the shared source of truth so the label always matches
-    // the schedule that getScheduleForDays will actually launch.
-    return getSplitLabel(days);
-  }
+  // ── A · TODAY ────────────────────────────────────────────────────────
+  function renderToday(t) {
+    document.getElementById('todayTitle').textContent = t.title;
 
-  function runRecalc() {
-    var weight   = parseFloat(document.getElementById('rc-weight').value);
-    var bodyfat  = parseFloat(document.getElementById('rc-bodyfat').value) || null;
-    var goal     = document.getElementById('rc-goal').value;
-    var stepMult = parseFloat(document.getElementById('rc-steps').value);
-    var training = parseFloat(document.getElementById('rc-training').value);
-
-    if (!weight) { showToast('Please enter your current weight.'); return; }
-
-    var p        = currentProfile;
-    var weightKg = weight * 0.453592;
-    var heightCm = p.height_cm  || 175;
-    var age      = p.age        || 30;
-    var gender   = p.gender     || 'male';
-
-    var bmr  = rcCalcBMR(weightKg, heightCm, age, gender, bodyfat);
-    var tdee = Math.round(bmr * stepMult + (training * 0.75 * 6 * (bmr / 24)) / 7);
-    var minCals = gender === 'female' ? 1350 : 1600;
-    var targetCals;
-
-    if (goal === 'fatloss') {
-      targetCals = Math.max(minCals, tdee - 500);
-    } else if (goal === 'recomp') {
-      targetCals = Math.max(minCals, tdee - 200);
+    var statusEl = document.getElementById('todayStatus');
+    if (t.status) {
+      document.getElementById('todayStatusText').textContent = t.status;
+      statusEl.className = 'today-status' +
+        (t.state === 'done' ? ' is-done' : t.state === 'resume' ? ' is-live' : '');
+      statusEl.hidden = false;
     } else {
-      // muscle gain — always a surplus above maintenance
-      targetCals = tdee + 250;
+      statusEl.hidden = true;
     }
 
-    console.log('[Recalculate] Goal:', goal, '| Maintenance:', tdee, '| Target:', targetCals);
+    var cta = document.getElementById('todayCta');
+    if (t.cta) {
+      cta.textContent = t.cta.label;
+      cta.href = t.cta.href;
+      cta.hidden = false;
+    } else {
+      cta.hidden = true;
+    }
 
-    var proteinG = Math.round(weight * (goal === 'recomp' ? 1.0 : goal === 'fatloss' ? 0.9 : 0.95));
-    var fatG     = Math.round(targetCals * 0.25 / 9);
-    var carbG    = Math.round(Math.max(0, targetCals - (proteinG * 4) - (fatG * 9)) / 4);
-    var diff     = Math.abs(tdee - targetCals);
-    var subLabel = targetCals < tdee
-      ? diff + ' cal deficit from maintenance (' + tdee.toLocaleString() + ' kcal)'
-      : targetCals > tdee
-        ? diff + ' cal surplus above maintenance (' + tdee.toLocaleString() + ' kcal)'
-        : 'At maintenance';
-
-    document.getElementById('rc-rCals').textContent    = targetCals.toLocaleString() + ' kcal';
-    document.getElementById('rc-rProtein').textContent = proteinG + 'g';
-    document.getElementById('rc-rCarbs').textContent   = carbG + 'g';
-    document.getElementById('rc-rFats').textContent    = fatG + 'g';
-    document.getElementById('rc-rSub').textContent     = subLabel;
-
-    recalcPlan = {
-      weight_lbs: weight, body_fat_pct: bodyfat, goal,
-      activity_level: stepMult, training_days: training,
-      maintenance_calories: tdee, target_calories: targetCals,
-      protein_target: proteinG, fat_target: fatG, carb_target: carbG,
-      training_split: rcGetSplit(training),
-    };
-
-    document.getElementById('recalcForm').style.display    = 'none';
-    document.getElementById('recalcResults').style.display = '';
-  }
-
-  async function saveRecalc() {
-    if (!recalcPlan) return;
-    try {
-      var prevTrainingDays = currentProfile.training_days;
-      var { data: s } = await supabaseClient.auth.getSession();
-      var { error } = await supabaseClient
-        .from('profiles').update(recalcPlan).eq('id', s.session.user.id);
-      if (error) throw error;
-      Object.assign(currentProfile, recalcPlan);
-
-      document.getElementById('dashCalories').textContent  = recalcPlan.target_calories.toLocaleString() + ' kcal';
-      var diff = Math.abs(recalcPlan.target_calories - recalcPlan.maintenance_calories);
-      document.getElementById('dashCalSub').textContent    = recalcPlan.target_calories < recalcPlan.maintenance_calories
-        ? diff + ' cal deficit from maintenance' : diff + ' cal surplus above maintenance';
-      document.getElementById('dashProtein').textContent   = recalcPlan.protein_target + 'g';
-      document.getElementById('dashCarbs').textContent     = recalcPlan.carb_target + 'g';
-      document.getElementById('dashFats').textContent      = recalcPlan.fat_target + 'g';
-      document.getElementById('dashSplit').textContent     = getFrequencyLabel(recalcPlan.training_days);
-      document.getElementById('recalcModal').classList.remove('open');
-
-      // training_days is global — remap ALL owned programs when it changes
-      if (recalcPlan.training_days !== prevTrainingDays && ownedProgramsList.length > 0) {
-        await remapAllProgramSchedules(s.session.user.id, recalcPlan.training_days);
-      }
-
-      showToast('Goals updated!');
-    } catch (err) {
-      console.error('saveRecalc:', err);
-      showToast('Error saving — try again.');
+    var alt = document.getElementById('todayAlt');
+    if (t.secondary) {
+      alt.textContent = t.secondary.label;
+      alt.hidden = false;
+      alt.onclick = t.secondary.action === 'discard'
+        ? discardSession
+        : function () { window.location.href = t.secondary.href; };
+    } else {
+      alt.hidden = true;
     }
   }
 
-  // training_days is a GLOBAL profile setting — one source of truth, no per-program frequency.
-  // This function remaps ALL owned programs to the new schedule at once.
-  async function remapAllProgramSchedules(userId, newTrainingDays) {
-    if (!ownedProgramsList.length) return;
-
-    // Fetch all existing user_programs rows for owned slugs in one query
-    var { data: rows } = await supabaseClient
-      .from('user_programs').select('*')
-      .eq('user_id', userId)
-      .in('program_slug', ownedProgramsList);
-
-    var rowMap = {};
-    (rows || []).forEach(function(r) { rowMap[r.program_slug] = r; });
-
-    var days = parseInt(newTrainingDays, 10) || 3;
-
-    await Promise.all(ownedProgramsList.map(async function(slug) {
-      var up      = rowMap[slug];
-      if (!up) return; // no row yet — bootstrapped on first workout finish with correct days
-
-      var newKeys = getScheduleForDays(slug, days);
-      var oldKeys = up.schedule_keys || [];
-      if (oldKeys.join(',') === newKeys.join(',')) return; // already correct, skip
-
-      var curKey = oldKeys[up.current_index % (oldKeys.length || 1)];
-      var newIdx = newKeys.indexOf(curKey);
-      if (newIdx < 0) newIdx = (up.current_index || 0) % newKeys.length;
-
-      // user_programs holds progression only — training_days lives on profiles
-      await supabaseClient.from('user_programs')
-        .update({ schedule_keys: newKeys, current_index: newIdx })
-        .eq('id', up.id);
-    }));
-
-    // Refresh Today card to show the updated next session for the active program
-    if (currentProfile.active_program) {
-      await showActiveProgramState(userId, currentProfile.active_program, ownedProgramsList.length > 1);
+  // ── B · THIS WEEK ────────────────────────────────────────────────────
+  function renderWeek(w) {
+    document.getElementById('weekValue').textContent = w.hasData ? w.label : '—';
+    var track = document.getElementById('weekTrack');
+    if (w.hasData && w.planned) {
+      document.getElementById('weekFill').style.width = w.pct + '%';
+      document.getElementById('weekFill').className = 'fill' + (w.complete ? ' good' : '');
+      track.hidden = false;
+    } else {
+      track.hidden = true;
     }
+    document.getElementById('weekMeta').textContent =
+      w.hasData && w.streak > 1 ? w.streak + '-day streak' : '';
   }
 
-  async function loadPurchases(userId) {
-    try {
-      const { data, error } = await supabaseClient
-        .from('purchases').select('product, status')
-        .eq('user_id', userId).eq('status', 'active');
-      if (error) throw error;
-      const owned = new Set((data || []).map(p => p.product));
+  // ── C · NUTRITION ────────────────────────────────────────────────────
+  function renderNutrition(n) {
+    var body = document.getElementById('nutBody');
+    var targetEl = document.getElementById('nutTarget');
+    var summary = document.getElementById('nutSummary');
 
-      // Update Open Program / Buy badges in Programs section
-      document.querySelectorAll('.plan-item[data-product]').forEach(item => {
-        if (owned.has(item.dataset.product)) {
-          const url = PROGRAM_URLS[item.dataset.product];
-          item.querySelector('.plan-action').innerHTML = url
-            ? `<a class="owned-badge" href="${url}">✓ Open Program →</a>`
-            : '<span class="owned-badge">✓ Owned</span>';
-        }
-      });
-
-      // Resolve which program to show in Today card
-      ownedProgramsList = [...owned].filter(p => PROGRAM_META[p]);
-      await resolveActiveProgram(userId, ownedProgramsList);
-    } catch (err) {
-      console.error('loadPurchases error:', err);
+    if (!n.hasData) {
+      targetEl.textContent = '';
+      body.innerHTML = '<div class="nut-empty">Not available</div>';
+      summary.textContent = 'Nutrition not available';
+      return;
     }
-    await renderMembership(userId);
-  }
-
-  // ── Membership status + billing portal ────────────────────────────
-  async function renderMembership(userId) {
-    var section = document.getElementById('membershipSection');
-    try {
-      // Include past_due so a member with a failed payment still sees the card
-      // (and a warning) rather than silently losing access to manage billing.
-      var { data, error } = await supabaseClient
-        .from('purchases')
-        .select('status, current_period_end, cancel_at_period_end')
-        .eq('user_id', userId)
-        .eq('product', 'ai_membership')
-        .in('status', ['active', 'past_due'])
-        .order('created_at', { ascending: false })
-        .limit(1);
-      if (error) throw error;
-
-      var m = (data && data[0]) || null;
-      if (!m) { section.style.display = 'none'; return; }
-
-      var periodEnd = m.current_period_end ? new Date(m.current_period_end) : null;
-
-      // Defensive: if a cancellation window has already elapsed but the
-      // subscription.deleted webhook hasn't landed yet, treat access as ended.
-      if (m.cancel_at_period_end && periodEnd && periodEnd < new Date()) {
-        section.style.display = 'none';
-        return;
-      }
-
-      var statusEl = document.getElementById('membershipStatus');
-      var dateStr = periodEnd
-        ? periodEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-        : null;
-
-      if (m.status === 'past_due') {
-        statusEl.innerHTML = '<span style="color:var(--red);font-weight:700;">Payment failed</span> — update your card to keep access.';
-      } else if (m.cancel_at_period_end) {
-        statusEl.innerHTML = dateStr
-          ? '<span style="color:var(--text-muted);">Canceled — access ends on ' + dateStr + '</span>'
-          : '<span style="color:var(--text-muted);">Canceled</span>';
-      } else {
-        statusEl.textContent = dateStr ? ('Active — renews ' + dateStr) : 'Active';
-      }
-      section.style.display = '';
-    } catch (err) {
-      console.error('renderMembership error:', err);
-      section.style.display = 'none';
-    }
-  }
-
-  async function manageBilling(btn) {
-    var orig = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = 'Loading…';
-    try {
-      var session = await getSession();
-      if (!session) { window.location.href = 'auth.html'; return; }
-      var res = await fetch('/api/customer-portal', {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + session.access_token },
-      });
-      if (!res.ok) {
-        var d = await res.json().catch(function(){ return {}; });
-        throw new Error(d.error || 'Could not open billing portal');
-      }
-      var json = await res.json();
-      window.location.href = json.url;
-    } catch (err) {
-      console.error('manageBilling:', err);
-      alert(err.message || 'Could not open billing portal. Please try again.');
-      btn.disabled = false;
-      btn.textContent = orig;
-    }
-  }
-
-  // ── Active program logic ──────────────────────────────────────────
-
-  async function resolveActiveProgram(userId, programs) {
-    var activeSlug = currentProfile.active_program || null;
-
-    // If stored active program is no longer owned, clear it
-    if (activeSlug && !programs.includes(activeSlug)) {
-      activeSlug = null;
-      await supabaseClient.from('profiles').update({ active_program: null }).eq('id', userId);
-      currentProfile.active_program = null;
-    }
-
-    if (programs.length === 0) {
-      showNoProgramState();
+    if (!n.logged) {
+      targetEl.textContent = '';
+      body.innerHTML = '<div class="nut-empty">Nothing logged yet today</div>';
+      summary.textContent = 'No food logged today';
       return;
     }
 
-    if (programs.length === 1 && !activeSlug) {
-      // Auto-set the single owned program
-      activeSlug = programs[0];
-      await supabaseClient.from('profiles').update({ active_program: activeSlug }).eq('id', userId);
-      currentProfile.active_program = activeSlug;
+    var html = '';
+    if (n.hasTargets) {
+      targetEl.innerHTML = '<span class="sub">' + n.consumed.toLocaleString() +
+        ' / ' + n.target.toLocaleString() + '</span>';
+      html += '<div class="nut">' +
+        '<span class="num nut-num' + (n.over ? ' over' : '') + '">' + n.left.toLocaleString() + '</span>' +
+        '<span class="nut-unit">kcal ' + (n.over ? 'over' : 'left') + '</span>' +
+        '</div>' +
+        '<div class="track"><div class="fill ' + (n.over ? 'over' : 'good') +
+        '" style="width:' + n.pct + '%"></div></div>';
+      summary.textContent = n.left.toLocaleString() + ' kcal ' + (n.over ? 'over' : 'left');
+    } else {
+      targetEl.textContent = '';
+      html += '<div class="nut">' +
+        '<span class="num nut-num">' + n.consumed.toLocaleString() + '</span>' +
+        '<span class="nut-unit">kcal today</span>' +
+        '</div>';
+      summary.textContent = n.consumed.toLocaleString() + ' kcal today';
     }
 
-    if (!activeSlug) {
-      // Multiple programs, none chosen yet
-      showProgramPickerState(programs);
+    if (n.protein.target) {
+      html += '<div class="nut-macro">' +
+        '<span class="label">Protein</span>' +
+        '<span>' + n.protein.consumed + ' / ' + n.protein.target + ' g</span>' +
+        '</div>' +
+        '<div class="track"><div class="fill" style="width:' + n.protein.pct + '%"></div></div>';
+    } else if (n.protein.consumed) {
+      html += '<div class="nut-macro"><span class="label">Protein</span>' +
+        '<span>' + n.protein.consumed + ' g</span></div>';
+    }
+    body.innerHTML = html;
+  }
+
+  // ── D · FOCUS ────────────────────────────────────────────────────────
+  // Deterministic, evidence-backed, one line — or nothing at all. This is the
+  // seat the AI Coach will occupy; it is never presented as AI today.
+  function renderFocus(f) {
+    var el = document.getElementById('focusRow');
+    if (!f) { el.hidden = true; return; }
+    document.getElementById('focusText').textContent = f.text;
+    el.setAttribute('data-tone', f.tone);
+    el.hidden = false;
+  }
+
+  // ── E · PROGRESS ─────────────────────────────────────────────────────
+  function renderProgress(p) {
+    var valueEl = document.getElementById('progValue');
+    var metaEl  = document.getElementById('progMeta');
+    if (!p.hasData) {
+      valueEl.textContent = '—';
+      metaEl.innerHTML = '<span style="color:var(--text-muted)">No weigh-ins yet</span>';
       return;
     }
-
-    await showActiveProgramState(userId, activeSlug, programs.length > 1);
-  }
-
-  async function showActiveProgramState(userId, activeSlug, canChange) {
-    var meta = PROGRAM_META[activeSlug];
-    if (!meta) return;
-
-    // Schedule is driven by profile.training_days — not hardcoded
-    var correctKeys = getScheduleForDays(activeSlug, currentProfile.training_days);
-
-    var { data: up } = await supabaseClient
-      .from('user_programs').select('id, schedule_keys, current_index')
-      .eq('user_id', userId).eq('program_slug', activeSlug).maybeSingle();
-
-    var keys, idx;
-    if (!up || !(up.schedule_keys || []).length) {
-      keys = correctKeys;
-      idx  = 0;
-    } else {
-      keys = up.schedule_keys;
-      idx  = up.current_index || 0;
-      // Auto-remap if stored schedule doesn't match current training_days
-      if (keys.join(',') !== correctKeys.join(',')) {
-        var curKey = keys[idx % keys.length];
-        var newIdx = correctKeys.indexOf(curKey);
-        if (newIdx < 0) newIdx = idx % correctKeys.length;
-        supabaseClient.from('user_programs')
-          .update({ schedule_keys: correctKeys, current_index: newIdx })
-          .eq('id', up.id).then(function(){});
-        keys = correctKeys;
-        idx  = newIdx;
-      }
+    valueEl.textContent = p.current + ' ' + p.unit;
+    if (p.change30 == null) {
+      metaEl.textContent = '';
+      return;
     }
-
-    var sessionKey = keys[idx % keys.length];
-
-    // Stash schedule state so the manual workout picker can offer every session
-    // in the current schedule (the recommended one stays the default).
-    activeProgramSlug      = activeSlug;
-    activeScheduleKeys     = keys;
-    recommendedSessionKey  = sessionKey;
-    selectedSessionKey     = sessionKey;
-
-    document.getElementById('activeProgramName').textContent    = meta.name;
-    document.getElementById('changeProgramBtn').style.display   = canChange ? '' : 'none';
-    document.getElementById('activeProgramSection').style.display = '';
-    document.getElementById('noProgramSection').style.display    = 'none';
-    document.getElementById('programPickerSection').style.display = 'none';
-
-    var btn = document.getElementById('btnStartWorkout');
-    // Dashboard launches are the progression driver — mode=progression so
-    // finishing advances current_index (program-page launches use mode=optional).
-    btn.href = 'workout.html?program=' + activeSlug + '&session=' + sessionKey + '&mode=progression';
-    btn.textContent = 'Start Workout';
-    btn.style.display = '';
-    document.getElementById('btnBrowsePrograms').style.display = 'none';
-
-    // Show the workout selector (defaults to recommended, user can change).
-    document.getElementById('workoutDropdown').classList.remove('open');
-    document.getElementById('workoutSelectorBtn').classList.remove('open');
-    document.getElementById('chooseWorkoutWrap').style.display = '';
-    renderWorkoutSelector();
-
-    // Goal / active program mismatch hint
-    var expectedSlug = GOAL_PROGRAM_MAP[currentProfile.goal];
-    var hintEl = document.getElementById('mismatchHint');
-    if (expectedSlug && expectedSlug !== activeSlug && PROGRAM_META[expectedSlug] && ownedProgramsList.includes(expectedSlug)) {
-      var goalLabel    = GOAL_LABELS[currentProfile.goal] || currentProfile.goal;
-      var expectedName = PROGRAM_META[expectedSlug].name;
-      hintEl.innerHTML = 'Your goal is <strong>' + goalLabel + '</strong>. '
-        + '<a href="#" onclick="setActiveProgram(\'' + expectedSlug + '\'); return false;">Switch to ' + expectedName + '?</a>';
-      hintEl.style.display = '';
-    } else {
-      hintEl.style.display = 'none';
-    }
+    var arrow = p.direction === 'down' ? '↓' : p.direction === 'up' ? '↑' : '±';
+    metaEl.innerHTML = '<span class="prog-delta ' + esc(p.direction) + '">' +
+      arrow + ' ' + Math.abs(p.change30) + ' ' + esc(p.unit) + '</span>' +
+      '<span style="color:var(--text-muted)"> this month</span>';
   }
 
-  function showNoProgramState() {
-    document.getElementById('activeProgramSection').style.display  = 'none';
-    document.getElementById('programPickerSection').style.display   = 'none';
-    document.getElementById('mismatchHint').style.display            = 'none';
-    document.getElementById('noProgramSection').style.display        = '';
-    document.getElementById('btnStartWorkout').style.display          = 'none';
-    document.getElementById('btnBrowsePrograms').style.display        = '';
-  }
-
-  function showProgramPickerState(programs) {
-    document.getElementById('activeProgramSection').style.display  = 'none';
-    document.getElementById('noProgramSection').style.display       = 'none';
-    document.getElementById('mismatchHint').style.display            = 'none';
-    document.getElementById('btnStartWorkout').style.display          = 'none';
-    document.getElementById('btnBrowsePrograms').style.display        = 'none';
-
-    var listEl = document.getElementById('programPickerList');
-    listEl.innerHTML = programs.map(function(slug) {
-      var m = PROGRAM_META[slug];
-      return '<button class="program-picker-btn" onclick="setActiveProgram(\'' + slug + '\')">' + m.name + '</button>';
-    }).join('');
-    document.getElementById('programPickerSection').style.display = '';
-  }
-
-  async function setActiveProgram(slug) {
-    try {
-      var { data: s } = await supabaseClient.auth.getSession();
-      var userId = s.session.user.id;
-      await supabaseClient.from('profiles').update({ active_program: slug }).eq('id', userId);
-      currentProfile.active_program = slug;
-
-      document.getElementById('activeProgramSection').style.display  = 'none';
-      document.getElementById('noProgramSection').style.display       = 'none';
-      document.getElementById('programPickerSection').style.display   = 'none';
-      document.getElementById('mismatchHint').style.display            = 'none';
-
-      await showActiveProgramState(userId, slug, ownedProgramsList.length > 1);
-    } catch (err) {
-      console.error('setActiveProgram error:', err);
-      showToast('Error updating program — try again.');
-    }
-  }
-
-  function openProgramPicker() {
-    document.getElementById('activeProgramSection').style.display = 'none';
-    document.getElementById('btnStartWorkout').style.display       = 'none';
-    document.getElementById('mismatchHint').style.display           = 'none';
-    document.getElementById('chooseWorkoutWrap').style.display      = 'none';
-    showProgramPickerState(ownedProgramsList);
-  }
-
-  // ── Workout selector dropdown ─────────────────────────────────────
-  // Always defaults to the recommended next workout; user can open the dropdown
-  // and pick any session in the current schedule. Picking only changes the
-  // Start link — active_program and current_index are not touched.
-  var activeProgramSlug     = null;
-  var activeScheduleKeys    = [];
-  var recommendedSessionKey = null;
-  var selectedSessionKey    = null;
-
-  function toggleWorkoutDropdown() {
-    var dropdown = document.getElementById('workoutDropdown');
-    var btn      = document.getElementById('workoutSelectorBtn');
-    var open     = dropdown.classList.contains('open');
-    dropdown.classList.toggle('open', !open);
-    btn.classList.toggle('open', !open);
-  }
-
-  function renderWorkoutSelector() {
-    // Update the selector button label
-    document.getElementById('workoutSelectorLabel').textContent =
-      SESSION_LABELS[selectedSessionKey] || selectedSessionKey || '—';
-
-    // Rebuild the dropdown options
-    var dropdown = document.getElementById('workoutDropdown');
-    dropdown.innerHTML = activeScheduleKeys.map(function(key) {
-      var isActive = key === selectedSessionKey;
-      var isRec    = key === recommendedSessionKey;
-      var tag = isRec ? '<span class="workout-dropdown-tag">Next up</span>' : '';
-      return '<button class="workout-dropdown-option' + (isActive ? ' active' : '') + '" ' +
-        'onclick="selectDashWorkout(\'' + key + '\')">' +
-        '<span>' + (SESSION_LABELS[key] || key) + '</span>' + tag + '</button>';
-    }).join('');
-  }
-
-  function selectDashWorkout(key) {
-    if (activeScheduleKeys.indexOf(key) < 0) return;
-    selectedSessionKey = key;
-    // Only the recommended "Next up" session is a progression workout. Any other
-    // session the user picks here is an OPTIONAL one-off: it logs to history and
-    // feeds per-exercise progression, but must NEVER advance current_index. The
-    // active program only advances after completing the intended progression
-    // workout (Tier 2.2 rule — the next programmed workout stays next until it's
-    // the one actually completed).
-    var mode = (key === recommendedSessionKey) ? 'progression' : 'optional';
-    var btn = document.getElementById('btnStartWorkout');
-    btn.href = 'workout.html?program=' + activeProgramSlug + '&session=' + key + '&mode=' + mode;
-    btn.textContent = 'Start Workout';
-    // Close the dropdown after selection
-    document.getElementById('workoutDropdown').classList.remove('open');
-    document.getElementById('workoutSelectorBtn').classList.remove('open');
-    renderWorkoutSelector();
-  }
-
-  // ── My Activity: Recent Workouts ──────────────────────────────────
-  // Compact, read-only preview of the 3 most recent completed workouts.
-  // Full detail (expand/edit/delete) lives on workout-history.html.
-  function escActivity(str) {
-    return String(str)
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-  }
-
-  async function loadRecentActivity(userId) {
-    var el = document.getElementById('recentWorkouts');
-    if (!el) return;
-    try {
-      var { data } = await supabaseClient
-        .from('workouts')
-        .select('id, name, created_at, duration_minutes, program_slug')
-        .eq('user_id', userId).eq('completed', true)
-        .order('created_at', { ascending: false }).limit(3);
-
-      if (!data || data.length === 0) {
-        el.innerHTML = '<div class="activity-empty">No completed workouts yet.</div>';
-        return;
-      }
-
-      el.innerHTML = data.map(function(w) {
-        var d = new Date(w.created_at);
-        var date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        var prog = (w.program_slug && typeof programName === 'function') ? programName(w.program_slug) : '';
-        var subBits = [];
-        if (prog) subBits.push('<span class="prog">' + escActivity(prog) + '</span>');
-        if (w.duration_minutes) subBits.push(w.duration_minutes + ' min');
-        var sub = subBits.length ? '<div class="activity-row-sub">' + subBits.join(' · ') + '</div>' : '';
-        return '<a class="activity-row" href="workout-history.html">' +
-          '<div class="activity-row-main">' +
-            '<div class="activity-row-name">' + escActivity(w.name || 'Workout') + '</div>' +
-            sub +
-          '</div>' +
-          '<div class="activity-row-date">' + date + '</div>' +
-        '</a>';
-      }).join('');
-    } catch (err) {
-      console.error('loadRecentActivity error:', err);
-      el.innerHTML = '<div class="activity-empty">Couldn\'t load workouts.</div>';
-    }
-  }
-
-  // ── P2 · Trained today? ────────────────────────────────────────
-  async function loadTrainedToday(userId) {
-    var el = document.getElementById('workoutStatusToday');
-    if (!el) return;
-    var today = (typeof nuToday === 'function') ? nuToday()
-      : new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-    try {
-      var { data } = await supabaseClient.from('workouts')
-        .select('id').eq('user_id', userId).eq('completed', true).eq('date', today).limit(1);
-      if (data && data.length) {
-        el.className = 'workout-status done';
-        el.innerHTML = '<span class="ws-dot"></span><span class="ws-text">Trained today ✓</span>';
-      } else {
-        el.className = 'workout-status todo';
-        el.innerHTML = '<span class="ws-dot"></span><span class="ws-text">No workout logged yet today</span>';
-      }
-    } catch (err) {
-      console.error('loadTrainedToday error:', err);
-      el.className = 'workout-status';
-      el.innerHTML = '<span class="ws-dot"></span><span class="ws-text">Workout status unavailable</span>';
-    }
-  }
-
-  // ── P4 · Momentum (workout streak + this-week count) ───────────
-  // dashIso / dashDayStreak / dashThisWeekCount moved verbatim to snapshot.js
-  // (Phase 4.1) — one home for streak logic, shared with the AI Coach contract.
-  async function loadStreak(userId) {
-    var el = document.getElementById('momentumStreak');
-    if (!el) return;
-    try {
-      var { data } = await supabaseClient.from('workouts')
-        .select('date').eq('user_id', userId).eq('completed', true)
-        .order('date', { ascending: false }).limit(180);
-      var dates = Array.from(new Set((data || []).map(function (w) { return w.date; })));
-      if (!dates.length) { el.innerHTML = ''; return; }
-      var streak = dashDayStreak(new Set(dates));
-      var week = dashThisWeekCount(dates);
-      el.innerHTML =
-        '<span class="streak-num' + (streak === 0 ? ' cold' : '') + '">' + streak + '</span>' +
-        '<span class="streak-label">day streak</span>' +
-        '<span class="streak-week">This week: ' + week + '</span>';
-    } catch (err) {
-      console.error('loadStreak error:', err);
-      el.innerHTML = '';
-    }
-  }
-
-  // ── Today's Nutrition (dashboard) ──────────────────────────────
-  // Read-only summary of today's food logs vs. profile targets.
-  // NEVER writes targets — those are owned by Recalculate Goals.
-  async function loadNutritionSummary(userId) {
-    var el = document.getElementById('nutritionSummary');
-    if (!el) return;
-    try {
-      var logs = await nuFetchLogs(userId, nuToday());
-      if (!logs.length) {
-        el.innerHTML = '<div class="activity-empty">No food logged today — tap <strong>Log Food</strong> to start tracking.</div>';
-        return;
-      }
-      var t = nuDayTotals(logs);
-      var p = currentProfile || {};
-      var calTarget = +p.target_calories || 0;
-
-      // Compact macro bar: label · consumed/target · fill (amber when over target).
-      function macroBar(label, consumed, target) {
-        var c = nuRound(consumed);
-        var pct = target ? Math.min(100, Math.round(consumed / target * 100)) : 0;
-        var over = target && consumed > target;
-        var val = target ? (c + ' <small>/ ' + target + ' g</small>') : (c + ' g');
-        return '<div class="nut-macro">' +
-            '<div class="nut-macro-head">' +
-              '<span class="nut-macro-label">' + label + '</span>' +
-              '<span class="nut-macro-val">' + val + '</span>' +
-            '</div>' +
-            '<div class="nut-track"><div class="nut-fill' + (over ? ' over' : '') + '" style="width:' + pct + '%"></div></div>' +
-          '</div>';
-      }
-
-      var html;
-      if (calTarget) {
-        // Hero = calories left (or over). Bar green, amber once over target.
-        var consumedCal = nuRound(t.calories);
-        var left = calTarget - consumedCal;
-        var over = left < 0;
-        var pct = Math.min(100, Math.round(consumedCal / calTarget * 100));
-        html =
-          '<div class="nut-hero">' +
-            '<div class="nut-hero-num' + (over ? ' over' : '') + '">' + (over ? '−' + Math.abs(left) : left) + '</div>' +
-            '<div class="nut-hero-meta">' +
-              '<div class="nut-hero-label">' + (over ? 'Calories Over' : 'Calories Left') + '</div>' +
-              '<div class="nut-hero-sub">' + consumedCal.toLocaleString() + ' / ' + calTarget.toLocaleString() + ' kcal</div>' +
-            '</div>' +
-          '</div>' +
-          '<div class="nut-track nut-track-cal"><div class="nut-fill cal' + (over ? ' over' : '') + '" style="width:' + pct + '%"></div></div>' +
-          macroBar('Protein', t.protein, +p.protein_target || 0) +
-          macroBar('Carbs',   t.carbs,   +p.carb_target    || 0) +
-          macroBar('Fat',     t.fat,     +p.fat_target     || 0);
-      } else {
-        // No calorie target yet — show consumed totals + nudge (can't compute "left").
-        html =
-          '<div class="nut-hero">' +
-            '<div class="nut-hero-num">' + nuRound(t.calories).toLocaleString() + '</div>' +
-            '<div class="nut-hero-meta">' +
-              '<div class="nut-hero-label">Calories Today</div>' +
-              '<div class="nut-hero-sub">P ' + nuRound(t.protein) + 'g · C ' + nuRound(t.carbs) + 'g · F ' + nuRound(t.fat) + 'g</div>' +
-            '</div>' +
-          '</div>' +
-          '<div class="nut-note">Set your targets (Recalculate Goals) to track progress.</div>';
-      }
-      el.innerHTML = html;
-    } catch (err) {
-      console.error('loadNutritionSummary error:', err);
-      el.innerHTML = '<div class="activity-empty">Couldn\'t load nutrition.</div>';
-    }
-  }
-
-  // ── Snapshot-fed extras (Phase 4.1) ────────────────────────────
-  // ONE buildUserSnapshot call powers the two new lines. Existing loaders are
-  // untouched; when the AI Coach ships they can migrate onto this snapshot.
-  async function loadSnapshotExtras(userId) {
-    try {
-      var snap = await buildUserSnapshot(userId, { profile: currentProfile });
-
-      // Goal Progress: body composition beside the scale numbers.
-      var gm = document.getElementById('goalMetricsRow');
-      if (gm) {
-        var bits = [];
-        function delta30(d, unit) {
-          if (d == null) return '';
-          var r = wlRound1(d);
-          return ' <span class="gm-delta">(' + (r > 0 ? '+' : r < 0 ? '−' : '±') + Math.abs(r) + unit + ' · 30d)</span>';
-        }
-        if (snap.bodyFat.count > 0) {
-          bits.push('<span><span class="gm-label">Body Fat</span>' +
-            wlRound1(snap.bodyFat.current) + '%' + delta30(snap.bodyFat.change30, '%') + '</span>');
-        }
-        if (snap.waist.count > 0) {
-          bits.push('<span><span class="gm-label">Waist</span>' +
-            wlRound1(snap.waist.current) + ' in' + delta30(snap.waist.change30, ' in') + '</span>');
-        }
-        gm.innerHTML = bits.length
-          ? '<a href="weight-history.html">' + bits.join('') + '</a>'
-          : '';
-      }
-
-      // Scoreboard: 7-day consistency line.
-      var wc = document.getElementById('weekConsistency');
-      if (wc) {
-        var n = snap.nutrition.week;
-        var parts = [];
-        if (n.daysLogged > 0) parts.push('food logged ' + n.daysLogged + ' of 7 days');
-        if (snap.training.thisWeekCount > 0) {
-          parts.push(snap.training.thisWeekCount + (snap.training.thisWeekCount === 1 ? ' workout' : ' workouts'));
-        }
-        wc.textContent = parts.length ? 'This week: ' + parts.join(' · ') : '';
-      }
-    } catch (err) {
-      console.error('loadSnapshotExtras error:', err);
-    }
-  }
-
-  // ── Weigh-Ins (dashboard) ──────────────────────────────────────
-  async function loadRecentWeighIns(userId) {
-    var listEl = document.getElementById('recentWeighIns');
-    var sumEl  = document.getElementById('weighInSummary');
-    if (!listEl) return;
-    try {
-      // Pull a 60-row window so 7-day avg / 30-day change can be computed.
-      var logs = await wlFetchLogs(userId, 60);
-      var profileWeight = currentProfile ? currentProfile.weight_lbs : null;
-      var stats = wlStats(logs, profileWeight);
-
-      if (stats.count === 0) {
-        sumEl.innerHTML = '';
-        listEl.innerHTML = profileWeight
-          ? '<div class="activity-empty">No weigh-ins yet. Your starting weight is <strong>' + wlEsc(wlRound1(profileWeight)) + ' lbs</strong> — tap <strong>Log Weight</strong> to start tracking.</div>'
-          : '<div class="activity-empty">No weigh-ins yet — tap <strong>Log Weight</strong> to start tracking.</div>';
-        return;
-      }
-
-      var cells = [];
-      cells.push('<div class="wi-stat"><div class="wi-stat-label">Current</div><div class="wi-stat-val">' + wlRound1(stats.current) + ' <small>lbs</small></div></div>');
-      if (stats.avg7 != null)
-        cells.push('<div class="wi-stat"><div class="wi-stat-label">7-Day Avg</div><div class="wi-stat-val">' + wlRound1(stats.avg7) + ' <small>lbs</small></div></div>');
-      if (stats.change30 != null)
-        cells.push('<div class="wi-stat"><div class="wi-stat-label">30-Day</div><div class="wi-stat-val" style="font-size:18px;">' + wlChangeStr(stats.change30) + '</div></div>');
-      if (currentProfile && currentProfile.goal_weight_lbs)
-        cells.push('<div class="wi-stat"><div class="wi-stat-label">Goal</div><div class="wi-stat-val">' + wlRound1(currentProfile.goal_weight_lbs) + ' <small>lbs</small></div></div>');
-      sumEl.innerHTML = '<div class="wi-summary">' + cells.join('') + '</div>';
-
-      // Last 3 entries, each with delta vs the next-older entry (logs is desc).
-      listEl.innerHTML = logs.slice(0, 3).map(function (l, i) {
-        var prev  = logs[i + 1];
-        var delta = prev ? (+l.weight_lbs - +prev.weight_lbs) : null;
-        return '<a class="activity-row" href="weight-history.html">' +
-          '<div class="activity-row-main">' +
-            '<div class="activity-row-name">' + wlRound1(l.weight_lbs) + ' lbs</div>' +
-            (l.note ? '<div class="activity-row-sub">' + wlEsc(l.note) + '</div>' : '') +
-          '</div>' +
-          '<div class="activity-row-date">' + wlDeltaHTML(delta) + ' &nbsp; ' + wlEsc(wlFmtDate(l.logged_on)) + '</div>' +
-        '</a>';
-      }).join('');
-    } catch (err) {
-      console.error('loadRecentWeighIns error:', err);
-      listEl.innerHTML = '<div class="activity-empty">Couldn\'t load weigh-ins.</div>';
-    }
-  }
-
-  // Refresh the dashboard weigh-ins after the shared modal saves.
-  // wlSave() has already synced profiles.weight_lbs (and currentProfile) to the
-  // latest weigh-in, so mirror it into the Current Weight card too.
+  // ── Weight modal hook ────────────────────────────────────────────────
+  // wlSave() already toasts and has synced profiles.weight_lbs — just re-derive.
   window.onWeightSaved = async function () {
     if (!currentUserId) return;
-    if (currentProfile && currentProfile.weight_lbs != null) {
-      document.getElementById('dashStartWeight').textContent = currentProfile.weight_lbs + ' lbs';
-    }
-    await loadRecentWeighIns(currentUserId);
+    currentProfile = await getProfile(currentUserId);
+    await renderDashboard(currentUserId);
   };
 
-  var inProgressId = null;
-
-  async function checkDashboardInProgress(userId) {
-    // Most recent unfinished workout, regardless of age — an unfinished session
-    // must never become an invisible orphan. Resume/discard is the only way out.
-    var { data } = await supabaseClient
-      .from('workouts').select('id, name')
-      .eq('user_id', userId).eq('completed', false)
-      .order('created_at', { ascending: false }).limit(1).maybeSingle();
-    if (!data) return;
-    inProgressId = data.id;
-    var btn = document.getElementById('btnStartWorkout');
-    btn.textContent = 'Resume Workout';
-    btn.href        = 'workout.html';
-    btn.style.display = '';
-    document.getElementById('btnBrowsePrograms').style.display = 'none';
-    document.getElementById('discardSessionRow').style.display = '';
-    // Safety: can't start a different workout until the unfinished one is
-    // resumed or discarded — hide the manual selection control for now.
-    document.getElementById('chooseWorkoutWrap').style.display = 'none';
-  }
-
-  async function discardDashboardSession() {
+  async function discardSession() {
     if (!inProgressId) return;
     if (!confirm('Discard this unfinished session? This cannot be undone.')) return;
-    var { error } = await supabaseClient.from('workouts').delete().eq('id', inProgressId);
-    if (error) { showToast('Error discarding — try again.'); return; }
+    var res = await supabaseClient.from('workouts').delete().eq('id', inProgressId);
+    if (res.error) { showToast('Error discarding — try again.'); return; }
     inProgressId = null;
-    document.getElementById('discardSessionRow').style.display = 'none';
-    var btn = document.getElementById('btnStartWorkout');
-    btn.textContent = 'Start Workout';
-    btn.href = 'workout.html';
     showToast('Session discarded.');
-    await resolveActiveProgram(
-      (await supabaseClient.auth.getSession()).data.session.user.id,
-      ownedProgramsList
-    );
+    await renderDashboard(currentUserId);
   }
 
 </script>

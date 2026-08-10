@@ -68,6 +68,13 @@ header .btn-back {
 }
 header .btn-back:hover { border-color: var(--border-3, #2f2f2f); color: var(--text-2, #a0a0a0); }
 
+/* The header back-link is a FALLBACK Home path, not a second Home control.
+   Wherever the primary nav renders, its Home destination already does this job,
+   so the redundant link is hidden. It reappears automatically on a suppressed-
+   nav surface (workout.html #activeView), which would otherwise have no visible
+   route out but the logo. */
+:root.mm-has-nav header .btn-back { display: none; }
+
 .header-logo:focus-visible,
 header .btn-back:focus-visible {
   outline: 2px solid var(--red, #B1121B);

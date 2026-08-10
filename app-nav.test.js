@@ -22,7 +22,7 @@ const SHELL_CSS = read('app-shell.css');
 
 // Pages that render the shared navigation.
 const NAV_PAGES = [
-  'app.html', 'workout.html', 'workout-history.html',
+  'app.html', 'profile.html', 'workout.html', 'workout-history.html',
   'nutrition.html', 'weight-history.html',
 ];
 // Authenticated pages that deliberately suppress it, plus every page outside
@@ -76,6 +76,17 @@ test('resolution: child routes map to their parent destination', () => {
   assert.strictEqual(AppNav.resolveDestinationId('/workout-history.html'), 'train');
   // Resolves to Train for identity even though it suppresses the nav.
   assert.strictEqual(AppNav.resolveDestinationId('/workout-complete.html'), 'train');
+  // Profile is a child of Home — a secondary destination, never a sixth tab.
+  assert.strictEqual(AppNav.resolveDestinationId('/profile.html'), 'home');
+});
+
+test('resolution: profile.html adds no primary destination', () => {
+  assert.strictEqual(AppNav.navigableDestinations().length, 4, 'still four tabs');
+  const html = AppNav.navMarkup({ pathname: '/profile.html' });
+  assert.ok(!/profile\.html/.test(html), 'profile is not a nav item');
+  const current = html.match(/aria-current="page"/g) || [];
+  assert.strictEqual(current.length, 1, 'Home is marked current on profile.html');
+  assert.match(html, /data-mm-nav-id="home"[^>]*aria-current="page"/);
 });
 
 test('resolution: query strings, fragments and casing do not defeat matching', () => {
@@ -304,6 +315,18 @@ test('header: no participating page redefines the shared header rules', () => {
   }
 });
 
+test('header: the redundant back-link is hidden wherever the nav renders', () => {
+  assert.match(SHELL_CSS, /:root\.mm-has-nav header \.btn-back\s*\{[^}]*display:\s*none/,
+    'nav present → the second Home control is hidden');
+  // Only workout.html keeps the markup: it is the one page that can suppress
+  // the nav (#activeView) and would otherwise have no visible route out.
+  assert.match(read('workout.html'), /<a class="btn-back" href="app\.html">/,
+    'workout.html keeps its fallback back-link');
+  for (const p of ['nutrition.html', 'weight-history.html', 'workout-history.html']) {
+    assert.ok(!/class="btn-back"/.test(read(p)), `${p}: redundant back-link removed`);
+  }
+});
+
 test('header: the shell back-link is scoped so app.html\'s modal Back button survives', () => {
   // app.html reuses the .btn-back class for the recalculate-goals modal.
   // The shell rule MUST stay scoped to `header` or that button is restyled.
@@ -311,13 +334,13 @@ test('header: the shell back-link is scoped so app.html\'s modal Back button sur
     'the shell never defines an unscoped .btn-back');
   assert.match(SHELL_CSS, /header \.btn-back\s*\{[^}]*min-height:\s*44px/,
     'the header back-link meets the 44px tap target');
-  const appCss = (read('app.html').match(/<style>([\s\S]*?)<\/style>/) || [])[1] || '';
-  assert.match(appCss, /\.btn-back\s*\{[^}]*flex:\s*1/,
-    'app.html keeps its own modal .btn-back rule');
-  // The four sub-pages use the header variant only, so they keep no local copy.
-  for (const p of ['workout.html', 'workout-history.html', 'nutrition.html', 'weight-history.html']) {
+  // profile.html's modal Back button uses a distinct class precisely so it can
+  // never collide with the shell's header control.
+  const profCss = (read('profile.html').match(/<style>([\s\S]*?)<\/style>/) || [])[1] || '';
+  assert.match(profCss, /\.btn-back-modal\s*\{/, 'the modal Back button is namespaced');
+  for (const p of NAV_PAGES) {
     const css = (read(p).match(/<style>([\s\S]*?)<\/style>/) || [])[1] || '';
-    assert.ok(!/\.btn-back\s*\{/.test(css), `${p}: no local .btn-back rule`);
+    assert.ok(!/(^|\n)\s*\.btn-back\s*\{/.test(css), `${p}: no local .btn-back rule`);
   }
 });
 

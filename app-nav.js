@@ -51,7 +51,9 @@
       label: 'Home',
       href: 'app.html',
       available: true,
-      routes: ['app.html'],
+      // profile.html is the SECONDARY account destination reached from Home —
+      // a child route, deliberately not a sixth primary tab.
+      routes: ['app.html', 'profile.html'],
     },
     {
       id: 'train',
