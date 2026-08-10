@@ -232,6 +232,38 @@ header .btn-back:focus-visible {
   .toast.show { transform: none; }
 }
 
+/* ── iOS auto-zoom guard ────────────────────────────────────────────────────
+ * Mobile Safari automatically zooms the page when a focusable text control
+ * computes BELOW 16px. That zoom shifts the visual viewport away from the
+ * layout viewport, and while a `position: fixed` overlay is open on a scrolled
+ * page the overlay's hit target no longer lines up with where it is painted —
+ * so the next tap misses the action button entirely and nothing happens. That
+ * is the real-device Nutrition "Add food" defect: focusing the 14px food-search
+ * field triggered the zoom, and the subsequent tap on the red add button was
+ * swallowed. Zooming back out by hand restored the alignment and the same food
+ * logged correctly.
+ *
+ * The accessible fix is to size the CONTROLS so the zoom never fires. The
+ * viewport meta MUST keep pinch-zoom available — never maximum-scale=1 or
+ * user-scalable=no, which would suppress the symptom by removing a genuine
+ * accessibility affordance.
+ *
+ * Scoped to touch pointers and phone widths so desktop typography is untouched.
+ * Checkboxes/radios/ranges/colors have no text to zoom toward and keep their
+ * own sizing.
+ *
+ * `!important` is deliberate and matches the `[hidden]` guard above: page rules
+ * like `.field-group select` (0,1,1) outrank a bare `select` (0,0,1), so without
+ * it every <select> in the app silently kept its 14px and went on zooming. This
+ * is a correctness floor, not styling — it must not lose to page CSS drift. */
+@media (max-width: 480px), (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 /* ── Shell accessibility primitives ─────────────────────────────────────── */
 
 /* Visible only when focused; the first tab stop on a shell page. */
