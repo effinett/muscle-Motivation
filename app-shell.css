@@ -1,0 +1,183 @@
+/* ──────────────────────────────────────────────────────────────────────────
+ * Muscle Motivation — Shared App Shell  ·  Phase 4.3.4 (CP2)
+ *
+ * The shared presentation layer for the authenticated application: the primary
+ * bottom navigation, the ONE bottom-clearance strategy, and the shell-level
+ * accessibility primitives (skip link, focus ring, reduced motion).
+ *
+ * Linked in <head> AFTER each page's inline <style> and BEFORE safe-area.css,
+ * on every page that participates in navigation. Markup is produced by
+ * app-nav.js — this file never assumes a specific page's layout.
+ *
+ * Colour tokens are read from the host page with fallbacks, so the shell adopts
+ * whatever palette a page already defines and never forces a migration.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/* ── The one bottom-clearance strategy ──────────────────────────────────────
+ * --mm-nav-base-height   the nav's own height, 0px when no nav is rendered.
+ *                        app-nav.js toggles .mm-has-nav on <html>; nothing else
+ *                        may set this.
+ * --mm-bottom-clearance  the FULL band occupied at the bottom of the viewport
+ *                        (nav + device home indicator). Every page that needs
+ *                        to clear the nav adds this ONE value — no page-specific
+ *                        magic numbers, no duplicated env() arithmetic.
+ * A page's own breathing room stays the page's concern and is added on top. */
+:root {
+  --mm-nav-base-height: 0px;
+  --mm-bottom-clearance: calc(var(--mm-nav-base-height) + env(safe-area-inset-bottom, 0px));
+}
+:root.mm-has-nav {
+  --mm-nav-base-height: 64px;
+}
+
+/* ── Primary navigation ─────────────────────────────────────────────────────
+ * z-index sits ABOVE the sticky page header (100) and BELOW every modal /
+ * sheet overlay (190–200), so an open dialog correctly covers the nav, while
+ * toasts (999) and the PWA surfaces stay above everything as before. */
+.mm-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 120;
+  display: flex;
+  align-items: stretch;
+  height: var(--mm-bottom-clearance);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: var(--surface-1, #0d0d0d);
+  background: color-mix(in srgb, var(--bg, #080808) 94%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border-2, #252525);
+}
+
+/* Fallback for engines without color-mix(): an opaque surface is always
+   readable, so the nav never renders as transparent-over-content. */
+@supports not (background: color-mix(in srgb, red 50%, transparent)) {
+  .mm-nav { background: var(--surface-1, #0d0d0d); }
+}
+
+.mm-nav-item {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 4px;
+  text-decoration: none;
+  color: var(--text-muted, #555555);
+  transition: color 0.18s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* The active indicator is a SHAPE, not only a colour: a filled bar across the
+   top edge of the destination. Paired with a brighter label and aria-current,
+   the current destination is conveyed three independent ways. */
+.mm-nav-item::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  background: var(--red, #B1121B);
+  transition: width 0.18s ease;
+}
+.mm-nav-item.is-active::before { width: 34px; }
+.mm-nav-item.is-active { color: var(--text, #ffffff); }
+.mm-nav-item.is-active .mm-nav-glyph { color: var(--red, #B1121B); }
+
+.mm-nav-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+}
+.mm-nav-glyph {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+.mm-nav-label {
+  font-family: 'Barlow', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  line-height: 1;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Hover is a pointer-only affordance — never let it linger on touch. */
+@media (hover: hover) {
+  .mm-nav-item:hover { color: var(--text-2, #a0a0a0); }
+  .mm-nav-item.is-active:hover { color: var(--text, #ffffff); }
+}
+
+/* Narrow phones (320px → 4 × 80px): keep the 64px bar and the full label,
+   only tighten the horizontal padding so nothing is ever truncated. */
+@media (max-width: 360px) {
+  .mm-nav-item { padding-left: 2px; padding-right: 2px; gap: 4px; }
+  .mm-nav-label { letter-spacing: 0.5px; }
+}
+
+/* ── Shell accessibility primitives ─────────────────────────────────────── */
+
+/* Visible only when focused; the first tab stop on a shell page. */
+.mm-skip-link {
+  position: absolute;
+  left: 8px;
+  top: -100px;
+  z-index: 300;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: var(--surface-2, #131313);
+  border: 1px solid var(--red, #B1121B);
+  color: var(--text, #ffffff);
+  font-family: 'Barlow', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: top 0.15s ease;
+}
+.mm-skip-link:focus { top: 8px; }
+
+.mm-visually-hidden {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* A single strong, consistent focus ring for shell controls. Deliberately
+   scoped to the shell — existing page controls keep their current treatment
+   and are recorded for a later accessibility pass. */
+.mm-nav-item:focus-visible,
+.mm-skip-link:focus-visible {
+  outline: 2px solid var(--red, #B1121B);
+  outline-offset: -3px;
+  border-radius: 6px;
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .mm-nav-item,
+  .mm-nav-item::before,
+  .mm-skip-link {
+    transition: none;
+  }
+}

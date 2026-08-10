@@ -80,9 +80,11 @@
     #signOutBtn:hover { border-color: var(--border-3); color: var(--text-2); }
 
     /* Container */
+    /* Bottom padding = the page's own breathing room + the shared app-shell
+       clearance (nav height + home indicator). See app-shell.css. */
     .container {
       max-width: 680px; margin: 0 auto;
-      padding: 28px 16px 80px;
+      padding: 28px 16px calc(24px + var(--mm-bottom-clearance, 0px));
     }
 
     /* Welcome */
@@ -611,7 +613,7 @@
 
     /* Toast */
     .toast {
-      position: fixed; bottom: 24px; left: 50%;
+      position: fixed; bottom: calc(24px + var(--mm-nav-base-height, 0px)); left: 50%;
       transform: translateX(-50%) translateY(80px);
       background: var(--surface-2); border: 1px solid var(--border-3);
       color: var(--text); padding: 12px 24px;
@@ -624,7 +626,7 @@
     @media (max-width: 480px) {
       header { padding: 0 14px; }
       .header-logo span { display: none; }
-      .container { padding: 20px 12px 80px; }
+      .container { padding: 20px 12px calc(24px + var(--mm-bottom-clearance, 0px)); }
       .numbers-grid { grid-template-columns: 1fr 1fr; }
     }
   </style>
@@ -643,6 +645,8 @@
   <script src="pwa-install.js" defer></script>
   <script src="pwa-install-ui.js" defer></script>
   <script src="pwa-install-register.js" defer></script>
+  <script src="app-nav.js" defer></script>
+  <link rel="stylesheet" href="app-shell.css">
   <link rel="stylesheet" href="safe-area.css">
 </head>
 <body>
@@ -656,6 +660,8 @@
 <!-- Dashboard -->
 <div id="appContent" style="display:none;">
 
+  <a class="mm-skip-link" href="#mmMain">Skip to content</a>
+
   <header>
     <a class="header-logo" href="app.html">
       <img src="logow.png" alt="Muscle Motivation">
@@ -667,11 +673,11 @@
     </div>
   </header>
 
-  <div class="container">
+  <main class="container" id="mmMain" tabindex="-1">
 
     <!-- Welcome -->
     <div class="welcome">
-      <div class="welcome-greeting">Good to see you, <span id="dashName">—</span></div>
+      <h1 class="welcome-greeting">Good to see you, <span id="dashName">—</span></h1>
       <div class="welcome-sub" id="dashDate"></div>
     </div>
 
@@ -906,7 +912,10 @@
       <span class="ref-soon">Coming Soon</span>
     </a>
 
-  </div><!-- /container -->
+  </main><!-- /container -->
+
+  <!-- Shared primary navigation (markup owned by app-nav.js) -->
+  <div id="appNavMount"></div>
 </div><!-- /appContent -->
 
 <!-- Recalculate Goals Modal -->

@@ -60,7 +60,9 @@
     }
     .btn-back:hover { border-color: var(--border-3); color: var(--text-2); }
 
-    .container { max-width: 680px; margin: 0 auto; padding: 28px 16px 120px; }
+    /* Bottom padding = the page's own breathing room + the shared app-shell
+       clearance (nav height + home indicator). See app-shell.css. */
+    .container { max-width: 680px; margin: 0 auto; padding: 28px 16px calc(24px + var(--mm-bottom-clearance, 0px)); }
 
     .page-title { font-family: 'Bebas Neue', sans-serif; font-size: 34px; letter-spacing: 1.5px; }
     .page-sub { font-size: 13px; color: var(--text-muted); margin-top: 2px; margin-bottom: 8px; }
@@ -158,7 +160,7 @@
     .empty-state a:hover { text-decoration: underline; }
 
     .toast {
-      position: fixed; bottom: 24px; left: 50%;
+      position: fixed; bottom: calc(24px + var(--mm-nav-base-height, 0px)); left: 50%;
       transform: translateX(-50%) translateY(80px);
       background: var(--surface-2); border: 1px solid var(--border-3);
       color: var(--text); padding: 12px 24px; border-radius: 8px;
@@ -171,7 +173,7 @@
     @media (max-width: 480px) {
       header { padding: 0 14px; }
       .header-logo span { display: none; }
-      .container { padding: 20px 12px 120px; }
+      .container { padding: 20px 12px calc(24px + var(--mm-bottom-clearance, 0px)); }
     }
   </style>
   <link rel="manifest" href="/manifest.webmanifest">
@@ -189,6 +191,8 @@
   <script src="pwa-install.js" defer></script>
   <script src="pwa-install-ui.js" defer></script>
   <script src="pwa-install-register.js" defer></script>
+  <script src="app-nav.js" defer></script>
+  <link rel="stylesheet" href="app-shell.css">
   <link rel="stylesheet" href="safe-area.css">
 </head>
 <body>
@@ -199,6 +203,7 @@
 </div>
 
 <div id="appContent" style="display:none;">
+  <a class="mm-skip-link" href="#mmMain">Skip to content</a>
   <header>
     <a class="header-logo" href="app.html">
       <img src="logow.png" alt="Muscle Motivation">
@@ -207,15 +212,18 @@
     <a class="btn-back" href="app.html">← Dashboard</a>
   </header>
 
-  <div class="container">
-    <div class="page-title">Workout History</div>
+  <main class="container" id="mmMain" tabindex="-1">
+    <h1 class="page-title">Workout History</h1>
     <div class="page-sub">Every completed session — tap any workout to see exercises, sets, and weights.</div>
 
     <div class="section-label">All Workouts</div>
     <div id="historyList">
       <div class="empty-state">Loading…</div>
     </div>
-  </div>
+  </main>
+
+  <!-- Shared primary navigation (markup owned by app-nav.js) -->
+  <div id="appNavMount"></div>
 </div>
 
 <div class="toast" id="toast"></div>

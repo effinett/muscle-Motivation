@@ -64,7 +64,13 @@
     }
     .btn-back:hover { border-color: var(--border-3); color: var(--text-2); }
 
-    .container { max-width: 680px; margin: 0 auto; padding: 28px 16px 120px; }
+    /* Bottom padding = the page's own breathing room + the shared app-shell
+       clearance (nav height + home indicator). See app-shell.css.
+       The extra room the REST STRIP needs belongs to #activeView alone — that
+       is the only view where the strip can appear, and the nav is suppressed
+       there, so the two bottom surfaces never both claim the band. */
+    .container { max-width: 680px; margin: 0 auto; padding: 28px 16px calc(24px + var(--mm-bottom-clearance, 0px)); }
+    #activeView { padding-bottom: 96px; }
 
     .section-label {
       font-family: 'Barlow', sans-serif; font-size: 11px; font-weight: 700;
@@ -575,7 +581,7 @@
     #discardModal { align-items: center; justify-content: center; padding: 20px; }
 
     .toast {
-      position: fixed; bottom: 24px; left: 50%;
+      position: fixed; bottom: calc(24px + var(--mm-nav-base-height, 0px)); left: 50%;
       transform: translateX(-50%) translateY(80px);
       background: var(--surface-2); border: 1px solid var(--border-3);
       color: var(--text); padding: 12px 24px; border-radius: 8px;
@@ -680,7 +686,7 @@
     @media (max-width: 480px) {
       header { padding: 0 14px; }
       .header-logo span { display: none; }
-      .container { padding: 20px 12px 120px; }
+      .container { padding: 20px 12px calc(24px + var(--mm-bottom-clearance, 0px)); }
     }
   </style>
   <link rel="manifest" href="/manifest.webmanifest">
@@ -698,6 +704,8 @@
   <script src="pwa-install.js" defer></script>
   <script src="pwa-install-ui.js" defer></script>
   <script src="pwa-install-register.js" defer></script>
+  <script src="app-nav.js" defer></script>
+  <link rel="stylesheet" href="app-shell.css">
   <link rel="stylesheet" href="safe-area.css">
 </head>
 <body>
@@ -708,6 +716,7 @@
 </div>
 
 <div id="appContent" style="display:none;">
+  <a class="mm-skip-link" href="#mmMain">Skip to content</a>
   <header>
     <a class="header-logo" href="app.html">
       <img src="logow.png" alt="Muscle Motivation">
@@ -716,7 +725,8 @@
     <a class="btn-back" href="app.html">← Dashboard</a>
   </header>
 
-  <div class="container">
+  <main class="container" id="mmMain" tabindex="-1">
+    <h1 class="mm-visually-hidden">Workout</h1>
 
     <!-- Start screen -->
     <div id="startView">
@@ -822,7 +832,11 @@
       <button class="btn-primary" style="margin-top:18px;" onclick="saveTemplate()">Save Workout</button>
     </div>
 
-  </div>
+  </main>
+
+  <!-- Shared primary navigation (markup owned by app-nav.js).
+       Suppressed while #activeView is showing — see the setView calls below. -->
+  <div id="appNavMount"></div>
 </div>
 
 <!-- Rest timer -->
@@ -1668,6 +1682,8 @@
   function showActiveView() {
     document.getElementById('startView').style.display  = 'none';
     document.getElementById('activeView').style.display = 'block';
+    // Live capture surface — suppress the primary nav (Phase 4.3.4 CP2).
+    if (typeof AppNav !== 'undefined') AppNav.setView('active');
     document.getElementById('activeWorkoutName').value  = currentWorkout.name;
     renderExercises();
     startTimer();
@@ -2692,12 +2708,16 @@
     document.getElementById('builderView').style.display = 'none';
     document.getElementById('startView').style.display   = 'block';
     editingTemplate = null;
+    // Browse surface — the primary nav belongs here (Phase 4.3.4 CP2).
+    if (typeof AppNav !== 'undefined') AppNav.setView('start');
   }
 
   function showBuilderView() {
     document.getElementById('startView').style.display   = 'none';
     document.getElementById('activeView').style.display  = 'none';
     document.getElementById('builderView').style.display = 'block';
+    // Template editing is still a browse-level surface — nav stays.
+    if (typeof AppNav !== 'undefined') AppNav.setView('builder');
     document.getElementById('templateNameInput').value = editingTemplate.name || '';
     renderBuilderExercises();
     window.scrollTo(0, 0);
