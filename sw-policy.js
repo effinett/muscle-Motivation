@@ -37,13 +37,13 @@
   // Bump this integer whenever the cached static shell changes. It is the sole
   // input that changes CURRENT_STATIC_CACHE, giving each SW release a distinct,
   // deterministic cache name (obsolete-cache cleanup is a LATER checkpoint).
-  // Phase 4.3.3 Checkpoint 5: set to 4 (Version D) so the shared branch-alias
-  // preview produces genuinely different worker bytes than the already-installed
-  // Version C (mm-static-v3) on the test iPhone, driving the real on-device
-  // waiting-worker / update-banner / Update now / Later / one-time reload /
-  // old-cache-cleanup validation. The STATIC_ALLOWLIST and all
-  // privacy/classification rules are unchanged.
-  var CACHE_VERSION = 4;
+  // Phase 4.3.3 Checkpoint 5: set to 5 (Version E) so production users whose
+  // installed PWA is still on Version D (mm-static-v4, the merged release)
+  // see a genuinely different worker bundle, driving the real on-device
+  // standalone waiting-worker / update-banner / Update now / Later /
+  // one-time reload / old-cache-cleanup validation on the production host.
+  // The STATIC_ALLOWLIST and all privacy/classification rules are unchanged.
+  var CACHE_VERSION = 5;
 
   // Deterministic current static cache name, e.g. "mm-static-v2".
   var CURRENT_STATIC_CACHE = CACHE_PREFIX + 'v' + CACHE_VERSION;
