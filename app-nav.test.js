@@ -473,6 +473,38 @@ test('cp4: the skip link reveals itself on focus', () => {
   assert.match(SHELL_CSS, /\.mm-skip-link:focus\s*\{[^}]*top:\s*8px/, 'revealed on focus');
 });
 
+/* ── 9c · Service-worker privacy / cache boundary ──────────────────────────
+ * Phase 4.3.4 adds files and a page. None of them may become cacheable, and
+ * the approved static allowlist must stay exactly the six public assets. */
+
+test('cache boundary: the static allowlist is still the six approved assets', () => {
+  const policy = require('./sw-policy.js');
+  assert.deepStrictEqual([...policy.STATIC_ALLOWLIST], [
+    '/icons/icon-192.png',
+    '/icons/icon-512.png',
+    '/icons/icon-maskable-192.png',
+    '/icons/icon-maskable-512.png',
+    '/icons/apple-touch-icon.png',
+    '/favicon.ico',
+  ]);
+  assert.ok(Object.isFrozen(policy.STATIC_ALLOWLIST), 'allowlist stays frozen');
+});
+
+test('cache boundary: nothing added by this phase is cacheable', () => {
+  const policy = require('./sw-policy.js');
+  const req = (url) => policy.isCacheableRequest({
+    method: 'GET', url, appOrigin: 'https://app.test', hasAuthorizationHeader: false,
+  });
+  for (const url of ['/app-nav.js', '/app-shell.css', '/dashboard-model.js',
+    '/program-state.js', '/profile.html', '/app.html', '/nutrition.html',
+    '/api/usda-search', '/api/ai-food-parse']) {
+    assert.strictEqual(req(url), false, `${url} must never be cached`);
+  }
+  // The approved assets are still reachable, so the boundary was not simply
+  // broken in the other direction.
+  assert.strictEqual(req('/favicon.ico'), true, 'approved assets still cacheable');
+});
+
 /* ── 10 · Shell accessibility primitives ────────────────────────────────── */
 
 test('a11y: shell defines a real focus-visible ring and honours reduced motion', () => {
