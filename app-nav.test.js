@@ -286,6 +286,41 @@ test('shell: each nav page has one <main>, one <h1>, and a skip link', () => {
   }
 });
 
+/* ── 8b · The shared header is defined once ─────────────────────────────── */
+
+test('header: app-shell.css owns the header, logo and back-link rules', () => {
+  assert.match(SHELL_CSS, /\nheader\s*\{[^}]*position:\s*sticky[^}]*height:\s*60px/,
+    'the sticky 60px header lives in the shell');
+  assert.match(SHELL_CSS, /\.header-logo\s*\{[^}]*display:\s*flex/);
+  assert.match(SHELL_CSS, /\.header-logo img\s*\{[^}]*height:\s*42px/);
+  assert.match(SHELL_CSS, /\.header-logo span\s*\{[^}]*Bebas Neue/);
+});
+
+test('header: no participating page redefines the shared header rules', () => {
+  for (const p of NAV_PAGES) {
+    const css = (read(p).match(/<style>([\s\S]*?)<\/style>/) || [])[1] || '';
+    assert.ok(!/(^|\n)\s*header\s*\{/.test(css), `${p}: no local header rule`);
+    assert.ok(!/(^|\n)\s*\.header-logo\s*[{ ]/.test(css), `${p}: no local .header-logo rule`);
+  }
+});
+
+test('header: the shell back-link is scoped so app.html\'s modal Back button survives', () => {
+  // app.html reuses the .btn-back class for the recalculate-goals modal.
+  // The shell rule MUST stay scoped to `header` or that button is restyled.
+  assert.ok(!/(^|\n)\.btn-back\s*\{/.test(SHELL_CSS),
+    'the shell never defines an unscoped .btn-back');
+  assert.match(SHELL_CSS, /header \.btn-back\s*\{[^}]*min-height:\s*44px/,
+    'the header back-link meets the 44px tap target');
+  const appCss = (read('app.html').match(/<style>([\s\S]*?)<\/style>/) || [])[1] || '';
+  assert.match(appCss, /\.btn-back\s*\{[^}]*flex:\s*1/,
+    'app.html keeps its own modal .btn-back rule');
+  // The four sub-pages use the header variant only, so they keep no local copy.
+  for (const p of ['workout.html', 'workout-history.html', 'nutrition.html', 'weight-history.html']) {
+    const css = (read(p).match(/<style>([\s\S]*?)<\/style>/) || [])[1] || '';
+    assert.ok(!/\.btn-back\s*\{/.test(css), `${p}: no local .btn-back rule`);
+  }
+});
+
 /* ── 9 · The one bottom-clearance strategy ──────────────────────────────── */
 
 test('clearance: app-shell.css owns the tokens and toggles on .mm-has-nav', () => {

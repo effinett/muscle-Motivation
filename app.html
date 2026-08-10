@@ -46,27 +46,7 @@
       letter-spacing: 2.5px; text-transform: uppercase;
     }
 
-    /* Header */
-    header {
-      position: sticky; top: 0; z-index: 100;
-      background: rgba(8,8,8,0.97);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border-1);
-      padding: 0 20px;
-      display: flex; align-items: center;
-      justify-content: space-between;
-      height: 60px;
-    }
-    .header-logo {
-      display: flex; align-items: center; gap: 10px;
-      text-decoration: none;
-    }
-    .header-logo img { height: 42px; }
-    .header-logo span {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 18px; letter-spacing: 2.5px;
-      color: var(--text); text-transform: uppercase;
-    }
+    /* Header — header / .header-logo now live in app-shell.css */
     .header-right { display: flex; align-items: center; gap: 14px; }
     .user-name { font-size: 13px; color: var(--text-muted); }
     #signOutBtn {
@@ -624,8 +604,6 @@
     .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 
     @media (max-width: 480px) {
-      header { padding: 0 14px; }
-      .header-logo span { display: none; }
       .container { padding: 20px 12px calc(24px + var(--mm-bottom-clearance, 0px)); }
       .numbers-grid { grid-template-columns: 1fr 1fr; }
     }

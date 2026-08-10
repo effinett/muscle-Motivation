@@ -42,27 +42,7 @@
     #authGate img { width: 72px; margin-bottom: 16px; opacity: 0.6; }
     #authGate p { color: var(--text-muted); font-size: 11px; letter-spacing: 2.5px; text-transform: uppercase; }
 
-    header {
-      position: sticky; top: 0; z-index: 100;
-      background: rgba(8,8,8,0.97); backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border-1);
-      padding: 0 20px;
-      display: flex; align-items: center; justify-content: space-between; height: 60px;
-    }
-    .header-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
-    .header-logo img { height: 42px; }
-    .header-logo span {
-      font-family: 'Bebas Neue', sans-serif; font-size: 18px;
-      letter-spacing: 2.5px; color: var(--text); text-transform: uppercase;
-    }
-    .btn-back {
-      padding: 6px 14px; font-size: 11px; font-family: 'Barlow', sans-serif;
-      font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-      background: transparent; border: 1px solid var(--border-2);
-      color: var(--text-muted); border-radius: 6px; cursor: pointer;
-      transition: border-color 0.2s, color 0.2s; text-decoration: none;
-    }
-    .btn-back:hover { border-color: var(--border-3); color: var(--text-2); }
+    /* header / .header-logo / .btn-back now live in app-shell.css */
 
     /* Bottom padding = the page's own breathing room + the shared app-shell
        clearance (nav height + home indicator). See app-shell.css.
@@ -684,8 +664,6 @@
     }
 
     @media (max-width: 480px) {
-      header { padding: 0 14px; }
-      .header-logo span { display: none; }
       .container { padding: 20px 12px calc(24px + var(--mm-bottom-clearance, 0px)); }
     }
   </style>
