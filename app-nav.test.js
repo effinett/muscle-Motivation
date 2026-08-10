@@ -371,11 +371,8 @@ test('clearance: no participating page keeps a hard-coded bottom magic number', 
       assert.ok(!/padding:[^;]*\b(80|120|132)px\s*;/.test(r),
         `${p}: no leftover bottom magic number — got ${r}`);
     }
-    // Toasts must clear the nav band too.
-    const toast = (css.match(/\.toast\s*\{[^}]*\}/) || [])[0] || '';
-    assert.match(toast, /bottom:\s*calc\(24px \+ var\(--mm-nav-base-height, 0px\)\)/,
-      `${p}: toast rides above the nav`);
   }
+  // The toast itself is shell-owned — see the CP4 toast test below.
 });
 
 test('clearance: the nav occupies exactly the clearance band', () => {
@@ -403,15 +400,92 @@ test('clearance: workout.html keeps its rest-strip room on #activeView only', ()
   assert.strictEqual(AppNav.shouldShowNav({ pathname: '/workout.html', view: 'active' }), false);
 });
 
+/* ── 9b · CP4 browser-validation regressions ───────────────────────────────
+ * Every assertion here corresponds to a defect observed in a real browser. */
+
+test('cp4: [hidden] is authoritative — a display:flex component stays hidden', () => {
+  // Observed: the dashboard Focus surface rendered as an empty box because the
+  // UA's type-less `[hidden] { display:none }` loses to `.focus { display:flex }`.
+  assert.match(SHELL_CSS, /\[hidden\]\s*\{\s*display:\s*none\s*!important\s*;?\s*\}/,
+    'the shell forces hidden elements to stay hidden');
+  // The surfaces that rely on it are all display-setting components.
+  const app = read('app.html');
+  assert.match(app, /<section class="focus" id="focusRow" hidden/, 'Focus starts hidden');
+  assert.match(app, /id="todayCta"[^>]*hidden/, 'the CTA can be hidden');
+  assert.match((app.match(/<style>([\s\S]*?)<\/style>/) || [])[1] || '',
+    /\.focus\s*\{[^}]*display:\s*flex/, 'Focus is a flex component (the failing case)');
+});
+
+test('cp4: the toast is defined once, in the shell, and never per page', () => {
+  // Observed at 320px: `left:50%` with no right anchor shrink-to-fits to the
+  // half-viewport, collapsing a normal message into a 160px three-line column.
+  assert.match(SHELL_CSS, /\.toast\s*\{[^}]*left:\s*16px;\s*right:\s*16px/,
+    'anchored to BOTH edges');
+  assert.match(SHELL_CSS, /\.toast\s*\{[^}]*margin:\s*0 auto/, 'centred by auto margins');
+  assert.match(SHELL_CSS, /\.toast\s*\{[^}]*bottom:\s*calc\(24px \+ var\(--mm-nav-base-height, 0px\)\)/,
+    'rides above the nav via the shared token');
+  const toastRule = (SHELL_CSS.match(/\n\.toast\s*\{[^}]*\}/) || [''])[0];
+  assert.ok(!/translateX\(-50%\)/.test(toastRule), 'no half-viewport centring trick');
+  assert.ok(!/white-space:\s*nowrap/.test(toastRule),
+    'long messages wrap instead of overflowing');
+  for (const p of NAV_PAGES) {
+    const css = (read(p).match(/<style>([\s\S]*?)<\/style>/) || [])[1] || '';
+    assert.ok(!/(^|\n)\s*\.toast\s*[.{]/.test(css), `${p}: no local .toast rule`);
+  }
+});
+
+test('cp4: the toast is announced to assistive tech', () => {
+  for (const p of ['app.html', 'profile.html']) {
+    assert.match(read(p), /<div class="toast" id="toast" role="status" aria-live="polite">/,
+      `${p}: toast is a polite status region`);
+  }
+});
+
+test('cp4: nav destinations keep the content rhythm on wide viewports', () => {
+  // Observed at 1440px: four items stretched edge-to-edge across the window.
+  assert.match(SHELL_CSS, /\.mm-nav\s*\{[^}]*justify-content:\s*center/);
+  assert.match(SHELL_CSS, /\.mm-nav-item\s*\{[^}]*max-width:\s*170px/,
+    'items cap so the group tracks the 680px column');
+});
+
+test('cp4: Home styles every class the shared weight modal emits', () => {
+  // Observed: rewriting app.html dropped the modal CSS while weight.js still
+  // mounted its modal there, so it rendered inline and permanently visible.
+  // Deriving the class list from weight.js means the two can never drift.
+  const markup = (read('weight.js').match(/function wlModalMarkup\(\)[\s\S]*?\n\}/) || [''])[0];
+  assert.ok(markup.length, 'located wlModalMarkup()');
+  const classes = [...new Set([...markup.matchAll(/class=\\?"([a-z- ]+)\\?"/g)]
+    .flatMap((m) => m[1].split(/\s+/)).filter(Boolean))];
+  assert.ok(classes.includes('modal-overlay') && classes.includes('btn-calc'),
+    'sanity: extracted the real class names');
+  const appCss = (read('app.html').match(/<style>([\s\S]*?)<\/style>/) || [])[1] || '';
+  for (const c of classes) {
+    assert.ok(new RegExp('\\.' + c + '\\b').test(appCss),
+      `app.html must style .${c} — weight.js mounts its modal on Home`);
+  }
+  // The overlay must start hidden and only show via .open.
+  assert.match(appCss, /\.modal-overlay\s*\{[^}]*display:\s*none/);
+  assert.match(appCss, /\.modal-overlay\.open\s*\{[^}]*display:\s*flex/);
+});
+
+test('cp4: the skip link reveals itself on focus', () => {
+  assert.match(SHELL_CSS, /\.mm-skip-link\s*\{[^}]*top:\s*-100px/, 'parked off-screen');
+  assert.match(SHELL_CSS, /\.mm-skip-link:focus\s*\{[^}]*top:\s*8px/, 'revealed on focus');
+});
+
 /* ── 10 · Shell accessibility primitives ────────────────────────────────── */
 
 test('a11y: shell defines a real focus-visible ring and honours reduced motion', () => {
   assert.match(SHELL_CSS, /\.mm-nav-item:focus-visible[\s\S]{0,160}outline:\s*2px solid/,
     'nav items get a 2px focus ring');
   assert.match(SHELL_CSS, /\.mm-skip-link:focus\s*\{[^}]*top:\s*8px/, 'skip link reveals on focus');
-  const rm = SHELL_CSS.match(/@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/);
-  assert.ok(rm, 'a reduced-motion block exists');
-  assert.match(rm[1], /transition:\s*none/, 'shell animation is disabled under reduced motion');
+  const rmBlocks = [...SHELL_CSS.matchAll(/@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/g)]
+    .map((m) => m[1]);
+  assert.ok(rmBlocks.length, 'a reduced-motion block exists');
+  const all = rmBlocks.join('\n');
+  assert.match(all, /\.mm-nav-item[\s\S]*?transition:\s*none/,
+    'nav animation is disabled under reduced motion');
+  assert.match(all, /\.toast\s*\{[^}]*transition:/, 'the toast slide is neutralised too');
 });
 
 test('a11y: nav tap targets clear 44px and are never shrunk on narrow phones', () => {

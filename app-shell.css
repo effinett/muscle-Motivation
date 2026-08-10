@@ -13,6 +13,14 @@
  * whatever palette a page already defines and never forces a migration.
  * ──────────────────────────────────────────────────────────────────────── */
 
+/* ── hidden ─────────────────────────────────────────────────────────────────
+ * The UA's `[hidden] { display: none }` is a bare type-less rule, so ANY class
+ * rule that sets `display` beats it — a `display:flex` component with the
+ * `hidden` attribute stays visible. Browser validation caught exactly that on
+ * the dashboard's Focus surface, which rendered as an empty box. Making the
+ * shell's rule authoritative fixes every current and future use. */
+[hidden] { display: none !important; }
+
 /* ── The one bottom-clearance strategy ──────────────────────────────────────
  * --mm-nav-base-height   the nav's own height, 0px when no nav is rendered.
  *                        app-nav.js toggles .mm-has-nav on <html>; nothing else
@@ -99,6 +107,7 @@ header .btn-back:focus-visible {
   z-index: 120;
   display: flex;
   align-items: stretch;
+  justify-content: center;
   height: var(--mm-bottom-clearance);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   background: var(--surface-1, #0d0d0d);
@@ -118,6 +127,9 @@ header .btn-back:focus-visible {
   position: relative;
   flex: 1 1 0;
   min-width: 0;
+  /* The bar stays full-bleed, but the destinations keep the same rhythm as the
+     680px content column instead of stretching across a desktop window. */
+  max-width: 170px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -184,6 +196,40 @@ header .btn-back:focus-visible {
 @media (max-width: 360px) {
   .mm-nav-item { padding-left: 2px; padding-right: 2px; gap: 4px; }
   .mm-nav-label { letter-spacing: 0.5px; }
+}
+
+/* ── Toast ──────────────────────────────────────────────────────────────────
+ * Shell furniture, previously duplicated verbatim in six pages. Anchored to
+ * BOTH edges with auto margins rather than `left:50% + translateX(-50%)`: with
+ * only a left anchor the shrink-to-fit width is the half-viewport, so at 320px
+ * a normal message collapsed into a 160px, three-line column (and before that,
+ * `white-space: nowrap` made it overflow instead). It rides above the nav via
+ * the shared token; safe-area.css adds the home-indicator inset on top. */
+.toast {
+  position: fixed;
+  left: 16px; right: 16px;
+  bottom: calc(24px + var(--mm-nav-base-height, 0px));
+  margin: 0 auto;
+  width: fit-content;
+  max-width: min(420px, calc(100vw - 32px));
+  z-index: 999;
+  padding: 12px 20px;
+  background: var(--surface-2, #131313);
+  border: 1px solid var(--border-3, #2f2f2f);
+  border-radius: 8px;
+  color: var(--text, #ffffff);
+  font-family: 'Barlow', sans-serif;
+  font-size: 14px; font-weight: 600; line-height: 1.4;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(80px);
+  transition: transform 0.35s ease, opacity 0.35s ease;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .toast { transition: opacity 0.01s linear; transform: none; }
+  .toast.show { transform: none; }
 }
 
 /* ── Shell accessibility primitives ─────────────────────────────────────── */

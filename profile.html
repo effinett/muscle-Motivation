@@ -187,19 +187,10 @@
       font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 2px; cursor: pointer;
     }
 
-    .toast {
-      position: fixed; bottom: calc(24px + var(--mm-nav-base-height, 0px)); left: 50%;
-      transform: translateX(-50%) translateY(80px);
-      background: var(--surface-2); border: 1px solid var(--border-3);
-      color: var(--text); padding: 12px 24px; border-radius: 8px;
-      font-size: 14px; font-weight: 600;
-      transition: transform 0.35s ease, opacity 0.35s ease;
-      opacity: 0; z-index: 999; max-width: calc(100vw - 32px);
-    }
-    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    /* .toast now lives in app-shell.css */
 
     @media (prefers-reduced-motion: reduce) {
-      .toast, .btn-sm, .signout, .item { transition: none; }
+      .btn-sm, .signout, .item { transition: none; }
     }
     @media (max-width: 480px) {
       .container { padding: 16px 12px calc(24px + var(--mm-bottom-clearance, 0px)); }

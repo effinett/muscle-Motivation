@@ -560,16 +560,7 @@
     /* Confirm discard modal */
     #discardModal { align-items: center; justify-content: center; padding: 20px; }
 
-    .toast {
-      position: fixed; bottom: calc(24px + var(--mm-nav-base-height, 0px)); left: 50%;
-      transform: translateX(-50%) translateY(80px);
-      background: var(--surface-2); border: 1px solid var(--border-3);
-      color: var(--text); padding: 12px 24px; border-radius: 8px;
-      font-size: 14px; font-weight: 600;
-      transition: transform 0.35s ease, opacity 0.35s ease;
-      opacity: 0; z-index: 999; white-space: nowrap;
-    }
-    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    /* .toast now lives in app-shell.css */
 
     /* ── PR Celebration ─────────────────────────────────────────────── */
     :root { --gold: #E6B450; --gold-soft: rgba(230,180,80,0.16); }
