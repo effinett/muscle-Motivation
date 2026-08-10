@@ -1084,6 +1084,40 @@ If yes, build it. If not, rethink the approach.
 
 **Success Metric:** *"Does this help users achieve better fitness results more easily?"* If no — don't build it.
 
+
+## 21. BASH & PERMISSION DISCIPLINE
+
+For read-only audits and verification:
+
+- Prefer simple, individual Bash commands over large compound shell scripts.
+- Prefer already-approved read-only commands such as:
+  - `git status`
+  - `git diff`
+  - `git log`
+  - `git show`
+  - `git branch`
+  - `git merge-base`
+  - `git rev-parse`
+  - `git rev-list`
+  - `grep`
+  - `ls`
+  - `curl`
+  - MCP read-only tools
+- Avoid nested quoting, multiline inline `python3 -c`, loops, brace-heavy commands, and complex command substitutions when a simpler equivalent exists.
+- Do not request broad permanent allow rules for interpreters such as `python3 -c *`, `bash *`, or unrestricted shell execution merely to reduce prompts.
+- Keep consequential actions gated behind explicit confirmation:
+  - commit
+  - push
+  - merge
+  - deploy
+  - database writes or migrations
+  - package installs
+  - deletes
+  - force-pushes
+  - Stripe writes
+
+**Goal:** Minimize unnecessary permission prompts without weakening safety.
+
 ---
 
 *End of CLAUDE.md — All sections are source of truth. Do not override without explicit instruction from Effi.*
