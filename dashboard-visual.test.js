@@ -269,12 +269,19 @@ test('insight: default treatment is the accent, warning is reserved', () => {
 
 /* ── 6b · V4 polish ─────────────────────────────────────────────────────── */
 
-test('polish: Quick log is an inline action in the Nutrition section', () => {
-  assert.match(HOME_BODY, /<a class="home-action" href="nutrition\.html#quicklog">Quick log<\/a>/);
-  // Same visual weight as Log weight — both are .home-action, neither a slab.
-  const actions = HOME_BODY.match(/class="home-action"/g) || [];
-  assert.ok(actions.length >= 3, 'choose workout, quick log and log weight');
+test('polish: Quick log is the Nutrition section action, in its header row', () => {
+  // Moved out of a detached row beneath the metrics and into the section
+  // header's value slot, which Nutrition leaves empty.
+  assert.match(HOME_BODY,
+    /<h2 class="mm-section-label">Nutrition<\/h2>[\s\S]{0,220}?<a class="home-action home-action--section" href="nutrition\.html#quicklog">Quick log<\/a>[\s\S]{0,40}?<\/div>/,
+    'Quick log sits inside the Nutrition section header');
+  assert.ok(!/home-inline-actions/.test(HOME_BODY), 'the detached action row is gone');
+  // Still the same quiet weight as Log weight — both .home-action, no slab.
   assert.match(HOME_BODY, /id="logWeightBtn"/, 'Log weight is still inline in Progress');
+  const actions = HOME_BODY.match(/class="home-action/g) || [];
+  assert.ok(actions.length >= 3, 'choose workout, quick log and log weight');
+  // The header variant keeps a full tap target without growing the header.
+  assert.match(HOME_CSS, /\.home-action--section\s*\{[^}]*min-height:\s*44px/);
 });
 
 test('polish: Quick log opens the EXISTING nutrition flow, not a new one', () => {
@@ -292,11 +299,58 @@ test('polish: Quick log opens the EXISTING nutrition flow, not a new one', () =>
 });
 
 test('polish: the gap under an inline action is evened out, not the sections', () => {
-  assert.match(HOME_CSS,
-    /\.home-action \+ \.mm-section,\s*\.home-inline-actions \+ \.mm-section\s*\{[^}]*margin-top:\s*12px/,
+  assert.match(HOME_CSS, /\.home-action \+ \.mm-section\s*\{[^}]*margin-top:\s*12px/,
     'only the post-action gap is trimmed');
   // The shared section rhythm itself is unchanged.
   assert.match(SHELL, /\.mm-section\s*\{[^}]*margin:\s*26px 0 10px/);
+});
+
+test('polish: the first section starts without a dead band under the header', () => {
+  // `:first-child` alone never matched, because the visually-hidden <h1> is the
+  // real first child. The heading case is now matched explicitly — no negative
+  // margins are used to compensate.
+  assert.match(SHELL,
+    /\.mm-section:first-child,\s*\.mm-visually-hidden \+ \.mm-section\s*\{\s*margin-top:\s*0/,
+    'the first section drops its top margin structurally');
+  const structure = HOME_BODY.replace(/<!--[\s\S]*?-->/g, '').replace(/\s+/g, ' ');
+  assert.match(structure, /<h1 class="mm-visually-hidden">[^<]*<\/h1> <div class="mm-section">/,
+    'Home is exactly that structure — the hidden h1 immediately precedes it');
+});
+
+test('polish: Progress keeps its action beside the weight, never stranded', () => {
+  const row = (HOME_CSS.match(/\.home-progress\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.ok(!/justify-content:\s*space-between/.test(row),
+    'space-between pushed Log weight to the far right when there was no trend');
+  assert.match(row, /flex-wrap:\s*wrap/, 'trend and action wrap rather than stretch apart');
+  assert.match(HOME_CSS, /\.home-trend:empty\s*\{[^}]*display:\s*none/,
+    'an absent trend collapses instead of leaving a gap');
+});
+
+test('polish: the calorie value uses the shared section-value scale', () => {
+  assert.match(HOME_BODY.length ? HOME : HOME, /class="home-metric-value is-lead"/,
+    'calories is the lead nutrition metric');
+  const lead = (HOME_CSS.match(/\.home-metric-value\.is-lead\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.match(lead, /Bebas Neue/, 'matches the section-value family');
+  const size = Number((lead.match(/font-size:\s*(\d+)px/) || [])[1]);
+  assert.ok(size >= 20 && size <= 24,
+    `calorie value should sit with its siblings, not shout — got ${size}px`);
+  // Protein deliberately stays at the secondary size.
+  const base = (HOME_CSS.match(/\.home-metric-value\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.match(base, /font-size:\s*14px/);
+  // And nowhere near the old 42px treatment.
+  assert.ok(!/font-size:\s*(3\d|4\d)px/.test(HOME_CSS), 'no oversized calorie number returns');
+});
+
+test('polish: meters read as empty at zero and stay visible just above it', () => {
+  assert.match(SHELL, /\.mm-meter\s*\{[^}]*--mm-meter-height:\s*6px/);
+  assert.match(SHELL, /\.mm-meter-fill\s*\{[^}]*min-width:\s*var\(--mm-meter-height\)/,
+    'a tiny value renders as a deliberate pill, not a clipped speck');
+  assert.match(SHELL, /\.mm-meter\[data-empty="true"\] \.mm-meter-fill[^{]*\{[^}]*display:\s*none/);
+  // Zero is hidden outright rather than floored up to the visibility minimum.
+  assert.match(HOME, /if \(p === 0\) el\.setAttribute\('data-empty', 'true'\);/);
+  assert.match(HOME, /else el\.removeAttribute\('data-empty'\);/);
+  // aria-valuenow stays exact regardless of the visual floor.
+  assert.match(HOME, /setAttribute\('aria-valuenow', String\(p\)\)/);
 });
 
 test('polish: today + completed remains readable as BOTH states', () => {
@@ -381,7 +435,7 @@ test('home: interactive targets clear 44px', () => {
 });
 
 test('home: bottom clearance and reduced motion are intact', () => {
-  assert.match(HOME_CSS, /padding:\s*18px 16px calc\(24px \+ var\(--mm-bottom-clearance, 0px\)\)/);
+  assert.match(HOME_CSS, /padding:\s*24px 16px calc\(24px \+ var\(--mm-bottom-clearance, 0px\)\)/);
   assert.match(HOME_CSS, /@media \(max-width: 480px\)[\s\S]{0,220}var\(--mm-bottom-clearance, 0px\)/);
   assert.match(HOME_CSS, /@media \(prefers-reduced-motion: reduce\)/);
 });

@@ -137,13 +137,21 @@
  * safe-area.css continues to add the notch inset via header:has(.header-logo). */
 header {
   position: sticky; top: 0; z-index: 100;
-  background: rgba(8, 8, 8, 0.97);
+  /* Derived from the page background, not a literal. The old hard-coded
+     rgba(8,8,8,.97) survived the V1 palette migration and rendered DARKER than
+     the #121011 page, producing a visible horizontal seam under the header on
+     device — while the nav, which is token-derived, matched correctly. */
+  background: var(--mm-bg);
+  background: color-mix(in srgb, var(--mm-bg) 97%, transparent);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--mm-line-subtle);
   padding: 0 20px;
   display: flex; align-items: center; justify-content: space-between;
   height: 60px;
+}
+@supports not (background: color-mix(in srgb, red 50%, transparent)) {
+  header { background: var(--mm-bg); }
 }
 .header-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
 .header-logo img { height: 42px; }
@@ -433,7 +441,13 @@ header .btn-back:focus-visible {
   gap: 12px;
   margin: 26px 0 10px;
 }
-.mm-section:first-child { margin-top: 0; }
+/* The first section carries no top margin. `:first-child` alone silently failed
+   wherever a page opens with a visually-hidden <h1> — that element is still the
+   first child even though it is out of flow, so the rule never matched and the
+   dashboard began with a dead band under the header. Matching the heading case
+   explicitly is the structural fix; no negative margins are used to compensate. */
+.mm-section:first-child,
+.mm-visually-hidden + .mm-section { margin-top: 0; }
 .mm-section-label {
   font-family: 'Barlow', sans-serif;
   font-size: 11px;
@@ -471,7 +485,8 @@ header .btn-back:focus-visible {
  */
 .mm-meter {
   --mm-meter-pct: 0%;
-  height: 6px;
+  --mm-meter-height: 6px;
+  height: var(--mm-meter-height);
   border-radius: 3px;
   background: var(--mm-surface-high);
   overflow: hidden;
@@ -480,6 +495,12 @@ header .btn-back:focus-visible {
   display: block;
   height: 100%;
   width: var(--mm-meter-pct);
+  /* A visibility floor of exactly one bar-height, so a very small value renders
+     as a deliberate pill rather than a clipped speck that reads as a rendering
+     artifact. On a 358px track that floor is ~1.7%, so nothing is materially
+     exaggerated — and 0% is hidden outright via data-empty rather than being
+     floored up to something. */
+  min-width: var(--mm-meter-height);
   max-width: 100%;
   border-radius: inherit;
   background: var(--mm-accent);
@@ -559,7 +580,11 @@ header .btn-back:focus-visible {
    vanish into that fill, losing the "today" meaning entirely. The gap ring
    survives both states, so completed-and-today reads as check + ring. */
 .mm-day.is-today .mm-day-dot {
-  border-color: var(--mm-accent);
+  /* ONE ring. The inner border deliberately stays neutral: accenting it too
+     produced two concentric accent rings on device, which read as
+     overcomplicated and pulled more attention than the primary CTA. The
+     detached outer ring alone carries "today", and because it sits outside the
+     dot it still survives a completed day's accent fill. */
   box-shadow: 0 0 0 2px var(--mm-bg), 0 0 0 3.5px var(--mm-accent);
 }
 .mm-day.is-today .mm-day-label { color: var(--mm-text); }

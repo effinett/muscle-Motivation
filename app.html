@@ -61,7 +61,7 @@
        clearance (nav height + home indicator). See app-shell.css. */
     .container {
       max-width: 680px; margin: 0 auto;
-      padding: 18px 16px calc(24px + var(--mm-bottom-clearance, 0px));
+      padding: 24px 16px calc(24px + var(--mm-bottom-clearance, 0px));
     }
 
     /* ── Open rows ──────────────────────────────────────────────────────
@@ -99,6 +99,18 @@
       white-space: nowrap;
     }
     .home-metric-value .sub { color: var(--mm-text-tertiary); font-weight: 600; }
+    /* Calories is the metric checked most often, and at 14px Barlow it read
+       SMALLER than "0 / 3 WORKOUTS" and "213 LB" — inverting its priority.
+       It now borrows the existing section-value scale (Bebas 20px) so it sits
+       level with its siblings, while protein stays deliberately secondary.
+       Nowhere near the old 42px treatment, and still well below the hero. */
+    .home-metric-value.is-lead {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 22px; font-weight: 400; letter-spacing: 0.5px; line-height: 1;
+    }
+    .home-metric-value.is-lead .sub {
+      font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 600;
+    }
 
     /* Quiet inline action — used for "Choose another workout" and "Log weight".
        Text-weight, never a button slab, but still a real 44px target. */
@@ -128,21 +140,29 @@
     .mm-hero-meta.is-done::before { background: var(--mm-success); }
     .mm-hero-meta.is-live::before { background: var(--mm-accent); }
 
-    /* A row that holds only quiet inline actions. */
-    .home-inline-actions { display: flex; align-items: center; gap: 18px; margin-top: 2px; }
+    /* An action sitting in a section header. Keeps the full 44px tap target
+       while collapsing its box vertically, so the header row does not grow. */
+    .home-action--section {
+      min-height: 44px; margin: -12px 0; align-self: center;
+    }
 
     /* The 44px action box leaves dead space under its text, which made the gap
        before the next section read larger than every other section gap. Trim it
        back so the rhythm is even — without tightening the sections themselves. */
-    .home-action + .mm-section,
-    .home-inline-actions + .mm-section { margin-top: 12px; }
+    .home-action + .mm-section { margin-top: 12px; }
 
-    /* Progress: value in the section header, trend + action on one open row. */
+    /* Progress: value in the section header, trend + action on one open row.
+       Left-aligned rather than space-between — with no trend to hold the left
+       side (a single weigh-in), space-between stranded "Log weight" alone at
+       the far right, detached from the weight it belongs to. Flow order keeps
+       both readings adjacent whether or not a trend exists. */
     .home-progress {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 12px; margin-top: 2px;
+      display: flex; align-items: center; flex-wrap: wrap;
+      gap: 4px 16px; margin-top: 2px;
     }
     .home-trend { font-size: 13px; font-weight: 600; color: var(--mm-text-secondary); }
+    /* No trend yet — collapse entirely so it contributes no gap. */
+    .home-trend:empty { display: none; }
     .home-trend.down { color: var(--mm-success); }
     .home-trend.up   { color: var(--mm-warning); }
     .home-trend .muted { color: var(--mm-text-tertiary); font-weight: 600; }
@@ -208,7 +228,7 @@
     }
 
     @media (max-width: 480px) {
-      .container { padding: 14px 12px calc(24px + var(--mm-bottom-clearance, 0px)); }
+      .container { padding: 20px 12px calc(24px + var(--mm-bottom-clearance, 0px)); }
     }
   </style>
   <link rel="manifest" href="/manifest.webmanifest">
@@ -261,7 +281,8 @@
 
     <!-- ── A · TRAIN / TODAY'S PLAN ─────────────────────────────────────
          The one dominant surface. Keeps a container because it carries the
-         screen's primary action; no photography until V5. -->
+         screen's primary action. Renders the no-image fallback; hero
+         photography remains deferred. -->
     <div class="mm-section">
       <h2 class="mm-section-label">Train</h2>
     </div>
@@ -295,15 +316,14 @@
          No container, deliberately quieter than the hero. -->
     <div class="mm-section">
       <h2 class="mm-section-label">Nutrition</h2>
+      <!-- The section's own action, in the value slot Nutrition leaves empty.
+           Deep-links into the EXISTING Quick Log flow on nutrition.html. -->
+      <a class="home-action home-action--section" href="nutrition.html#quicklog">Quick log</a>
     </div>
     <a class="home-row" href="nutrition.html" id="nutRow">
       <div id="nutBody"></div>
       <span class="mm-visually-hidden">Open nutrition</span>
     </a>
-    <div class="home-inline-actions">
-      <!-- Deep-links into the EXISTING Quick Log flow on nutrition.html. -->
-      <a class="home-action" href="nutrition.html#quicklog">Quick log</a>
-    </div>
 
     <!-- ── D · COACH INSIGHT ────────────────────────────────────────────
          The seat the AI Coach will occupy. Deterministic evidence only, and
@@ -386,6 +406,10 @@
     el.className = 'mm-meter' + (modifier ? ' mm-meter--' + modifier : '');
     el.style.setProperty('--mm-meter-pct', p + '%');
     el.setAttribute('aria-valuenow', String(p));
+    // Zero reads as an empty track. Only a genuine non-zero value draws a fill,
+    // which the shell then floors to one bar-height so it stays visible.
+    if (p === 0) el.setAttribute('data-empty', 'true');
+    else el.removeAttribute('data-empty');
   }
 
   window.addEventListener('load', function () {
@@ -564,6 +588,7 @@
     var calValue, calPct, calMod = null;
     if (n.hasTargets) {
       calValue = n.left.toLocaleString() + ' <span class="sub">kcal ' + (n.over ? 'over' : 'left') + '</span>';
+
       calPct = n.pct;
       if (n.over) calMod = 'warning';
     } else {
@@ -574,7 +599,7 @@
     var html =
       '<div class="home-metric">' +
         '<span class="home-metric-label">Calories</span>' +
-        '<span class="home-metric-value">' + calValue + '</span>' +
+        '<span class="home-metric-value is-lead">' + calValue + '</span>' +
       '</div>' +
       '<div class="mm-meter" id="nutCalMeter"' + (n.hasTargets ? '' : ' data-empty="true"') +
         ' role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Calories">' +

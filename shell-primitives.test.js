@@ -51,7 +51,7 @@ test('primitives: none hard-codes a colour value', () => {
 });
 
 test('primitives: every colour they use comes from the token layer', () => {
-  const allowed = /^--mm-(accent|accent-contrast|accent-soft|accent-border|success|warning|danger|text|text-secondary|text-tertiary|surface|surface-raised|surface-high|line|line-subtle|line-strong|bg|white|neutral-light|neutral-muted|brand-red|meter-pct|nav-base-height|bottom-clearance)$/;
+  const allowed = /^--mm-(accent|accent-contrast|accent-soft|accent-border|success|warning|danger|text|text-secondary|text-tertiary|surface|surface-raised|surface-high|line|line-subtle|line-strong|bg|white|neutral-light|neutral-muted|brand-red|meter-pct|meter-height|nav-base-height|bottom-clearance)$/;
   for (const p of PRIMITIVES) {
     const body = bodiesFor(p);
     for (const m of body.matchAll(/var\(\s*(--[\w-]+)/g)) {
