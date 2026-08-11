@@ -161,6 +161,43 @@ test('insight: Focus was renamed to Coach Insight', () => {
   assert.ok(!/\.focus\s*\{/.test(HOME_CSS), 'old Focus CSS removed');
 });
 
+test('insight: the untrained-week message adds information rather than scolding', () => {
+  const DM = require('./dashboard-model.js');
+  // Monday–Sunday week, nothing trained, target of 3, today is Tuesday.
+  const days = ['2026-08-10', '2026-08-11', '2026-08-12', '2026-08-13',
+    '2026-08-14', '2026-08-15', '2026-08-16'].map((date, i) => ({
+    date, label: 'MTWTFSS'[i], weekday: date, completed: false,
+    isToday: date === '2026-08-11', isFuture: date > '2026-08-11',
+  }));
+  const f = DM.buildFocus({
+    profile: {},
+    snapshot: {
+      weight: {}, nutrition: { today: {}, week: {} },
+      training: { streak: 0, thisWeekCount: 0,
+        week: { days, completed: 0, planned: 3, start: days[0].date, end: days[6].date } },
+    },
+    hourOfDay: 10,
+  });
+  assert.ok(f, 'an insight is produced');
+  assert.strictEqual(f.id, 'week-runway');
+  assert.strictEqual(f.text, '6 days left to train this week.',
+    'today plus the five remaining days — real calendar data, not a restatement');
+  assert.strictEqual(f.severity, undefined, 'a runway is not a warning');
+  assert.ok(!/no workouts|nothing|failed|behind/i.test(f.text), 'no negative framing');
+
+  // On the final day it reads as the last day, not "1 days".
+  const sunday = days.map((d) => Object.assign({}, d,
+    { isToday: d.date === '2026-08-16', isFuture: false }));
+  const last = DM.buildFocus({
+    profile: {},
+    snapshot: { weight: {}, nutrition: { today: {}, week: {} },
+      training: { streak: 0, thisWeekCount: 0,
+        week: { days: sunday, completed: 0, planned: 3 } } },
+    hourOfDay: 10,
+  });
+  assert.strictEqual(last.text, 'Last day to train this week.');
+});
+
 test('insight: hides cleanly when there is no evidence-backed insight', () => {
   assert.match(HOME_BODY, /<section class="mm-insight" id="insightRow" hidden>/,
     'starts hidden');
@@ -204,6 +241,63 @@ test('insight: default treatment is the accent, warning is reserved', () => {
   const f = DM.buildFocus(nudge);
   assert.ok(f, 'a nudge insight exists');
   assert.strictEqual(f.severity, undefined, 'a routine nudge carries no severity');
+});
+
+/* ── 6b · V4 polish ─────────────────────────────────────────────────────── */
+
+test('polish: Quick log is an inline action in the Nutrition section', () => {
+  assert.match(HOME_BODY, /<a class="home-action" href="nutrition\.html#quicklog">Quick log<\/a>/);
+  // Same visual weight as Log weight — both are .home-action, neither a slab.
+  const actions = HOME_BODY.match(/class="home-action"/g) || [];
+  assert.ok(actions.length >= 3, 'choose workout, quick log and log weight');
+  assert.match(HOME_BODY, /id="logWeightBtn"/, 'Log weight is still inline in Progress');
+});
+
+test('polish: Quick log opens the EXISTING nutrition flow, not a new one', () => {
+  const nutrition = read('nutrition.html');
+  // The dashboard only deep-links; the handler just focuses the existing input.
+  assert.match(nutrition, /function focusQuickLogFromHash\(\)/);
+  assert.match(nutrition, /window\.location\.hash !== '#quicklog'/);
+  assert.match(nutrition, /getElementById\('aiLogInput'\)/,
+    'it targets the existing Quick Log field');
+  assert.match(nutrition, /<form class="ai-log-row" onsubmit="aiQuickLog\(event\)">/,
+    'the original Quick Log form is untouched');
+  // No second logging implementation anywhere on Home.
+  assert.ok(!/aiQuickLog|aiLogInput|food_logs|nuSaveLog/.test(HOME),
+    'Home implements no logging of its own');
+});
+
+test('polish: the gap under an inline action is evened out, not the sections', () => {
+  assert.match(HOME_CSS,
+    /\.home-action \+ \.mm-section,\s*\.home-inline-actions \+ \.mm-section\s*\{[^}]*margin-top:\s*12px/,
+    'only the post-action gap is trimmed');
+  // The shared section rhythm itself is unchanged.
+  assert.match(SHELL, /\.mm-section\s*\{[^}]*margin:\s*26px 0 10px/);
+});
+
+test('polish: today + completed remains readable as BOTH states', () => {
+  // A thicker accent border would disappear into the accent fill of a completed
+  // day. The today marker is a detached ring, so it survives either state.
+  const today = (SHELL.match(/\.mm-day\.is-today \.mm-day-dot\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.match(today, /box-shadow:\s*0 0 0 2px var\(--mm-bg\), 0 0 0 3\.5px var\(--mm-accent\)/,
+    'today draws a detached outer ring');
+  assert.ok(!/border-width:\s*2px/.test(today), 'not a thicker border that the fill would hide');
+  // Home emits both classes together and announces both meanings.
+  assert.match(HOME, /\(d\.isToday \? 'today, ' : ''\) \+ \(d\.completed \? 'completed' : 'not completed'\)/,
+    'screen readers hear "today, completed"');
+});
+
+test('polish: neutral days stay neutral — nothing reads as missed or scheduled', () => {
+  // Past days with no workout get NO extra class at all: same neutral outline.
+  assert.match(HOME, /d\.completed \? ' is-done' : ''/);
+  assert.match(HOME, /d\.isToday \? ' is-today' : ''/);
+  assert.ok(!/is-missed|is-skipped|is-scheduled|is-planned/.test(HOME + SHELL),
+    'no missed/scheduled state exists in markup or styling');
+  // The only dimming is for days that have not happened yet.
+  const future = (SHELL.match(/\.mm-day\.is-future \.mm-day-dot\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.match(future, /opacity/, 'future days are dimmed, not marked');
+  assert.ok(!/var\(--mm-danger\)|var\(--mm-warning\)/.test(SHELL.match(/\.mm-day[\s\S]*?\.mm-insight/)[0]),
+    'no day state uses a semantic alarm colour');
 });
 
 /* ── 7 · Progress + what left Home ──────────────────────────────────────── */

@@ -553,8 +553,15 @@ header .btn-back:focus-visible {
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
-/* Today — a ring, plus a brighter label. */
-.mm-day.is-today .mm-day-dot { border-color: var(--mm-accent); border-width: 2px; }
+/* Today — a DETACHED outer ring, plus a brighter label. Deliberately drawn
+   outside the dot rather than as a thicker border: when today is also a
+   completed day the dot is filled with the accent, and an accent border would
+   vanish into that fill, losing the "today" meaning entirely. The gap ring
+   survives both states, so completed-and-today reads as check + ring. */
+.mm-day.is-today .mm-day-dot {
+  border-color: var(--mm-accent);
+  box-shadow: 0 0 0 2px var(--mm-bg), 0 0 0 3.5px var(--mm-accent);
+}
 .mm-day.is-today .mm-day-label { color: var(--mm-text); }
 /* Days outside the tracked range read as inactive without implying failure. */
 .mm-day.is-future .mm-day-dot { opacity: 0.45; }

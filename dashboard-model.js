@@ -216,9 +216,21 @@
       return { text: training.streak + '-day streak.', tone: 'good', id: 'streak' };
     }
 
-    // 5. Training behind with little of the week left.
-    if (week.hasData && week.planned && week.completed === 0) {
-      return { text: 'No workouts logged this week yet.', tone: 'behind', id: 'week-empty' };
+    // 5. Nothing trained yet this week — surface the RUNWAY, not the gap.
+    // "No workouts logged this week yet" merely restated the This Week metric
+    // sitting directly above it, and read as a rebuke in the Coach seat. Days
+    // remaining is real calendar-week data that appears nowhere else on Home,
+    // so this adds information instead of repeating it.
+    if (week.hasData && week.planned && week.completed === 0 && week.days.length) {
+      var daysLeft = week.days.filter(function (d) { return d.isToday || d.isFuture; }).length;
+      if (daysLeft > 0) {
+        return {
+          text: daysLeft === 1
+            ? 'Last day to train this week.'
+            : daysLeft + ' days left to train this week.',
+          tone: 'neutral', id: 'week-runway',
+        };
+      }
     }
 
     // 6. Tracking has lapsed (only when we have a real weekly figure).

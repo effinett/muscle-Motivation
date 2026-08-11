@@ -1432,6 +1432,18 @@
     }
   }
 
+  /* Deep link from the dashboard's "Quick log" action. Opens the EXISTING
+     Quick Log flow — it only scrolls to and focuses #aiLogInput, adding no
+     second logging path. iOS will not raise the keyboard without a gesture,
+     so the field is brought into view rather than assumed focused. */
+  function focusQuickLogFromHash() {
+    if (window.location.hash !== '#quicklog') return;
+    var input = document.getElementById('aiLogInput');
+    if (!input) return;
+    try { input.scrollIntoView({ block: 'center' }); } catch (e) { input.scrollIntoView(); }
+    setTimeout(function () { try { input.focus({ preventScroll: true }); } catch (e) { input.focus(); } }, 80);
+  }
+
   /* ── refresh ─────────────────────────────────────────────────────── */
   async function refresh() {
     if (!currentUserId) return;
@@ -1464,6 +1476,7 @@
         loadFavChips();
         loadRecentChips();
         lucide.createIcons();
+        focusQuickLogFromHash();
       } catch (err) {
         console.error('Nutrition page error:', err);
         window.location.href = 'auth.html';

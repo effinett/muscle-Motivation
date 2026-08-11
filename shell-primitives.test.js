@@ -101,8 +101,12 @@ test('daystrip: state is never conveyed by colour alone', () => {
   const check = CODE.match(/\.mm-day\.is-done \.mm-day-dot::after[^{]*\{([^}]*)\}/)[1];
   assert.match(check, /border-width:\s*0 2px 2px 0/, 'the check is drawn, not coloured in');
   assert.match(check, /transform:\s*rotate\(45deg\)/);
+  // Today is a DETACHED outer ring. It must not be a mere border thickening:
+  // when today is also completed the dot is filled with the accent, and an
+  // accent border would disappear into that fill, losing the "today" meaning.
   const today = CODE.match(/\.mm-day\.is-today \.mm-day-dot[^{]*\{([^}]*)\}/)[1];
-  assert.match(today, /border-width:\s*2px/, 'today is a thicker ring, not just a hue');
+  assert.match(today, /box-shadow:\s*0 0 0 [\d.]+px var\(--mm-bg\), 0 0 0 [\d.]+px var\(--mm-accent\)/,
+    'today is a ring drawn outside the dot, so it survives a filled state');
 });
 
 test('daystrip: has no "scheduled" state — we never imply a weekday plan', () => {
