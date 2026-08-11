@@ -87,16 +87,26 @@
   }
 
   /* ── B · THIS WEEK ──────────────────────────────────────────────────────
-   * completed / planned. `planned` is null when the user has not declared a
-   * training frequency — we show the count alone rather than invent a target. */
+   * completed / planned over the Monday–Sunday CALENDAR week, plus the seven
+   * day states the strip renders. Both read the SAME snapshot.training.week
+   * structure, so the strip and the metric can never disagree.
+   *
+   * Falls back to the legacy rolling-7-day fields when a caller supplies an
+   * older snapshot; `planned` stays null when the user has declared no training
+   * frequency, so we show the count alone rather than invent a target. */
   function buildWeek(input) {
     var snap = input.snapshot || null;
     var training = (snap && snap.training) || {};
-    var completed = num(training.thisWeekCount);
-    var planned = (training.weekAdherence && num(training.weekAdherence.planned));
+    var week = training.week || null;
+
+    var completed = week ? num(week.completed) : num(training.thisWeekCount);
+    var planned = week
+      ? num(week.planned)
+      : (training.weekAdherence && num(training.weekAdherence.planned));
 
     if (completed == null) {
-      return { hasData: false, completed: null, planned: null, pct: 0, label: null, complete: false };
+      return { hasData: false, completed: null, planned: null, pct: 0, label: null,
+        complete: false, days: [] };
     }
     var complete = planned != null && completed >= planned;
     return {
@@ -109,6 +119,11 @@
         : completed + (completed === 1 ? ' workout' : ' workouts'),
       complete: complete,
       streak: num(training.streak) || 0,
+      // Seven day cells for .mm-daystrip. Empty when the snapshot predates the
+      // calendar-week field — the strip simply does not render.
+      days: week && Array.isArray(week.days) ? week.days : [],
+      start: week ? week.start : null,
+      end: week ? week.end : null,
     };
   }
 

@@ -80,6 +80,69 @@ function snWeekAdherence(completed, trainingDays) {
   };
 }
 
+/* ── calendar week (pure) ───────────────────────────────────────────────────
+ * The Monday–Sunday week containing `today`. This is the ONE definition that
+ * powers both the day strip and the completed/target metric — they must never
+ * disagree, which is why both read the same structure.
+ *
+ * Deliberately distinct from dashThisWeekCount(), which is a ROLLING 7-day
+ * window and stays untouched for backward compatibility. New consumers should
+ * use training.week; the rolling figures remain for existing ones.
+ *
+ * Honest state vocabulary only: a day is completed, today, or neither. The
+ * product stores a weekly training COUNT (profiles.training_days), never a
+ * per-weekday plan, so there is no "scheduled" state to derive and inventing
+ * one would fabricate data. */
+function snWeekStart(todayIso) {
+  var d = wlParseDate(todayIso);
+  // getDay(): 0=Sun … 6=Sat. Shift so Monday is the first day of the week.
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+var SN_DAY_LABELS   = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+var SN_DAY_WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+// workoutDates: ISO date strings of COMPLETED workouts (duplicates tolerated —
+// a day counts once, matching a target expressed in training DAYS per week).
+function snCalendarWeek(workoutDates, todayIso, trainingDays) {
+  var today = todayIso || wlToday();
+  var start = snWeekStart(today);
+
+  var done = {};
+  (workoutDates || []).forEach(function (d) { if (d) done[String(d)] = true; });
+
+  var days = [];
+  var completed = 0;
+  for (var i = 0; i < 7; i++) {
+    var d = new Date(start.getTime());
+    d.setDate(start.getDate() + i);          // rolls across month/year ends
+    var iso = dashIso(d);
+    var isDone = done[iso] === true;
+    if (isDone) completed++;
+    days.push({
+      date: iso,
+      label: SN_DAY_LABELS[i],
+      weekday: SN_DAY_WEEKDAYS[i],
+      completed: isDone,
+      isToday: iso === today,
+      isFuture: iso > today,
+    });
+  }
+
+  var planned = snPlannedPerWeek(trainingDays);
+  return {
+    start: days[0].date,
+    end: days[6].date,
+    days: days,
+    completed: completed,
+    planned: planned,
+    ratio: planned ? Math.round((completed / planned) * 100) / 100 : null,
+    met: planned ? completed >= planned : null,
+  };
+}
+
 /* ── nutrition compliance (pure) ───────────────────────────────────────── */
 // rows: food_logs rows (date, calories, protein, carbs, fat) covering the last
 // 7 days INCLUDING today. Averages are over days that logged anything — the
@@ -157,8 +220,11 @@ function snComputeSnapshot(inputs) {
     training: {
       trainedToday: seen[today] === true,
       streak: dashDayStreak(new Set(dates)),
+      // Rolling 7-day figures — PRESERVED for existing consumers.
       thisWeekCount: thisWeekCount,
       weekAdherence: snWeekAdherence(thisWeekCount, p.training_days),
+      // Calendar Monday–Sunday week — the definition new surfaces should use.
+      week: snCalendarWeek(dates, today, p.training_days),
       lastWorkout: last ? { name: last.name || 'Workout', date: last.date } : null,
     },
   };
@@ -219,6 +285,8 @@ if (typeof module !== 'undefined' && module.exports) {
     snWeekNutrition: snWeekNutrition,
     snPlannedPerWeek: snPlannedPerWeek,
     snWeekAdherence: snWeekAdherence,
+    snWeekStart: snWeekStart,
+    snCalendarWeek: snCalendarWeek,
     snComputeSnapshot: snComputeSnapshot,
   };
 }
