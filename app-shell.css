@@ -13,6 +13,98 @@
  * whatever palette a page already defines and never forces a migration.
  * ──────────────────────────────────────────────────────────────────────── */
 
+/* ══════════════════════════════════════════════════════════════════════════
+ * DESIGN TOKENS — Phase 4.3.4 V1
+ *
+ * Three deliberately separate tiers. The distinction is the whole point: it is
+ * what lets a user pick their own accent later without refactoring components,
+ * without diluting the Muscle Motivation identity, and without destroying the
+ * meaning of success / warning / danger.
+ *
+ *   1. BRAND     permanent Muscle Motivation identity. Never user-changeable.
+ *   2. ACCENT    the personalization layer. Defaults to brand red today; a
+ *                future theme writes --mm-accent on :root and every consuming
+ *                component follows. Components must NEVER hard-code #B1121B.
+ *   3. SEMANTIC  meaning-carrying colour. Deliberately NOT aliased to the
+ *                accent — if a user picks red, "over target" must not become
+ *                indistinguishable from "primary action", and if they pick
+ *                green, "success" must not silently become their accent.
+ *
+ * This block is the canonical application palette. It is defined here rather
+ * than per page because app-shell.css is linked AFTER each page's inline
+ * <style>, so these values win at equal (0,1,0) specificity. Pages keep their
+ * own :root as a graceful fallback if this sheet ever fails to load.
+ * ══════════════════════════════════════════════════════════════════════════ */
+:root {
+  /* ── 1 · BRAND ───────────────────────────────────────────────────────── */
+  --mm-brand-red:      #B1121B;   /* identity red — not the personalization knob */
+  --mm-bg:             #121011;   /* primary dark background */
+  --mm-surface:        #231F20;   /* secondary dark surface */
+  --mm-neutral-light:  #F7F5F2;   /* primary light neutral */
+  --mm-neutral-muted:  #B8B3B4;   /* muted neutral */
+  --mm-white:          #FFFFFF;   /* functional white */
+
+  /* Derived neutral steps, interpolated between the brand background and
+     surface so every elevation stays on the same warm-charcoal hue. */
+  --mm-surface-raised: #1A1717;
+  --mm-surface-high:   #2C2827;
+  --mm-line-subtle:    #241F20;
+  --mm-line:           #332D2E;
+  --mm-line-strong:    #443C3D;
+
+  /* Text tiers. All three clear WCAG AA on --mm-bg (≈17:1 / 9.3:1 / 5.4:1);
+     the old #555 tertiary sat near 2.3:1 and failed. */
+  --mm-text:           var(--mm-neutral-light);
+  --mm-text-secondary: var(--mm-neutral-muted);
+  --mm-text-tertiary:  #8A8384;
+
+  /* ── 2 · ACCENT (user-selectable later) ──────────────────────────────── */
+  --mm-accent:          var(--mm-brand-red);
+  --mm-accent-contrast: var(--mm-white);   /* text/icon ON the accent */
+  --mm-accent-soft:     rgba(177, 18, 27, 0.12);
+  --mm-accent-border:   rgba(177, 18, 27, 0.30);
+
+  /* ── 3 · SEMANTIC (never aliases the accent) ─────────────────────────── */
+  --mm-success: #22C55E;
+  --mm-warning: #E0A800;
+  --mm-danger:  #DC2626;
+}
+
+/* Keep the soft/border accent derivatives following a changed --mm-accent.
+   Declared after the rgba literals so supporting engines take these, and
+   non-supporting engines keep a correct red. */
+@supports (color: color-mix(in srgb, red 50%, transparent)) {
+  :root {
+    --mm-accent-soft:   color-mix(in srgb, var(--mm-accent) 14%, transparent);
+    --mm-accent-border: color-mix(in srgb, var(--mm-accent) 30%, transparent);
+  }
+}
+
+/* ── Legacy bridge ──────────────────────────────────────────────────────────
+ * Every page still declares its own --red / --bg / --surface-* / --text-* set.
+ * Rather than edit six palettes in one step, the historical names are re-pointed
+ * at the tokens above. Pages therefore adopt the approved brand palette with no
+ * per-page change, and component migration can proceed incrementally.
+ * NEW code should consume the --mm-* tokens directly; these names are a
+ * migration aid, not an API. */
+:root {
+  --bg:         var(--mm-bg);
+  --surface-1:  var(--mm-surface-raised);
+  --surface-2:  var(--mm-surface);
+  --surface-3:  var(--mm-surface-high);
+  --border-1:   var(--mm-line-subtle);
+  --border-2:   var(--mm-line);
+  --border-3:   var(--mm-line-strong);
+  --text:       var(--mm-text);
+  --text-2:     var(--mm-text-secondary);
+  --text-muted: var(--mm-text-tertiary);
+  --red:        var(--mm-accent);
+  --red-muted:  var(--mm-accent-soft);
+  --red-border: var(--mm-accent-border);
+  --green:      var(--mm-success);
+  --amber:      var(--mm-warning);
+}
+
 /* ── hidden ─────────────────────────────────────────────────────────────────
  * The UA's `[hidden] { display: none }` is a bare type-less rule, so ANY class
  * rule that sets `display` beats it — a `display:flex` component with the
@@ -48,7 +140,7 @@ header {
   background: rgba(8, 8, 8, 0.97);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border-1, #1c1c1c);
+  border-bottom: 1px solid var(--mm-line-subtle);
   padding: 0 20px;
   display: flex; align-items: center; justify-content: space-between;
   height: 60px;
@@ -57,7 +149,7 @@ header {
 .header-logo img { height: 42px; }
 .header-logo span {
   font-family: 'Bebas Neue', sans-serif; font-size: 18px;
-  letter-spacing: 2.5px; color: var(--text, #ffffff); text-transform: uppercase;
+  letter-spacing: 2.5px; color: var(--mm-text); text-transform: uppercase;
 }
 
 /* The header back-link. Visual treatment is unchanged; it now meets the 44px
@@ -70,11 +162,11 @@ header .btn-back {
   min-height: 44px;
   padding: 6px 14px; font-size: 11px; font-family: 'Barlow', sans-serif;
   font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-  background: transparent; border: 1px solid var(--border-2, #252525);
-  color: var(--text-muted, #555555); border-radius: 6px; cursor: pointer;
+  background: transparent; border: 1px solid var(--mm-line);
+  color: var(--mm-text-tertiary); border-radius: 6px; cursor: pointer;
   transition: border-color 0.2s, color 0.2s; text-decoration: none;
 }
-header .btn-back:hover { border-color: var(--border-3, #2f2f2f); color: var(--text-2, #a0a0a0); }
+header .btn-back:hover { border-color: var(--mm-line-strong); color: var(--mm-text-secondary); }
 
 /* The header back-link is a FALLBACK Home path, not a second Home control.
    Wherever the primary nav renders, its Home destination already does this job,
@@ -85,7 +177,7 @@ header .btn-back:hover { border-color: var(--border-3, #2f2f2f); color: var(--te
 
 .header-logo:focus-visible,
 header .btn-back:focus-visible {
-  outline: 2px solid var(--red, #B1121B);
+  outline: 2px solid var(--mm-accent);
   outline-offset: 2px;
   border-radius: 6px;
 }
@@ -110,17 +202,17 @@ header .btn-back:focus-visible {
   justify-content: center;
   height: var(--mm-bottom-clearance);
   padding-bottom: env(safe-area-inset-bottom, 0px);
-  background: var(--surface-1, #0d0d0d);
-  background: color-mix(in srgb, var(--bg, #080808) 94%, transparent);
+  background: var(--mm-surface-raised);
+  background: color-mix(in srgb, var(--mm-bg) 94%, transparent);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
-  border-top: 1px solid var(--border-2, #252525);
+  border-top: 1px solid var(--mm-line);
 }
 
 /* Fallback for engines without color-mix(): an opaque surface is always
    readable, so the nav never renders as transparent-over-content. */
 @supports not (background: color-mix(in srgb, red 50%, transparent)) {
-  .mm-nav { background: var(--surface-1, #0d0d0d); }
+  .mm-nav { background: var(--mm-surface-raised); }
 }
 
 .mm-nav-item {
@@ -137,7 +229,7 @@ header .btn-back:focus-visible {
   gap: 5px;
   padding: 8px 4px;
   text-decoration: none;
-  color: var(--text-muted, #555555);
+  color: var(--mm-text-tertiary);
   transition: color 0.18s ease;
   -webkit-tap-highlight-color: transparent;
 }
@@ -154,12 +246,12 @@ header .btn-back:focus-visible {
   width: 0;
   height: 2px;
   border-radius: 0 0 2px 2px;
-  background: var(--red, #B1121B);
+  background: var(--mm-accent);
   transition: width 0.18s ease;
 }
 .mm-nav-item.is-active::before { width: 34px; }
-.mm-nav-item.is-active { color: var(--text, #ffffff); }
-.mm-nav-item.is-active .mm-nav-glyph { color: var(--red, #B1121B); }
+.mm-nav-item.is-active { color: var(--mm-text); }
+.mm-nav-item.is-active .mm-nav-glyph { color: var(--mm-accent); }
 
 .mm-nav-icon {
   display: flex;
@@ -187,8 +279,8 @@ header .btn-back:focus-visible {
 
 /* Hover is a pointer-only affordance — never let it linger on touch. */
 @media (hover: hover) {
-  .mm-nav-item:hover { color: var(--text-2, #a0a0a0); }
-  .mm-nav-item.is-active:hover { color: var(--text, #ffffff); }
+  .mm-nav-item:hover { color: var(--mm-text-secondary); }
+  .mm-nav-item.is-active:hover { color: var(--mm-text); }
 }
 
 /* Narrow phones (320px → 4 × 80px): keep the 64px bar and the full label,
@@ -214,10 +306,10 @@ header .btn-back:focus-visible {
   max-width: min(420px, calc(100vw - 32px));
   z-index: 999;
   padding: 12px 20px;
-  background: var(--surface-2, #131313);
-  border: 1px solid var(--border-3, #2f2f2f);
+  background: var(--mm-surface);
+  border: 1px solid var(--mm-line-strong);
   border-radius: 8px;
-  color: var(--text, #ffffff);
+  color: var(--mm-text);
   font-family: 'Barlow', sans-serif;
   font-size: 14px; font-weight: 600; line-height: 1.4;
   text-align: center;
@@ -274,9 +366,9 @@ header .btn-back:focus-visible {
   z-index: 300;
   padding: 10px 16px;
   border-radius: 8px;
-  background: var(--surface-2, #131313);
-  border: 1px solid var(--red, #B1121B);
-  color: var(--text, #ffffff);
+  background: var(--mm-surface);
+  border: 1px solid var(--mm-accent);
+  color: var(--mm-text);
   font-family: 'Barlow', sans-serif;
   font-size: 13px;
   font-weight: 700;
@@ -303,7 +395,7 @@ header .btn-back:focus-visible {
    and are recorded for a later accessibility pass. */
 .mm-nav-item:focus-visible,
 .mm-skip-link:focus-visible {
-  outline: 2px solid var(--red, #B1121B);
+  outline: 2px solid var(--mm-accent);
   outline-offset: -3px;
   border-radius: 6px;
 }
