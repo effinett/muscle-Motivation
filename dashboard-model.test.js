@@ -186,15 +186,35 @@ test('focus: returns null when there is no snapshot at all', () => {
 });
 
 test('focus: returns null when nothing is evidence-backed — no filler', () => {
+  // Nutrition is on track, the streak is short, logging is healthy, and the
+  // user has declared NO weekly training target — so there is no goal to count
+  // toward and genuinely nothing to say.
   const f = DM.buildFocus({
     snapshot: snap({
       nutrition: { today: { calories: 1200, protein: 120 }, week: { daysLogged: 5 } },
-      training: { thisWeekCount: 2, streak: 1, weekAdherence: { planned: 4, completed: 2 } },
+      training: { thisWeekCount: 2, streak: 1,
+        weekAdherence: { planned: null, completed: 2 } },
     }),
     profile: { target_calories: 2500, protein_target: 160 },
     hourOfDay: 12,
   });
   assert.strictEqual(f, null, 'silence beats a manufactured insight');
+});
+
+test('focus: a declared weekly target DOES earn a line when behind', () => {
+  // Same scenario, but with a real target — the weekly goal is evidence-backed
+  // and useful, so the seat is filled rather than left empty.
+  const f = DM.buildFocus({
+    snapshot: snap({
+      nutrition: { today: { calories: 1200, protein: 120 }, week: { daysLogged: 5 } },
+      training: { thisWeekCount: 2, streak: 1,
+        weekAdherence: { planned: 4, completed: 2 } },
+    }),
+    profile: { target_calories: 2500, protein_target: 160 },
+    hourOfDay: 12,
+  });
+  assert.strictEqual(f.id, 'week-remaining');
+  assert.strictEqual(f.text, '2 workouts to hit your weekly goal.');
 });
 
 test('focus: protein behind, but only once late enough to act on', () => {

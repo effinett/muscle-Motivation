@@ -161,41 +161,65 @@ test('insight: Focus was renamed to Coach Insight', () => {
   assert.ok(!/\.focus\s*\{/.test(HOME_CSS), 'old Focus CSS removed');
 });
 
-test('insight: the untrained-week message adds information rather than scolding', () => {
+test('insight: weekly training is expressed in WORKOUTS remaining, never days', () => {
   const DM = require('./dashboard-model.js');
-  // Monday–Sunday week, nothing trained, target of 3, today is Tuesday.
-  const days = ['2026-08-10', '2026-08-11', '2026-08-12', '2026-08-13',
-    '2026-08-14', '2026-08-15', '2026-08-16'].map((date, i) => ({
-    date, label: 'MTWTFSS'[i], weekday: date, completed: false,
-    isToday: date === '2026-08-11', isFuture: date > '2026-08-11',
-  }));
+  const week = (completed, planned) => DM.buildFocus({
+    profile: {},
+    snapshot: {
+      weight: {}, nutrition: { today: {}, week: {} },
+      training: { streak: 0, thisWeekCount: completed,
+        week: { days: [], completed, planned } },
+    },
+    hourOfDay: 10,
+  });
+
+  // Plural and singular, straight from the real completed/planned values.
+  assert.strictEqual(week(0, 3).text, '3 workouts to hit your weekly goal.');
+  assert.strictEqual(week(1, 3).text, '2 workouts to hit your weekly goal.');
+  assert.strictEqual(week(2, 3).text, '1 workout to hit your weekly goal.');
+  assert.strictEqual(week(0, 1).text, '1 workout to hit your weekly goal.');
+
+  const f = week(1, 3);
+  assert.strictEqual(f.id, 'week-remaining');
+  assert.strictEqual(f.severity, undefined, 'being mid-week is not a warning');
+  // Must never imply the remaining CALENDAR days are training days.
+  assert.ok(!/day|days/i.test(f.text),
+    'no day-counting — the product has no per-weekday schedule to promise');
+  assert.ok(!/missed|behind|failed|should/i.test(f.text), 'no scolding');
+});
+
+test('insight: target met reads as a concise completion', () => {
+  const DM = require('./dashboard-model.js');
+  const met = (completed, planned) => DM.buildFocus({
+    profile: {},
+    snapshot: {
+      weight: {}, nutrition: { today: {}, week: {} },
+      training: { streak: 0, thisWeekCount: completed,
+        week: { days: [], completed, planned } },
+    },
+    hourOfDay: 10,
+  });
+  assert.strictEqual(met(3, 3).text, 'Weekly training goal complete.');
+  assert.strictEqual(met(3, 3).id, 'week-complete');
+  assert.strictEqual(met(5, 3).text, 'Weekly training goal complete.',
+    'exceeding the target still reads as complete, not as a new number');
+  assert.ok(met(3, 3).text.length <= 40, 'stays concise');
+});
+
+test('insight: with no declared weekly target the rule stays silent', () => {
+  const DM = require('./dashboard-model.js');
   const f = DM.buildFocus({
     profile: {},
     snapshot: {
       weight: {}, nutrition: { today: {}, week: {} },
-      training: { streak: 0, thisWeekCount: 0,
-        week: { days, completed: 0, planned: 3, start: days[0].date, end: days[6].date } },
+      training: { streak: 0, thisWeekCount: 2,
+        week: { days: [], completed: 2, planned: null } },
     },
     hourOfDay: 10,
   });
-  assert.ok(f, 'an insight is produced');
-  assert.strictEqual(f.id, 'week-runway');
-  assert.strictEqual(f.text, '6 days left to train this week.',
-    'today plus the five remaining days — real calendar data, not a restatement');
-  assert.strictEqual(f.severity, undefined, 'a runway is not a warning');
-  assert.ok(!/no workouts|nothing|failed|behind/i.test(f.text), 'no negative framing');
-
-  // On the final day it reads as the last day, not "1 days".
-  const sunday = days.map((d) => Object.assign({}, d,
-    { isToday: d.date === '2026-08-16', isFuture: false }));
-  const last = DM.buildFocus({
-    profile: {},
-    snapshot: { weight: {}, nutrition: { today: {}, week: {} },
-      training: { streak: 0, thisWeekCount: 0,
-        week: { days: sunday, completed: 0, planned: 3 } } },
-    hourOfDay: 10,
-  });
-  assert.strictEqual(last.text, 'Last day to train this week.');
+  // No target → no goal to count toward. Nothing else qualifies here either,
+  // so the surface hides rather than inventing a denominator or filler.
+  assert.strictEqual(f, null);
 });
 
 test('insight: hides cleanly when there is no evidence-backed insight', () => {

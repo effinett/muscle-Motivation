@@ -206,9 +206,9 @@
         severity: 'warning', action: seeNutrition };
     }
 
-    // 3. Planned training done for the week.
+    // 3. Weekly training target met.
     if (week.hasData && week.complete && week.planned) {
-      return { text: 'Week complete — ' + week.completed + ' of ' + week.planned + '.', tone: 'good', id: 'week-complete' };
+      return { text: 'Weekly training goal complete.', tone: 'good', id: 'week-complete' };
     }
 
     // 4. A streak worth protecting.
@@ -216,19 +216,18 @@
       return { text: training.streak + '-day streak.', tone: 'good', id: 'streak' };
     }
 
-    // 5. Nothing trained yet this week — surface the RUNWAY, not the gap.
-    // "No workouts logged this week yet" merely restated the This Week metric
-    // sitting directly above it, and read as a rebuke in the Coach seat. Days
-    // remaining is real calendar-week data that appears nowhere else on Home,
-    // so this adds information instead of repeating it.
-    if (week.hasData && week.planned && week.completed === 0 && week.days.length) {
-      var daysLeft = week.days.filter(function (d) { return d.isToday || d.isFuture; }).length;
-      if (daysLeft > 0) {
+    // 5. Behind the weekly target — express it as WORKOUTS remaining.
+    // Deliberately not "days left": the product tracks a weekly training COUNT,
+    // never a per-weekday plan, so counting down calendar days would imply the
+    // user is expected to train on every remaining day and would contradict the
+    // neutral-day model. Workouts remaining is exactly the target's own unit.
+    if (week.hasData && week.planned) {
+      var remaining = week.planned - week.completed;
+      if (remaining > 0) {
         return {
-          text: daysLeft === 1
-            ? 'Last day to train this week.'
-            : daysLeft + ' days left to train this week.',
-          tone: 'neutral', id: 'week-runway',
+          text: remaining + ' workout' + (remaining === 1 ? '' : 's') +
+            ' to hit your weekly goal.',
+          tone: 'neutral', id: 'week-remaining',
         };
       }
     }
