@@ -472,14 +472,74 @@ test('polish: neutral days stay neutral — nothing reads as missed or scheduled
 
 /* ── 7 · Progress + what left Home ──────────────────────────────────────── */
 
-test('progress: compact section with an inline Log weight action', () => {
-  assert.match(HOME_BODY, /<span class="mm-section-value" id="progValue">/);
-  assert.match(HOME_BODY, /class="home-action" id="logWeightBtn" onclick="wlOpenModal\(\)"/,
-    'Log weight is a quiet inline action inside Progress');
-  // The old standalone twin-button block is gone.
-  assert.ok(!/class="secondary"|class="secondary-btn"/.test(HOME_BODY),
-    'the bottom button pair is removed');
+test('progress: weight, trend and action are one row, not a header/body split', () => {
+  // Weight moved OUT of the section-header value slot, which had placed it
+  // diagonally opposite its own action.
+  assert.ok(!/<span class="mm-section-value" id="progValue">/.test(HOME_BODY),
+    'weight no longer lives in the section header');
+  assert.match(HOME_BODY,
+    /<div class="home-progress">\s*<span class="home-weight" id="progValue">[\s\S]*?<span class="home-trend" id="progTrend"><\/span>\s*<button class="home-action" id="logWeightBtn" onclick="wlOpenModal\(\)">/,
+    'weight → trend → action, in that reading order, in one row');
+  // Weight is the primary element; trend is quieter context.
+  const weight = (HOME_CSS.match(/\.home-weight\s*\{([^}]*)\}/) || [])[1] || '';
+  const trend = (HOME_CSS.match(/\.home-trend\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.match(weight, /Bebas Neue/);
+  const wSize = Number((weight.match(/font-size:\s*(\d+)px/) || [])[1]);
+  const tSize = Number((trend.match(/font-size:\s*(\d+)px/) || [])[1]);
+  assert.ok(wSize > tSize, `weight (${wSize}px) must outrank the trend (${tSize}px)`);
+  // Action stays right-aligned and quiet.
+  assert.match(HOME_CSS, /\.home-progress \.home-action\s*\{[^}]*margin-left:\s*auto/);
+  // The old standalone twin-button block is still gone.
+  assert.ok(!/class="secondary"|class="secondary-btn"/.test(HOME_BODY));
   assert.ok(!/\.secondary-btn\s*\{/.test(HOME_CSS));
+});
+
+test('progress: remains an open section — never a card', () => {
+  const row = (HOME_CSS.match(/\.home-progress\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.ok(!/background:/.test(row), 'no surface fill');
+  assert.ok(!/border:/.test(row), 'no border');
+  assert.ok(!/border-radius:/.test(row), 'no card rounding');
+  // Still exactly two contained surfaces on the page.
+  assert.strictEqual((HOME_BODY.match(/class="mm-hero"/g) || []).length, 1);
+  assert.strictEqual((HOME_BODY.match(/class="mm-insight"/g) || []).length, 1);
+});
+
+test('progress: with a real trend, all three read as one statement', () => {
+  // renderProgress emits weight, then the signed 30-day change, then the row
+  // keeps the action to the right.
+  assert.match(HOME, /valueEl\.hidden = false;\s*valueEl\.textContent = p\.current \+ ' ' \+ p\.unit;/);
+  assert.match(HOME, /trendEl\.innerHTML = arrow \+ ' ' \+ Math\.abs\(p\.change30\)/);
+  assert.match(HOME, /<span class="muted">this month<\/span>/);
+});
+
+test('progress: with no trend, nothing marks where one would go', () => {
+  assert.match(HOME, /if \(p\.change30 == null\)[\s\S]{0,240}?trendEl\.textContent = '';/,
+    'a single weigh-in produces no trend text');
+  assert.match(HOME_CSS, /\.home-trend:empty\s*\{[^}]*display:\s*none/,
+    'and the empty element collapses, leaving weight + action adjacent');
+  // Nothing is invented to fill the space.
+  assert.ok(!/--|n\/a|no change|0 lb this month/i.test(
+    (HOME.match(/function renderProgress[\s\S]*?\n  \}/) || [''])[0].replace(/this month/g, '')),
+    'no placeholder trend is fabricated');
+});
+
+test('progress: with no weight at all, the state is honest and still actionable', () => {
+  assert.match(HOME, /if \(!p\.hasData\)[\s\S]{0,320}?valueEl\.hidden = true;/,
+    'the weight element is hidden rather than showing a lone em dash');
+  assert.match(HOME, /No weigh-ins yet/, 'the empty state says so plainly');
+  // The action is outside that branch, so it always remains available.
+  const body = (HOME.match(/function renderProgress[\s\S]*?\n  \}/) || [''])[0];
+  assert.ok(!/logWeightBtn/.test(body), 'Log weight is never hidden or disabled');
+  assert.match(HOME_BODY, /id="logWeightBtn" onclick="wlOpenModal\(\)"/);
+});
+
+test('progress: cannot overflow at narrow widths or large values', () => {
+  const row = (HOME_CSS.match(/\.home-progress\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.match(row, /flex-wrap:\s*wrap/,
+    'a long weight or large text size wraps instead of overflowing 320px');
+  const weight = (HOME_CSS.match(/\.home-weight\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.match(weight, /white-space:\s*nowrap/, 'the value itself never breaks mid-number');
+  assert.ok(!/width:\s*\d+px/.test(row), 'no fixed widths to overflow');
 });
 
 test('progress: a trend is shown only when real data supports it', () => {

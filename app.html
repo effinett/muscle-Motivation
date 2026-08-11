@@ -151,18 +151,26 @@
        back so the rhythm is even — without tightening the sections themselves. */
     .home-action + .mm-section { margin-top: 12px; }
 
-    /* Progress: value in the section header, trend + action on one open row.
-       Left-aligned rather than space-between — with no trend to hold the left
-       side (a single weigh-in), space-between stranded "Log weight" alone at
-       the far right, detached from the weight it belongs to. Flow order keeps
-       both readings adjacent whether or not a trend exists. */
+    /* Progress is ONE row: weight, then trend as quieter context, then the
+       action. The weight used to live in the section-header value slot, which
+       put it diagonally opposite its own action — top-right versus bottom-left.
+       Bringing it into the row makes the three read as a single statement, and
+       wrapping means a long value or a large text size never overflows. */
     .home-progress {
-      display: flex; align-items: center; flex-wrap: wrap;
-      gap: 4px 16px; margin-top: 2px;
+      display: flex; align-items: baseline; flex-wrap: wrap;
+      gap: 4px 14px; margin-top: 2px;
+    }
+    .home-weight {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 24px; letter-spacing: 0.5px; line-height: 1;
+      color: var(--mm-text); white-space: nowrap;
     }
     .home-trend { font-size: 13px; font-weight: 600; color: var(--mm-text-secondary); }
-    /* No trend yet — collapse entirely so it contributes no gap. */
+    /* No trend yet — collapse entirely so nothing marks where one would go. */
     .home-trend:empty { display: none; }
+    /* The action sits right regardless of what precedes it, and centres against
+       the row rather than trying to share a text baseline with a 44px box. */
+    .home-progress .home-action { margin-left: auto; align-self: center; }
     .home-trend.down { color: var(--mm-success); }
     .home-trend.up   { color: var(--mm-warning); }
     .home-trend .muted { color: var(--mm-text-tertiary); font-weight: 600; }
@@ -346,9 +354,9 @@
          No container. Log weight lives here as a quiet inline action. -->
     <div class="mm-section">
       <h2 class="mm-section-label">Progress</h2>
-      <span class="mm-section-value" id="progValue">—</span>
     </div>
     <div class="home-progress">
+      <span class="home-weight" id="progValue">—</span>
       <span class="home-trend" id="progTrend"></span>
       <button class="home-action" id="logWeightBtn" onclick="wlOpenModal()">Log weight</button>
     </div>
@@ -670,11 +678,14 @@
     var trendEl = document.getElementById('progTrend');
 
     if (!p.hasData) {
-      valueEl.textContent = '—';
+      // No weight to show — the empty state carries the whole message, so a
+      // lone em dash beside it would be noise. The action stays useful.
+      valueEl.hidden = true;
       trendEl.className = 'home-trend';
       trendEl.innerHTML = '<span class="muted">No weigh-ins yet</span>';
       return;
     }
+    valueEl.hidden = false;
     valueEl.textContent = p.current + ' ' + p.unit;
 
     if (p.change30 == null) {
