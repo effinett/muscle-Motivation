@@ -585,7 +585,10 @@
       return;
     }
 
-    var calValue, calPct, calMod = null;
+    // Category colouring, matching the nutrition page: green identifies
+    // CALORIES, the accent identifies macro progress. Amber still overrides
+    // when genuinely over target — that is semantic, not categorical.
+    var calValue, calPct, calMod = 'calories';
     if (n.hasTargets) {
       calValue = n.left.toLocaleString() + ' <span class="sub">kcal ' + (n.over ? 'over' : 'left') + '</span>';
 
@@ -628,7 +631,12 @@
     if (n.protein.target) {
       // Hitting a protein target IS a genuine achievement, so success colour
       // is earned here — unlike ordinary partial progress.
-      setMeter('nutProMeter', n.protein.pct, n.protein.pct >= 100 ? 'success' : null);
+      // Protein stays on the ACCENT at every value. Turning it green on
+      // completion would give green two meanings on one screen — "this is
+      // calories" and "this is finished" — which is exactly the category
+      // ambiguity this treatment exists to remove. Hitting the target is
+      // already conveyed by the numbers reading 217 / 217 g and a full bar.
+      setMeter('nutProMeter', n.protein.pct, null);
     }
   }
 

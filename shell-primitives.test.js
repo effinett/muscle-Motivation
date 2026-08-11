@@ -101,12 +101,16 @@ test('daystrip: state is never conveyed by colour alone', () => {
   const check = CODE.match(/\.mm-day\.is-done \.mm-day-dot::after[^{]*\{([^}]*)\}/)[1];
   assert.match(check, /border-width:\s*0 2px 2px 0/, 'the check is drawn, not coloured in');
   assert.match(check, /transform:\s*rotate\(45deg\)/);
-  // Today is a DETACHED outer ring. It must not be a mere border thickening:
-  // when today is also completed the dot is filled with the accent, and an
-  // accent border would disappear into that fill, losing the "today" meaning.
+  // Today, on its own, is a single accent OUTLINE at the normal dot size.
   const today = CODE.match(/\.mm-day\.is-today \.mm-day-dot[^{]*\{([^}]*)\}/)[1];
-  assert.match(today, /box-shadow:\s*0 0 0 [\d.]+px var\(--mm-bg\), 0 0 0 [\d.]+px var\(--mm-accent\)/,
-    'today is a ring drawn outside the dot, so it survives a filled state');
+  assert.match(today, /border-color:\s*var\(--mm-accent\)/, 'today is an accent outline');
+  assert.ok(!/box-shadow/.test(today), 'no outer ring on its own — that reads as two circles');
+  // Only when today is ALSO completed does a detached outer ring appear: the
+  // dot is then filled with the accent, so a border could not carry "today",
+  // and the ring drawn outside it can.
+  const combined = CODE.match(/\.mm-day\.is-today\.is-done \.mm-day-dot[^{]*\{([^}]*)\}/)[1];
+  assert.match(combined, /box-shadow:\s*0 0 0 [\d.]+px var\(--mm-bg\), 0 0 0 [\d.]+px var\(--mm-accent\)/,
+    'the combined state adds a ring outside the filled dot');
 });
 
 test('daystrip: has no "scheduled" state — we never imply a weekday plan', () => {

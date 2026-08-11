@@ -135,6 +135,94 @@ test('nutrition: no longer the loudest element on the screen', () => {
   assert.match(SHELL, /\.mm-hero-title\s*\{[^}]*clamp\(34px/);
 });
 
+/* ── Category colouring: green = calories, accent = macros ──────────────── */
+
+test('nutrition: Calories uses the calorie-category token, not semantic success', () => {
+  assert.match(SHELL, /--mm-calories:\s*#[0-9A-Fa-f]{6}/, 'a dedicated category token exists');
+  assert.match(SHELL, /\.mm-meter--calories \.mm-meter-fill\s*\{[^}]*background:\s*var\(--mm-calories\)/);
+  // Home asks for the category modifier by default.
+  assert.match(HOME, /var calValue, calPct, calMod = 'calories';/);
+  assert.match(HOME, /setMeter\('nutCalMeter', calPct, calMod\)/);
+  // It is its OWN token — not an alias of success, and not accent-derived.
+  const cal = (SHELL.match(/--mm-calories:\s*([^;]+);/) || [])[1].trim();
+  assert.ok(!/var\(/.test(cal), 'calorie category is a literal, not an alias');
+  assert.ok(!/--mm-accent/.test(cal), 'a user theme can never collapse calories into macros');
+});
+
+test('nutrition: Protein uses the theme accent at every value', () => {
+  assert.match(HOME, /setMeter\('nutProMeter', n\.protein\.pct, null\)/,
+    'no modifier — the meter default is var(--mm-accent)');
+  assert.match(SHELL, /\.mm-meter-fill\s*\{[^}]*background:\s*var\(--mm-accent\)/);
+  // Protein must not turn green on completion, or green would mean both
+  // "this is calories" and "this is finished" on the same screen.
+  assert.ok(!/nutProMeter'[^)]*'success'/.test(HOME), 'protein never switches to success green');
+});
+
+test('nutrition: over target is still semantic amber, overriding the category', () => {
+  assert.match(HOME, /if \(n\.over\) calMod = 'warning';/);
+  assert.match(SHELL, /\.mm-meter--warning \.mm-meter-fill\s*\{[^}]*background:\s*var\(--mm-warning\)/);
+});
+
+test('nutrition: Home matches the nutrition page category treatment', () => {
+  // The page has coloured calories green and macros with the accent since
+  // before this phase — Home now agrees rather than inventing its own scheme.
+  const page = read('nutrition.html');
+  assert.match(page, /\.total-cals \.bar-fill\s*\{\s*background:\s*var\(--green\)/,
+    'nutrition page: calories green');
+  assert.match(page, /\.bar-fill\s*\{[^}]*background:\s*var\(--red\)/,
+    'nutrition page: macros accent');
+  // And no rainbow per-macro palette was introduced anywhere.
+  assert.ok(!/--mm-(carbs|fat|protein)\b/.test(SHELL), 'no per-macro colour tokens');
+});
+
+/* ── Day-marker state model ─────────────────────────────────────────────── */
+
+test('day states: the outer ring belongs to today+completed alone', () => {
+  const ringRule = SHELL.match(/\.mm-day\.is-today\.is-done \.mm-day-dot\s*\{([^}]*)\}/);
+  assert.ok(ringRule, 'the ring is scoped to the combined state');
+  assert.match(ringRule[1], /box-shadow:\s*0 0 0 2px var\(--mm-bg\), 0 0 0 4px var\(--mm-accent\)/,
+    'a larger outer ring with a background-coloured gap');
+  // No other day state may draw a ring.
+  const dayRules = [...SHELL.matchAll(/\.mm-day[^{]*\{([^}]*)\}/g)];
+  for (const r of dayRules) {
+    const sel = SHELL.slice(SHELL.lastIndexOf('.mm-day', r.index), r.index + 1);
+    if (/box-shadow/.test(r[1])) {
+      assert.match(r[0], /is-today\.is-done/,
+        `only today+completed may draw a ring — found one on: ${sel.split('\n').pop()}`);
+    }
+  }
+});
+
+test('day states: today-incomplete is a single accent outline at normal size', () => {
+  const today = SHELL.match(/\.mm-day\.is-today \.mm-day-dot\s*\{([^}]*)\}/)[1];
+  assert.match(today, /border-color:\s*var\(--mm-accent\)/, 'a single accent outline');
+  assert.ok(!/box-shadow/.test(today), 'no outer ring — that would read as two circles');
+  assert.ok(!/width|height|border-width/.test(today), 'same size and stroke as every other day');
+});
+
+test('day states: a previously completed day is fill + check, with no ring', () => {
+  const done = SHELL.match(/\.mm-day\.is-done \.mm-day-dot\s*\{([^}]*)\}/)[1];
+  assert.match(done, /background:\s*var\(--mm-accent\)/);
+  assert.ok(!/box-shadow/.test(done), 'no ring on an ordinary completed day');
+  assert.match(SHELL, /\.mm-day\.is-done \.mm-day-dot::after[^{]*\{[^}]*border-width:\s*0 2px 2px 0/,
+    'the check is drawn as a shape');
+});
+
+test('day states: neutral days stay unmarked, and no failure state exists', () => {
+  const base = SHELL.match(/\.mm-day-dot\s*\{([^}]*)\}/)[1];
+  assert.match(base, /border:\s*1\.5px solid var\(--mm-line\)/, 'plain neutral circle');
+  assert.ok(!/box-shadow|background:/.test(base), 'nothing marks a neutral day');
+  assert.ok(!/is-missed|is-skipped|is-scheduled|is-planned|is-failed/.test(SHELL + HOME),
+    'no missed/scheduled/failed day state exists anywhere');
+});
+
+test('day states: both meanings stay available without colour', () => {
+  // Completed = a drawn check; today = an outline/ring. Screen readers get both.
+  assert.match(HOME, /\(d\.isToday \? 'today, ' : ''\) \+ \(d\.completed \? 'completed' : 'not completed'\)/);
+  assert.match(HOME, /d\.completed \? ' is-done' : ''/);
+  assert.match(HOME, /d\.isToday \? ' is-today' : ''/);
+});
+
 test('nutrition: ordinary progress uses the accent, not semantic colour', () => {
   // Calories only go semantic when genuinely OVER target.
   assert.match(HOME, /if \(n\.over\) calMod = 'warning';/);
@@ -149,7 +237,9 @@ test('nutrition: every real-world state is handled', () => {
   assert.match(HOME, /if \(n\.hasTargets\)/, 'with and without a calorie target');
   assert.match(HOME, /n\.over \? 'over' : 'left'/, 'over vs remaining');
   assert.match(HOME, /if \(n\.protein\.target\)/, 'protein with a target');
-  assert.match(HOME, /n\.protein\.pct >= 100 \? 'success' : null/, 'protein achieved');
+  assert.match(HOME, /else if \(n\.protein\.consumed\)/, 'protein without a target');
+  // Protein achieved is conveyed by the numbers and a full bar, not by a
+  // colour change — see the category-colouring tests above.
 });
 
 /* ── 6 · Coach Insight ──────────────────────────────────────────────────── */
@@ -354,12 +444,14 @@ test('polish: meters read as empty at zero and stay visible just above it', () =
 });
 
 test('polish: today + completed remains readable as BOTH states', () => {
-  // A thicker accent border would disappear into the accent fill of a completed
-  // day. The today marker is a detached ring, so it survives either state.
-  const today = (SHELL.match(/\.mm-day\.is-today \.mm-day-dot\s*\{([^}]*)\}/) || [])[1] || '';
-  assert.match(today, /box-shadow:\s*0 0 0 2px var\(--mm-bg\), 0 0 0 3\.5px var\(--mm-accent\)/,
-    'today draws a detached outer ring');
-  assert.ok(!/border-width:\s*2px/.test(today), 'not a thicker border that the fill would hide');
+  // The fill and check carry "completed"; the outer ring adds "and it is
+  // today". A thicker border could not do that job — it would vanish into the
+  // accent fill — which is why the ring is drawn outside the dot.
+  const combined = (SHELL.match(/\.mm-day\.is-today\.is-done \.mm-day-dot\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.match(combined, /box-shadow:\s*0 0 0 2px var\(--mm-bg\), 0 0 0 4px var\(--mm-accent\)/,
+    'the combined state adds a larger outer ring with a visible gap');
+  assert.match(SHELL, /\.mm-day\.is-done \.mm-day-dot\s*\{[^}]*background:\s*var\(--mm-accent\)/,
+    'while still carrying the completed fill');
   // Home emits both classes together and announces both meanings.
   assert.match(HOME, /\(d\.isToday \? 'today, ' : ''\) \+ \(d\.completed \? 'completed' : 'not completed'\)/,
     'screen readers hear "today, completed"');

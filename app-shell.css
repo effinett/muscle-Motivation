@@ -68,6 +68,20 @@
   --mm-success: #22C55E;
   --mm-warning: #E0A800;
   --mm-danger:  #DC2626;
+
+  /* ── 4 · DATA CATEGORY ────────────────────────────────────────────────
+   * Identity of a kind of DATA, not a judgement about it and not a
+   * personalization slot. Calories have been green across the nutrition page
+   * since long before this phase (nutrition.html: `.total-cals .bar-fill`),
+   * while macros carry the accent — so green here means "this is calories",
+   * not "this is good".
+   *
+   * It gets its own token rather than borrowing --mm-success on purpose: the
+   * two happen to share a value today, but they answer different questions,
+   * and a future change to the success colour must not silently restyle the
+   * calorie category. Equally it is NOT accent-derived, so a user theme never
+   * collapses the calorie/macro distinction. */
+  --mm-calories: #22C55E;
 }
 
 /* Keep the soft/border accent derivatives following a changed --mm-accent.
@@ -509,6 +523,8 @@ header .btn-back:focus-visible {
 .mm-meter--success .mm-meter-fill { background: var(--mm-success); }
 .mm-meter--warning .mm-meter-fill { background: var(--mm-warning); }
 .mm-meter--danger  .mm-meter-fill { background: var(--mm-danger); }
+/* Data-category modifier — identifies WHAT is measured, not how well. */
+.mm-meter--calories .mm-meter-fill { background: var(--mm-calories); }
 /* No data yet: render the track alone rather than a misleading empty fill. */
 .mm-meter[data-empty="true"] .mm-meter-fill { display: none; }
 
@@ -579,15 +595,19 @@ header .btn-back:focus-visible {
    completed day the dot is filled with the accent, and an accent border would
    vanish into that fill, losing the "today" meaning entirely. The gap ring
    survives both states, so completed-and-today reads as check + ring. */
-.mm-day.is-today .mm-day-dot {
-  /* ONE ring. The inner border deliberately stays neutral: accenting it too
-     produced two concentric accent rings on device, which read as
-     overcomplicated and pulled more attention than the primary CTA. The
-     detached outer ring alone carries "today", and because it sits outside the
-     dot it still survives a completed day's accent fill. */
-  box-shadow: 0 0 0 2px var(--mm-bg), 0 0 0 3.5px var(--mm-accent);
-}
+/* Today, NOT completed — a single accent outline at the normal dot size. No
+   outer ring: on device, an outer ring plus an outlined dot read as two
+   concentric circles and drew more attention than the primary CTA. */
+.mm-day.is-today .mm-day-dot { border-color: var(--mm-accent); }
 .mm-day.is-today .mm-day-label { color: var(--mm-text); }
+
+/* Today AND completed — the ONLY state that uses the outer ring. The fill and
+   check already say "completed", so the ring is doing one job: adding "and it
+   is today". The 2px background-coloured gap keeps it reading as a deliberate
+   second ring rather than a thick border. */
+.mm-day.is-today.is-done .mm-day-dot {
+  box-shadow: 0 0 0 2px var(--mm-bg), 0 0 0 4px var(--mm-accent);
+}
 /* Days outside the tracked range read as inactive without implying failure. */
 .mm-day.is-future .mm-day-dot { opacity: 0.45; }
 
