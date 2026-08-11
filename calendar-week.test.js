@@ -255,12 +255,16 @@ test('V3: exercise count was deliberately omitted, not faked', () => {
   assert.ok(!/exerciseCount|duration/i.test(model), 'and none is invented downstream');
 });
 
-test('V3: Home is still not visually restructured', () => {
+test('V4: the day strip is rendered from training.week, not re-derived', () => {
   const home = fs.readFileSync(path.join(__dirname, 'app.html'), 'utf8');
-  for (const p of ['mm-section', 'mm-meter', 'mm-daystrip', 'mm-insight', 'mm-hero']) {
-    assert.ok(!home.includes(p), `app.html must not consume ${p} until V4`);
-  }
-  for (const id of ['todayTitle', 'todayCta', 'weekRow', 'nutRow', 'focusRow', 'progRow']) {
-    assert.ok(home.includes(`id="${id}"`), `existing ${id} still present`);
-  }
+  // The strip is built from the model's day cells…
+  assert.match(home, /\(w\.days \|\| \[\]\)\.map/, 'strip renders model.week.days');
+  // …and the only states it can emit are the honest three.
+  assert.match(home, /d\.completed \? ' is-done' : ''/);
+  assert.match(home, /d\.isToday \? ' is-today' : ''/);
+  assert.ok(!/is-scheduled|is-planned|is-missed|is-rest/.test(home),
+    'Home never renders a fabricated day state');
+  // Home does no week maths of its own.
+  assert.ok(!/getDay\(\)|setDate\(/.test(home),
+    'week derivation stays in the shared domain layer');
 });

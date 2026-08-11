@@ -206,15 +206,21 @@ test('primitives: V2 did not regress the protected shell contracts', () => {
   assert.match(SHELL, /:root\.mm-has-nav\s*\{[^}]*--mm-nav-base-height:\s*64px/, 'nav height');
 });
 
-/* ── Home is NOT restructured in V2 ─────────────────────────────────────── */
+/* ── Home consumes the primitives (wired in V4) ─────────────────────────── */
 
-test('V2: Home still uses its existing structure — no primitive is wired in yet', () => {
+test('primitives: Home actually consumes every one of them', () => {
   const home = read('app.html');
   for (const p of ['mm-section', 'mm-meter', 'mm-daystrip', 'mm-insight', 'mm-hero']) {
-    assert.ok(!home.includes(p), `app.html must not consume ${p} until V4`);
+    assert.ok(home.includes(p), `app.html consumes ${p}`);
   }
-  // The current sections are all still present and untouched.
-  for (const id of ['todayTitle', 'todayCta', 'weekRow', 'nutRow', 'focusRow', 'progRow']) {
-    assert.ok(home.includes(`id="${id}"`), `existing ${id} still present`);
+  // They are used as the shared primitives, not re-implemented locally. A page
+  // may still position them contextually (`.home-metric + .mm-meter`), but must
+  // never redeclare the primitive itself.
+  const css = (home.match(/<style>([\s\S]*?)<\/style>/) || [])[1] || '';
+  const selectors = [...css.matchAll(/(^|})\s*([^{}@]+)\{/g)]
+    .flatMap((m) => m[2].split(',').map((s) => s.trim()));
+  for (const p of ['.mm-hero', '.mm-meter', '.mm-daystrip', '.mm-insight', '.mm-section']) {
+    assert.ok(!selectors.includes(p),
+      `app.html must not redefine ${p} — it belongs to the shell`);
   }
 });

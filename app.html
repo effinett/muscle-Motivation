@@ -9,28 +9,26 @@
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js" integrity="sha384-ouAVEJVCMsf8Svzn+BwqbaBhxBEA0xgeVBhHnxmWd+Wqyv18yhWCQwGegFD/OHLq" crossorigin="anonymous"></script>
   <style>
+    /* Fallback palette only — app-shell.css defines the canonical tokens and
+       overrides these. Kept so the page degrades sanely if the shell 404s. */
     :root {
       --red:          #B1121B;
-      --red-muted:    rgba(177,18,27,0.12);
-      --red-border:   rgba(177,18,27,0.28);
-      --bg:           #080808;
-      --surface-1:    #0d0d0d;
-      --surface-2:    #131313;
-      --surface-3:    #1a1a1a;
-      --border-1:     #1c1c1c;
-      --border-2:     #252525;
-      --border-3:     #2f2f2f;
-      --text:         #ffffff;
-      --text-2:       #a0a0a0;
-      --text-muted:   #555555;
-      --green:        #22c55e;
-      --amber:        #e0a800;
+      --bg:           #121011;
+      --surface-1:    #1A1717;
+      --surface-2:    #231F20;
+      --surface-3:    #2C2827;
+      --border-1:     #241F20;
+      --border-2:     #332D2E;
+      --border-3:     #443C3D;
+      --text:         #F7F5F2;
+      --text-2:       #B8B3B4;
+      --text-muted:   #8A8384;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Barlow', sans-serif;
-      background: var(--bg);
-      color: var(--text);
+      background: var(--mm-bg);
+      color: var(--mm-text);
       min-height: 100vh;
       overflow-x: hidden;
     }
@@ -43,174 +41,105 @@
     }
     #authGate img { width: 72px; margin-bottom: 16px; opacity: 0.6; }
     #authGate p {
-      color: var(--text-muted); font-size: 11px;
+      color: var(--mm-text-tertiary); font-size: 11px;
       letter-spacing: 2.5px; text-transform: uppercase;
     }
 
-    /* Header — header / .header-logo now live in app-shell.css */
+    /* Header — header / .header-logo live in app-shell.css.
+       The avatar is the ONLY Profile entry point; Profile has no Home content. */
     .header-profile {
       display: inline-flex; align-items: center; justify-content: center;
       width: 44px; height: 44px; margin-right: -10px;
-      color: var(--text-2); text-decoration: none;
+      color: var(--mm-text-secondary); text-decoration: none;
       border-radius: 50%;
       transition: color 0.2s, background 0.2s;
     }
-    .header-profile:hover { color: var(--text); background: var(--surface-2); }
+    .header-profile:hover { color: var(--mm-text); background: var(--mm-surface); }
     .header-profile:focus-visible { outline: 2px solid var(--mm-accent); outline-offset: 2px; }
 
     /* Bottom padding = the page's own breathing room + the shared app-shell
        clearance (nav height + home indicator). See app-shell.css. */
     .container {
       max-width: 680px; margin: 0 auto;
-      padding: 20px 16px calc(24px + var(--mm-bottom-clearance, 0px));
+      padding: 18px 16px calc(24px + var(--mm-bottom-clearance, 0px));
     }
 
-    /* ── Shared section rhythm ──────────────────────────────────────────
-       Hierarchy comes from typography, spacing and density — not from a
-       stack of equally-weighted cards. */
-    .eyebrow {
-      font-size: 10px; font-weight: 700; letter-spacing: 2px;
-      text-transform: uppercase; color: var(--text-muted);
+    /* ── Open rows ──────────────────────────────────────────────────────
+       A tappable block with NO container: the background is the layout
+       surface. This is what replaces the old bordered cards, so This Week
+       and Nutrition stop competing with the hero for visual weight. */
+    .home-row {
+      display: block;
+      padding: 2px 0 4px;
+      text-decoration: none;
+      color: inherit;
+      border-radius: 10px;
     }
-    .num {
-      font-family: 'Bebas Neue', sans-serif;
-      letter-spacing: 0.5px; line-height: 1;
+    .home-row:focus-visible {
+      outline: 2px solid var(--mm-accent);
+      outline-offset: 4px;
     }
+    @media (hover: hover) {
+      .home-row:hover .mm-meter { background: var(--mm-line); }
+    }
+    .home-row:active { opacity: 0.75; }
 
-    /* ── A · TODAY — the one thing that matters now ─────────────────────── */
-    .today {
-      padding: 4px 0 16px;
-      border-bottom: 1px solid var(--border-1);
-      margin-bottom: 16px;
+    /* Label + value pair sitting above a meter. */
+    .home-metric {
+      display: flex; align-items: baseline; justify-content: space-between;
+      gap: 12px; margin: 0 0 7px;
     }
-    .today-title {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: clamp(38px, 10vw, 54px);
-      line-height: 1.02; letter-spacing: 1px;
-      text-transform: uppercase;
-      margin: 6px 0 0;
+    .home-metric + .mm-meter { margin-bottom: 14px; }
+    .home-metric-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+      text-transform: uppercase; color: var(--mm-text-tertiary);
     }
-    .today-status {
-      display: inline-flex; align-items: center; gap: 7px;
-      font-size: 13px; font-weight: 600; color: var(--text-2);
-      margin-top: 8px;
+    .home-metric-value {
+      font-size: 14px; font-weight: 600; color: var(--mm-text);
+      white-space: nowrap;
     }
-    .today-status .dot {
-      width: 7px; height: 7px; border-radius: 50%;
-      background: var(--text-muted); flex-shrink: 0;
-    }
-    .today-status.is-done .dot { background: var(--mm-success); }
-    .today-status.is-live .dot { background: var(--mm-accent); }
-    .cta {
-      display: flex; align-items: center; justify-content: center;
-      width: 100%; min-height: 56px; margin-top: 20px;
-      padding: 15px 20px;
-      background: var(--mm-accent); border: none; border-radius: 12px;
-      color: var(--mm-accent-contrast); text-align: center; text-decoration: none;
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 21px; letter-spacing: 2.5px; text-transform: uppercase;
-      cursor: pointer; transition: opacity 0.2s;
-    }
-    .cta:hover { opacity: 0.88; }
-    .cta:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
-    .today-alt {
-      display: inline-flex; align-items: center; gap: 5px; min-height: 44px;
-      margin-top: 2px; font-size: 13px; font-weight: 600;
-      color: var(--text-2); text-decoration: none;
-      background: none; border: none; cursor: pointer;
+    .home-metric-value .sub { color: var(--mm-text-tertiary); font-weight: 600; }
+
+    /* Quiet inline action — used for "Choose another workout" and "Log weight".
+       Text-weight, never a button slab, but still a real 44px target. */
+    .home-action {
+      display: inline-flex; align-items: center; gap: 5px;
+      min-height: 44px;
+      background: none; border: none; padding: 0;
       font-family: 'Barlow', sans-serif;
-    }
-    /* Reads as a control rather than a stray caption. */
-    .today-alt::after { content: '›'; font-size: 16px; line-height: 1; color: var(--text-muted); }
-    .today-alt:hover { color: var(--text); }
-    .today-alt:focus-visible { outline: 2px solid var(--mm-accent); outline-offset: 2px; border-radius: 6px; }
-
-    /* ── Tappable rows / tiles ──────────────────────────────────────────── */
-    .row {
-      display: block; width: 100%;
-      padding: 15px 16px; margin-bottom: 10px;
-      background: var(--surface-1);
-      border: 1px solid var(--border-2);
-      border-radius: 12px;
-      text-decoration: none; color: var(--text);
-      transition: border-color 0.2s;
-    }
-    .row:hover { border-color: var(--border-3); }
-    .row:focus-visible { outline: 2px solid var(--mm-accent); outline-offset: 2px; }
-    .row-head {
-      display: flex; align-items: baseline; justify-content: space-between;
-      gap: 12px;
-    }
-    .row-value { font-size: 15px; font-weight: 600; white-space: nowrap; }
-    .row-value .sub { color: var(--text-muted); font-weight: 600; font-size: 13px; }
-
-    /* Slim progress track, used by This Week and Nutrition */
-    .track {
-      height: 5px; margin-top: 11px;
-      background: var(--surface-3); border-radius: 3px; overflow: hidden;
-    }
-    .fill {
-      height: 100%; border-radius: 3px;
-      background: var(--mm-accent);
-      transition: width 0.3s ease;
-    }
-    .fill.good { background: var(--mm-success); }
-    .fill.over { background: var(--mm-warning); }
-
-    /* ── B · THIS WEEK ──────────────────────────────────────────────────── */
-    .week-value { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 0.5px; }
-    .week-meta { font-size: 12px; color: var(--text-muted); font-weight: 600; margin-top: 8px; }
-    .week-meta:empty { display: none; }
-
-    /* ── C · NUTRITION ──────────────────────────────────────────────────── */
-    .nut { display: flex; align-items: baseline; gap: 10px; margin-top: 6px; }
-    .nut-num { font-size: 42px; color: var(--mm-success); }
-    .nut-num.over { color: var(--mm-warning); }
-    .nut-unit { font-size: 13px; font-weight: 700; color: var(--text-2); letter-spacing: 0.5px; }
-    .nut-macro {
-      display: flex; align-items: baseline; justify-content: space-between;
-      gap: 12px; margin-top: 14px; font-size: 13px; font-weight: 600;
-    }
-    .nut-macro .label { color: var(--text-muted); font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; }
-    .nut-empty { font-size: 14px; color: var(--text-2); margin-top: 4px; }
-
-    /* ── D · FOCUS — the permanent Coach seat ───────────────────────────── */
-    .focus {
-      display: flex; align-items: flex-start; gap: 11px;
-      padding: 14px 16px; margin-bottom: 10px;
-      background: var(--surface-1);
-      border: 1px solid var(--border-2);
-      border-left: 2px solid var(--text-muted);
-      border-radius: 12px;
-    }
-    .focus[data-tone="behind"] { border-left-color: var(--mm-warning); }
-    .focus[data-tone="good"]   { border-left-color: var(--mm-success); }
-    .focus-icon { color: var(--text-muted); flex-shrink: 0; margin-top: 1px; }
-    .focus-body { min-width: 0; }
-    .focus-text { font-size: 14px; font-weight: 600; color: var(--text); margin-top: 3px; }
-
-    /* ── E · PROGRESS ───────────────────────────────────────────────────── */
-    .prog-value { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 0.5px; }
-    .prog-delta { font-size: 13px; font-weight: 600; color: var(--text-2); }
-    .prog-delta.down { color: var(--mm-success); }
-    .prog-delta.up   { color: var(--mm-warning); }
-
-    /* ── F · SECONDARY ──────────────────────────────────────────────────── */
-    .secondary {
-      display: flex; gap: 10px; margin-top: 18px;
-    }
-    .secondary-btn {
-      flex: 1; display: inline-flex; align-items: center; justify-content: center;
-      gap: 8px; min-height: 48px; padding: 12px;
-      background: transparent; border: 1px solid var(--border-2);
-      border-radius: 10px; color: var(--text-2);
-      font-family: 'Barlow', sans-serif; font-size: 12px; font-weight: 700;
-      letter-spacing: 1.2px; text-transform: uppercase;
+      font-size: 13px; font-weight: 600;
+      color: var(--mm-text-secondary);
       text-decoration: none; cursor: pointer;
-      transition: border-color 0.2s, color 0.2s;
     }
-    .secondary-btn:hover { border-color: var(--border-3); color: var(--text); }
-    .secondary-btn:focus-visible { outline: 2px solid var(--mm-accent); outline-offset: 2px; }
+    .home-action::after { content: '›'; font-size: 16px; line-height: 1; color: var(--mm-text-tertiary); }
+    .home-action:hover { color: var(--mm-text); }
+    .home-action:focus-visible {
+      outline: 2px solid var(--mm-accent); outline-offset: 3px; border-radius: 6px;
+    }
+
+    /* Hero state dot — the text beside it always says the same thing, so the
+       colour is emphasis only, never the sole carrier of meaning. */
+    .mm-hero-meta.is-done::before,
+    .mm-hero-meta.is-live::before {
+      content: ''; display: inline-block;
+      width: 7px; height: 7px; border-radius: 50%;
+      margin-right: 7px; vertical-align: middle;
+    }
+    .mm-hero-meta.is-done::before { background: var(--mm-success); }
+    .mm-hero-meta.is-live::before { background: var(--mm-accent); }
+
+    /* Progress: value in the section header, trend + action on one open row. */
+    .home-progress {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; margin-top: 2px;
+    }
+    .home-trend { font-size: 13px; font-weight: 600; color: var(--mm-text-secondary); }
+    .home-trend.down { color: var(--mm-success); }
+    .home-trend.up   { color: var(--mm-warning); }
+    .home-trend .muted { color: var(--mm-text-tertiary); font-weight: 600; }
+
+    /* Quiet empty states — never a card, never a paragraph. */
+    .home-empty { font-size: 13px; color: var(--mm-text-tertiary); padding: 2px 0 6px; }
 
     /* ── Log / Edit Weight modal ────────────────────────────────────────
        Markup comes from weight.js (wlModalMarkup) and uses these shared class
@@ -223,7 +152,7 @@
     }
     .modal-overlay.open { display: flex; }
     .modal-box {
-      background: var(--surface-1); border: 1px solid var(--border-2);
+      background: var(--mm-surface-raised); border: 1px solid var(--mm-line);
       border-radius: 14px; padding: 22px 18px;
       width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto;
     }
@@ -234,21 +163,21 @@
     .modal-title { font-family: 'Bebas Neue', sans-serif; font-size: 24px; letter-spacing: 1.5px; }
     .modal-close {
       min-width: 44px; min-height: 44px; background: none; border: none;
-      color: var(--text-muted); font-size: 18px; cursor: pointer;
+      color: var(--mm-text-tertiary); font-size: 18px; cursor: pointer;
     }
-    .modal-close:hover { color: var(--text); }
+    .modal-close:hover { color: var(--mm-text); }
     .modal-close:focus-visible { outline: 2px solid var(--mm-accent); outline-offset: 2px; border-radius: 6px; }
     .field-group { margin-bottom: 14px; }
     .field-label {
       display: block; font-size: 11px; font-weight: 700;
       letter-spacing: 1.5px; text-transform: uppercase;
-      color: var(--text-muted); margin-bottom: 6px;
+      color: var(--mm-text-tertiary); margin-bottom: 6px;
     }
     .field-optional { font-weight: 400; text-transform: none; letter-spacing: 0; }
     .field-group input {
       width: 100%; min-height: 44px; padding: 10px 12px;
-      background: var(--surface-2); border: 1px solid var(--border-2);
-      border-radius: 8px; color: var(--text);
+      background: var(--mm-surface); border: 1px solid var(--mm-line);
+      border-radius: 8px; color: var(--mm-text);
       font-family: 'Barlow', sans-serif; font-size: 16px; appearance: none;
     }
     .field-group input:focus-visible {
@@ -256,20 +185,21 @@
     }
     .btn-calc {
       width: 100%; min-height: 48px; margin-top: 8px; padding: 12px;
-      background: var(--mm-accent); border: none; border-radius: 8px; color: var(--mm-accent-contrast);
+      background: var(--mm-accent); border: none; border-radius: 8px;
+      color: var(--mm-accent-contrast);
       font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 2px;
       cursor: pointer;
     }
-    .btn-calc:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    .btn-calc:focus-visible { outline: 2px solid var(--mm-accent-contrast); outline-offset: 2px; }
 
-    /* .toast now lives in app-shell.css */
+    /* .toast lives in app-shell.css */
 
     @media (prefers-reduced-motion: reduce) {
-      .cta, .row, .fill, .secondary-btn, .header-profile { transition: none; }
+      .home-row, .header-profile { transition: none; }
     }
 
     @media (max-width: 480px) {
-      .container { padding: 16px 12px calc(24px + var(--mm-bottom-clearance, 0px)); }
+      .container { padding: 14px 12px calc(24px + var(--mm-bottom-clearance, 0px)); }
     }
   </style>
   <link rel="manifest" href="/manifest.webmanifest">
@@ -320,64 +250,74 @@
   <main class="container" id="mmMain" tabindex="-1">
     <h1 class="mm-visually-hidden">Dashboard</h1>
 
-    <!-- A · TODAY -->
-    <section class="today" aria-labelledby="todayLabel">
-      <div class="eyebrow" id="todayLabel">Today</div>
-      <div class="today-title" id="todayTitle">&nbsp;</div>
-      <div class="today-status" id="todayStatus" hidden><span class="dot"></span><span id="todayStatusText"></span></div>
-      <a class="cta" id="todayCta" href="workout.html" hidden></a>
-      <button class="today-alt" id="todayAlt" hidden></button>
+    <!-- ── A · TRAIN / TODAY'S PLAN ─────────────────────────────────────
+         The one dominant surface. Keeps a container because it carries the
+         screen's primary action; no photography until V5. -->
+    <div class="mm-section">
+      <h2 class="mm-section-label">Train</h2>
+    </div>
+    <section class="mm-hero" aria-labelledby="todayTitle">
+      <div class="mm-hero-body">
+        <div class="mm-hero-eyebrow">Today's Plan</div>
+        <h3 class="mm-hero-title" id="todayTitle">&nbsp;</h3>
+        <div class="mm-hero-meta" id="todayMeta" hidden></div>
+        <a class="mm-hero-cta" id="todayCta" href="workout.html" hidden></a>
+      </div>
     </section>
+    <button class="home-action" id="todayAlt" hidden></button>
 
-    <!-- B · THIS WEEK -->
-    <a class="row" id="weekRow" href="workout-history.html" aria-labelledby="weekLabel weekValue">
-      <div class="row-head">
-        <span class="eyebrow" id="weekLabel">This Week</span>
-        <span class="week-value" id="weekValue">—</span>
+    <!-- ── B · THIS WEEK ────────────────────────────────────────────────
+         No container. The day strip and meter both read training.week, so the
+         count and the ticks can never disagree. -->
+    <div class="mm-section">
+      <h2 class="mm-section-label">This Week</h2>
+      <span class="mm-section-value" id="weekValue">—</span>
+    </div>
+    <a class="home-row" href="workout-history.html">
+      <div class="mm-daystrip" id="weekStrip" role="list"></div>
+      <div class="mm-meter" id="weekMeter" style="margin-top:12px" role="progressbar"
+           aria-valuemin="0" aria-valuemax="100" aria-label="Weekly training progress">
+        <div class="mm-meter-fill"></div>
       </div>
-      <div class="track" id="weekTrack" hidden><div class="fill" id="weekFill" style="width:0"></div></div>
-      <div class="week-meta" id="weekMeta"></div>
+      <span class="mm-visually-hidden">View workout history</span>
     </a>
 
-    <!-- C · NUTRITION -->
-    <a class="row" id="nutRow" href="nutrition.html" aria-labelledby="nutLabel nutSummary">
-      <div class="row-head">
-        <span class="eyebrow" id="nutLabel">Nutrition</span>
-        <span class="row-value" id="nutTarget"></span>
-      </div>
-      <div id="nutBody">
-        <div class="nut-empty">Loading&hellip;</div>
-      </div>
-      <span class="mm-visually-hidden" id="nutSummary"></span>
+    <!-- ── C · NUTRITION ────────────────────────────────────────────────
+         No container, deliberately quieter than the hero. -->
+    <div class="mm-section">
+      <h2 class="mm-section-label">Nutrition</h2>
+    </div>
+    <a class="home-row" href="nutrition.html" id="nutRow">
+      <div id="nutBody"></div>
+      <span class="mm-visually-hidden">Open nutrition</span>
     </a>
 
-    <!-- D · FOCUS (deterministic; hidden when there is no real evidence) -->
-    <section class="focus" id="focusRow" hidden aria-labelledby="focusLabel">
-      <span class="focus-icon" aria-hidden="true">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
-             stroke-linecap="round" stroke-linejoin="round" focusable="false">
-          <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>
+    <!-- ── D · COACH INSIGHT ────────────────────────────────────────────
+         The seat the AI Coach will occupy. Deterministic evidence only, and
+         hidden entirely when nothing is evidence-backed. -->
+    <section class="mm-insight" id="insightRow" hidden>
+      <span class="mm-insight-icon" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="1.8" stroke-linecap="round" focusable="false">
+          <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.4"/>
         </svg>
       </span>
-      <div class="focus-body">
-        <div class="eyebrow" id="focusLabel">Focus</div>
-        <p class="focus-text" id="focusText"></p>
+      <div class="mm-insight-body">
+        <div class="mm-insight-label">Coach Insight</div>
+        <p class="mm-insight-text" id="insightText"></p>
+        <a class="mm-insight-action" id="insightAction" hidden></a>
       </div>
     </section>
 
-    <!-- E · PROGRESS -->
-    <a class="row" id="progRow" href="weight-history.html" aria-labelledby="progLabel progValue">
-      <div class="row-head">
-        <span class="eyebrow" id="progLabel">Progress</span>
-        <span class="prog-value" id="progValue">—</span>
-      </div>
-      <div class="week-meta" id="progMeta"></div>
-    </a>
-
-    <!-- F · SECONDARY -->
-    <div class="secondary">
-      <button class="secondary-btn" onclick="wlOpenModal()">Log Weight</button>
-      <a class="secondary-btn" href="profile.html">Profile</a>
+    <!-- ── E · PROGRESS ─────────────────────────────────────────────────
+         No container. Log weight lives here as a quiet inline action. -->
+    <div class="mm-section">
+      <h2 class="mm-section-label">Progress</h2>
+      <span class="mm-section-value" id="progValue">—</span>
+    </div>
+    <div class="home-progress">
+      <span class="home-trend" id="progTrend"></span>
+      <button class="home-action" id="logWeightBtn" onclick="wlOpenModal()">Log weight</button>
     </div>
 
   </main>
@@ -423,6 +363,16 @@
     t.textContent = msg;
     t.classList.add('show');
     setTimeout(function () { t.classList.remove('show'); }, 3000);
+  }
+
+  // Meters are driven by ONE custom property (the .mm-meter contract).
+  function setMeter(id, pct, modifier) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var p = Math.max(0, Math.min(100, Math.round(pct || 0)));
+    el.className = 'mm-meter' + (modifier ? ' mm-meter--' + modifier : '');
+    el.style.setProperty('--mm-meter-pct', p + '%');
+    el.setAttribute('aria-valuenow', String(p));
   }
 
   window.addEventListener('load', function () {
@@ -482,7 +432,7 @@
     renderToday(model.today);
     renderWeek(model.week);
     renderNutrition(model.nutrition);
-    renderFocus(model.focus);
+    renderInsight(model.focus);
     renderProgress(model.progress);
   }
 
@@ -515,18 +465,20 @@
     }
   }
 
-  // ── A · TODAY ────────────────────────────────────────────────────────
+  // ── A · TODAY'S PLAN ─────────────────────────────────────────────────
+  // Every priority state from the model renders in the same hero shape:
+  // resume · already trained · programmed session · choose program · open.
   function renderToday(t) {
     document.getElementById('todayTitle').textContent = t.title;
 
-    var statusEl = document.getElementById('todayStatus');
+    var meta = document.getElementById('todayMeta');
     if (t.status) {
-      document.getElementById('todayStatusText').textContent = t.status;
-      statusEl.className = 'today-status' +
+      meta.textContent = t.status;
+      meta.className = 'mm-hero-meta' +
         (t.state === 'done' ? ' is-done' : t.state === 'resume' ? ' is-live' : '');
-      statusEl.hidden = false;
+      meta.hidden = false;
     } else {
-      statusEl.hidden = true;
+      meta.hidden = true;
     }
 
     var cta = document.getElementById('todayCta');
@@ -551,101 +503,143 @@
   }
 
   // ── B · THIS WEEK ────────────────────────────────────────────────────
+  // Day cells carry only honest state: completed, today, or neither.
   function renderWeek(w) {
     document.getElementById('weekValue').textContent = w.hasData ? w.label : '—';
-    var track = document.getElementById('weekTrack');
+
+    var strip = document.getElementById('weekStrip');
+    strip.innerHTML = (w.days || []).map(function (d) {
+      var cls = 'mm-day' +
+        (d.completed ? ' is-done' : '') +
+        (d.isToday ? ' is-today' : '') +
+        (!d.completed && !d.isToday && d.isFuture ? ' is-future' : '');
+      var state = d.completed ? 'completed' : (d.isToday ? 'today, not yet completed' : 'not completed');
+      return '<div class="' + cls + '" role="listitem">' +
+        '<span class="mm-day-label" aria-hidden="true">' + esc(d.label) + '</span>' +
+        '<span class="mm-day-dot"></span>' +
+        '<span class="mm-visually-hidden">' + esc(d.weekday) + ': ' + state + '</span>' +
+      '</div>';
+    }).join('');
+
+    var meter = document.getElementById('weekMeter');
     if (w.hasData && w.planned) {
-      document.getElementById('weekFill').style.width = w.pct + '%';
-      document.getElementById('weekFill').className = 'fill' + (w.complete ? ' good' : '');
-      track.hidden = false;
+      setMeter('weekMeter', w.pct, w.complete ? 'success' : null);
+      meter.hidden = false;
     } else {
-      track.hidden = true;
+      // No declared target — the tick count stands alone rather than showing
+      // progress toward a denominator we do not have.
+      meter.hidden = true;
     }
-    document.getElementById('weekMeta').textContent =
-      w.hasData && w.streak > 1 ? w.streak + '-day streak' : '';
   }
 
   // ── C · NUTRITION ────────────────────────────────────────────────────
+  // Two compact metrics + two thin meters. Ordinary progress uses the ACCENT;
+  // amber appears only when genuinely over target.
   function renderNutrition(n) {
     var body = document.getElementById('nutBody');
-    var targetEl = document.getElementById('nutTarget');
-    var summary = document.getElementById('nutSummary');
 
     if (!n.hasData) {
-      targetEl.textContent = '';
-      body.innerHTML = '<div class="nut-empty">Not available</div>';
-      summary.textContent = 'Nutrition not available';
+      body.innerHTML = '<div class="home-empty">Not available</div>';
       return;
     }
     if (!n.logged) {
-      targetEl.textContent = '';
-      body.innerHTML = '<div class="nut-empty">Nothing logged yet today</div>';
-      summary.textContent = 'No food logged today';
+      body.innerHTML = '<div class="home-empty">Nothing logged yet today</div>';
       return;
     }
 
-    var html = '';
+    var calValue, calPct, calMod = null;
     if (n.hasTargets) {
-      targetEl.innerHTML = '<span class="sub">' + n.consumed.toLocaleString() +
-        ' / ' + n.target.toLocaleString() + '</span>';
-      html += '<div class="nut">' +
-        '<span class="num nut-num' + (n.over ? ' over' : '') + '">' + n.left.toLocaleString() + '</span>' +
-        '<span class="nut-unit">kcal ' + (n.over ? 'over' : 'left') + '</span>' +
-        '</div>' +
-        '<div class="track"><div class="fill ' + (n.over ? 'over' : 'good') +
-        '" style="width:' + n.pct + '%"></div></div>';
-      summary.textContent = n.left.toLocaleString() + ' kcal ' + (n.over ? 'over' : 'left');
+      calValue = n.left.toLocaleString() + ' <span class="sub">kcal ' + (n.over ? 'over' : 'left') + '</span>';
+      calPct = n.pct;
+      if (n.over) calMod = 'warning';
     } else {
-      targetEl.textContent = '';
-      html += '<div class="nut">' +
-        '<span class="num nut-num">' + n.consumed.toLocaleString() + '</span>' +
-        '<span class="nut-unit">kcal today</span>' +
-        '</div>';
-      summary.textContent = n.consumed.toLocaleString() + ' kcal today';
+      calValue = n.consumed.toLocaleString() + ' <span class="sub">kcal today</span>';
+      calPct = 0;
     }
+
+    var html =
+      '<div class="home-metric">' +
+        '<span class="home-metric-label">Calories</span>' +
+        '<span class="home-metric-value">' + calValue + '</span>' +
+      '</div>' +
+      '<div class="mm-meter" id="nutCalMeter"' + (n.hasTargets ? '' : ' data-empty="true"') +
+        ' role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Calories">' +
+        '<div class="mm-meter-fill"></div></div>';
 
     if (n.protein.target) {
-      html += '<div class="nut-macro">' +
-        '<span class="label">Protein</span>' +
-        '<span>' + n.protein.consumed + ' / ' + n.protein.target + ' g</span>' +
+      html +=
+        '<div class="home-metric">' +
+          '<span class="home-metric-label">Protein</span>' +
+          '<span class="home-metric-value">' + n.protein.consumed +
+            ' <span class="sub">/ ' + n.protein.target + ' g</span></span>' +
         '</div>' +
-        '<div class="track"><div class="fill" style="width:' + n.protein.pct + '%"></div></div>';
+        '<div class="mm-meter" id="nutProMeter" role="progressbar" aria-valuemin="0"' +
+          ' aria-valuemax="100" aria-label="Protein">' +
+          '<div class="mm-meter-fill"></div></div>';
     } else if (n.protein.consumed) {
-      html += '<div class="nut-macro"><span class="label">Protein</span>' +
-        '<span>' + n.protein.consumed + ' g</span></div>';
+      html +=
+        '<div class="home-metric">' +
+          '<span class="home-metric-label">Protein</span>' +
+          '<span class="home-metric-value">' + n.protein.consumed + ' <span class="sub">g</span></span>' +
+        '</div>';
     }
+
     body.innerHTML = html;
+    setMeter('nutCalMeter', calPct, calMod);
+    if (n.protein.target) {
+      // Hitting a protein target IS a genuine achievement, so success colour
+      // is earned here — unlike ordinary partial progress.
+      setMeter('nutProMeter', n.protein.pct, n.protein.pct >= 100 ? 'success' : null);
+    }
   }
 
-  // ── D · FOCUS ────────────────────────────────────────────────────────
-  // Deterministic, evidence-backed, one line — or nothing at all. This is the
-  // seat the AI Coach will occupy; it is never presented as AI today.
-  function renderFocus(f) {
-    var el = document.getElementById('focusRow');
+  // ── D · COACH INSIGHT ────────────────────────────────────────────────
+  // One evidence-backed line, or nothing at all. Never AI-flavoured, never a
+  // paragraph. Default treatment is the accent — not a warning.
+  function renderInsight(f) {
+    var el = document.getElementById('insightRow');
+    var action = document.getElementById('insightAction');
     if (!f) { el.hidden = true; return; }
-    document.getElementById('focusText').textContent = f.text;
-    el.setAttribute('data-tone', f.tone);
+
+    document.getElementById('insightText').textContent = f.text;
+    // Default is the theme accent. Semantic styling is applied ONLY when the
+    // model marks an insight as genuinely semantic — a routine nudge like
+    // "food logged 1 of 7 days" must never be dressed as an error.
+    el.className = 'mm-insight' + (f.severity ? ' mm-insight--' + f.severity : '');
+
+    if (f.action) {
+      action.textContent = f.action.label;
+      action.href = f.action.href;
+      action.hidden = false;
+    } else {
+      action.hidden = true;
+    }
     el.hidden = false;
   }
 
   // ── E · PROGRESS ─────────────────────────────────────────────────────
   function renderProgress(p) {
     var valueEl = document.getElementById('progValue');
-    var metaEl  = document.getElementById('progMeta');
+    var trendEl = document.getElementById('progTrend');
+
     if (!p.hasData) {
       valueEl.textContent = '—';
-      metaEl.innerHTML = '<span style="color:var(--text-muted)">No weigh-ins yet</span>';
+      trendEl.className = 'home-trend';
+      trendEl.innerHTML = '<span class="muted">No weigh-ins yet</span>';
       return;
     }
     valueEl.textContent = p.current + ' ' + p.unit;
+
     if (p.change30 == null) {
-      metaEl.textContent = '';
+      // One weigh-in is not a trend — say nothing rather than invent one.
+      trendEl.className = 'home-trend';
+      trendEl.textContent = '';
       return;
     }
     var arrow = p.direction === 'down' ? '↓' : p.direction === 'up' ? '↑' : '±';
-    metaEl.innerHTML = '<span class="prog-delta ' + esc(p.direction) + '">' +
-      arrow + ' ' + Math.abs(p.change30) + ' ' + esc(p.unit) + '</span>' +
-      '<span style="color:var(--text-muted)"> this month</span>';
+    trendEl.className = 'home-trend ' + esc(p.direction);
+    trendEl.innerHTML = arrow + ' ' + Math.abs(p.change30) + ' ' + esc(p.unit) +
+      ' <span class="muted">this month</span>';
   }
 
   // ── Weight modal hook ────────────────────────────────────────────────

@@ -408,12 +408,15 @@ test('cp4: [hidden] is authoritative — a display:flex component stays hidden',
   // UA's type-less `[hidden] { display:none }` loses to `.focus { display:flex }`.
   assert.match(SHELL_CSS, /\[hidden\]\s*\{\s*display:\s*none\s*!important\s*;?\s*\}/,
     'the shell forces hidden elements to stay hidden');
-  // The surfaces that rely on it are all display-setting components.
+  // The surfaces that rely on it are display-setting components. Since V4 the
+  // Coach Insight surface is the shared .mm-insight primitive, which is
+  // display:flex — precisely the case the bare UA rule loses to.
   const app = read('app.html');
-  assert.match(app, /<section class="focus" id="focusRow" hidden/, 'Focus starts hidden');
+  assert.match(app, /<section class="mm-insight" id="insightRow" hidden/,
+    'Coach Insight starts hidden');
   assert.match(app, /id="todayCta"[^>]*hidden/, 'the CTA can be hidden');
-  assert.match((app.match(/<style>([\s\S]*?)<\/style>/) || [])[1] || '',
-    /\.focus\s*\{[^}]*display:\s*flex/, 'Focus is a flex component (the failing case)');
+  assert.match(SHELL_CSS, /\.mm-insight\s*\{[^}]*display:\s*flex/,
+    '.mm-insight is a flex component (the failing case)');
 });
 
 test('cp4: the toast is defined once, in the shell, and never per page', () => {

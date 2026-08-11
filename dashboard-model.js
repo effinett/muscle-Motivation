@@ -79,7 +79,7 @@
     // store link as the only option.
     return {
       state: 'open',
-      title: 'No workout planned',
+      title: 'Ready to train',
       status: null,
       cta: { label: 'Start Workout', href: 'workout.html' },
       secondary: null,
@@ -186,15 +186,24 @@
     var week = buildWeek(input);
     var nut = buildNutrition(input);
 
+    // An insight that points at a screen the user can act on carries a small
+    // action. Purely routing — it adds no claim the evidence does not support.
+    var seeNutrition = { label: 'View nutrition', href: 'nutrition.html' };
+
     // 1. Protein clearly behind, late enough in the day to be actionable.
     if (hour != null && hour >= 15 && nut.hasData && nut.protein &&
         nut.protein.target && nut.protein.consumed < nut.protein.target * 0.6) {
-      return { text: 'Protein is behind today.', tone: 'behind', id: 'protein-behind' };
+      return { text: 'Protein is behind today.', tone: 'behind', id: 'protein-behind',
+        action: seeNutrition };
     }
 
-    // 2. Over the calorie target.
+    // 2. Over the calorie target. The ONLY insight carrying a semantic
+    // severity: exceeding a target the user set is genuinely a warning state.
+    // Every other insight is a routine nudge and must render in the theme
+    // accent, not as an error.
     if (nut.hasData && nut.hasTargets && nut.over) {
-      return { text: 'You\'re over calories today.', tone: 'behind', id: 'calories-over' };
+      return { text: 'You\'re over calories today.', tone: 'behind', id: 'calories-over',
+        severity: 'warning', action: seeNutrition };
     }
 
     // 3. Planned training done for the week.
@@ -215,12 +224,14 @@
     // 6. Tracking has lapsed (only when we have a real weekly figure).
     var daysLogged = num(nutrition.week && nutrition.week.daysLogged);
     if (daysLogged != null && daysLogged > 0 && daysLogged <= 2) {
-      return { text: 'Food logged ' + daysLogged + ' of 7 days.', tone: 'behind', id: 'logging-lapsed' };
+      return { text: 'Food logged ' + daysLogged + ' of 7 days.', tone: 'behind',
+        id: 'logging-lapsed', action: seeNutrition };
     }
 
     // 7. Nothing logged today, late in the day.
     if (hour != null && hour >= 18 && nut.hasData && !nut.logged) {
-      return { text: 'No food logged today.', tone: 'behind', id: 'no-food' };
+      return { text: 'No food logged today.', tone: 'behind', id: 'no-food',
+        action: seeNutrition };
     }
 
     // No evidence-backed insight — say nothing rather than fill the space.
