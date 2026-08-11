@@ -400,11 +400,357 @@ header .btn-back:focus-visible {
   border-radius: 6px;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+ * SHARED UI PRIMITIVES — Phase 4.3.4 V2
+ *
+ * Presentation-only building blocks for Home, Train, Nutrition, Progress and
+ * the future Coach surface. Every one consumes the V1 token layer, so a user
+ * accent change flows through automatically and no component hard-codes red.
+ *
+ * These are CSS contracts, not markup generators: the consumer chooses the
+ * element (so a section label can be a real <h2> where it is a heading, and a
+ * plain <div> where it is not). Class names and the custom properties called
+ * out below ARE the API — renaming them breaks consumers.
+ *
+ * Defined here, not wired into any page yet: V2 ships the primitives, V4 does
+ * the dashboard restructure that consumes them.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── .mm-section ────────────────────────────────────────────────────────────
+ * A section header that lives ON the background rather than inside a card.
+ * This is the main tool for breaking up card-equality: label left, optional
+ * value right, optional hairline beneath.
+ *
+ *   <div class="mm-section">
+ *     <h2 class="mm-section-label">This Week</h2>
+ *     <span class="mm-section-value">1 / 3</span>
+ *   </div>
+ */
+.mm-section {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 26px 0 10px;
+}
+.mm-section:first-child { margin-top: 0; }
+.mm-section-label {
+  font-family: 'Barlow', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--mm-text-tertiary);
+  margin: 0;
+}
+.mm-section-value {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 20px;
+  letter-spacing: 0.5px;
+  line-height: 1;
+  color: var(--mm-text);
+  white-space: nowrap;
+}
+/* Hairline variant — use when the section needs separating without a card. */
+.mm-section--ruled { padding-bottom: 10px; border-bottom: 1px solid var(--mm-line-subtle); }
+
+/* ── .mm-meter ──────────────────────────────────────────────────────────────
+ * Thin progress bar. Percentage is set through ONE custom property so callers
+ * never touch inline width:
+ *
+ *   el.style.setProperty('--mm-meter-pct', '42%')
+ *
+ * Default fill is the user accent. Semantic modifiers exist for genuinely
+ * meaningful states only — plain progress must stay accent-coloured so that
+ * "over target" keeps its distinct meaning.
+ *
+ *   <div class="mm-meter" role="progressbar" aria-valuenow="42"
+ *        aria-valuemin="0" aria-valuemax="100" aria-label="Calories">
+ *     <div class="mm-meter-fill"></div>
+ *   </div>
+ */
+.mm-meter {
+  --mm-meter-pct: 0%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--mm-surface-high);
+  overflow: hidden;
+}
+.mm-meter-fill {
+  display: block;
+  height: 100%;
+  width: var(--mm-meter-pct);
+  max-width: 100%;
+  border-radius: inherit;
+  background: var(--mm-accent);
+  transition: width 0.3s ease;
+}
+.mm-meter--success .mm-meter-fill { background: var(--mm-success); }
+.mm-meter--warning .mm-meter-fill { background: var(--mm-warning); }
+.mm-meter--danger  .mm-meter-fill { background: var(--mm-danger); }
+/* No data yet: render the track alone rather than a misleading empty fill. */
+.mm-meter[data-empty="true"] .mm-meter-fill { display: none; }
+
+/* ── .mm-daystrip ───────────────────────────────────────────────────────────
+ * Seven day cells across a calendar week. INFORMATIONAL, not interactive —
+ * cells are never tap targets, so the 44px rule applies to the row that
+ * contains the strip, not to a cell.
+ *
+ * Honest state vocabulary — completed / today / neither. There is deliberately
+ * no "scheduled" state: the product stores a weekly training COUNT, never a
+ * per-weekday plan, so implying a day was scheduled would be fabricated.
+ *
+ * State is never colour-only: completed draws a check mark, today draws a
+ * ring, neither is an empty dim circle. Each cell carries its own label.
+ *
+ *   <div class="mm-daystrip">
+ *     <div class="mm-day is-done"><span class="mm-day-label">M</span>
+ *       <span class="mm-day-dot"></span></div>
+ *     …
+ *   </div>
+ */
+.mm-daystrip {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.mm-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+}
+.mm-day-label {
+  font-family: 'Barlow', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--mm-text-tertiary);
+  line-height: 1;
+}
+.mm-day-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid var(--mm-line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+/* Completed — filled accent + a drawn check (shape, not just colour). */
+.mm-day.is-done .mm-day-dot {
+  background: var(--mm-accent);
+  border-color: var(--mm-accent);
+}
+.mm-day.is-done .mm-day-dot::after {
+  content: '';
+  width: 4px;
+  height: 8px;
+  margin-top: -2px;
+  border: solid var(--mm-accent-contrast);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+/* Today — a ring, plus a brighter label. */
+.mm-day.is-today .mm-day-dot { border-color: var(--mm-accent); border-width: 2px; }
+.mm-day.is-today .mm-day-label { color: var(--mm-text); }
+/* Days outside the tracked range read as inactive without implying failure. */
+.mm-day.is-future .mm-day-dot { opacity: 0.45; }
+
+/* ── .mm-insight ────────────────────────────────────────────────────────────
+ * The Coach Insight surface — the seat the AI Coach will occupy. One label,
+ * one concise line, one optional action. It is NOT a chat container.
+ *
+ * Default treatment is the ACCENT edge. Warning/danger modifiers exist for
+ * genuinely semantic insights only; routine coaching nudges must not be
+ * dressed as errors.
+ */
+.mm-insight {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 14px 16px;
+  background: var(--mm-surface-raised);
+  border: 1px solid var(--mm-line);
+  border-left: 2px solid var(--mm-accent);
+  border-radius: 12px;
+}
+.mm-insight--warning { border-left-color: var(--mm-warning); }
+.mm-insight--danger  { border-left-color: var(--mm-danger); }
+.mm-insight--success { border-left-color: var(--mm-success); }
+.mm-insight-icon { color: var(--mm-accent); flex-shrink: 0; margin-top: 1px; line-height: 0; }
+.mm-insight--warning .mm-insight-icon { color: var(--mm-warning); }
+.mm-insight--danger  .mm-insight-icon { color: var(--mm-danger); }
+.mm-insight--success .mm-insight-icon { color: var(--mm-success); }
+.mm-insight-body { min-width: 0; }
+.mm-insight-label {
+  font-family: 'Barlow', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--mm-text-tertiary);
+}
+.mm-insight-text {
+  font-family: 'Barlow', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mm-text);
+  margin: 3px 0 0;
+}
+.mm-insight-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;          /* real tap target */
+  margin-bottom: -10px;      /* absorbed so the card keeps its visual height */
+  font-family: 'Barlow', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mm-accent);
+  text-decoration: none;
+}
+.mm-insight-action::after { content: '›'; font-size: 15px; line-height: 1; }
+.mm-insight-action:focus-visible {
+  outline: 2px solid var(--mm-accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ── .mm-hero ───────────────────────────────────────────────────────────────
+ * The Today's Plan panel. Carries the screen's primary action, so it is one of
+ * only two surfaces that keeps a container.
+ *
+ * The optional image layer is DECORATIVE and additive: the panel is complete
+ * without it, adds no layout shift when it loads, and text never sits on the
+ * photograph — a gradient mask keeps the copy over solid surface. With no
+ * image the same geometry is filled by a soft accent wash.
+ *
+ *   <section class="mm-hero">
+ *     <div class="mm-hero-media" aria-hidden="true"><img alt="" …></div>
+ *     <div class="mm-hero-body"> eyebrow / title / meta / CTA </div>
+ *   </section>
+ */
+.mm-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--mm-surface-raised);
+  border: 1px solid var(--mm-line);
+}
+/* No-image default: a restrained accent wash anchored to the corner the
+   photograph would occupy, so both variants share one composition. */
+.mm-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background: radial-gradient(120% 90% at 100% 0%,
+    var(--mm-accent-soft) 0%, transparent 62%);
+}
+.mm-hero-media {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 62%;
+  z-index: -1;
+  pointer-events: none;
+}
+.mm-hero-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  display: block;
+  filter: grayscale(1) contrast(1.05);
+}
+/* The mask that guarantees legibility: copy always sits over solid surface. */
+.mm-hero-media::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg,
+    var(--mm-surface-raised) 0%,
+    var(--mm-surface-raised) 26%,
+    color-mix(in srgb, var(--mm-surface-raised) 55%, transparent) 62%,
+    transparent 100%);
+}
+@supports not (color: color-mix(in srgb, red 50%, transparent)) {
+  .mm-hero-media::after {
+    background: linear-gradient(90deg,
+      var(--mm-surface-raised) 0%, var(--mm-surface-raised) 40%, transparent 100%);
+  }
+}
+.mm-hero-body {
+  position: relative;
+  padding: 20px;
+  max-width: 74%;            /* copy never runs under the image */
+}
+.mm-hero:not(:has(.mm-hero-media)) .mm-hero-body { max-width: 100%; }
+.mm-hero-eyebrow {
+  font-family: 'Barlow', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--mm-accent);
+}
+.mm-hero-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(34px, 9vw, 46px);
+  line-height: 1.02;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--mm-text);
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;   /* long program/session names never overflow */
+}
+.mm-hero-meta {
+  font-family: 'Barlow', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mm-text-secondary);
+  margin-top: 6px;
+}
+.mm-hero-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  margin-top: 16px;
+  padding: 12px 26px;
+  border: none;
+  border-radius: 10px;
+  background: var(--mm-accent);
+  color: var(--mm-accent-contrast);
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 19px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+.mm-hero-cta:hover { opacity: 0.88; }
+.mm-hero-cta:focus-visible {
+  outline: 2px solid var(--mm-accent-contrast);
+  outline-offset: 3px;
+}
+/* Narrow phones: the image yields space rather than squeezing the copy. */
+@media (max-width: 380px) {
+  .mm-hero-body { max-width: 84%; padding: 18px 16px; }
+  .mm-hero-media { width: 52%; }
+}
+
 /* ── Reduced motion ─────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .mm-nav-item,
   .mm-nav-item::before,
-  .mm-skip-link {
+  .mm-skip-link,
+  .mm-meter-fill,
+  .mm-hero-cta {
     transition: none;
   }
 }
