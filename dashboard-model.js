@@ -262,56 +262,40 @@
    * weight and its 30-day change, plus body fat when it has been logged.
    * Steps / water / sleep are NOT modelled — there is no shared source. */
 
-  // Whole days between two YYYY-MM-DD strings. UTC on both sides, so the
-  // difference is unaffected by the local timezone; these are date-only values
-  // and only their span is ever used.
-  function daysBetween(a, b) {
-    var pa = String(a).split('-'), pb = String(b).split('-');
-    var ta = Date.UTC(+pa[0], (+pa[1]) - 1, +pa[2]);
-    var tb = Date.UTC(+pb[0], (+pb[1]) - 1, +pb[2]);
-    if (!isFinite(ta) || !isFinite(tb)) return null;
-    return Math.round((tb - ta) / 86400000);
-  }
-
   // ── HOME SPARKLINE PRESENTATION THRESHOLD ─────────────────────────────
   //
-  // NEW POLICY, and deliberately scoped: these two numbers decide ONLY whether
-  // Home draws a sparkline. They are NOT a weight-domain semantic. They do not
-  // exist in weight.js, they take no part in change30, and nothing on the
-  // Progress page or in weight history consults them — that surface renders the
-  // full chart under its own rules and is untouched by this file.
+  // Presentation policy, scoped to Home: it decides ONLY whether Home draws a
+  // sparkline. It is NOT a weight-domain semantic — it does not exist in
+  // weight.js, takes no part in change30, and nothing on the Progress page or
+  // in weight history consults it. That surface renders the full chart under
+  // its own rules and is untouched by this file.
   //
-  // Why a gate at all: a sparkline is a claim about a SHAPE, which needs more
-  // evidence than a number does. Two weigh-ins establish a factual delta and
-  // describe no trend; three logged on three consecutive days inside a 30-day
-  // window would draw a line whose horizontal extent implies a month of history
-  // that was never recorded.
+  // Three weigh-ins. Two would be geometrically drawable, but two points can
+  // only ever produce one straight segment — which says nothing the change text
+  // beside it does not already say, in words, more precisely. A third point is
+  // where the line starts carrying information of its own: a direction that
+  // held, reversed, or flattened.
   //
-  // Why 7 days specifically — a judgement call, not an inherited rule:
-  //   · Scale weight swings by a pound or more day to day on water, food and
-  //     glycogen alone, so a span under a week plots mostly noise as if it were
-  //     direction. A week is the shortest span where the line is more signal
-  //     than fluctuation.
-  //   · It is the least restrictive gate that still admits a genuinely new
-  //     user: three weigh-ins across one week earns a sparkline, so the
-  //     visualisation is not reserved for long-established accounts.
-  //   · Corroboration only, NOT authority: wlStats already averages weight over
-  //     a trailing 7 days (avg7) precisely because single days are noisy, so a
-  //     week is an interval the product already treats as the point where
-  //     weight becomes readable. That makes 7 a defensible choice here; it does
-  //     not make it a pre-existing product rule for sparklines, and there was
-  //     none to inherit.
+  // It is a POINT COUNT and nothing else. There is deliberately no minimum
+  // day-span: three weigh-ins on three consecutive days are three real
+  // measurements and are drawn as such. An earlier revision gated on a 7-day
+  // span as well; that withheld the line from exactly the people most likely to
+  // want it, and the spacing concern it was aimed at is handled truthfully by
+  // the geometry instead — x is derived from the real timestamps, so tightly
+  // grouped entries render tightly grouped rather than being spread out to look
+  // like a month.
   //
-  // Changing either value changes what Home DRAWS and nothing else.
+  // Eligibility is judged on the SAME trailing-30-day series the change text is
+  // computed from (snapshot.weight.recent). The window is never widened to
+  // reach three points: three lifetime weigh-ins with only two inside the
+  // window draw nothing.
+  //
+  // Changing this value changes what Home DRAWS and nothing else.
   var HOME_SPARK_MIN_POINTS = 3;
-  var HOME_SPARK_MIN_SPAN_DAYS = 7;
 
   function sparklineSeries(recent) {
     var pts = Array.isArray(recent) ? recent : [];
-    if (pts.length < HOME_SPARK_MIN_POINTS) return null;
-    var span = daysBetween(pts[0].logged_on, pts[pts.length - 1].logged_on);
-    if (span == null || span < HOME_SPARK_MIN_SPAN_DAYS) return null;
-    return pts;
+    return pts.length < HOME_SPARK_MIN_POINTS ? null : pts;
   }
 
   function buildProgress(input) {
@@ -359,10 +343,9 @@
     buildNutrition: buildNutrition,
     buildFocus: buildFocus,
     buildProgress: buildProgress,
-    // Home presentation thresholds — exposed so tests can pin that they gate
-    // the DRAWING and nothing else. Not a weight-domain semantic.
+    // Home presentation threshold — exposed so tests can pin that it gates the
+    // DRAWING and nothing else. Not a weight-domain semantic.
     HOME_SPARK_MIN_POINTS: HOME_SPARK_MIN_POINTS,
-    HOME_SPARK_MIN_SPAN_DAYS: HOME_SPARK_MIN_SPAN_DAYS,
   };
 
   if (global) global.DashboardModel = DashboardModel;

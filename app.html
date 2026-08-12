@@ -237,13 +237,25 @@
     }
     .mm-hero-cta:not([hidden]) + .home-action--hero::after { font-size: 14px; }
 
-    /* Progress is a compact snapshot, still open on the background — never a
-       card. Three stacked bands: the metric, an optional sparkline, then the
-       actions. Weight leads; the change is right-aligned context, mirroring the
-       label/value idiom the section headers already use. */
+    /* Weight is a compact snapshot, still open on the background — never a
+       card. Two columns: the reading on the left, the sparkline balancing the
+       right, with the logging action beneath. Centred against each other so a
+       one-line stack (no change yet) still sits level with the line.
+
+       If the two ever cannot share a line — a very large text size, a longer
+       change string — the SPARKLINE wraps below rather than the reading being
+       squeezed: it is the supporting element, so it is the one that gives way.
+       Nothing overflows and no text collides. */
     .home-progress {
-      display: flex; align-items: baseline; flex-wrap: wrap;
-      gap: 4px 14px; margin-top: 2px;
+      display: flex; align-items: center; flex-wrap: wrap;
+      gap: 8px 16px; margin-top: 2px;
+    }
+    /* Weight and its change are one statement, so they stack together rather
+       than being separated by the sparkline. No min-width override: the column
+       keeps its intrinsic width so the row wraps instead of shrinking the
+       reading below what it needs. */
+    .home-weightstack {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
     }
     .home-weight {
       font-family: 'Bebas Neue', sans-serif;
@@ -257,10 +269,10 @@
        neutral and the arrow carries the direction. (weight.js says the same of
        wlDeltaHTML: "Neutral by design".)
 
-       It also sits directly beside the weight on a controlled gap rather than
-       being pushed to the far edge: the two are one status statement — "this is
-       your weight, this is how it moved" — and a screen-width gap between them
-       read as two separate facts. */
+       It sits directly under the weight, inside the same stack: the two are one
+       status statement — "this is your weight, this is how it moved" — and it
+       is the accessible, explicit account of direction that the sparkline is
+       never allowed to replace. */
     .home-trend {
       font-size: 13px; font-weight: 600; color: var(--mm-text-secondary);
       white-space: nowrap;
@@ -270,11 +282,18 @@
     .home-trend .muted { color: var(--mm-text-tertiary); font-weight: 600; }
 
     /* Sparkline — supporting context only. It is not a tap target, carries no
-       axes, labels or dots, and never appears without the numeric change above
-       it, so weight direction is never conveyed by the drawing alone. Colour
-       comes from the theme token via currentColor. */
+       axes, labels, grid or dots, and never appears without the numeric change
+       beside it, so weight direction is never conveyed by the drawing alone.
+       Colour comes from the theme token via currentColor.
+
+       Sized to BALANCE the reading, not to compete with it: it takes the space
+       left over on the right, capped so it never grows into the dominant
+       element, and shrinks before the weight column does at narrow widths. */
     .home-spark {
-      height: 30px; margin: 12px 0 2px;
+      flex: 0 1 auto;
+      width: 46%; max-width: 168px; min-width: 84px;
+      height: 34px;
+      margin-left: auto;
       color: var(--mm-accent);
       pointer-events: none;
     }
@@ -474,23 +493,30 @@
       </div>
     </section>
 
-    <!-- ── E · PROGRESS ─────────────────────────────────────────────────
+    <!-- ── E · WEIGHT ───────────────────────────────────────────────────
          No container — a compact snapshot on the background, never a card.
-         Metric, then an optional sparkline, then one logging action and one
-         navigation action. The sparkline is decorative support: it is hidden
-         from assistive technology because the change beside the weight already
-         states the same thing in words. -->
+         Labelled WEIGHT rather than Progress because that is exactly what it
+         is: a quick weight status. "Progress" is the persistent bottom-nav
+         destination for the full history, so the two no longer share a name.
+         Nothing about that tab, its label or its route changes.
+
+         Weight and its change anchor the left; the sparkline balances the
+         right. It is decorative support only — hidden from assistive
+         technology, because the change directly above it already states the
+         same thing in words. There is no navigation link here: the Progress
+         tab is always on screen, so a second route to it was redundant. -->
     <div class="mm-section">
-      <h2 class="mm-section-label">Progress</h2>
+      <h2 class="mm-section-label">Weight</h2>
     </div>
     <div class="home-progress">
-      <span class="home-weight" id="progValue">—</span>
-      <span class="home-trend" id="progTrend"></span>
+      <div class="home-weightstack">
+        <span class="home-weight" id="progValue">—</span>
+        <span class="home-trend" id="progTrend"></span>
+      </div>
+      <div class="home-spark" id="progSpark" hidden></div>
     </div>
-    <div class="home-spark" id="progSpark" hidden></div>
     <div class="home-actions">
       <button class="home-log" id="logWeightBtn" onclick="wlOpenModal()">Log weight</button>
-      <a class="home-action" href="weight-history.html">View progress</a>
     </div>
 
   </main>

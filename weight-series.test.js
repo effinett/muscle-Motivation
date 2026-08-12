@@ -115,6 +115,74 @@ test('spark: x is time-based, so a gap between weigh-ins reads as a gap', () => 
   assert.ok(xs[1] - xs[0] > xs[2] - xs[1], 'the long gap is the wide one');
 });
 
+/* ── X normalisation: the PLOTTED span, never a fixed window ────────────── */
+
+const xsOf = (g) => g.points.split(' ').map((p) => +p.split(',')[0]);
+
+test('spark: the earliest and latest plotted points anchor the two edges', () => {
+  // The x-axis is the span of the data actually drawn — NOT the 30-day window
+  // it came from. Three consecutive days therefore use the full width instead
+  // of huddling in the first tenth of an invisible month.
+  for (const spanDays of [1, 2, 3, 7, 21, 29]) {
+    const g = W.wlSparklinePoints(W.wlRecentSeries(
+      [row(spanDays, 200), row(Math.floor(spanDays / 2), 199), row(0, 198)], 30));
+    const xs = xsOf(g);
+    assert.strictEqual(xs[0], 0, `${spanDays}d: earliest sits on the left edge`);
+    assert.strictEqual(xs[xs.length - 1], g.width, `${spanDays}d: latest on the right edge`);
+  }
+});
+
+test('spark: intermediate points keep their REAL proportional spacing', () => {
+  // Aug 1 / Aug 2 / Aug 20 must not become three evenly spaced points: the
+  // middle one belongs beside the first, not in the centre.
+  const xs = xsOf(W.wlSparklinePoints(
+    W.wlRecentSeries([row(20, 200), row(19, 199.5), row(0, 198)], 30)));
+  assert.strictEqual(xs[0], 0);
+  assert.strictEqual(xs[2], 100);
+  assert.ok(xs[1] < 10, `middle point at ${xs[1]} must hug the earliest, not the centre`);
+  // One day of twenty is 5% along, and that is what it draws.
+  assert.strictEqual(xs[1], 5);
+
+  // Explicitly NOT index-based: evenly spaced dates give 0/50/100, uneven ones
+  // do not, so array position cannot be what determines x.
+  const even = xsOf(W.wlSparklinePoints(
+    W.wlRecentSeries([row(20, 200), row(10, 199), row(0, 198)], 30)));
+  assert.deepStrictEqual(even, [0, 50, 100], 'evenly dated points do land evenly');
+  assert.notDeepStrictEqual(xs, even, 'unevenly dated ones must not');
+});
+
+test('spark: identical dates degrade safely, with no invalid geometry', () => {
+  // body_weight_logs is unique on (user_id, logged_on) so this cannot arise in
+  // production, but the geometry must never emit NaN or Infinity regardless.
+  for (const rows of [
+    [row(0, 200), row(0, 199), row(0, 198)],          // every date identical
+    [row(5, 200), row(5, 199), row(0, 198)],          // two share a date
+  ]) {
+    const g = W.wlSparklinePoints(rows);
+    for (const pair of g.points.split(' ')) {
+      const [x, y] = pair.split(',').map(Number);
+      for (const [axis, v, max] of [['x', x, g.width], ['y', y, g.height]]) {
+        assert.ok(Number.isFinite(v), `${axis} must be finite, got ${v}`);
+        assert.ok(v >= 0 && v <= max, `${axis} ${v} within 0..${max}`);
+      }
+    }
+  }
+  // A zero-width span centres the line rather than dividing by zero.
+  assert.deepStrictEqual(xsOf(W.wlSparklinePoints([row(0, 200), row(0, 199), row(0, 198)])),
+    [50, 50, 50]);
+});
+
+test('spark: normalisation invents nothing — one point in, one point out', () => {
+  const rows = [row(18, 201), row(12, 200), row(4, 199), row(0, 197)];
+  const g = W.wlSparklinePoints(W.wlRecentSeries(rows, 30));
+  assert.strictEqual(g.count, rows.length, 'no endpoint padding, no resampling');
+  assert.strictEqual(g.points.split(' ').length, rows.length);
+  // Every plotted y traces back to a logged weight, not a smoothed value.
+  const ys = g.points.split(' ').map((p) => +p.split(',')[1]);
+  assert.strictEqual(new Set(ys).size, new Set(rows.map((r) => r.weight_lbs)).size,
+    'distinct weights stay distinct — nothing is averaged away');
+});
+
 test('spark: fewer than two points draws nothing', () => {
   assert.strictEqual(W.wlSparklinePoints([]), null);
   assert.strictEqual(W.wlSparklinePoints([row(0, 200)]), null);
@@ -176,19 +244,41 @@ test('scope: the Progress page keeps its own rendering, untouched by Home', () =
   assert.ok(!/HOME_SPARK/.test(page), 'no Home presentation threshold reaches it');
 });
 
-test('scope: the shared window returns real rows regardless of any draw gate', () => {
-  // Three weigh-ins on three consecutive days: Home declines to draw them, but
-  // the domain still reports all three and the full change between them.
+test('scope: the drawing decision lives in Home, not in the weight domain', () => {
   const clustered = [row(0, 198), row(1, 199), row(2, 200)];
+  // The domain reports every real row and the full change, unconditionally.
   assert.strictEqual(W.wlRecentSeries(clustered, 30).length, 3);
   assert.strictEqual(W.wlStats(clustered, null).change30, -2);
-  // Geometry would happily draw them — refusing is Home's decision, made in
-  // dashboard-model.js, not a property of the weight domain.
   assert.strictEqual(W.wlSparklinePoints(clustered).count, 3);
-  assert.strictEqual(
-    require('./dashboard-model.js').buildProgress({
-      snapshot: { weight: { current: 198, count: 3, change30: -2, recent: clustered } },
-    }).series, null, 'the gate lives in the Home view-model alone');
+  // Whether to draw is decided in dashboard-model.js. Only ONE row is below the
+  // threshold, so the domain's answer is identical either way.
+  const DM = require('./dashboard-model.js');
+  const build = (recent) => DM.buildProgress({
+    snapshot: { weight: { current: 198, count: recent.length, change30: -2, recent } },
+  });
+  assert.strictEqual(build(clustered).series.length, 3, 'Home draws three real rows');
+  assert.strictEqual(build([row(0, 198)]).series, null, 'one point is not a line');
+  assert.strictEqual(W.wlStats([row(0, 198)], null).change30, null,
+    'and the domain independently reports no change for it');
+});
+
+test('scope: unsorted entries still reach the page in chronological order', () => {
+  // End to end: rows arrive from Supabase newest-first, the shared window sorts
+  // them ascending, the model passes those exact rows through, and geometry
+  // sorts defensively again. No stage may reorder them into nonsense.
+  const jumbled = [row(2, 191.4), row(25, 200.0), row(12, 196.0), row(0, 190.0)];
+  const series = W.wlRecentSeries(jumbled, 30);
+  const p = require('./dashboard-model.js').buildProgress({
+    snapshot: { weight: W.wlStats(jumbled, null).count
+      ? Object.assign(W.wlStats(jumbled, null), { recent: series }) : {} },
+  });
+  assert.deepStrictEqual(p.series.map((r) => r.logged_on),
+    [daysAgo(25), daysAgo(12), daysAgo(2), daysAgo(0)], 'oldest to newest');
+
+  const xs = W.wlSparklinePoints(p.series).points.split(' ').map((s) => +s.split(',')[0]);
+  assert.deepStrictEqual(xs, xs.slice().sort((a, b) => a - b), 'and x increases with time');
+  // The rendered points are exactly the logged ones — reordering invented none.
+  assert.strictEqual(xs.length, jumbled.length);
 });
 
 /* ── Wiring: no new request ─────────────────────────────────────────────── */

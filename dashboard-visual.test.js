@@ -40,8 +40,8 @@ test('home: the open rows carry no container chrome', () => {
   assert.ok(!/border:\s*1px/.test(row), 'open rows have no border');
 });
 
-test('home: This Week, Nutrition and Progress are open sections', () => {
-  for (const label of ['This Week', 'Nutrition', 'Progress']) {
+test('home: This Week, Nutrition and Weight are open sections', () => {
+  for (const label of ['This Week', 'Nutrition', 'Weight']) {
     const re = new RegExp('<div class="mm-section">[\\s\\S]{0,200}?' + label);
     assert.match(HOME_BODY, re, `${label} uses a background-level section header`);
   }
@@ -54,11 +54,42 @@ test('home: sections appear in the approved priority order', () => {
   const heroAt = HOME_BODY.indexOf('class="mm-hero"');
   assert.ok(heroAt > -1, 'the hero is present');
   let cursor = heroAt;
-  for (const label of ['This Week', 'Nutrition', 'Coach Insight', 'Progress']) {
+  for (const label of ['This Week', 'Nutrition', 'Coach Insight', 'Weight']) {
     const at = HOME_BODY.indexOf('>' + label + '<');
     assert.ok(at > cursor, `${label} follows the previous section`);
     cursor = at;
   }
+});
+
+test('home: the weight snapshot is named WEIGHT; Progress stays the destination', () => {
+  // Home shows a weight status; the bottom-nav tab owns the full history. They
+  // no longer share a name, so "Progress" means one thing.
+  assert.match(HOME_BODY, /<h2 class="mm-section-label">Weight<\/h2>/);
+  assert.ok(!/<h2 class="mm-section-label">Progress<\/h2>/.test(HOME_BODY),
+    'no Progress heading remains on Home');
+
+  // The tab, its label and its route are untouched.
+  const nav = read('app-nav.js');
+  assert.match(nav, /id: 'progress',\s*label: 'Progress',\s*href: 'weight-history\.html'/);
+  assert.match(nav, /routes: \['weight-history\.html'\]/);
+  // And the destination page itself was not renamed or restructured.
+  assert.match(read('weight-history.html'), /wlChartSVG\(/,
+    'the Progress page still renders its own full chart');
+});
+
+test('home: the redundant second route to Progress is gone', () => {
+  // The Progress tab is on screen at all times, so a link to it inside the
+  // section was a duplicate of a control the user already has.
+  assert.ok(!/View progress/.test(HOME_BODY), 'no View progress action on Home');
+  assert.ok(!/href="weight-history\.html"/.test(HOME_BODY),
+    'and Home content links to the destination zero times');
+  // It was removed, not swapped for another navigation link: the only action
+  // left in the section is the quick log.
+  const section = HOME_BODY.slice(HOME_BODY.indexOf('mm-section-label">Weight'));
+  const actions = section.match(/class="home-(?:action|log)"/g) || [];
+  assert.deepStrictEqual(actions, ['class="home-log"'], 'Log weight alone');
+  // The nav still carries the destination.
+  assert.match(read('app-nav.js'), /href: 'weight-history\.html'/);
 });
 
 test('home: the redundant TRAIN heading above the hero is gone', () => {
@@ -588,8 +619,6 @@ test('actions: creation and navigation are two distinct visual languages', () =>
   // Exact assignment of the language across Home.
   assert.match(HOME_BODY, /class="home-log" href="nutrition\.html#quicklog">Log food</, 'food = creation');
   assert.match(HOME_BODY, /class="home-log" id="logWeightBtn"[^>]*>Log weight</, 'weight = creation');
-  assert.match(HOME_BODY, /class="home-action" href="weight-history\.html">View progress</,
-    'View progress stays a navigation action');
   // The alternate-workout label is supplied by the model, so the element is
   // what carries the language — it must remain a .home-action, never a log.
   assert.match(HOME_BODY, /class="home-action home-action--hero" id="todayAlt"/,
@@ -644,17 +673,15 @@ test('actions: Log weight invokes the shared weight-entry flow, not a copy', () 
     'Home only supplies the refresh hook weight.js calls back into');
 });
 
-test('actions: View progress goes to the existing Progress destination', () => {
-  assert.match(HOME_BODY, /<a class="home-action" href="weight-history\.html">View progress<\/a>/);
-  // The same destination the bottom nav's Progress tab already owns — this
-  // introduces no new route.
-  const nav = read('app-nav.js');
-  assert.match(nav, /id: 'progress',[\s\S]{0,120}?href: 'weight-history\.html'/);
+test('actions: the model still knows the destination, even unrendered on Home', () => {
+  // Removing the link is a PRESENTATION change: the view-model keeps `href`
+  // for any future consumer, and the nav still routes there.
   const DM = require('./dashboard-model.js');
   assert.strictEqual(DM.buildProgress({ snapshot: { weight: { current: 200 } } }).href,
-    'weight-history.html', 'and the model agrees');
-  // It navigates; it must never open the logging modal.
-  assert.ok(!/View progress<\/a>[\s\S]{0,40}wlOpenModal/.test(HOME_BODY));
+    'weight-history.html');
+  assert.strictEqual(DM.buildProgress({ snapshot: {} }).href, 'weight-history.html',
+    'including in the empty state');
+  assert.match(read('app-nav.js'), /id: 'progress',[\s\S]{0,120}?href: 'weight-history\.html'/);
 });
 
 test('polish: no orphaned inline action is left between two sections', () => {
@@ -829,14 +856,23 @@ test('polish: neutral days stay neutral — nothing reads as missed or scheduled
 
 /* ── 7 · Progress + what left Home ──────────────────────────────────────── */
 
-test('progress: the snapshot is metric → sparkline → actions, in that order', () => {
+test('progress: the reading anchors left, the sparkline balances right', () => {
   // Weight is still out of the section-header value slot.
   assert.ok(!/<span class="mm-section-value" id="progValue">/.test(HOME_BODY),
     'weight no longer lives in the section header');
   const structure = HOME_BODY.replace(/<!--[\s\S]*?-->/g, '').replace(/\s+/g, ' ');
   assert.match(structure,
-    /<div class="home-progress"> <span class="home-weight" id="progValue">[^<]*<\/span> <span class="home-trend" id="progTrend"><\/span> <\/div> <div class="home-spark" id="progSpark" hidden><\/div> <div class="home-actions"> <button class="home-log" id="logWeightBtn" onclick="wlOpenModal\(\)">Log weight<\/button> <a class="home-action" href="weight-history\.html">View progress<\/a>/,
-    'metric row, then sparkline, then one logging and one navigation action');
+    /<div class="home-progress"> <div class="home-weightstack"> <span class="home-weight" id="progValue">[^<]*<\/span> <span class="home-trend" id="progTrend"><\/span> <\/div> <div class="home-spark" id="progSpark" hidden><\/div> <\/div> <div class="home-actions"> <button class="home-log" id="logWeightBtn" onclick="wlOpenModal\(\)">Log weight<\/button> <\/div>/,
+    'weight + change stacked left, sparkline right, then the logging action');
+
+  // Weight and its change stay one group; the sparkline is the element that
+  // takes the remaining space on the right.
+  const stack = (HOME_CSS.match(/\.home-weightstack\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.match(stack, /flex-direction:\s*column/, 'the two readings stack together');
+  assert.ok(!/min-width:\s*0/.test(stack),
+    'the reading keeps its intrinsic width — the sparkline is what gives way');
+  const spark = (HOME_CSS.match(/\.home-spark\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.match(spark, /margin-left:\s*auto/, 'the sparkline balances the right');
 
   // Weight is the primary element; the change is quieter context beside it.
   const weight = (HOME_CSS.match(/\.home-weight\s*\{([^}]*)\}/) || [])[1] || '';
@@ -850,30 +886,39 @@ test('progress: the snapshot is metric → sparkline → actions, in that order'
   assert.ok(!/\.secondary-btn\s*\{/.test(HOME_CSS));
 });
 
-test('progress: related items are grouped, never pushed to opposite edges', () => {
-  // Two groups: weight + change is one status statement, and the two actions
-  // are one action pair. A screen-width gap read each pair as unrelated.
-  for (const [name, sel] of [['status row', '.home-progress'], ['action row', '.home-actions']]) {
+test('progress: related items stay grouped, and nothing is indented', () => {
+  // Weight + change is one status statement, held together in the stack rather
+  // than separated across the row.
+  assert.ok(!/\.home-trend\s*\{[^}]*margin-left:\s*auto/.test(HOME_CSS),
+    'the change is not pushed away from the weight it belongs to');
+  assert.ok(!/is-empty/.test(HOME_CSS + HOME),
+    'the empty-state realignment that push required is still gone');
+
+  // The action row is a single left-aligned action; nothing forces members of
+  // a pair to opposite edges.
+  const actions = (HOME_CSS.match(/\.home-actions\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.ok(!/justify-content:\s*space-between/.test(actions));
+  assert.match(actions, /flex-wrap:\s*wrap/, 'it wraps rather than cramping');
+
+  // Every row starts on the same content-grid line.
+  for (const sel of ['.home-progress', '.home-actions', '.home-weightstack']) {
     const body = (HOME_CSS.match(new RegExp('\\' + sel + '\\s*\\{([^}]*)\\}')) || [])[1] || '';
     assert.ok(body.length, `${sel} has a rule`);
-    assert.ok(!/justify-content:\s*space-between/.test(body),
-      `${name} must not force its members to opposite edges`);
-    assert.match(body, /gap:/, `${name} is spaced by a controlled gap`);
-    assert.match(body, /flex-wrap:\s*wrap/, `${name} wraps rather than cramping`);
+    assert.ok(!/margin-left:|padding-left|text-align/.test(body), `${sel} is not indented`);
   }
-  // Nothing may re-introduce edge separation by another route.
-  assert.ok(!/\.home-trend\s*\{[^}]*margin-left:\s*auto/.test(HOME_CSS),
-    'the change sits beside the weight, not at the far edge');
-  assert.ok(!/\.home-actions [^{]*\{[^}]*margin-left:\s*auto/.test(HOME_CSS),
-    'neither action is pushed right');
-  assert.ok(!/is-empty/.test(HOME_CSS + HOME),
-    'the empty-state realignment existed only to undo that push and is gone');
+});
 
-  // Both rows start on the same content-grid line as each other.
-  const progress = (HOME_CSS.match(/\.home-progress\s*\{([^}]*)\}/) || [])[1] || '';
-  for (const body of [progress, (HOME_CSS.match(/\.home-actions\s*\{([^}]*)\}/) || [])[1] || '']) {
-    assert.ok(!/margin-left|padding-left|text-align/.test(body), 'no row is indented');
-  }
+test('progress: the sparkline balances the section without dominating it', () => {
+  const spark = (HOME_CSS.match(/\.home-spark\s*\{([^}]*)\}/) || [])[1] || '';
+  const width = Number((spark.match(/width:\s*(\d+)%/) || [])[1]);
+  assert.ok(width && width <= 50, `sparkline takes ${width}% — never more than the reading`);
+  assert.match(spark, /max-width:\s*\d+px/, 'capped so it cannot grow on a wide screen');
+  assert.match(spark, /min-width:\s*\d+px/, 'and floored so it never collapses to a smudge');
+  assert.match(spark, /flex:\s*0 1 auto/, 'it shrinks before the weight column does');
+  const h = Number((spark.match(/height:\s*(\d+)px/) || [])[1]);
+  const wSize = Number(((HOME_CSS.match(/\.home-weight\s*\{([^}]*)\}/) || [])[1] || '')
+    .match(/font-size:\s*(\d+)px/)[1]);
+  assert.ok(h <= wSize + 12, `sparkline height ${h}px stays subordinate to the ${wSize}px value`);
 });
 
 test('progress: weight direction is never coloured good or bad', () => {

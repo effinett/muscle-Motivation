@@ -363,49 +363,58 @@ test('progress: one weigh-in shows the weight alone', () => {
   assert.strictEqual(p.series, null, 'and certainly not a shape');
 });
 
-test('progress: two weigh-ins give a factual change but NO sparkline', () => {
-  // Two points establish a delta; they describe no trend shape.
+test('progress: two weigh-ins show the change but draw no sparkline', () => {
+  // Two points can only ever be one straight segment, which says nothing the
+  // change text does not already say in words, and more precisely.
   const p = DM.buildProgress(withWeight({
     current: 198, count: 2, change30: -2, recent: weighIns(2, 20),
   }));
-  assert.strictEqual(p.change30, -2, 'the delta is real and shown');
+  assert.strictEqual(p.change30, -2, 'the delta is real and still shown');
   assert.strictEqual(p.direction, 'down');
-  assert.strictEqual(p.series, null, 'two points must not be drawn as a trend');
-});
-
-test('progress: three weigh-ins spanning real time do get a sparkline', () => {
-  const recent = weighIns(3, 21);
-  const p = DM.buildProgress(withWeight({
-    current: 198, count: 3, change30: -2, recent,
-  }));
-  assert.ok(Array.isArray(p.series), 'a sparkline is warranted');
-  assert.strictEqual(p.series.length, 3);
-  assert.deepStrictEqual(p.series, recent, 'the exact real rows, unmodified');
-});
-
-test('progress: clustered weigh-ins do not earn a trend shape', () => {
-  // Three entries inside three days inside a 30-day window would draw a line
-  // that misrepresents the month.
-  const p = DM.buildProgress(withWeight({
-    current: 198, count: 3, change30: -2, recent: weighIns(3, 2),
-  }));
-  assert.strictEqual(p.series, null, 'too little span to imply a shape');
-  assert.strictEqual(p.change30, -2, 'the factual change still stands');
-  assert.strictEqual(DM.HOME_SPARK_MIN_SPAN_DAYS, 7);
+  assert.strictEqual(p.series, null, 'but one segment is not a shape');
   assert.strictEqual(DM.HOME_SPARK_MIN_POINTS, 3);
-  assert.strictEqual(
-    DM.buildProgress(withWeight({ current: 198, count: 3, recent: weighIns(3, 7) })).series.length,
-    3, 'exactly at the boundary it qualifies');
-  assert.strictEqual(
-    DM.buildProgress(withWeight({ current: 198, count: 3, recent: weighIns(3, 6) })).series,
-    null, 'one day short it does not');
+});
+
+test('progress: three weigh-ins draw at ANY spacing — there is no span gate', () => {
+  // The third point is where the line starts carrying information of its own.
+  // Spacing is irrelevant to eligibility: three real measurements are three
+  // real measurements.
+  for (const span of [21, 7, 3, 2, 1]) {
+    const recent = weighIns(3, span);
+    const p = DM.buildProgress(withWeight({
+      current: 198, count: 3, change30: -2, recent,
+    }));
+    assert.ok(Array.isArray(p.series), `3 entries over ${span}d must draw`);
+    assert.strictEqual(p.series.length, 3);
+    assert.deepStrictEqual(p.series, recent, 'the exact real rows, unmodified');
+  }
+  const src = fs.readFileSync(path.join(__dirname, 'dashboard-model.js'), 'utf8');
+  assert.ok(!/HOME_SPARK_MIN_SPAN|daysBetween|SPAN_DAYS/.test(src),
+    'no span gate or date-difference helper exists to reintroduce one');
+  // The threshold compares a COUNT and nothing else.
+  assert.match(src, /pts\.length < HOME_SPARK_MIN_POINTS \? null : pts/);
+});
+
+test('progress: eligibility is judged on the existing window, never widened', () => {
+  // Three lifetime weigh-ins with only two inside the trailing-30-day series
+  // draw nothing — the window is not stretched to reach the threshold.
+  const p = DM.buildProgress(withWeight({
+    current: 198, count: 3, change30: -2, recent: weighIns(2, 12),
+  }));
+  assert.strictEqual(p.entries, 3, 'three exist on record');
+  assert.strictEqual(p.series, null, 'but only two are recent, so nothing is drawn');
+  // The series the model consumes is exactly what the snapshot supplies.
+  const recent = weighIns(3, 12);
+  assert.deepStrictEqual(
+    DM.buildProgress(withWeight({ current: 198, count: 9, recent })).series, recent,
+    'no filtering, resampling or padding of its own');
 });
 
 test('progress: the sparkline threshold gates the DRAWING and nothing else', () => {
   // It is a Home presentation policy, not a weight semantic. Crossing it must
   // change exactly one field: whether there is a series to draw.
-  const recent = weighIns(3, 6);   // below the span gate
-  const over = weighIns(3, 21);    // above it
+  const recent = weighIns(2, 21);  // below the threshold
+  const over = weighIns(3, 21);    // at it
   const below = DM.buildProgress(withWeight({ current: 198, count: 3, change30: -2, recent }));
   const above = DM.buildProgress(withWeight({ current: 198, count: 3, change30: -2, recent: over }));
 
@@ -431,12 +440,12 @@ test('progress: the threshold lives in Home only — the weight domain is clean'
   }
   // wlSparklinePoints refuses a single point for a GEOMETRIC reason — two
   // points are the minimum that define a line — not because of any policy.
-  assert.ok(!/length\s*<\s*3|>=\s*7|\b7\s*\)/.test(
+  assert.ok(!/>=\s*7|\b7\s*\)/.test(
     (weight.match(/function wlSparklinePoints[\s\S]*?\n\}/) || [''])[0]),
-    'geometry carries no 3-point or 7-day rule');
+    'geometry carries no span rule');
 
   // change30 is computed with no reference to the threshold at all: same logs,
-  // same number, whether or not Home would draw them.
+  // same number, whatever Home decides to draw.
   const W = require('./weight.js');
   const day = (n) => {
     const d = new Date(); d.setDate(d.getDate() - n);
@@ -445,7 +454,7 @@ test('progress: the threshold lives in Home only — the weight domain is clean'
   const clustered = [{ logged_on: day(0), weight_lbs: 198 },
     { logged_on: day(1), weight_lbs: 199 }, { logged_on: day(2), weight_lbs: 200 }];
   assert.strictEqual(W.wlStats(clustered, null).change30, -2,
-    'a span Home would not draw still produces the full, correct change');
+    'the change is unaffected by any drawing decision');
   assert.strictEqual(W.wlRecentSeries(clustered, 30).length, 3,
     'and the shared window still returns every real row');
 });
