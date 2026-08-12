@@ -101,10 +101,12 @@
        being identical. Trimmed optically so the rhythm matches; Nutrition is
        still clearly its own section, and no other gap is affected (the
        nutrition row is followed by the insight, not by a section header).
-       Held at the conservative end of the correction: a section header needs to
-       sit further from the previous block than from its own content (10px), and
-       below ~18px the two stop reading as separate sections. */
-    .home-row + .mm-section { margin-top: 14px; }
+       Sized on device rather than by arithmetic: at 14px (18px total) training
+       and nutrition began reading as one group, so the correction is smaller
+       than it first looked. 22px puts the total at 26px — clearly two sections
+       again, still short of the uncorrected 30px, and well above the 10px a
+       section label sits above its own content. */
+    .home-row + .mm-section { margin-top: 22px; }
 
     /* …and it stays INSIDE Nutrition. Coach Insight is the next item in the
        hierarchy, not part of the nutrition block, so it keeps the same 26px
@@ -179,24 +181,27 @@
        It is deliberately quieter than the other .home-action instances (Quick
        log, Log weight). Those sit alone on the background where they are the
        only thing to act on; this one sits directly under a filled primary CTA,
-       and at the shared 13px/secondary treatment it read as that button's peer.
-       One step down in both size and tier makes it an escape hatch — still
-       #8A8384 on the card at 4.8:1, past AA, and never a disabled grey. The
-       44px target and the chevron are untouched.
+       and at the shared 13px treatment it read as that button's peer.
+
+       The demotion is SIZE, not contrast. Dropping it to --mm-text-tertiary as
+       well took it to 4.8:1 on the card, which measured fine but read as
+       disabled on device — a secondary action has to look reachable. It keeps
+       the standard --mm-text-secondary (8.9:1) and stays subordinate through
+       type alone: 12px Barlow against a 19px Bebas slab on the theme accent.
+       The 44px target, position, spacing and chevron are untouched.
 
        Scoped to a VISIBLE CTA on purpose. In the completed state ("Train
        again") the CTA is hidden and this is the card's only action, so it keeps
-       the standard treatment instead of becoming the faintest thing on the
-       card. `:not([hidden])` is required — the hidden CTA is still an adjacent
-       sibling in the DOM, so the bare `+` selector would match it too. */
+       the full-size treatment instead of being shrunk for a competition that
+       is not happening. `:not([hidden])` is required — the hidden CTA is still
+       an adjacent sibling in the DOM, so the bare `+` selector would match. */
     .home-action--hero {
       display: flex; width: fit-content; margin: 0 0 -18px;
     }
     .mm-hero-cta:not([hidden]) + .home-action--hero {
-      font-size: 12px; color: var(--mm-text-tertiary);
+      font-size: 12px; color: var(--mm-text-secondary);
     }
     .mm-hero-cta:not([hidden]) + .home-action--hero::after { font-size: 14px; }
-    .mm-hero-cta:not([hidden]) + .home-action--hero:hover { color: var(--mm-text-secondary); }
 
     /* Progress is ONE row: weight, then trend as quieter context, then the
        action. The weight used to live in the section-header value slot, which

@@ -119,32 +119,46 @@ test('hero: the alternate path sits INSIDE the card, beneath the CTA', () => {
 });
 
 test('hero: the alternate is demoted only where it competes with the CTA', () => {
-  // Smaller and one text tier down, so START WORKOUT is unmistakably primary.
+  // Demoted by SIZE, not by contrast, so START WORKOUT stays unmistakably
+  // primary while the alternate still reads as reachable.
   const demoted = (HOME_CSS.match(
     /\.mm-hero-cta:not\(\[hidden\]\) \+ \.home-action--hero\s*\{([^}]*)\}/) || [])[1] || '';
   assert.ok(demoted.length, 'the demotion is scoped to a VISIBLE primary CTA');
   assert.match(demoted, /font-size:\s*12px/, 'one step smaller than the 13px base');
-  assert.match(demoted, /color:\s*var\(--mm-text-tertiary\)/, 'one text tier quieter');
 
   // `:not([hidden])` is load-bearing: a hidden CTA is still an adjacent sibling,
-  // so a bare `+` would also demote the completed state's only action.
+  // so a bare `+` would also shrink the completed state's only action.
   assert.ok(!/^\s*\.mm-hero-cta \+ \.home-action--hero/m.test(HOME_CSS),
     'the unscoped sibling selector must not be used');
   assert.match(HOME, /cta\.hidden = true;/, 'the completed state does hide the CTA');
 
-  // Quiet, never unreadable and never disabled-looking. --mm-text-tertiary on
-  // --mm-surface-raised measures 4.8:1, past AA for normal text.
-  const tertiary = (SHELL.match(/--mm-text-tertiary:\s*(#[0-9A-Fa-f]{6})/) || [])[1];
+  // It must never be dimmed below the standard quiet-action tier. Tertiary
+  // measured 4.8:1 — past AA on paper, but it read as DISABLED on device, and
+  // a secondary action has to look reachable.
+  assert.match(demoted, /color:\s*var\(--mm-text-secondary\)/,
+    'the alternate keeps the standard secondary text colour');
+  assert.ok(!/--mm-text-tertiary/.test(demoted), 'never the muted tier');
+  const secondary = (SHELL.match(/--mm-neutral-muted:\s*(#[0-9A-Fa-f]{6})/) || [])[1];
   const raised = (SHELL.match(/--mm-surface-raised:\s*(#[0-9A-Fa-f]{6})/) || [])[1];
   const lum = (hex) => {
     const c = [1, 3, 5].map((i) => parseInt(hex.substr(i, 2), 16) / 255)
       .map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
     return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
   };
-  const l1 = Math.max(lum(tertiary), lum(raised)), l2 = Math.min(lum(tertiary), lum(raised));
+  const l1 = Math.max(lum(secondary), lum(raised)), l2 = Math.min(lum(secondary), lum(raised));
   const ratio = (l1 + 0.05) / (l2 + 0.05);
-  assert.ok(ratio >= 4.5, `alternate action contrast ${ratio.toFixed(2)}:1 must clear AA`);
+  assert.ok(ratio >= 7, `alternate action contrast ${ratio.toFixed(2)}:1 — clearly actionable`);
   assert.ok(!/opacity/.test(demoted), 'dimming by opacity would read as disabled');
+
+  // Hover is the shared .home-action behaviour — no local override cancelling it.
+  assert.ok(!/\.home-action--hero:hover/.test(HOME_CSS),
+    'no override that would flatten hover feedback to its resting colour');
+
+  // Still decisively quieter than the primary: 12px Barlow vs 19px Bebas.
+  const cta = (SHELL.match(/\.mm-hero-cta\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.match(cta, /font-size:\s*19px/);
+  assert.match(cta, /background:\s*var\(--mm-accent\)/, 'only the CTA carries the accent');
+  assert.ok(!/background|--mm-accent/.test(demoted), 'the alternate has no fill and no accent');
 
   // Behaviour, target and chevron are untouched by the demotion.
   assert.ok(!/min-height|display:\s*none|pointer-events/.test(demoted));
@@ -239,7 +253,11 @@ test('week: the gap to Nutrition is corrected optically, and only there', () => 
   // It must stay clearly larger than the 10px a section label sits above its
   // OWN content, or the two sections stop reading as separate.
   const rhythm = Number((SHELL.match(/\.mm-section\s*\{[^}]*margin:\s*\d+px 0 (\d+)px/) || [])[1]);
-  assert.ok(gap > rhythm, `section gap (${gap}px) must exceed the label's own gap (${rhythm}px)`);
+  // Two distinct information groups: training adherence, then nutrition status.
+  // At 14px they began reading as one group, so the correction is bounded from
+  // BELOW as well as above — tighter than the standard rhythm, never merged.
+  assert.ok(gap >= rhythm * 2,
+    `section gap (${gap}px) must clearly exceed the label's own gap (${rhythm}px)`);
   assert.ok(gap < 26, 'and it is genuinely a reduction from the standard rhythm');
 
   // Scoped by adjacency: the nutrition row is followed by the insight, not by
