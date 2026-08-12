@@ -95,6 +95,17 @@
       gap: 12px; margin: 0 0 5px;
     }
     .home-metric + .mm-meter { margin-bottom: 10px; }
+    /* The day strip is the one block whose contents are ROUND, so the space
+       under it reads larger than the same measurement under a flat element —
+       the section gap after it looked bigger than every other one despite
+       being identical. Trimmed optically so the rhythm matches; Nutrition is
+       still clearly its own section, and no other gap is affected (the
+       nutrition row is followed by the insight, not by a section header).
+       Held at the conservative end of the correction: a section header needs to
+       sit further from the previous block than from its own content (10px), and
+       below ~18px the two stop reading as separate sections. */
+    .home-row + .mm-section { margin-top: 14px; }
+
     /* …and it stays INSIDE Nutrition. Coach Insight is the next item in the
        hierarchy, not part of the nutrition block, so it keeps the same 26px
        transition every other section gets. Without this it inherited only the
@@ -162,11 +173,30 @@
        level down. `display: flex` puts it on its own line after the inline-flex
        CTA, and `fit-content` stops the 44px box from spanning the whole card
        and becoming an invisible full-width target. The negative bottom margin
-       absorbs the box's own dead space so the card keeps its 20px optical
-       padding; the tap target itself is untouched. */
+       absorbs the box's own dead space so the card keeps its optical padding;
+       the tap target itself is untouched.
+
+       It is deliberately quieter than the other .home-action instances (Quick
+       log, Log weight). Those sit alone on the background where they are the
+       only thing to act on; this one sits directly under a filled primary CTA,
+       and at the shared 13px/secondary treatment it read as that button's peer.
+       One step down in both size and tier makes it an escape hatch — still
+       #8A8384 on the card at 4.8:1, past AA, and never a disabled grey. The
+       44px target and the chevron are untouched.
+
+       Scoped to a VISIBLE CTA on purpose. In the completed state ("Train
+       again") the CTA is hidden and this is the card's only action, so it keeps
+       the standard treatment instead of becoming the faintest thing on the
+       card. `:not([hidden])` is required — the hidden CTA is still an adjacent
+       sibling in the DOM, so the bare `+` selector would match it too. */
     .home-action--hero {
-      display: flex; width: fit-content; margin: 0 0 -14px;
+      display: flex; width: fit-content; margin: 0 0 -18px;
     }
+    .mm-hero-cta:not([hidden]) + .home-action--hero {
+      font-size: 12px; color: var(--mm-text-tertiary);
+    }
+    .mm-hero-cta:not([hidden]) + .home-action--hero::after { font-size: 14px; }
+    .mm-hero-cta:not([hidden]) + .home-action--hero:hover { color: var(--mm-text-secondary); }
 
     /* Progress is ONE row: weight, then trend as quieter context, then the
        action. The weight used to live in the section-header value slot, which

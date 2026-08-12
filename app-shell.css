@@ -747,7 +747,10 @@ header .btn-back:focus-visible {
 }
 .mm-hero-body {
   position: relative;
-  padding: 20px;
+  /* Vertical padding is tighter than horizontal on purpose: the card is the
+     tallest thing on Home, so the space it can give back is vertical. The 20px
+     side padding is untouched — narrowing it would change the card's shape. */
+  padding: 16px 20px;
   max-width: 74%;            /* copy never runs under the image */
 }
 .mm-hero:not(:has(.mm-hero-media)) .mm-hero-body { max-width: 100%; }
@@ -766,7 +769,9 @@ header .btn-back:focus-visible {
   letter-spacing: 1px;
   text-transform: uppercase;
   color: var(--mm-text);
-  margin: 6px 0 0;
+  /* The eyebrow, title and meta are one identity block, so they sit close
+     together; the gap that matters is the one before the CTA below them. */
+  margin: 4px 0 0;
   overflow-wrap: anywhere;   /* long program/session names never overflow */
 }
 .mm-hero-meta {
@@ -774,14 +779,16 @@ header .btn-back:focus-visible {
   font-size: 13px;
   font-weight: 600;
   color: var(--mm-text-secondary);
-  margin-top: 6px;
+  margin-top: 4px;
 }
 .mm-hero-cta {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 48px;
-  margin-top: 16px;
+  min-height: 48px;          /* button dimensions are unchanged */
+  /* A 48px filled slab separates itself from the copy by its own weight, so it
+     needed less clear space above it than a text element would. */
+  margin-top: 10px;
   padding: 12px 26px;
   border: none;
   border-radius: 10px;

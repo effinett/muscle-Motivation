@@ -106,8 +106,7 @@ test('hero: the alternate path sits INSIDE the card, beneath the CTA', () => {
   // Subordinate by type, not by a second button: no accent fill, smaller text.
   const modifier = (HOME_CSS.match(/\.home-action--hero\s*\{([^}]*)\}/) || [])[1] || '';
   assert.ok(modifier.length, '.home-action--hero exists');
-  assert.ok(!/background|border:|font-size/.test(modifier),
-    'placement only — it inherits the quiet .home-action treatment');
+  assert.ok(!/background|border:/.test(modifier), 'never a second button');
   assert.match(modifier, /display:\s*flex/, 'it drops onto its own line under the CTA');
   assert.match(modifier, /width:\s*fit-content/,
     'the 44px box must not span the card and become an invisible full-width target');
@@ -117,6 +116,40 @@ test('hero: the alternate path sits INSIDE the card, beneath the CTA', () => {
   // Two actions in the card, and only ONE of them is a filled slab.
   assert.strictEqual((hero.match(/mm-hero-cta/g) || []).length, 1, 'one primary CTA');
   assert.ok(!/mm-hero-cta[^"]*" id="todayAlt"/.test(hero), 'the alternate is not a second CTA');
+});
+
+test('hero: the alternate is demoted only where it competes with the CTA', () => {
+  // Smaller and one text tier down, so START WORKOUT is unmistakably primary.
+  const demoted = (HOME_CSS.match(
+    /\.mm-hero-cta:not\(\[hidden\]\) \+ \.home-action--hero\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.ok(demoted.length, 'the demotion is scoped to a VISIBLE primary CTA');
+  assert.match(demoted, /font-size:\s*12px/, 'one step smaller than the 13px base');
+  assert.match(demoted, /color:\s*var\(--mm-text-tertiary\)/, 'one text tier quieter');
+
+  // `:not([hidden])` is load-bearing: a hidden CTA is still an adjacent sibling,
+  // so a bare `+` would also demote the completed state's only action.
+  assert.ok(!/^\s*\.mm-hero-cta \+ \.home-action--hero/m.test(HOME_CSS),
+    'the unscoped sibling selector must not be used');
+  assert.match(HOME, /cta\.hidden = true;/, 'the completed state does hide the CTA');
+
+  // Quiet, never unreadable and never disabled-looking. --mm-text-tertiary on
+  // --mm-surface-raised measures 4.8:1, past AA for normal text.
+  const tertiary = (SHELL.match(/--mm-text-tertiary:\s*(#[0-9A-Fa-f]{6})/) || [])[1];
+  const raised = (SHELL.match(/--mm-surface-raised:\s*(#[0-9A-Fa-f]{6})/) || [])[1];
+  const lum = (hex) => {
+    const c = [1, 3, 5].map((i) => parseInt(hex.substr(i, 2), 16) / 255)
+      .map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  const l1 = Math.max(lum(tertiary), lum(raised)), l2 = Math.min(lum(tertiary), lum(raised));
+  const ratio = (l1 + 0.05) / (l2 + 0.05);
+  assert.ok(ratio >= 4.5, `alternate action contrast ${ratio.toFixed(2)}:1 must clear AA`);
+  assert.ok(!/opacity/.test(demoted), 'dimming by opacity would read as disabled');
+
+  // Behaviour, target and chevron are untouched by the demotion.
+  assert.ok(!/min-height|display:\s*none|pointer-events/.test(demoted));
+  assert.match(HOME_CSS, /\.mm-hero-cta:not\(\[hidden\]\) \+ \.home-action--hero::after\s*\{[^}]*font-size:\s*14px/,
+    'the chevron scales with the text — it is never removed');
 });
 
 test('hero: the alternate action keeps its exact existing behaviour', () => {
@@ -196,6 +229,26 @@ test('week: every day state survived the bar removal', () => {
   const DM = require('./dashboard-model.js');
   const withTarget = DM.buildWeek({ snapshot: { training: { week: { days: [], completed: 1, planned: 3 } } } });
   assert.strictEqual(withTarget.label, '1 / 3 workouts');
+});
+
+test('week: the gap to Nutrition is corrected optically, and only there', () => {
+  // Round day markers make the space under them read larger than the same
+  // measurement under a flat element, so this one section gap is trimmed.
+  const gap = Number((HOME_CSS.match(/\.home-row \+ \.mm-section\s*\{[^}]*margin-top:\s*(\d+)px/) || [])[1]);
+  assert.ok(gap, 'the corrective rule exists');
+  // It must stay clearly larger than the 10px a section label sits above its
+  // OWN content, or the two sections stop reading as separate.
+  const rhythm = Number((SHELL.match(/\.mm-section\s*\{[^}]*margin:\s*\d+px 0 (\d+)px/) || [])[1]);
+  assert.ok(gap > rhythm, `section gap (${gap}px) must exceed the label's own gap (${rhythm}px)`);
+  assert.ok(gap < 26, 'and it is genuinely a reduction from the standard rhythm');
+
+  // Scoped by adjacency: the nutrition row is followed by the insight, not by
+  // a section header, so no other transition is affected.
+  const structure = HOME_BODY.replace(/<!--[\s\S]*?-->/g, '').replace(/\s+/g, ' ');
+  const matches = (structure.match(/<\/a> <div class="mm-section">/g) || []).length;
+  assert.strictEqual(matches, 1, 'exactly one row→section transition exists on Home');
+  // The shared rhythm itself is untouched for every other section.
+  assert.match(SHELL, /\.mm-section\s*\{[^}]*margin:\s*26px 0 10px/);
 });
 
 test('week: the row containing the strip is still a real tap target', () => {
@@ -509,6 +562,33 @@ test('polish: the page starts without a dead band under the header', () => {
     /\.mm-section:first-child,\s*\.mm-visually-hidden \+ \.mm-section\s*\{\s*margin-top:\s*0/);
   // Only the container's own padding separates the header from the card.
   assert.match(HOME_CSS, /\.container\s*\{[^}]*padding:\s*24px 16px/);
+});
+
+test('polish: the hero is tighter without changing its structure or its CTA', () => {
+  // Height came out of SPACING only — no element was resized or removed.
+  const body = (SHELL.match(/\.mm-hero-body\s*\{([^}]*)\}/) || [])[1] || '';
+  const pad = body.match(/padding:\s*(\d+)px (\d+)px/);
+  assert.ok(pad, 'vertical and horizontal padding are declared separately');
+  assert.ok(Number(pad[1]) < Number(pad[2]),
+    'the card gives back vertical space; its 20px side padding defines the shape');
+  assert.ok(Number(pad[1]) >= 14, `${pad[1]}px vertical padding — tighter, not cramped`);
+  assert.match(body, /max-width:\s*74%/, 'copy constraint unchanged');
+
+  // The primary CTA keeps its dimensions; only the space above it moved.
+  const cta = (SHELL.match(/\.mm-hero-cta\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.match(cta, /min-height:\s*48px/, 'button height unchanged');
+  assert.match(cta, /padding:\s*12px 26px/, 'button padding unchanged');
+  assert.match(cta, /font-size:\s*19px/, 'button type unchanged');
+  assert.match(cta, /background:\s*var\(--mm-accent\)/, 'still the theme accent, still filled');
+  const ctaGap = Number((cta.match(/margin-top:\s*(\d+)px/) || [])[1]);
+  assert.ok(ctaGap >= 8 && ctaGap < 16, `CTA clearance tightened to ${ctaGap}px`);
+
+  // Title prominence and the card's own chrome are untouched.
+  assert.match(SHELL, /\.mm-hero-title\s*\{[^}]*clamp\(34px, 9vw, 46px\)/);
+  const shell = (SHELL.match(/\.mm-hero\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.match(shell, /border-radius:\s*16px/);
+  assert.match(shell, /background:\s*var\(--mm-surface-raised\)/);
+  assert.match(SHELL, /\.mm-hero::before\s*\{[^}]*radial-gradient/, 'the accent wash survives');
 });
 
 test('polish: Nutrition is tighter but the label/bar pairing still reads', () => {
