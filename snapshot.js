@@ -20,7 +20,8 @@
 if (typeof module !== 'undefined' && typeof wlStats === 'undefined') {
   var _wl = require('./weight.js');
   var wlToday = _wl.wlToday, wlParseDate = _wl.wlParseDate,
-      wlRound1 = _wl.wlRound1, wlStats = _wl.wlStats;
+      wlRound1 = _wl.wlRound1, wlStats = _wl.wlStats,
+      wlRecentSeries = _wl.wlRecentSeries;
   var _mx = require('./metrics.js');
   var bfStats = _mx.bfStats, msStats = _mx.msStats;
 }
@@ -185,6 +186,12 @@ function snComputeSnapshot(inputs) {
   weight.goal = goalW;
   weight.toGoal = (goalW != null && weight.current != null)
     ? wlRound1(weight.current - goalW) : null;
+  // The actual weigh-ins behind change30, oldest → newest. The rows were
+  // already fetched for wlStats and were simply being discarded, so carrying
+  // them costs nothing: no extra query, no extra round trip. Surfaces that
+  // VISUALISE the change read these instead of re-deriving a window of their
+  // own, which is what keeps a chart and its number describing one same set.
+  weight.recent = wlRecentSeries(inputs.weightLogs || [], 30);
 
   var workouts = inputs.workouts || [];
   var dates = [];

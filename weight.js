@@ -110,6 +110,32 @@ async function wlSyncProfileWeight(userId) {
 }
 
 /* ── stats ─────────────────────────────────────────────────────────────── */
+
+// The real weigh-ins inside a trailing window, oldest → newest.
+//
+// This is the ONE definition of "recent weight history": wlStats derives
+// change30 from it, and any surface that VISUALISES that change consumes the
+// same rows, so a number and a chart can never describe different sets.
+//
+// It only ever returns rows that exist. body_weight_logs is unique on
+// (user_id, logged_on) — enforced by the wlUpsert conflict target — so there is
+// at most one weigh-in per day and no same-day resolution to invent here.
+function wlRecentSeries(logs, days) {
+  var cutoff = wlParseDate(wlToday());
+  cutoff.setDate(cutoff.getDate() - (days || 30));
+  return (logs || [])
+    .filter(function (l) {
+      return l && l.logged_on && isFinite(+l.weight_lbs) &&
+        wlParseDate(l.logged_on) >= cutoff;
+    })
+    .sort(function (a, b) {
+      return a.logged_on < b.logged_on ? -1 : a.logged_on > b.logged_on ? 1 : 0;
+    })
+    .map(function (l) {
+      return { logged_on: l.logged_on, weight_lbs: +l.weight_lbs };
+    });
+}
+
 // logs: array as returned by wlFetchLogs (any order). profileWeight: fallback.
 function wlStats(logs, profileWeight) {
   var desc = (logs || []).slice().sort(function (a, b) {
@@ -129,9 +155,10 @@ function wlStats(logs, profileWeight) {
     ? win7.reduce(function (s, l) { return s + (+l.weight_lbs); }, 0) / win7.length
     : null;
 
-  var thirtyAgo = new Date(today); thirtyAgo.setDate(thirtyAgo.getDate() - 30);
-  var win30 = desc.filter(function (l) { return wlParseDate(l.logged_on) >= thirtyAgo; });
-  var change30 = win30.length >= 2 ? current - (+win30[win30.length - 1].weight_lbs) : null;
+  // Same rows, same window, same order as every consumer of wlRecentSeries —
+  // ascending, so the oldest in-window weigh-in is the first element.
+  var win30 = wlRecentSeries(desc, 30);
+  var change30 = win30.length >= 2 ? current - win30[0].weight_lbs : null;
 
   return { count: desc.length, current: current, currentFromProfile: false, avg7: avg7, change30: change30 };
 }
@@ -205,6 +232,49 @@ function wlChartSVG(logs, opts) {
     '</svg>';
 }
 
+/* ── compact sparkline geometry ────────────────────────────────────────── */
+// Points only — no SVG, no axes, no labels, no colour. The caller draws it, so
+// stroke colour stays a theme token rather than a literal baked in here (which
+// is why wlChartSVG, with its hard-coded red, is not reused for this).
+//
+// x is TIME-based, exactly like wlChartSVG: a fortnight between two weigh-ins
+// must read as a gap, not as one even step. Only real rows are plotted — no
+// interpolation, no synthesised intermediate points, no padding to a fixed
+// count. Sorted defensively so an unsorted caller still gets chronological
+// output.
+//
+// Normalised to a 100 x 100 box: the caller scales it with
+// preserveAspectRatio="none" plus a non-scaling stroke, so the line keeps a
+// constant visual weight at any width. `inset` keeps the extremes clear of the
+// top and bottom edges.
+function wlSparklinePoints(series, opts) {
+  opts = opts || {};
+  var pts = (series || [])
+    .filter(function (p) { return p && p.logged_on && isFinite(+p.weight_lbs); })
+    .sort(function (a, b) {
+      return a.logged_on < b.logged_on ? -1 : a.logged_on > b.logged_on ? 1 : 0;
+    });
+  if (pts.length < 2) return null;
+
+  var W = 100, H = 100, inset = opts.inset != null ? opts.inset : 8;
+  var xs = pts.map(function (p) { return wlParseDate(p.logged_on).getTime(); });
+  var ys = pts.map(function (p) { return +p.weight_lbs; });
+  var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
+  var minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
+  var spanX = maxX - minX, spanY = maxY - minY;
+
+  var coords = pts.map(function (p, i) {
+    // A flat series draws a flat line through the middle rather than being
+    // stretched to fill the box, which would invent movement that never
+    // happened.
+    var x = spanX === 0 ? W / 2 : ((xs[i] - minX) / spanX) * W;
+    var y = spanY === 0 ? H / 2 : inset + (1 - (ys[i] - minY) / spanY) * (H - inset * 2);
+    return (Math.round(x * 10) / 10) + ',' + (Math.round(y * 10) / 10);
+  });
+
+  return { width: W, height: H, points: coords.join(' '), count: pts.length };
+}
+
 /* ── shared Log / Edit Weight modal ────────────────────────────────────── */
 // Requires the modal markup (see wlModalMarkup) present on the page, a
 // showToast(msg) helper, and an optional window.onWeightSaved() refresh hook.
@@ -262,6 +332,7 @@ if (typeof module !== 'undefined' && module.exports) {
     wlEsc: wlEsc, wlToday: wlToday, wlParseDate: wlParseDate,
     wlFmtDate: wlFmtDate, wlRound1: wlRound1,
     wlStats: wlStats, wlChangeStr: wlChangeStr, wlChartSVG: wlChartSVG,
+    wlRecentSeries: wlRecentSeries, wlSparklinePoints: wlSparklinePoints,
   };
 }
 

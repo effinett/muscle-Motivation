@@ -303,6 +303,145 @@ test('progress: models only metrics with a real shared source', () => {
   }
 });
 
+/* ── E2 · PROGRESS SNAPSHOT: the sparkline gate ─────────────────────────────
+ * `series` is the model's INSTRUCTION to draw. Null means "do not draw", so a
+ * page can never decide to visualise history the evidence does not support. */
+
+// n real weigh-ins spread evenly across `spanDays`, oldest first.
+function weighIns(n, spanDays, startLbs) {
+  const out = [];
+  const step = n > 1 ? spanDays / (n - 1) : 0;
+  for (let i = 0; i < n; i++) {
+    const d = new Date(Date.UTC(2026, 0, 1) + Math.round(i * step) * 86400000);
+    out.push({ logged_on: d.toISOString().slice(0, 10), weight_lbs: (startLbs || 200) - i });
+  }
+  return out;
+}
+const withWeight = (over) => ({ snapshot: snap({ weight: over }) });
+
+test('progress: zero weigh-ins never produce a change or a sparkline', () => {
+  // A profile weight with no logged history is a starting value, not a series.
+  const p = DM.buildProgress(withWeight({ current: 190, count: 0, change30: null, recent: [] }));
+  assert.strictEqual(p.hasData, true, 'the profile weight is still shown');
+  assert.strictEqual(p.entries, 0, 'but no real weigh-ins are claimed');
+  assert.strictEqual(p.change30, null);
+  assert.strictEqual(p.series, null, 'nothing to draw');
+});
+
+test('progress: one weigh-in shows the weight alone', () => {
+  const p = DM.buildProgress(withWeight({
+    current: 200, count: 1, change30: null, recent: weighIns(1, 0),
+  }));
+  assert.strictEqual(p.entries, 1);
+  assert.strictEqual(p.change30, null, 'one point is not a change');
+  assert.strictEqual(p.series, null, 'and certainly not a shape');
+});
+
+test('progress: two weigh-ins give a factual change but NO sparkline', () => {
+  // Two points establish a delta; they describe no trend shape.
+  const p = DM.buildProgress(withWeight({
+    current: 198, count: 2, change30: -2, recent: weighIns(2, 20),
+  }));
+  assert.strictEqual(p.change30, -2, 'the delta is real and shown');
+  assert.strictEqual(p.direction, 'down');
+  assert.strictEqual(p.series, null, 'two points must not be drawn as a trend');
+});
+
+test('progress: three weigh-ins spanning real time do get a sparkline', () => {
+  const recent = weighIns(3, 21);
+  const p = DM.buildProgress(withWeight({
+    current: 198, count: 3, change30: -2, recent,
+  }));
+  assert.ok(Array.isArray(p.series), 'a sparkline is warranted');
+  assert.strictEqual(p.series.length, 3);
+  assert.deepStrictEqual(p.series, recent, 'the exact real rows, unmodified');
+});
+
+test('progress: clustered weigh-ins do not earn a trend shape', () => {
+  // Three entries inside three days inside a 30-day window would draw a line
+  // that misrepresents the month.
+  const p = DM.buildProgress(withWeight({
+    current: 198, count: 3, change30: -2, recent: weighIns(3, 2),
+  }));
+  assert.strictEqual(p.series, null, 'too little span to imply a shape');
+  assert.strictEqual(p.change30, -2, 'the factual change still stands');
+  assert.strictEqual(DM.HOME_SPARK_MIN_SPAN_DAYS, 7);
+  assert.strictEqual(DM.HOME_SPARK_MIN_POINTS, 3);
+  assert.strictEqual(
+    DM.buildProgress(withWeight({ current: 198, count: 3, recent: weighIns(3, 7) })).series.length,
+    3, 'exactly at the boundary it qualifies');
+  assert.strictEqual(
+    DM.buildProgress(withWeight({ current: 198, count: 3, recent: weighIns(3, 6) })).series,
+    null, 'one day short it does not');
+});
+
+test('progress: the sparkline threshold gates the DRAWING and nothing else', () => {
+  // It is a Home presentation policy, not a weight semantic. Crossing it must
+  // change exactly one field: whether there is a series to draw.
+  const recent = weighIns(3, 6);   // below the span gate
+  const over = weighIns(3, 21);    // above it
+  const below = DM.buildProgress(withWeight({ current: 198, count: 3, change30: -2, recent }));
+  const above = DM.buildProgress(withWeight({ current: 198, count: 3, change30: -2, recent: over }));
+
+  const differing = Object.keys(above).filter(
+    (k) => JSON.stringify(above[k]) !== JSON.stringify(below[k]));
+  assert.deepStrictEqual(differing, ['series'],
+    `only \`series\` may differ across the threshold — got ${differing.join(', ')}`);
+
+  // Named explicitly: current weight, the change, its direction and the
+  // destination are all identical on both sides.
+  for (const k of ['hasData', 'current', 'unit', 'entries', 'change30', 'direction', 'href']) {
+    assert.deepStrictEqual(below[k], above[k], `${k} is unaffected by the threshold`);
+  }
+});
+
+test('progress: the threshold lives in Home only — the weight domain is clean', () => {
+  const weight = fs.readFileSync(path.join(__dirname, 'weight.js'), 'utf8');
+
+  // No presentation gate leaked into the shared weight module.
+  for (const name of ['HOME_SPARK_MIN_POINTS', 'HOME_SPARK_MIN_SPAN_DAYS',
+    'MIN_SPAN', 'sparklineSeries']) {
+    assert.ok(!weight.includes(name), `${name} must not exist in weight.js`);
+  }
+  // wlSparklinePoints refuses a single point for a GEOMETRIC reason — two
+  // points are the minimum that define a line — not because of any policy.
+  assert.ok(!/length\s*<\s*3|>=\s*7|\b7\s*\)/.test(
+    (weight.match(/function wlSparklinePoints[\s\S]*?\n\}/) || [''])[0]),
+    'geometry carries no 3-point or 7-day rule');
+
+  // change30 is computed with no reference to the threshold at all: same logs,
+  // same number, whether or not Home would draw them.
+  const W = require('./weight.js');
+  const day = (n) => {
+    const d = new Date(); d.setDate(d.getDate() - n);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  };
+  const clustered = [{ logged_on: day(0), weight_lbs: 198 },
+    { logged_on: day(1), weight_lbs: 199 }, { logged_on: day(2), weight_lbs: 200 }];
+  assert.strictEqual(W.wlStats(clustered, null).change30, -2,
+    'a span Home would not draw still produces the full, correct change');
+  assert.strictEqual(W.wlRecentSeries(clustered, 30).length, 3,
+    'and the shared window still returns every real row');
+});
+
+test('progress: the sparkline never contains a point that was not logged', () => {
+  const recent = weighIns(5, 28);
+  const p = DM.buildProgress(withWeight({ current: 196, count: 5, change30: -4, recent }));
+  assert.strictEqual(p.series.length, recent.length,
+    'no padding, no resampling, no interpolation to a fixed point count');
+  for (const pt of p.series) {
+    assert.ok(recent.some((r) => r.logged_on === pt.logged_on && r.weight_lbs === pt.weight_lbs),
+      `${pt.logged_on} must be a real logged row`);
+  }
+});
+
+test('progress: a missing series degrades to no sparkline, never a guess', () => {
+  // An older snapshot shape (pre-`recent`) simply draws nothing.
+  const p = DM.buildProgress(withWeight({ current: 200, count: 8, change30: -3 }));
+  assert.strictEqual(p.series, null);
+  assert.strictEqual(p.change30, -3, 'the change still renders from the shared stat');
+});
+
 /* ── Assembly + total-degradation ───────────────────────────────────────── */
 
 test('model: assembles every section and degrades safely with no input', () => {

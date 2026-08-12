@@ -163,9 +163,40 @@
     .mm-hero-meta.is-done::before { background: var(--mm-success); }
     .mm-hero-meta.is-live::before { background: var(--mm-accent); }
 
+    /* ── Logging actions ────────────────────────────────────────────────
+       A second, deliberately different action language. Home is both a status
+       screen and a launch point, and those are different jobs: a chevron says
+       "go somewhere and look", a plus says "add something". Navigation stays
+       sentence-case + `›` (.home-action); creation is uppercase + `+`.
+
+       Distinguished by CASE and the glyph rather than by size or fill, so it
+       reads as a peer of the navigation actions and never as a second CTA
+       competing with START WORKOUT. Only the `+` carries the accent. */
+    .home-log {
+      display: inline-flex; align-items: center; gap: 6px;
+      min-height: 44px;
+      background: none; border: none; padding: 0;
+      font-family: 'Barlow', sans-serif;
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      color: var(--mm-text);
+      text-decoration: none; cursor: pointer;
+    }
+    .home-log::before {
+      content: '+';
+      font-size: 15px; font-weight: 700; line-height: 1;
+      color: var(--mm-accent);
+    }
+    .home-log:hover { color: var(--mm-text); }
+    .home-log:hover::before { opacity: 0.85; }
+    .home-log:focus-visible {
+      outline: 2px solid var(--mm-accent); outline-offset: 3px; border-radius: 6px;
+    }
+
     /* An action sitting in a section header. Keeps the full 44px tap target
        while collapsing its box vertically, so the header row does not grow. */
-    .home-action--section {
+    .home-action--section,
+    .home-log--section {
       min-height: 44px; margin: -12px 0; align-self: center;
     }
 
@@ -203,11 +234,10 @@
     }
     .mm-hero-cta:not([hidden]) + .home-action--hero::after { font-size: 14px; }
 
-    /* Progress is ONE row: weight, then trend as quieter context, then the
-       action. The weight used to live in the section-header value slot, which
-       put it diagonally opposite its own action — top-right versus bottom-left.
-       Bringing it into the row makes the three read as a single statement, and
-       wrapping means a long value or a large text size never overflows. */
+    /* Progress is a compact snapshot, still open on the background — never a
+       card. Three stacked bands: the metric, an optional sparkline, then the
+       actions. Weight leads; the change is right-aligned context, mirroring the
+       label/value idiom the section headers already use. */
     .home-progress {
       display: flex; align-items: baseline; flex-wrap: wrap;
       gap: 4px 14px; margin-top: 2px;
@@ -217,15 +247,47 @@
       font-size: 24px; letter-spacing: 0.5px; line-height: 1;
       color: var(--mm-text); white-space: nowrap;
     }
-    .home-trend { font-size: 13px; font-weight: 600; color: var(--mm-text-secondary); }
+    /* Deliberately NOT coloured by direction. Losing weight is not universally
+       good and gaining is not universally bad — it depends on whether the user
+       is cutting, maintaining or bulking, and nothing here knows that. Green/
+       amber would be a judgement the data cannot support, so the change stays
+       neutral and the arrow carries the direction. (weight.js says the same of
+       wlDeltaHTML: "Neutral by design".) */
+    .home-trend {
+      font-size: 13px; font-weight: 600; color: var(--mm-text-secondary);
+      margin-left: auto; white-space: nowrap;
+    }
     /* No trend yet — collapse entirely so nothing marks where one would go. */
     .home-trend:empty { display: none; }
-    /* The action sits right regardless of what precedes it, and centres against
-       the row rather than trying to share a text baseline with a 44px box. */
-    .home-progress .home-action { margin-left: auto; align-self: center; }
-    .home-trend.down { color: var(--mm-success); }
-    .home-trend.up   { color: var(--mm-warning); }
+    /* With no weight to sit beside, the slot carries the empty message instead
+       of a change — so it leads the row rather than being pushed to the right
+       edge, where it would hang with nothing opposite it. */
+    .home-trend.is-empty { margin-left: 0; }
     .home-trend .muted { color: var(--mm-text-tertiary); font-weight: 600; }
+
+    /* Sparkline — supporting context only. It is not a tap target, carries no
+       axes, labels or dots, and never appears without the numeric change above
+       it, so weight direction is never conveyed by the drawing alone. Colour
+       comes from the theme token via currentColor. */
+    .home-spark {
+      height: 30px; margin: 12px 0 2px;
+      color: var(--mm-accent);
+      pointer-events: none;
+    }
+    .home-spark svg { display: block; width: 100%; height: 100%; overflow: visible; }
+    .home-spark polyline {
+      fill: none; stroke: currentColor; stroke-width: 2;
+      stroke-linecap: round; stroke-linejoin: round;
+      /* Constant visual weight however wide the phone is — the box is scaled
+         non-uniformly, and without this the line would thicken with it. */
+      vector-effect: non-scaling-stroke;
+    }
+
+    /* Log left, navigate right — creation and navigation never blur together. */
+    .home-actions {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap;
+    }
 
     /* Quiet empty states — never a card, never a paragraph. */
     .home-empty { font-size: 13px; color: var(--mm-text-tertiary); padding: 2px 0 6px; }
@@ -378,8 +440,11 @@
     <div class="mm-section">
       <h2 class="mm-section-label">Nutrition</h2>
       <!-- The section's own action, in the value slot Nutrition leaves empty.
-           Deep-links into the EXISTING Quick Log flow on nutrition.html. -->
-      <a class="home-action home-action--section" href="nutrition.html#quicklog">Quick log</a>
+           Deep-links into the EXISTING Quick Log flow on nutrition.html — the
+           same href as before, so nutrition.html's focusQuickLogFromHash()
+           still brings the real Quick Log input into view and focuses it.
+           A logging action, so it takes the `+` language, not a chevron. -->
+      <a class="home-log home-log--section" href="nutrition.html#quicklog">Log food</a>
     </div>
     <a class="home-row" href="nutrition.html" id="nutRow">
       <div id="nutBody"></div>
@@ -404,14 +469,22 @@
     </section>
 
     <!-- ── E · PROGRESS ─────────────────────────────────────────────────
-         No container. Log weight lives here as a quiet inline action. -->
+         No container — a compact snapshot on the background, never a card.
+         Metric, then an optional sparkline, then one logging action and one
+         navigation action. The sparkline is decorative support: it is hidden
+         from assistive technology because the change beside the weight already
+         states the same thing in words. -->
     <div class="mm-section">
       <h2 class="mm-section-label">Progress</h2>
     </div>
     <div class="home-progress">
       <span class="home-weight" id="progValue">—</span>
       <span class="home-trend" id="progTrend"></span>
-      <button class="home-action" id="logWeightBtn" onclick="wlOpenModal()">Log weight</button>
+    </div>
+    <div class="home-spark" id="progSpark" hidden></div>
+    <div class="home-actions">
+      <button class="home-log" id="logWeightBtn" onclick="wlOpenModal()">Log weight</button>
+      <a class="home-action" href="weight-history.html">View progress</a>
     </div>
 
   </main>
@@ -720,15 +793,19 @@
   }
 
   // ── E · PROGRESS ─────────────────────────────────────────────────────
+  // Every state is driven by real weigh-ins: no history means no trend and no
+  // drawing, and the model decides both — this only renders what it is given.
   function renderProgress(p) {
     var valueEl = document.getElementById('progValue');
     var trendEl = document.getElementById('progTrend');
 
+    renderSparkline(p.series);
+
     if (!p.hasData) {
       // No weight to show — the empty state carries the whole message, so a
-      // lone em dash beside it would be noise. The action stays useful.
+      // lone em dash beside it would be noise. Log weight stays useful.
       valueEl.hidden = true;
-      trendEl.className = 'home-trend';
+      trendEl.className = 'home-trend is-empty';
       trendEl.innerHTML = '<span class="muted">No weigh-ins yet</span>';
       return;
     }
@@ -741,10 +818,31 @@
       trendEl.textContent = '';
       return;
     }
+    // The arrow is decoration; the direction is also stated in words for screen
+    // readers, since "↓" alone announces poorly or not at all.
     var arrow = p.direction === 'down' ? '↓' : p.direction === 'up' ? '↑' : '±';
+    var spoken = p.direction === 'down' ? 'Down' : p.direction === 'up' ? 'Up' : 'No change,';
     trendEl.className = 'home-trend ' + esc(p.direction);
-    trendEl.innerHTML = arrow + ' ' + Math.abs(p.change30) + ' ' + esc(p.unit) +
+    trendEl.innerHTML =
+      '<span aria-hidden="true">' + arrow + '</span>' +
+      '<span class="mm-visually-hidden">' + spoken + ' </span> ' +
+      Math.abs(p.change30) + ' ' + esc(p.unit) +
       ' <span class="muted">this month</span>';
+  }
+
+  // Supporting visual only. Geometry comes from weight.js (the same module that
+  // owns the full Progress chart) over the exact rows behind the change value;
+  // this page adds no window, no maths and no interpolation of its own.
+  function renderSparkline(series) {
+    var el = document.getElementById('progSpark');
+    var geo = series && typeof wlSparklinePoints === 'function'
+      ? wlSparklinePoints(series) : null;
+    if (!geo) { el.hidden = true; el.innerHTML = ''; return; }
+    el.innerHTML =
+      '<svg viewBox="0 0 ' + geo.width + ' ' + geo.height + '"' +
+      ' preserveAspectRatio="none" aria-hidden="true" focusable="false">' +
+      '<polyline points="' + esc(geo.points) + '"/></svg>';
+    el.hidden = false;
   }
 
   // ── Weight modal hook ────────────────────────────────────────────────

@@ -524,28 +524,68 @@ test('insight: default treatment is the accent, warning is reserved', () => {
 
 /* ── 6b · V4 polish ─────────────────────────────────────────────────────── */
 
-test('polish: Quick log is the Nutrition section action, in its header row', () => {
-  // Moved out of a detached row beneath the metrics and into the section
-  // header's value slot, which Nutrition leaves empty.
+test('polish: Log food is the Nutrition section action, in its header row', () => {
+  // Sits in the section header's value slot, which Nutrition leaves empty.
   assert.match(HOME_BODY,
-    /<h2 class="mm-section-label">Nutrition<\/h2>[\s\S]{0,220}?<a class="home-action home-action--section" href="nutrition\.html#quicklog">Quick log<\/a>[\s\S]{0,40}?<\/div>/,
-    'Quick log sits inside the Nutrition section header');
+    /<h2 class="mm-section-label">Nutrition<\/h2>[\s\S]{0,420}?<a class="home-log home-log--section" href="nutrition\.html#quicklog">Log food<\/a>[\s\S]{0,40}?<\/div>/,
+    'Log food sits inside the Nutrition section header');
   assert.ok(!/home-inline-actions/.test(HOME_BODY), 'the detached action row is gone');
-  // Still the same quiet weight as Log weight — both .home-action, no slab.
-  assert.match(HOME_BODY, /id="logWeightBtn"/, 'Log weight is still inline in Progress');
-  const actions = HOME_BODY.match(/class="home-action/g) || [];
-  assert.ok(actions.length >= 3, 'choose workout, quick log and log weight');
+  assert.match(HOME_BODY, /id="logWeightBtn"/, 'Log weight is still in Progress');
   // The header variant keeps a full tap target without growing the header.
-  assert.match(HOME_CSS, /\.home-action--section\s*\{[^}]*min-height:\s*44px/);
+  assert.match(HOME_CSS, /\.home-action--section,\s*\n?\s*\.home-log--section\s*\{[^}]*min-height:\s*44px/);
 });
 
-test('polish: Quick log opens the EXISTING nutrition flow, not a new one', () => {
+test('actions: creation and navigation are two distinct visual languages', () => {
+  // A plus means "add something"; a chevron means "go and look". Mixing them
+  // would make Home's two jobs — status and logging — read as one.
+  const log = (HOME_CSS.match(/\.home-log\s*\{([^}]*)\}/) || [])[1] || '';
+  const nav = (HOME_CSS.match(/\.home-action\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.ok(log.length && nav.length, 'both action classes exist');
+  assert.match(HOME_CSS, /\.home-log::before\s*\{[^}]*content:\s*'\+'/, 'logging carries a plus');
+  assert.match(HOME_CSS, /\.home-action::after\s*\{[^}]*content:\s*'›'/, 'navigation carries a chevron');
+  assert.ok(!/content:\s*'›'/.test(log), 'a logging action never takes a chevron');
+  assert.match(log, /text-transform:\s*uppercase/, 'logging is uppercase');
+  assert.ok(!/text-transform/.test(nav), 'navigation stays sentence case');
+
+  // Neither is a button, and neither rivals the hero CTA.
+  for (const [name, body] of [['home-log', log], ['home-action', nav]]) {
+    assert.ok(!/background:\s*var\(--mm-accent\)/.test(body), `${name} has no accent fill`);
+    assert.ok(!/border:\s*1px/.test(body), `${name} is not a bordered button`);
+    assert.match(body, /min-height:\s*44px/, `${name} is still a real tap target`);
+  }
+  // Only the plus glyph is accented — never the whole label.
+  assert.match(HOME_CSS, /\.home-log::before\s*\{[^}]*color:\s*var\(--mm-accent\)/);
+  assert.ok(!/--mm-accent/.test(log), 'the label itself is not accent-coloured');
+
+  // Exact assignment of the language across Home.
+  assert.match(HOME_BODY, /class="home-log home-log--section"[^>]*>Log food</, 'food = creation');
+  assert.match(HOME_BODY, /class="home-log" id="logWeightBtn"[^>]*>Log weight</, 'weight = creation');
+  assert.match(HOME_BODY, /class="home-action" href="weight-history\.html">View progress</,
+    'View progress stays a navigation action');
+  // The alternate-workout label is supplied by the model, so the element is
+  // what carries the language — it must remain a .home-action, never a log.
+  assert.match(HOME_BODY, /class="home-action home-action--hero" id="todayAlt"/,
+    'Choose a different workout stays a navigation action');
+  const DM = require('./dashboard-model.js');
+  assert.strictEqual(
+    DM.buildToday({ snapshot: {}, program: { sessionLabel: 'X', href: 'workout.html?p' } })
+      .secondary.label,
+    'Choose a different workout', 'and its label is unchanged');
+  // Coach Insight is untouched and keeps its own action treatment.
+  assert.match(HOME_BODY, /class="mm-insight-action" id="insightAction"/);
+  assert.match(SHELL, /\.mm-insight-action::after\s*\{[^}]*content:\s*'›'/);
+});
+
+test('polish: Log food opens the EXISTING nutrition flow, not a new one', () => {
   const nutrition = read('nutrition.html');
-  // The dashboard only deep-links; the handler just focuses the existing input.
+  // Renaming the presentation must not turn the shortcut into plain navigation
+  // to the top of Nutrition — the hash is what triggers scroll-and-focus.
+  assert.match(HOME_BODY, /href="nutrition\.html#quicklog"/, 'still the deep link');
   assert.match(nutrition, /function focusQuickLogFromHash\(\)/);
   assert.match(nutrition, /window\.location\.hash !== '#quicklog'/);
   assert.match(nutrition, /getElementById\('aiLogInput'\)/,
     'it targets the existing Quick Log field');
+  assert.match(nutrition, /\.focus\(/, 'and focuses it, so typing can start immediately');
   assert.match(nutrition, /<form class="ai-log-row" onsubmit="aiQuickLog\(event\)">/,
     'the original Quick Log form is untouched');
   // No second logging implementation anywhere on Home.
@@ -553,18 +593,54 @@ test('polish: Quick log opens the EXISTING nutrition flow, not a new one', () =>
     'Home implements no logging of its own');
 });
 
+test('actions: Log weight invokes the shared weight-entry flow, not a copy', () => {
+  // weight.js is the one owner of the Log/Edit Weight modal, and Home already
+  // used it — this pass changed the label, never the flow.
+  assert.match(HOME_BODY, /id="logWeightBtn" onclick="wlOpenModal\(\)"/);
+  const weight = read('weight.js');
+  assert.match(weight, /One source of truth for body-weight queries/);
+  assert.match(weight, /function wlOpenModal\(/);
+  assert.match(HOME, /document\.getElementById\('weightModalMount'\)\.innerHTML = wlModalMarkup\(\);/,
+    'Home mounts the shared modal markup rather than defining its own');
+
+  // Home must own no part of weight persistence, validation or formatting.
+  // Comments are prose, not implementation — strip them before checking.
+  const homeCode = HOME.replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/<!--[\s\S]*?-->/g, '').replace(/^\s*\/\/.*$/gm, '');
+  for (const owned of ['body_weight_logs', 'wlUpsert', 'wlSave(', 'wlSyncProfileWeight',
+    'upsert(', 'onConflict']) {
+    assert.ok(!homeCode.includes(owned), `${owned} belongs to weight.js, not Home`);
+  }
+  assert.match(weight, /async function wlSave\(/, 'saving still lives in weight.js');
+  assert.match(HOME, /window\.onWeightSaved = async function/,
+    'Home only supplies the refresh hook weight.js calls back into');
+});
+
+test('actions: View progress goes to the existing Progress destination', () => {
+  assert.match(HOME_BODY, /<a class="home-action" href="weight-history\.html">View progress<\/a>/);
+  // The same destination the bottom nav's Progress tab already owns — this
+  // introduces no new route.
+  const nav = read('app-nav.js');
+  assert.match(nav, /id: 'progress',[\s\S]{0,120}?href: 'weight-history\.html'/);
+  const DM = require('./dashboard-model.js');
+  assert.strictEqual(DM.buildProgress({ snapshot: { weight: { current: 200 } } }).href,
+    'weight-history.html', 'and the model agrees');
+  // It navigates; it must never open the logging modal.
+  assert.ok(!/View progress<\/a>[\s\S]{0,40}wlOpenModal/.test(HOME_BODY));
+});
+
 test('polish: no orphaned inline action is left between two sections', () => {
   // The rule that trimmed the gap under a free-standing action existed only for
   // the alternate-workout button, which now lives inside the hero. Home has no
   // action floating on the background between sections at all.
   assert.ok(!/\.home-action \+ \.mm-section/.test(HOME_CSS), 'the compensating rule is gone');
-  // Every .home-action is now inside a hero, a section header or the Progress
-  // row — none is a direct child of <main>.
+  // Every action is now inside a hero, a section header or the Progress action
+  // row — none is a bare direct child of <main>.
   const main = HOME_BODY.replace(/<!--[\s\S]*?-->/g, '')
     .replace(/<section class="mm-hero"[\s\S]*?<\/section>/, '')
     .replace(/<div class="mm-section">[\s\S]*?<\/div>/g, '')
-    .replace(/<div class="home-progress">[\s\S]*?<\/div>/, '');
-  assert.ok(!/home-action/.test(main), 'no action floats on the background');
+    .replace(/<div class="home-actions">[\s\S]*?<\/div>/, '');
+  assert.ok(!/home-action|home-log/.test(main), 'no action floats on the background');
   // The shared section rhythm itself is unchanged.
   assert.match(SHELL, /\.mm-section\s*\{[^}]*margin:\s*26px 0 10px/);
 });
@@ -620,7 +696,7 @@ test('polish: Nutrition is tighter but the label/bar pairing still reads', () =>
 
   // Tightened by spacing alone — type sizes and tap targets are untouched.
   assert.match(HOME_CSS, /\.home-metric-value\s*\{[^}]*font-size:\s*14px/);
-  assert.match(HOME_CSS, /\.home-action--section\s*\{[^}]*min-height:\s*44px/);
+  assert.match(HOME_CSS, /\.home-action--section,\s*\n?\s*\.home-log--section\s*\{[^}]*min-height:\s*44px/);
   assert.match(SHELL, /\.mm-meter\s*\{[^}]*--mm-meter-height:\s*6px/, 'bars keep their height');
 });
 
@@ -725,26 +801,68 @@ test('polish: neutral days stay neutral — nothing reads as missed or scheduled
 
 /* ── 7 · Progress + what left Home ──────────────────────────────────────── */
 
-test('progress: weight, trend and action are one row, not a header/body split', () => {
-  // Weight moved OUT of the section-header value slot, which had placed it
-  // diagonally opposite its own action.
+test('progress: the snapshot is metric → sparkline → actions, in that order', () => {
+  // Weight is still out of the section-header value slot.
   assert.ok(!/<span class="mm-section-value" id="progValue">/.test(HOME_BODY),
     'weight no longer lives in the section header');
-  assert.match(HOME_BODY,
-    /<div class="home-progress">\s*<span class="home-weight" id="progValue">[\s\S]*?<span class="home-trend" id="progTrend"><\/span>\s*<button class="home-action" id="logWeightBtn" onclick="wlOpenModal\(\)">/,
-    'weight → trend → action, in that reading order, in one row');
-  // Weight is the primary element; trend is quieter context.
+  const structure = HOME_BODY.replace(/<!--[\s\S]*?-->/g, '').replace(/\s+/g, ' ');
+  assert.match(structure,
+    /<div class="home-progress"> <span class="home-weight" id="progValue">[^<]*<\/span> <span class="home-trend" id="progTrend"><\/span> <\/div> <div class="home-spark" id="progSpark" hidden><\/div> <div class="home-actions"> <button class="home-log" id="logWeightBtn" onclick="wlOpenModal\(\)">Log weight<\/button> <a class="home-action" href="weight-history\.html">View progress<\/a>/,
+    'metric row, then sparkline, then one logging and one navigation action');
+
+  // Weight is the primary element; the change is quieter context beside it.
   const weight = (HOME_CSS.match(/\.home-weight\s*\{([^}]*)\}/) || [])[1] || '';
   const trend = (HOME_CSS.match(/\.home-trend\s*\{([^}]*)\}/) || [])[1] || '';
   assert.match(weight, /Bebas Neue/);
   const wSize = Number((weight.match(/font-size:\s*(\d+)px/) || [])[1]);
   const tSize = Number((trend.match(/font-size:\s*(\d+)px/) || [])[1]);
-  assert.ok(wSize > tSize, `weight (${wSize}px) must outrank the trend (${tSize}px)`);
-  // Action stays right-aligned and quiet.
-  assert.match(HOME_CSS, /\.home-progress \.home-action\s*\{[^}]*margin-left:\s*auto/);
+  assert.ok(wSize > tSize, `weight (${wSize}px) must outrank the change (${tSize}px)`);
+  assert.match(trend, /margin-left:\s*auto/, 'the change is right-aligned context');
   // The old standalone twin-button block is still gone.
   assert.ok(!/class="secondary"|class="secondary-btn"/.test(HOME_BODY));
   assert.ok(!/\.secondary-btn\s*\{/.test(HOME_CSS));
+});
+
+test('progress: weight direction is never coloured good or bad', () => {
+  // Losing weight is not universally good and gaining is not universally bad —
+  // it depends on whether the user is cutting, maintaining or bulking, and
+  // nothing on Home knows that. Colouring it would be an unsupported judgement.
+  const trend = (HOME_CSS.match(/\.home-trend\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.match(trend, /color:\s*var\(--mm-text-secondary\)/, 'neutral text colour');
+  assert.ok(!/\.home-trend\.(down|up)\s*\{/.test(HOME_CSS),
+    'no direction-keyed colour rule may exist');
+  assert.ok(!/--mm-success|--mm-danger|--mm-warning/.test(
+    HOME_CSS.slice(HOME_CSS.indexOf('.home-trend'), HOME_CSS.indexOf('.home-spark'))),
+    'no semantic colour anywhere in the trend treatment');
+  // weight.js states the same rule for its own delta pill — Home now agrees.
+  assert.match(read('weight.js'), /Neutral by design/);
+});
+
+test('progress: the sparkline is decoration, not an interactive surface', () => {
+  const spark = (HOME_CSS.match(/\.home-spark\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.ok(spark.length, '.home-spark exists');
+  assert.match(spark, /pointer-events:\s*none/, 'it can never receive a tap');
+  assert.match(spark, /color:\s*var\(--mm-accent\)/, 'theme token, not a literal');
+  assert.match(HOME_CSS, /\.home-spark polyline\s*\{[^}]*stroke:\s*currentColor/,
+    'the stroke follows the theme colour, so a user accent flows through');
+  assert.ok(!/#[0-9A-Fa-f]{6}/.test(spark), 'no hard-coded colour');
+
+  // Markup: no href, no onclick, no tabindex, no role — and hidden from AT,
+  // because the change text beside the weight already says the same thing.
+  assert.match(HOME, /<div class="home-spark" id="progSpark" hidden><\/div>/);
+  assert.match(HOME, /aria-hidden="true" focusable="false"/, 'decorative to screen readers');
+  const render = (HOME.match(/function renderSparkline[\s\S]*?\n  \}/) || [''])[0];
+  assert.ok(render.length, 'renderSparkline exists');
+  for (const attr of ['href', 'onclick', 'tabindex', 'role=', 'addEventListener']) {
+    assert.ok(!render.includes(attr), `the emitted sparkline carries no ${attr}`);
+  }
+  // No chart chrome: no axes, grid, ticks, labels, tooltips or heading.
+  assert.ok(!/<text|tooltip|axis|gridline|TREND/i.test(render),
+    'a sparkline, not a miniature of the full Progress chart');
+  // Geometry is borrowed from weight.js — Home computes none of its own.
+  assert.match(HOME, /wlSparklinePoints\(series\)/, 'geometry comes from the shared module');
+  assert.ok(!/Math\.(min|max)|\/ *span|normali[sz]/i.test(render),
+    'Home does no scaling maths of its own');
 });
 
 test('progress: remains an open section — never a card', () => {
@@ -757,29 +875,37 @@ test('progress: remains an open section — never a card', () => {
   assert.strictEqual((HOME_BODY.match(/class="mm-insight"/g) || []).length, 1);
 });
 
-test('progress: with a real trend, all three read as one statement', () => {
-  // renderProgress emits weight, then the signed 30-day change, then the row
-  // keeps the action to the right.
+test('progress: with a real trend, the change states its own window', () => {
   assert.match(HOME, /valueEl\.hidden = false;\s*valueEl\.textContent = p\.current \+ ' ' \+ p\.unit;/);
-  assert.match(HOME, /trendEl\.innerHTML = arrow \+ ' ' \+ Math\.abs\(p\.change30\)/);
-  assert.match(HOME, /<span class="muted">this month<\/span>/);
+  assert.match(HOME, /Math\.abs\(p\.change30\)/, 'the signed 30-day change is rendered');
+  assert.match(HOME, /<span class="muted">this month<\/span>/,
+    'the window is named, so the number is never an unlabelled delta');
+  // The arrow is decorative; direction is also spoken, since "↓" announces badly.
+  assert.match(HOME, /<span aria-hidden="true">' \+ arrow \+ '<\/span>/);
+  assert.match(HOME, /var spoken = p\.direction === 'down' \? 'Down'/);
+  assert.match(HOME, /<span class="mm-visually-hidden">' \+ spoken/);
 });
 
 test('progress: with no trend, nothing marks where one would go', () => {
   assert.match(HOME, /if \(p\.change30 == null\)[\s\S]{0,240}?trendEl\.textContent = '';/,
     'a single weigh-in produces no trend text');
   assert.match(HOME_CSS, /\.home-trend:empty\s*\{[^}]*display:\s*none/,
-    'and the empty element collapses, leaving weight + action adjacent');
+    'and the empty element collapses rather than leaving a gap');
   // Nothing is invented to fill the space.
-  assert.ok(!/--|n\/a|no change|0 lb this month/i.test(
-    (HOME.match(/function renderProgress[\s\S]*?\n  \}/) || [''])[0].replace(/this month/g, '')),
-    'no placeholder trend is fabricated');
+  const body = (HOME.match(/function renderProgress[\s\S]*?\n  \}/) || [''])[0]
+    .replace(/this month/g, '').replace(/No change,/g, '');
+  assert.ok(!/n\/a|0 lb this month/i.test(body), 'no placeholder trend is fabricated');
 });
 
 test('progress: with no weight at all, the state is honest and still actionable', () => {
   assert.match(HOME, /if \(!p\.hasData\)[\s\S]{0,320}?valueEl\.hidden = true;/,
     'the weight element is hidden rather than showing a lone em dash');
   assert.match(HOME, /No weigh-ins yet/, 'the empty state says so plainly');
+  // The change slot is right-aligned so it sits opposite the weight. With no
+  // weight there is nothing opposite, so the empty message leads the row
+  // instead of hanging off the right edge.
+  assert.match(HOME, /trendEl\.className = 'home-trend is-empty';/);
+  assert.match(HOME_CSS, /\.home-trend\.is-empty\s*\{[^}]*margin-left:\s*0/);
   // The action is outside that branch, so it always remains available.
   const body = (HOME.match(/function renderProgress[\s\S]*?\n  \}/) || [''])[0];
   assert.ok(!/logWeightBtn/.test(body), 'Log weight is never hidden or disabled');

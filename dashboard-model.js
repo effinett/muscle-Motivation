@@ -256,11 +256,64 @@
    * Only metrics the product actually has reliable shared data for: scale
    * weight and its 30-day change, plus body fat when it has been logged.
    * Steps / water / sleep are NOT modelled — there is no shared source. */
+
+  // Whole days between two YYYY-MM-DD strings. UTC on both sides, so the
+  // difference is unaffected by the local timezone; these are date-only values
+  // and only their span is ever used.
+  function daysBetween(a, b) {
+    var pa = String(a).split('-'), pb = String(b).split('-');
+    var ta = Date.UTC(+pa[0], (+pa[1]) - 1, +pa[2]);
+    var tb = Date.UTC(+pb[0], (+pb[1]) - 1, +pb[2]);
+    if (!isFinite(ta) || !isFinite(tb)) return null;
+    return Math.round((tb - ta) / 86400000);
+  }
+
+  // ── HOME SPARKLINE PRESENTATION THRESHOLD ─────────────────────────────
+  //
+  // NEW POLICY, and deliberately scoped: these two numbers decide ONLY whether
+  // Home draws a sparkline. They are NOT a weight-domain semantic. They do not
+  // exist in weight.js, they take no part in change30, and nothing on the
+  // Progress page or in weight history consults them — that surface renders the
+  // full chart under its own rules and is untouched by this file.
+  //
+  // Why a gate at all: a sparkline is a claim about a SHAPE, which needs more
+  // evidence than a number does. Two weigh-ins establish a factual delta and
+  // describe no trend; three logged on three consecutive days inside a 30-day
+  // window would draw a line whose horizontal extent implies a month of history
+  // that was never recorded.
+  //
+  // Why 7 days specifically — a judgement call, not an inherited rule:
+  //   · Scale weight swings by a pound or more day to day on water, food and
+  //     glycogen alone, so a span under a week plots mostly noise as if it were
+  //     direction. A week is the shortest span where the line is more signal
+  //     than fluctuation.
+  //   · It is the least restrictive gate that still admits a genuinely new
+  //     user: three weigh-ins across one week earns a sparkline, so the
+  //     visualisation is not reserved for long-established accounts.
+  //   · Corroboration only, NOT authority: wlStats already averages weight over
+  //     a trailing 7 days (avg7) precisely because single days are noisy, so a
+  //     week is an interval the product already treats as the point where
+  //     weight becomes readable. That makes 7 a defensible choice here; it does
+  //     not make it a pre-existing product rule for sparklines, and there was
+  //     none to inherit.
+  //
+  // Changing either value changes what Home DRAWS and nothing else.
+  var HOME_SPARK_MIN_POINTS = 3;
+  var HOME_SPARK_MIN_SPAN_DAYS = 7;
+
+  function sparklineSeries(recent) {
+    var pts = Array.isArray(recent) ? recent : [];
+    if (pts.length < HOME_SPARK_MIN_POINTS) return null;
+    var span = daysBetween(pts[0].logged_on, pts[pts.length - 1].logged_on);
+    if (span == null || span < HOME_SPARK_MIN_SPAN_DAYS) return null;
+    return pts;
+  }
+
   function buildProgress(input) {
     var snap = input.snapshot || null;
     var weight = (snap && snap.weight) || null;
     if (!weight || num(weight.current) == null) {
-      return { hasData: false, href: 'weight-history.html' };
+      return { hasData: false, entries: 0, series: null, href: 'weight-history.html' };
     }
     var change = num(weight.change30);
     var bf = (snap && snap.bodyFat) || null;
@@ -268,8 +321,14 @@
       hasData: true,
       current: round1(num(weight.current)),
       unit: 'lb',
+      // Real weigh-ins on record. A profile weight with no logged history
+      // still reports 0 — it is a starting value, not a measurement series.
+      entries: num(weight.count) || 0,
       change30: change != null ? round1(change) : null,
       direction: change == null ? null : (change < 0 ? 'down' : change > 0 ? 'up' : 'flat'),
+      // Present ONLY when a sparkline would be honest; null is the instruction
+      // not to draw one, so the page needs no policy of its own.
+      series: sparklineSeries(weight.recent),
       goal: num(weight.goal),
       bodyFat: (bf && num(bf.current) != null && bf.count > 0) ? round1(num(bf.current)) : null,
       href: 'weight-history.html',
@@ -295,6 +354,10 @@
     buildNutrition: buildNutrition,
     buildFocus: buildFocus,
     buildProgress: buildProgress,
+    // Home presentation thresholds — exposed so tests can pin that they gate
+    // the DRAWING and nothing else. Not a weight-domain semantic.
+    HOME_SPARK_MIN_POINTS: HOME_SPARK_MIN_POINTS,
+    HOME_SPARK_MIN_SPAN_DAYS: HOME_SPARK_MIN_SPAN_DAYS,
   };
 
   if (global) global.DashboardModel = DashboardModel;
