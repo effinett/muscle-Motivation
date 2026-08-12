@@ -182,9 +182,24 @@ function wlChangeStr(delta) {
 // Generic over the y column: opts.yField (default 'weight_lbs'), opts.ariaLabel,
 // opts.gradId (unique per chart when several render on one page). Rows must
 // carry logged_on. Existing weight callers pass no opts and are unchanged.
+//
+// ONE renderer, two sizes. Home draws a COMPACT preview of this same chart, so
+// what varies is presentation only — box, padding, label size, marker size —
+// never what the chart means. Data, scaling, point selection and the x/y
+// mapping below are shared, so the small chart and the large one can never tell
+// different stories. Every default reproduces the full chart byte for byte, so
+// the Progress page is unaffected by the parameterisation.
+//
+// Colour comes from `currentColor`, set by whichever container the chart is
+// dropped into, so a future user-selectable accent flows through both sizes.
+// The neutral label grey is chrome, not accent, and stays fixed.
 function wlChartSVG(logs, opts) {
   opts = opts || {};
-  var w = opts.width || 640, h = opts.height || 200, pad = 30;
+  var w = opts.width || 640, h = opts.height || 200;
+  var pad = opts.pad != null ? opts.pad : 30;
+  var labelSize = opts.labelSize || 11;
+  var dotR = opts.dotRadius != null ? opts.dotRadius : 2.6;
+  var strokeW = opts.strokeWidth != null ? opts.strokeWidth : 2.5;
   var yField = opts.yField || 'weight_lbs';
   var gradId = opts.gradId || 'wlgrad';
 
@@ -211,68 +226,45 @@ function wlChartSVG(logs, opts) {
   var area = line + ' L ' + X(maxX).toFixed(1) + ' ' + (pad + plotH).toFixed(1) +
              ' L ' + X(minX).toFixed(1) + ' ' + (pad + plotH).toFixed(1) + ' Z';
   var dots = pts.map(function (p, i) {
-    return '<circle cx="' + X(xs[i]).toFixed(1) + '" cy="' + Y(ys[i]).toFixed(1) + '" r="2.6" fill="#B1121B"/>';
+    return '<circle cx="' + X(xs[i]).toFixed(1) + '" cy="' + Y(ys[i]).toFixed(1) + '" r="' + dotR + '" fill="currentColor"/>';
   }).join('');
 
   var hi = Math.max.apply(null, ys), lo = Math.min.apply(null, ys);
+  // Label offsets track the label SIZE rather than being fixed pixel constants.
+  // At the default 11px these round to the original 5 / 14 / 8, so the full
+  // chart is unchanged; at a larger compact size the rows move apart with the
+  // type instead of overlapping it. The caller must keep
+  // `pad > below + bottom`, or the low-value label would land on the dates.
+  var above = Math.round(labelSize * 5 / 11);
+  var below = Math.round(labelSize * 14 / 11);
+  var bottom = Math.round(labelSize * 8 / 11);
+  function label(x, y, text, anchor) {
+    return '<text x="' + x + '" y="' + y + '"' +
+      (anchor ? ' text-anchor="' + anchor + '"' : '') +
+      ' fill="#666" font-size="' + labelSize +
+      '" font-family="Barlow,sans-serif">' + text + '</text>';
+  }
   var yLabels =
-    '<text x="6" y="' + (Y(hi) - 5).toFixed(1) + '" fill="#666" font-size="11" font-family="Barlow,sans-serif">' + wlRound1(hi) + '</text>' +
-    '<text x="6" y="' + (Y(lo) + 14).toFixed(1) + '" fill="#666" font-size="11" font-family="Barlow,sans-serif">' + wlRound1(lo) + '</text>';
+    label(6, (Y(hi) - above).toFixed(1), wlRound1(hi)) +
+    label(6, (Y(lo) + below).toFixed(1), wlRound1(lo));
   var xLabels =
-    '<text x="' + pad + '" y="' + (h - 8) + '" fill="#666" font-size="11" font-family="Barlow,sans-serif">' + wlEsc(wlFmtDate(pts[0].logged_on)) + '</text>' +
-    '<text x="' + (w - pad) + '" y="' + (h - 8) + '" text-anchor="end" fill="#666" font-size="11" font-family="Barlow,sans-serif">' + wlEsc(wlFmtDate(pts[pts.length - 1].logged_on)) + '</text>';
+    label(pad, h - bottom, wlEsc(wlFmtDate(pts[0].logged_on))) +
+    label(w - pad, h - bottom, wlEsc(wlFmtDate(pts[pts.length - 1].logged_on)), 'end');
 
-  return '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%;height:auto;display:block" role="img" aria-label="' + wlEsc(opts.ariaLabel || 'Weight trend') + '">' +
+  // A chart that sits inside its own labelled control announces the control,
+  // not a wall of coordinates — so the drawing can opt out of the a11y tree.
+  var a11y = opts.decorative
+    ? 'aria-hidden="true" focusable="false"'
+    : 'role="img" aria-label="' + wlEsc(opts.ariaLabel || 'Weight trend') + '"';
+
+  return '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%;height:auto;display:block" ' + a11y + '>' +
     '<defs><linearGradient id="' + wlEsc(gradId) + '" x1="0" y1="0" x2="0" y2="1">' +
-    '<stop offset="0%" stop-color="rgba(177,18,27,0.32)"/>' +
-    '<stop offset="100%" stop-color="rgba(177,18,27,0)"/></linearGradient></defs>' +
+    '<stop offset="0%" stop-color="currentColor" stop-opacity="0.32"/>' +
+    '<stop offset="100%" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs>' +
     '<path d="' + area + '" fill="url(#' + wlEsc(gradId) + ')"/>' +
-    '<path d="' + line + '" fill="none" stroke="#B1121B" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>' +
+    '<path d="' + line + '" fill="none" stroke="currentColor" stroke-width="' + strokeW + '" stroke-linejoin="round" stroke-linecap="round"/>' +
     dots + yLabels + xLabels +
     '</svg>';
-}
-
-/* ── compact sparkline geometry ────────────────────────────────────────── */
-// Points only — no SVG, no axes, no labels, no colour. The caller draws it, so
-// stroke colour stays a theme token rather than a literal baked in here (which
-// is why wlChartSVG, with its hard-coded red, is not reused for this).
-//
-// x is TIME-based, exactly like wlChartSVG: a fortnight between two weigh-ins
-// must read as a gap, not as one even step. Only real rows are plotted — no
-// interpolation, no synthesised intermediate points, no padding to a fixed
-// count. Sorted defensively so an unsorted caller still gets chronological
-// output.
-//
-// Normalised to a 100 x 100 box: the caller scales it with
-// preserveAspectRatio="none" plus a non-scaling stroke, so the line keeps a
-// constant visual weight at any width. `inset` keeps the extremes clear of the
-// top and bottom edges.
-function wlSparklinePoints(series, opts) {
-  opts = opts || {};
-  var pts = (series || [])
-    .filter(function (p) { return p && p.logged_on && isFinite(+p.weight_lbs); })
-    .sort(function (a, b) {
-      return a.logged_on < b.logged_on ? -1 : a.logged_on > b.logged_on ? 1 : 0;
-    });
-  if (pts.length < 2) return null;
-
-  var W = 100, H = 100, inset = opts.inset != null ? opts.inset : 8;
-  var xs = pts.map(function (p) { return wlParseDate(p.logged_on).getTime(); });
-  var ys = pts.map(function (p) { return +p.weight_lbs; });
-  var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
-  var minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
-  var spanX = maxX - minX, spanY = maxY - minY;
-
-  var coords = pts.map(function (p, i) {
-    // A flat series draws a flat line through the middle rather than being
-    // stretched to fill the box, which would invent movement that never
-    // happened.
-    var x = spanX === 0 ? W / 2 : ((xs[i] - minX) / spanX) * W;
-    var y = spanY === 0 ? H / 2 : inset + (1 - (ys[i] - minY) / spanY) * (H - inset * 2);
-    return (Math.round(x * 10) / 10) + ',' + (Math.round(y * 10) / 10);
-  });
-
-  return { width: W, height: H, points: coords.join(' '), count: pts.length };
 }
 
 /* ── shared Log / Edit Weight modal ────────────────────────────────────── */
@@ -332,7 +324,7 @@ if (typeof module !== 'undefined' && module.exports) {
     wlEsc: wlEsc, wlToday: wlToday, wlParseDate: wlParseDate,
     wlFmtDate: wlFmtDate, wlRound1: wlRound1,
     wlStats: wlStats, wlChangeStr: wlChangeStr, wlChartSVG: wlChartSVG,
-    wlRecentSeries: wlRecentSeries, wlSparklinePoints: wlSparklinePoints,
+    wlRecentSeries: wlRecentSeries,
   };
 }
 

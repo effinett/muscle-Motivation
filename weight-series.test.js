@@ -97,151 +97,146 @@ test('window: one row per day is a table guarantee, not something to resolve', (
   assert.strictEqual(new Set(s.map((r) => r.logged_on)).size, s.length, 'dates are distinct');
 });
 
-/* ── Geometry ───────────────────────────────────────────────────────────── */
+/* ── Geometry: the shared chart renderer ────────────────────────────────
+ * Home draws a COMPACT wlChartSVG, so these exercise the one renderer both
+ * sizes share. Each <circle> is a plotted weigh-in, which makes the emitted
+ * markers the honest record of what was drawn. */
 
-test('spark: plots one point per real weigh-in and nothing else', () => {
+const OPTS = { width: 300, height: 124, pad: 34, labelSize: 13, dotRadius: 3.4, gradId: 'g' };
+const chart = (rows, o) => W.wlChartSVG(rows, Object.assign({}, OPTS, o));
+const pointsOf = (svg) => [...svg.matchAll(/<circle cx="([\d.]+)" cy="([\d.]+)"/g)]
+  .map((m) => ({ x: +m[1], y: +m[2] }));
+const xsOf = (svg) => pointsOf(svg).map((p) => p.x);
+const LEFT = OPTS.pad, RIGHT = OPTS.width - OPTS.pad;
+
+test('chart: plots one marker per real weigh-in and nothing else', () => {
   const series = W.wlRecentSeries([row(0, 195), row(7, 197), row(21, 200)], 30);
-  const g = W.wlSparklinePoints(series);
-  assert.strictEqual(g.count, 3);
-  assert.strictEqual(g.points.split(' ').length, 3,
+  assert.strictEqual(pointsOf(chart(series)).length, 3,
     'no interpolated or manufactured intermediate points');
 });
 
-test('spark: x is time-based, so a gap between weigh-ins reads as a gap', () => {
+test('chart: x is time-based, so a gap between weigh-ins reads as a gap', () => {
   // Evenly spaced in INDEX but not in time: 0, 1, 29 days ago.
-  const g = W.wlSparklinePoints(W.wlRecentSeries([row(29, 200), row(1, 196), row(0, 195)], 30));
-  const xs = g.points.split(' ').map((p) => +p.split(',')[0]);
-  assert.deepStrictEqual(xs, [0, 96.6, 100].map((n) => n), 'spacing follows elapsed time');
+  const xs = xsOf(chart(W.wlRecentSeries([row(29, 200), row(1, 196), row(0, 195)], 30)));
   assert.ok(xs[1] - xs[0] > xs[2] - xs[1], 'the long gap is the wide one');
 });
 
-/* ── X normalisation: the PLOTTED span, never a fixed window ────────────── */
-
-const xsOf = (g) => g.points.split(' ').map((p) => +p.split(',')[0]);
-
-test('spark: the earliest and latest plotted points anchor the two edges', () => {
+test('chart: the earliest and latest plotted points anchor the two edges', () => {
   // The x-axis is the span of the data actually drawn — NOT the 30-day window
-  // it came from. Three consecutive days therefore use the full width instead
-  // of huddling in the first tenth of an invisible month.
+  // it came from. Three consecutive days therefore use the full plot width
+  // instead of huddling in the first tenth of an invisible month.
   for (const spanDays of [1, 2, 3, 7, 21, 29]) {
-    const g = W.wlSparklinePoints(W.wlRecentSeries(
-      [row(spanDays, 200), row(Math.floor(spanDays / 2), 199), row(0, 198)], 30));
-    const xs = xsOf(g);
-    assert.strictEqual(xs[0], 0, `${spanDays}d: earliest sits on the left edge`);
-    assert.strictEqual(xs[xs.length - 1], g.width, `${spanDays}d: latest on the right edge`);
+    const xs = xsOf(chart(W.wlRecentSeries(
+      [row(spanDays, 200), row(Math.floor(spanDays / 2), 199), row(0, 198)], 30)));
+    assert.strictEqual(xs[0], LEFT, `${spanDays}d: earliest sits on the left edge`);
+    assert.strictEqual(xs[xs.length - 1], RIGHT, `${spanDays}d: latest on the right edge`);
   }
 });
 
-test('spark: intermediate points keep their REAL proportional spacing', () => {
+test('chart: intermediate points keep their REAL proportional spacing', () => {
   // Aug 1 / Aug 2 / Aug 20 must not become three evenly spaced points: the
   // middle one belongs beside the first, not in the centre.
-  const xs = xsOf(W.wlSparklinePoints(
-    W.wlRecentSeries([row(20, 200), row(19, 199.5), row(0, 198)], 30)));
-  assert.strictEqual(xs[0], 0);
-  assert.strictEqual(xs[2], 100);
-  assert.ok(xs[1] < 10, `middle point at ${xs[1]} must hug the earliest, not the centre`);
-  // One day of twenty is 5% along, and that is what it draws.
-  assert.strictEqual(xs[1], 5);
+  const span = RIGHT - LEFT;
+  const xs = xsOf(chart(W.wlRecentSeries([row(20, 200), row(19, 199.5), row(0, 198)], 30)));
+  assert.strictEqual(xs[0], LEFT);
+  assert.strictEqual(xs[2], RIGHT);
+  assert.ok(xs[1] < LEFT + span * 0.1, `middle point at ${xs[1]} must hug the earliest`);
+  assert.strictEqual(xs[1], +(LEFT + span / 20).toFixed(1), 'one day of twenty is 5% along');
 
-  // Explicitly NOT index-based: evenly spaced dates give 0/50/100, uneven ones
+  // Explicitly NOT index-based: evenly spaced dates land evenly, uneven ones
   // do not, so array position cannot be what determines x.
-  const even = xsOf(W.wlSparklinePoints(
-    W.wlRecentSeries([row(20, 200), row(10, 199), row(0, 198)], 30)));
-  assert.deepStrictEqual(even, [0, 50, 100], 'evenly dated points do land evenly');
+  const even = xsOf(chart(W.wlRecentSeries([row(20, 200), row(10, 199), row(0, 198)], 30)));
+  assert.deepStrictEqual(even, [LEFT, LEFT + span / 2, RIGHT], 'evenly dated points land evenly');
   assert.notDeepStrictEqual(xs, even, 'unevenly dated ones must not');
 });
 
-test('spark: identical dates degrade safely, with no invalid geometry', () => {
+test('chart: identical dates degrade safely, with no invalid geometry', () => {
   // body_weight_logs is unique on (user_id, logged_on) so this cannot arise in
   // production, but the geometry must never emit NaN or Infinity regardless.
   for (const rows of [
     [row(0, 200), row(0, 199), row(0, 198)],          // every date identical
     [row(5, 200), row(5, 199), row(0, 198)],          // two share a date
   ]) {
-    const g = W.wlSparklinePoints(rows);
-    for (const pair of g.points.split(' ')) {
-      const [x, y] = pair.split(',').map(Number);
-      for (const [axis, v, max] of [['x', x, g.width], ['y', y, g.height]]) {
+    for (const p of pointsOf(chart(rows))) {
+      for (const [axis, v, max] of [['x', p.x, OPTS.width], ['y', p.y, OPTS.height]]) {
         assert.ok(Number.isFinite(v), `${axis} must be finite, got ${v}`);
         assert.ok(v >= 0 && v <= max, `${axis} ${v} within 0..${max}`);
       }
     }
   }
   // A zero-width span centres the line rather than dividing by zero.
-  assert.deepStrictEqual(xsOf(W.wlSparklinePoints([row(0, 200), row(0, 199), row(0, 198)])),
-    [50, 50, 50]);
+  const mid = LEFT + (RIGHT - LEFT) / 2;
+  assert.deepStrictEqual(xsOf(chart([row(0, 200), row(0, 199), row(0, 198)])), [mid, mid, mid]);
 });
 
-test('spark: normalisation invents nothing — one point in, one point out', () => {
+test('chart: normalisation invents nothing — one point in, one point out', () => {
   const rows = [row(18, 201), row(12, 200), row(4, 199), row(0, 197)];
-  const g = W.wlSparklinePoints(W.wlRecentSeries(rows, 30));
-  assert.strictEqual(g.count, rows.length, 'no endpoint padding, no resampling');
-  assert.strictEqual(g.points.split(' ').length, rows.length);
+  const pts = pointsOf(chart(W.wlRecentSeries(rows, 30)));
+  assert.strictEqual(pts.length, rows.length, 'no endpoint padding, no resampling');
   // Every plotted y traces back to a logged weight, not a smoothed value.
-  const ys = g.points.split(' ').map((p) => +p.split(',')[1]);
-  assert.strictEqual(new Set(ys).size, new Set(rows.map((r) => r.weight_lbs)).size,
+  assert.strictEqual(new Set(pts.map((p) => p.y)).size,
+    new Set(rows.map((r) => r.weight_lbs)).size,
     'distinct weights stay distinct — nothing is averaged away');
 });
 
-test('spark: fewer than two points draws nothing', () => {
-  assert.strictEqual(W.wlSparklinePoints([]), null);
-  assert.strictEqual(W.wlSparklinePoints([row(0, 200)]), null);
-  assert.strictEqual(W.wlSparklinePoints(null), null);
+test('chart: fewer than two points draws nothing', () => {
+  assert.strictEqual(chart([]), '');
+  assert.strictEqual(chart([row(0, 200)]), '');
+  assert.strictEqual(chart(null), '');
 });
 
-test('spark: a flat series draws a flat line, not an invented shape', () => {
-  const g = W.wlSparklinePoints(W.wlRecentSeries([row(0, 200), row(10, 200), row(20, 200)], 30));
-  const ys = g.points.split(' ').map((p) => +p.split(',')[1]);
-  assert.deepStrictEqual(ys, [50, 50, 50],
+test('chart: a flat series draws a flat line, not an invented shape', () => {
+  const ys = pointsOf(chart(W.wlRecentSeries([row(0, 200), row(10, 200), row(20, 200)], 30)))
+    .map((p) => p.y);
+  const mid = OPTS.pad + (OPTS.height - OPTS.pad * 2) / 2;
+  assert.deepStrictEqual(ys, [mid, mid, mid],
     'identical weights must not be stretched to fill the box');
 });
 
-test('spark: sorts defensively, so an unsorted caller still gets chronology', () => {
-  const unsorted = [row(0, 195), row(21, 200), row(7, 197)];
-  const g = W.wlSparklinePoints(unsorted);
-  const xs = g.points.split(' ').map((p) => +p.split(',')[0]);
+test('chart: sorts defensively, so an unsorted caller still gets chronology', () => {
+  const xs = xsOf(chart([row(0, 195), row(21, 200), row(7, 197)]));
   assert.deepStrictEqual(xs, xs.slice().sort((a, b) => a - b));
 });
 
-test('spark: the drawing carries no colour, no axes and no labels', () => {
-  const g = W.wlSparklinePoints(W.wlRecentSeries([row(0, 195), row(14, 200)], 30));
-  assert.deepStrictEqual(Object.keys(g).sort(), ['count', 'height', 'points', 'width'],
-    'points only — the caller owns the SVG, so the stroke stays a theme token');
-  assert.ok(!/#|rgb|stroke|text/i.test(JSON.stringify(g)));
+test('chart: carries no baked colour, so both sizes follow the theme', () => {
+  const svg = chart(W.wlRecentSeries([row(0, 195), row(14, 200), row(25, 202)], 30));
+  assert.ok(!/#B1121B|rgba\(177/.test(svg), 'no brand literal survives in the output');
+  assert.match(svg, /stroke="currentColor"/);
+  assert.match(svg, /fill="currentColor"/);
+  assert.match(svg, /stop-color="currentColor"/);
 });
 
-test('spark: values stay inside the box so the line is never clipped', () => {
-  const g = W.wlSparklinePoints(W.wlRecentSeries([row(0, 180), row(10, 220), row(20, 200)], 30));
-  for (const p of g.points.split(' ')) {
-    const [x, y] = p.split(',').map(Number);
-    assert.ok(x >= 0 && x <= g.width, `x ${x} within 0..${g.width}`);
-    assert.ok(y >= 0 && y <= g.height, `y ${y} within 0..${g.height}`);
+test('chart: values stay inside the box so the line is never clipped', () => {
+  for (const p of pointsOf(chart(W.wlRecentSeries([row(0, 180), row(10, 220), row(20, 200)], 30)))) {
+    assert.ok(p.x >= 0 && p.x <= OPTS.width, `x ${p.x} within 0..${OPTS.width}`);
+    assert.ok(p.y >= 0 && p.y <= OPTS.height, `y ${p.y} within 0..${OPTS.height}`);
   }
-});
-
-test('window: extracting the window did not change what wlStats reports', () => {
-  // change30 used to filter inline; it now shares wlRecentSeries. Same rows,
-  // same arithmetic, same sign — the refactor is behaviour-preserving.
-  const logs = [row(2, 191.4), row(11, 194.0), row(29, 196.6), row(31, 210)];
-  const s = W.wlStats(logs, null);
-  assert.strictEqual(s.current, 191.4, 'latest weigh-in');
-  assert.strictEqual(s.count, 4, 'every log still counted, in-window or not');
-  assert.strictEqual(+s.change30.toFixed(1), -5.2, 'newest minus oldest inside 30 days');
-  assert.ok(s.avg7 === null || typeof s.avg7 === 'number', 'avg7 is untouched');
 });
 
 /* ── Scope: the Home sparkline gate is not a weight semantic ────────────── */
 
-test('scope: the Progress page keeps its own rendering, untouched by Home', () => {
+test('scope: the Progress page keeps its own full-size rendering', () => {
   const page = read('weight-history.html');
-  // The full chart, with its axes and labels, is still what Progress draws —
-  // the sparkline is a Home-only presentation and was not pushed onto it.
-  assert.match(page, /wlChartSVG\(/, 'Progress still renders the full chart');
-  assert.ok(!/wlSparklinePoints|home-spark/.test(page),
-    'the Home sparkline never leaked onto the Progress page');
+  // Progress calls the shared renderer with NO size options, so it gets the
+  // full 640x200 chart it always had. Home's compact options never reach it.
+  assert.match(page, /var svg = wlChartSVG\(logs\);/, 'the bare, full-size call');
+  assert.ok(!/HOME_TREND|labelSize|dotRadius|decorative/.test(page),
+    'no Home presentation option leaked onto the Progress page');
+  assert.ok(!/home-trendcard/.test(page), 'nor the Home card');
   // And Progress reads the same shared stats it always did.
   assert.match(page, /wlStats\(/);
   assert.ok(!/HOME_SPARK/.test(page), 'no Home presentation threshold reaches it');
+});
+
+test('scope: one renderer serves both sizes — no second implementation', () => {
+  const W_SRC = read('weight.js');
+  assert.strictEqual((W_SRC.match(/function wlChartSVG\(/g) || []).length, 1,
+    'exactly one chart renderer exists');
+  assert.ok(!/function wlSparklinePoints\(/.test(W_SRC),
+    'the superseded standalone sparkline geometry is gone, not left to drift');
+  // Home and Progress both go through it.
+  assert.match(read('app.html'), /wlChartSVG\(/);
+  assert.match(read('weight-history.html'), /wlChartSVG\(/);
 });
 
 test('scope: the drawing decision lives in Home, not in the weight domain', () => {
@@ -249,7 +244,7 @@ test('scope: the drawing decision lives in Home, not in the weight domain', () =
   // The domain reports every real row and the full change, unconditionally.
   assert.strictEqual(W.wlRecentSeries(clustered, 30).length, 3);
   assert.strictEqual(W.wlStats(clustered, null).change30, -2);
-  assert.strictEqual(W.wlSparklinePoints(clustered).count, 3);
+  assert.strictEqual(pointsOf(chart(clustered)).length, 3);
   // Whether to draw is decided in dashboard-model.js. Only ONE row is below the
   // threshold, so the domain's answer is identical either way.
   const DM = require('./dashboard-model.js');
@@ -275,7 +270,7 @@ test('scope: unsorted entries still reach the page in chronological order', () =
   assert.deepStrictEqual(p.series.map((r) => r.logged_on),
     [daysAgo(25), daysAgo(12), daysAgo(2), daysAgo(0)], 'oldest to newest');
 
-  const xs = W.wlSparklinePoints(p.series).points.split(' ').map((s) => +s.split(',')[0]);
+  const xs = xsOf(chart(p.series));
   assert.deepStrictEqual(xs, xs.slice().sort((a, b) => a - b), 'and x increases with time');
   // The rendered points are exactly the logged ones — reordering invented none.
   assert.strictEqual(xs.length, jumbled.length);

@@ -88,6 +88,11 @@
     .chart-card {
       background: var(--surface-1); border: 1px solid var(--border-2);
       border-radius: 10px; padding: 16px 14px 8px;
+      /* wlChartSVG now strokes and fills with currentColor instead of a baked
+         literal, so the chart is theme-aware wherever it is dropped. --red
+         resolves to --mm-accent (#B1121B today), which is exactly the value
+         that was hard-coded — this card renders identically. */
+      color: var(--red);
     }
     .chart-hint { font-size: 12px; color: var(--text-muted); padding: 18px 4px; text-align: center; }
 

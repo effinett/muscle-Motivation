@@ -248,15 +248,20 @@
        Nothing overflows and no text collides. */
     .home-progress {
       display: flex; align-items: center; flex-wrap: wrap;
-      gap: 8px 16px; margin-top: 2px;
+      gap: 8px 14px; margin-top: 2px;
     }
-    /* Weight and its change are one statement, so they stack together rather
-       than being separated by the sparkline. No min-width override: the column
-       keeps its intrinsic width so the row wraps instead of shrinking the
-       reading below what it needs. */
+    /* The reading column: weight, its change, and the action on it. All three
+       sit beside the chart, which is why Log weight lives here rather than in
+       its own row — it still begins on the same content-grid line as Log food,
+       so the two quick-log actions stay a matched pair. The column is sized by
+       its content so the chart takes whatever is left. */
     .home-weightstack {
-      display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+      display: flex; flex-direction: column; align-items: flex-start;
+      gap: 3px; flex: 0 0 auto;
     }
+    /* The 44px box would otherwise add ~15px of dead space above the action and
+       push the column taller than the chart beside it. */
+    .home-weightstack .home-log { margin: -8px 0 -10px; }
     .home-weight {
       font-family: 'Bebas Neue', sans-serif;
       font-size: 24px; letter-spacing: 0.5px; line-height: 1;
@@ -300,11 +305,14 @@
        screen, and 211 LB remains the largest thing in the section. */
     .home-trendcard {
       display: block;
-      flex: 0 1 auto;
-      width: 48%; max-width: 168px; min-width: 140px;
-      height: 78px;
+      /* Takes the width the reading column leaves, so the two together fill the
+         row without either being pinned to a magic number. Basis 0, not auto:
+         the SVG's own intrinsic width would otherwise claim the whole row and
+         push itself onto a second line. */
+      flex: 1 1 0;
+      min-width: 150px; max-width: 320px;
       margin-left: auto;
-      padding: 11px 12px;
+      padding: 2px 4px;
       background: var(--mm-surface-raised);
       border: 1px solid var(--mm-line);
       border-radius: 10px;
@@ -319,14 +327,9 @@
     .home-trendcard:focus-visible {
       outline: 2px solid var(--mm-accent); outline-offset: 3px;
     }
-    .home-trendcard svg { display: block; width: 100%; height: 100%; overflow: visible; }
-    .home-trendcard polyline {
-      fill: none; stroke: currentColor; stroke-width: 2;
-      stroke-linecap: round; stroke-linejoin: round;
-      /* Constant visual weight however wide the phone is — the box is scaled
-         non-uniformly, and without this the line would thicken with it. */
-      vector-effect: non-scaling-stroke;
-    }
+    /* wlChartSVG sizes itself to the container width and keeps its own aspect,
+       so the card's height follows the chart rather than being declared twice. */
+    .home-trendcard svg { display: block; }
 
     /* Quiet empty states — never a card, never a paragraph. */
     .home-empty { font-size: 13px; color: var(--mm-text-tertiary); padding: 2px 0 6px; }
@@ -539,12 +542,10 @@
       <div class="home-weightstack">
         <span class="home-weight" id="progValue">—</span>
         <span class="home-trend" id="progTrend"></span>
+        <button class="home-log" id="logWeightBtn" onclick="wlOpenModal()">Log weight</button>
       </div>
       <a class="home-trendcard" id="progSpark" href="weight-history.html#chartWrap"
          aria-label="View weight trend in Progress" hidden></a>
-    </div>
-    <div class="home-actions">
-      <button class="home-log" id="logWeightBtn" onclick="wlOpenModal()">Log weight</button>
     </div>
 
   </main>
@@ -895,17 +896,62 @@
   // window, no maths and no interpolation of its own. The widget is hidden
   // entirely when there is nothing real to draw, so the link never leads
   // somewhere with no chart at the other end.
+  // COMPACT MODE of the Progress page's chart — the same wlChartSVG, the same
+  // rows, the same scaling. Only the box, padding, label size and marker size
+  // differ, so tapping through to the full chart shows the same shape larger.
+  // Labels are deliberately bigger than a proportional shrink would give: at
+  // this size an 11px label would render around 8px and be unreadable.
+  // The chart is authored at the size it will actually occupy, measured from
+  // the card, rather than at a fixed box scaled to fit. An SVG sized with
+  // width:100% scales its TEXT too, so a fixed viewBox would render these
+  // labels near 12px on a 430pt phone but around 7px on a 320pt one —
+  // unreadable exactly where legibility matters most. Drawing 1:1 keeps the
+  // labels at their stated size, and the line and markers at the same visual
+  // weight as the full chart, on every device.
+  //
+  // Height is held constant so the card is a consistent shape; only the width
+  // follows the row. `pad` clears the two label rows the renderer stacks at the
+  // bottom, so the low-weight value never lands on the dates.
+  var HOME_TREND = {
+    height: 124, pad: 34, minWidth: 150,
+    labelSize: 13, dotRadius: 3.4, strokeWidth: 2.5,
+    gradId: 'homeTrendGrad', decorative: true,
+  };
+  var homeTrendSeries = null;
+
   function renderSparkline(series) {
     var el = document.getElementById('progSpark');
-    var geo = series && typeof wlSparklinePoints === 'function'
-      ? wlSparklinePoints(series) : null;
-    if (!geo) { el.hidden = true; el.innerHTML = ''; return; }
-    el.innerHTML =
-      '<svg viewBox="0 0 ' + geo.width + ' ' + geo.height + '"' +
-      ' preserveAspectRatio="none" aria-hidden="true" focusable="false">' +
-      '<polyline points="' + esc(geo.points) + '"/></svg>';
+    homeTrendSeries = series || null;
+    if (!homeTrendSeries || typeof wlChartSVG !== 'function') {
+      el.hidden = true; el.innerHTML = '';
+      return;
+    }
+    // Unhide before measuring — a hidden element has no width to read.
     el.hidden = false;
+    var style = window.getComputedStyle(el);
+    var inner = el.clientWidth - parseFloat(style.paddingLeft || 0)
+      - parseFloat(style.paddingRight || 0);
+    var width = Math.max(HOME_TREND.minWidth, Math.round(inner) || HOME_TREND.minWidth);
+
+    var svg = wlChartSVG(homeTrendSeries, {
+      width: width, height: HOME_TREND.height, pad: HOME_TREND.pad,
+      labelSize: HOME_TREND.labelSize, dotRadius: HOME_TREND.dotRadius,
+      strokeWidth: HOME_TREND.strokeWidth,
+      gradId: HOME_TREND.gradId, decorative: true,
+    });
+    if (!svg) { el.hidden = true; el.innerHTML = ''; return; }
+    el.innerHTML = svg;
   }
+
+  // Rotation changes the row width, and with it the size the chart should have
+  // been authored at. Re-rendering from the SAME series redraws the identical
+  // data at the new size; it re-fetches nothing.
+  window.addEventListener('resize', function () {
+    clearTimeout(window.__mmTrendResize);
+    window.__mmTrendResize = setTimeout(function () {
+      if (homeTrendSeries) renderSparkline(homeTrendSeries);
+    }, 150);
+  });
 
   // ── Weight modal hook ────────────────────────────────────────────────
   // wlSave() already toasts and has synced profiles.weight_lbs — just re-derive.

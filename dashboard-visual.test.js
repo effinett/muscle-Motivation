@@ -596,14 +596,19 @@ test('actions: the two logging actions share one pattern and one grid line', () 
   assert.ok(!/class="home-log [a-z-]+"/.test(HOME_BODY),
     'neither carries a positional modifier that would offset it from the other');
 
-  // Both are the first child of a .home-actions row, which is left-aligned to
-  // the content grid — so they start at the same x with no per-action rule.
-  const rows = HOME_BODY.match(/<div class="home-actions">\s*<(a|button) class="home-log"/g) || [];
-  assert.strictEqual(rows.length, 2, 'each logging action leads its own action row');
-  const actions = (HOME_CSS.match(/\.home-actions\s*\{([^}]*)\}/) || [])[1] || '';
-  assert.ok(!/justify-content|margin-left|padding-left|text-align/.test(actions),
-    'no rule shifts one row off the grid line the other sits on');
-  assert.match(actions, /display:\s*flex/);
+  // Each leads a left-aligned container that sits flush on the content grid —
+  // Log food its own .home-actions row, Log weight the reading column beside
+  // the chart. Neither container is indented, so both start at the same x.
+  assert.match(HOME_BODY, /<div class="home-actions">\s*<a class="home-log"/,
+    'Log food leads the nutrition action row');
+  assert.match(HOME_BODY, /<div class="home-weightstack">[\s\S]*?<button class="home-log"/,
+    'Log weight sits in the reading column, beside the chart');
+  for (const sel of ['.home-actions', '.home-weightstack', '.home-progress']) {
+    const body = (HOME_CSS.match(new RegExp('\\' + sel + '\\s*\\{([^}]*)\\}')) || [])[1] || '';
+    assert.ok(body.length, `${sel} has a rule`);
+    assert.ok(!/justify-content|margin-left:|padding-left|text-align/.test(body),
+      `${sel} must not shift off the shared grid line`);
+  }
 
   // Distinct behaviour is preserved: one deep-links, one opens the modal.
   assert.match(HOME_BODY, /<a class="home-log" href="nutrition\.html#quicklog">Log food<\/a>/);
@@ -710,7 +715,8 @@ test('polish: no orphaned inline action is left between two sections', () => {
   const main = HOME_BODY.replace(/<!--[\s\S]*?-->/g, '')
     .replace(/<section class="mm-hero"[\s\S]*?<\/section>/, '')
     .replace(/<div class="mm-section">[\s\S]*?<\/div>/g, '')
-    .replace(/<div class="home-actions">[\s\S]*?<\/div>/g, '');
+    .replace(/<div class="home-actions">[\s\S]*?<\/div>/g, '')
+    .replace(/<div class="home-weightstack">[\s\S]*?<\/div>/, '');
   assert.ok(!/home-action|home-log/.test(main), 'no action floats on the background');
   // The shared section rhythm itself is unchanged.
   assert.match(SHELL, /\.mm-section\s*\{[^}]*margin:\s*26px 0 10px/);
@@ -872,23 +878,23 @@ test('polish: neutral days stay neutral — nothing reads as missed or scheduled
 
 /* ── 7 · Progress + what left Home ──────────────────────────────────────── */
 
-test('progress: the reading anchors left, the sparkline balances right', () => {
+test('progress: the reading anchors left, the chart balances right', () => {
   // Weight is still out of the section-header value slot.
   assert.ok(!/<span class="mm-section-value" id="progValue">/.test(HOME_BODY),
     'weight no longer lives in the section header');
   const structure = HOME_BODY.replace(/<!--[\s\S]*?-->/g, '').replace(/\s+/g, ' ');
   assert.match(structure,
-    /<div class="home-progress"> <div class="home-weightstack"> <span class="home-weight" id="progValue">[^<]*<\/span> <span class="home-trend" id="progTrend"><\/span> <\/div> <a class="home-trendcard" id="progSpark" href="weight-history\.html#chartWrap" aria-label="View weight trend in Progress" hidden><\/a> <\/div> <div class="home-actions"> <button class="home-log" id="logWeightBtn" onclick="wlOpenModal\(\)">Log weight<\/button> <\/div>/,
-    'weight + change stacked left, trend widget right, then the logging action');
+    /<div class="home-progress"> <div class="home-weightstack"> <span class="home-weight" id="progValue">[^<]*<\/span> <span class="home-trend" id="progTrend"><\/span> <button class="home-log" id="logWeightBtn" onclick="wlOpenModal\(\)">Log weight<\/button> <\/div> <a class="home-trendcard" id="progSpark" href="weight-history\.html#chartWrap" aria-label="View weight trend in Progress" hidden><\/a> <\/div>/,
+    'weight, change and the log action stacked left; the chart to their right');
 
-  // Weight and its change stay one group; the widget takes the space on the
-  // right and gives way first when the row cannot hold both.
+  // The reading column keeps its intrinsic width; the chart takes what is left.
   const stack = (HOME_CSS.match(/\.home-weightstack\s*\{([^}]*)\}/) || [])[1] || '';
-  assert.match(stack, /flex-direction:\s*column/, 'the two readings stack together');
-  assert.ok(!/min-width:\s*0/.test(stack),
-    'the reading keeps its intrinsic width — the widget is what gives way');
+  assert.match(stack, /flex-direction:\s*column/, 'the readings stack together');
+  assert.match(stack, /flex:\s*0 0 auto/, 'the reading is never squeezed');
   const spark = (HOME_CSS.match(/\.home-trendcard\s*\{([^}]*)\}/) || [])[1] || '';
-  assert.match(spark, /margin-left:\s*auto/, 'the widget balances the right');
+  assert.match(spark, /flex:\s*1 1 0/,
+    'basis 0 — the SVG intrinsic width must not push the chart onto its own line');
+  assert.match(spark, /margin-left:\s*auto/, 'the chart balances the right');
 
   // Weight is the primary element; the change is quieter context beside it.
   const weight = (HOME_CSS.match(/\.home-weight\s*\{([^}]*)\}/) || [])[1] || '';
@@ -924,24 +930,120 @@ test('progress: related items stay grouped, and nothing is indented', () => {
   }
 });
 
-test('weight: the trend widget balances the section without dominating it', () => {
+test('weight: the chart is substantial but the weight value still leads', () => {
   const spark = (HOME_CSS.match(/\.home-trendcard\s*\{([^}]*)\}/) || [])[1] || '';
-  const width = Number((spark.match(/width:\s*(\d+)%/) || [])[1]);
-  assert.ok(width && width <= 50, `widget takes ${width}% — never more than the reading`);
   assert.match(spark, /max-width:\s*\d+px/, 'capped so it cannot grow on a wide screen');
   assert.match(spark, /min-width:\s*\d+px/, 'and floored so it stays a readable chart');
-  assert.match(spark, /flex:\s*0 1 auto/, 'it shrinks before the weight column does');
 
-  // Sized in the requested band, and the weight value still leads the section:
-  // a 24px Bebas number against a quiet bordered box.
-  const h = Number((spark.match(/height:\s*(\d+)px/) || [])[1]);
-  assert.ok(h >= 70 && h <= 90, `widget height ${h}px sits in the 70–90px band`);
-  const min = Number((spark.match(/min-width:\s*(\d+)px/) || [])[1]);
-  const max = Number((spark.match(/max-width:\s*(\d+)px/) || [])[1]);
-  assert.ok(min >= 140 && max <= 170, `widget spans ${min}–${max}px`);
+  // Far larger than the 168x78 preview it replaces — a real chart, not a
+  // sparkline in a box.
+  const opts = (HOME.match(/var HOME_TREND = \{([\s\S]*?)\};/) || [])[1] || '';
+  const height = Number((opts.match(/height:\s*(\d+)/) || [])[1]);
+  const minW = Number((spark.match(/min-width:\s*(\d+)px/) || [])[1]);
+  const maxW = Number((spark.match(/max-width:\s*(\d+)px/) || [])[1]);
+  assert.ok(height >= 120 && height <= 145, `chart height ${height}px sits in the 120–145 band`);
+  assert.ok(height > 78, 'taller than the old widget');
+  assert.ok(maxW > 168, `chart may reach ${maxW}px — wider than the old 168px cap`);
+  assert.ok(minW >= 150, 'and never collapses below a legible chart');
+
   assert.match(HOME_CSS, /\.home-weight\s*\{[^}]*font-size:\s*24px/,
-    'the weight value keeps its scale');
+    'the weight value keeps its scale and stays the first thing read');
   assert.match(spark, /padding:/, 'internal breathing room so the line never touches the edge');
+});
+
+test('weight: Home draws the SAME chart as Progress, in compact form', () => {
+  // One renderer. Home passes presentation options; it reimplements nothing.
+  assert.match(HOME, /wlChartSVG\(homeTrendSeries, \{/, 'Home calls the shared renderer');
+  assert.ok(!/wlSparklinePoints/.test(HOME), 'the separate sparkline geometry is no longer used');
+  assert.match(read('weight-history.html'), /wlChartSVG\(/, 'Progress calls the same one');
+
+  // What differs is presentation only — box, padding, label and marker size.
+  const opts = (HOME.match(/var HOME_TREND = \{([\s\S]*?)\};/) || [])[1] || '';
+  for (const key of ['height', 'pad', 'labelSize', 'dotRadius', 'strokeWidth']) {
+    assert.ok(new RegExp(key + ':').test(opts), `compact mode sets ${key}`);
+  }
+  // Nothing that would change what the chart MEANS.
+  for (const forbidden of ['yField', 'slice', 'filter', 'map', 'sort', 'Math.']) {
+    assert.ok(!opts.includes(forbidden), `compact mode must not touch data via ${forbidden}`);
+  }
+
+  // The renderer's own defaults are the full chart, so Progress is unaffected
+  // by the parameterisation.
+  const W = read('weight.js');
+  assert.match(W, /var w = opts\.width \|\| 640, h = opts\.height \|\| 200;/);
+  assert.match(W, /var pad = opts\.pad != null \? opts\.pad : 30;/);
+  assert.match(W, /var labelSize = opts\.labelSize \|\| 11;/);
+  assert.match(W, /var dotR = opts\.dotRadius != null \? opts\.dotRadius : 2\.6;/);
+  assert.match(W, /var strokeW = opts\.strokeWidth != null \? opts\.strokeWidth : 2\.5;/);
+});
+
+test('weight: the compact chart keeps every feature of the full chart', () => {
+  const WJS = require('./weight.js');
+  const day = (n) => {
+    const d = new Date(); d.setDate(d.getDate() - n);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  };
+  const rows = [day(24), day(17), day(9), day(2)].map((logged_on, i) =>
+    ({ logged_on, weight_lbs: 214.6 - i * 1.1 }));
+  const compact = WJS.wlChartSVG(rows, { width: 280, height: 124, pad: 34,
+    labelSize: 13, dotRadius: 3.4, gradId: 'homeTrendGrad', decorative: true });
+  const full = WJS.wlChartSVG(rows);
+
+  for (const [feature, re] of [
+    ['trend line', /<path d="M[^"]+" fill="none" stroke="currentColor"/],
+    ['area fill', /<path d="[^"]+" fill="url\(#/],
+    ['gradient', /<linearGradient/],
+    ['entry markers', /<circle /],
+  ]) {
+    assert.match(compact, re, `compact keeps the ${feature}`);
+    assert.match(full, re, `full has the ${feature}`);
+  }
+  // One marker per real weigh-in, in both sizes — nothing added or dropped.
+  const dots = (s) => (s.match(/<circle /g) || []).length;
+  assert.strictEqual(dots(compact), rows.length);
+  assert.strictEqual(dots(compact), dots(full));
+
+  // Labels are DERIVED from the data, never hard-coded, in both sizes.
+  const hi = Math.max(...rows.map((r) => r.weight_lbs));
+  const lo = Math.min(...rows.map((r) => r.weight_lbs));
+  for (const svg of [compact, full]) {
+    assert.ok(svg.includes('>' + WJS.wlRound1(hi) + '<'), 'high weight label');
+    assert.ok(svg.includes('>' + WJS.wlRound1(lo) + '<'), 'low weight label');
+    assert.ok(svg.includes('>' + WJS.wlFmtDate(rows[0].logged_on) + '<'), 'earliest date');
+    assert.ok(svg.includes('>' + WJS.wlFmtDate(rows[rows.length - 1].logged_on) + '<'), 'latest date');
+  }
+
+  // Compact labels are LARGER than a proportional shrink would give. The full
+  // chart is 640 wide at 11px; shrunk to 280 that would be under 5px.
+  assert.match(compact, /font-size="13"/);
+  assert.match(full, /font-size="11"/);
+  assert.ok(13 > 11 * (280 / 640), 'compact type is deliberately not scaled down');
+
+  // The two label rows never collide: pad must clear both offsets.
+  const below = Math.round(13 * 14 / 11), bottom = Math.round(13 * 8 / 11);
+  assert.ok(34 > below + bottom, `pad 34 must exceed ${below} + ${bottom}`);
+
+  // Theme-aware in both: no baked brand literal anywhere in the output.
+  for (const svg of [compact, full]) {
+    assert.ok(!/#B1121B|rgba\(177/.test(svg), 'colour comes from currentColor');
+    assert.match(svg, /stroke="currentColor"/);
+  }
+});
+
+test('weight: the full Progress chart did not regress', () => {
+  // Defaults reproduce the previous output exactly; only the colour literal
+  // became currentColor, and the page sets that colour to the same red.
+  const page = read('weight-history.html');
+  assert.match(page, /\.chart-card\s*\{[^}]*color:\s*var\(--red\)/,
+    'the card supplies the accent the chart used to hard-code');
+  assert.match(SHELL, /--red:\s*var\(--mm-accent\)/);
+  assert.match(SHELL, /--mm-accent:\s*var\(--mm-brand-red\)/);
+  assert.match(SHELL, /--mm-brand-red:\s*#B1121B/, 'which resolves to the original literal');
+  // Progress still calls the renderer with no size options at all.
+  assert.match(page, /var svg = wlChartSVG\(logs\);/, 'weight chart: bare call');
+  assert.ok(!/wlChartSVG\(logs, \{\s*width/.test(page), 'no size override crept in');
+  assert.match(page, /wlChartSVG\(bfLogs, \{ yField: 'body_fat_pct'/, 'body-fat chart unchanged');
+  assert.match(page, /wlChartSVG\(series, \{ yField: site/, 'measurement chart unchanged');
 });
 
 test('weight: the widget borrows the Progress chart card, not a new look', () => {
@@ -985,13 +1087,15 @@ test('weight: the widget is an accessible navigation target, the SVG is not', ()
   // status in words.
   assert.match(HOME, /<a class="home-trendcard" id="progSpark" href="weight-history\.html#chartWrap"\s*\n?\s*aria-label="View weight trend in Progress" hidden><\/a>/,
     'a real anchor with a label naming where it goes');
-  assert.match(HOME, /aria-hidden="true" focusable="false"/,
-    'the SVG itself is hidden from assistive technology');
+  assert.match(HOME, /decorative: true/, 'the drawing opts out of the a11y tree');
+  assert.match(read('weight.js'),
+    /opts\.decorative\s*\?\s*'aria-hidden="true" focusable="false"'/,
+    'which the renderer honours');
   // A native <a href> gives keyboard activation and focus for free — no
   // tabindex or key handler is needed, and none is used.
   const render = (HOME.match(/function renderSparkline[\s\S]*?\n  \}/) || [''])[0];
   assert.ok(render.length, 'renderSparkline exists');
-  for (const attr of ['href', 'onclick', 'tabindex', 'role=', 'addEventListener']) {
+  for (const attr of ['href', 'onclick', 'tabindex', 'role=']) {
     assert.ok(!render.includes(attr), `the emitted drawing carries no ${attr}`);
   }
   assert.match(HOME_CSS, /\.home-trendcard:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--mm-accent\)/,
@@ -1000,17 +1104,18 @@ test('weight: the widget is an accessible navigation target, the SVG is not', ()
   const spark = (HOME_CSS.match(/\.home-trendcard\s*\{([^}]*)\}/) || [])[1] || '';
   assert.ok(!/pointer-events:\s*none/.test(spark), 'the widget must be tappable');
 
-  // Theme tokens throughout.
+  // Theme tokens throughout: the card sets the colour, the renderer inherits it.
   assert.match(spark, /color:\s*var\(--mm-accent\)/, 'theme token, not a literal');
-  assert.match(HOME_CSS, /\.home-trendcard polyline\s*\{[^}]*stroke:\s*currentColor/,
+  assert.match(read('weight.js'), /stroke="currentColor"/,
     'the stroke follows the theme colour, so a user accent flows through');
+  assert.ok(!/#[0-9A-Fa-f]{6}/.test(spark), 'no hard-coded colour on the card');
 
-  // No chart chrome: no axes, grid, ticks, labels, tooltips or heading.
-  assert.ok(!/<text|tooltip|axis|gridline|TREND|legend/i.test(render),
+  // No chart chrome authored here: no axes, grid, ticks, tooltips or heading.
+  assert.ok(!/<text|tooltip|axis|gridline|legend|<h[1-6]/i.test(render),
     'a preview, not a second full chart');
   // Geometry is borrowed from weight.js — Home computes none of its own.
-  assert.match(HOME, /wlSparklinePoints\(series\)/, 'geometry comes from the shared module');
-  assert.ok(!/Math\.(min|max)|\/ *span|normali[sz]/i.test(render),
+  assert.match(render, /wlChartSVG\(homeTrendSeries/, 'geometry comes from the shared module');
+  assert.ok(!/\/ *span|normali[sz]|minX|maxY/i.test(render),
     'Home does no scaling maths of its own');
 });
 
@@ -1032,8 +1137,16 @@ test('weight: the widget opens the EXISTING Trend chart, adding no new page', ()
   // the hash, and nothing else about the page changed.
   assert.ok(!/scrollToTrendFromHash/.test(page.replace(/function scrollToTrendFromHash[\s\S]*?\n  \}/, '')
     .replace(/scrollToTrendFromHash\(\);/, '')), 'exactly one definition and one call site');
-  // Home introduces no chart of its own beyond the shared sparkline helper.
-  assert.ok(!/wlChartSVG/.test(HOME), 'the full chart is never duplicated onto Home');
+  // Home renders THROUGH the shared renderer and implements no chart of its
+  // own: no scaling maths, no path building, no second geometry.
+  // Math.max appears only as the min-width floor for the measured box; nothing
+  // that plots a point, scales an axis or emits SVG lives here.
+  const render = (HOME.match(/function renderSparkline[\s\S]*?\n  \}/) || [''])[0];
+  for (const own of ['viewBox', '<path', '<circle', '<svg', 'polyline', 'toFixed', 'logged_on']) {
+    assert.ok(!render.includes(own), `Home must not build chart geometry itself (${own})`);
+  }
+  assert.match(render, /Math\.max\(HOME_TREND\.minWidth/,
+    'the only arithmetic is the width floor');
 });
 
 test('progress: remains an open section — never a card', () => {
