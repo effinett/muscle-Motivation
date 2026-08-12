@@ -50,23 +50,37 @@ test('home: This Week, Nutrition and Progress are open sections', () => {
 /* ── 2 · Hierarchy order ────────────────────────────────────────────────── */
 
 test('home: sections appear in the approved priority order', () => {
-  const order = ['Train', 'This Week', 'Nutrition', 'Coach Insight', 'Progress'];
-  let cursor = -1;
-  for (const label of order) {
+  // The hero leads the page directly — no section heading precedes it.
+  const heroAt = HOME_BODY.indexOf('class="mm-hero"');
+  assert.ok(heroAt > -1, 'the hero is present');
+  let cursor = heroAt;
+  for (const label of ['This Week', 'Nutrition', 'Coach Insight', 'Progress']) {
     const at = HOME_BODY.indexOf('>' + label + '<');
     assert.ok(at > cursor, `${label} follows the previous section`);
     cursor = at;
   }
 });
 
+test('home: the redundant TRAIN heading above the hero is gone', () => {
+  // "Today's Plan" inside the card already establishes the context, so a
+  // section label above it was a second title for the same thing.
+  assert.ok(!/<h2 class="mm-section-label">Train<\/h2>/.test(HOME_BODY),
+    'no Train section label');
+  // And it was not swapped for another heading — the card simply leads.
+  const structure = HOME_BODY.replace(/<!--[\s\S]*?-->/g, '').replace(/\s+/g, ' ');
+  assert.match(structure, /<\/h1> <section class="mm-hero"/,
+    'the hero is the first thing after the page heading');
+});
+
 test('home: heading structure is a clean outline', () => {
   const h1 = HOME.match(/<h1\b/g) || [];
   assert.strictEqual(h1.length, 1, 'exactly one h1');
-  // Section labels are real headings; the hero title sits under the Train h2.
   const h2 = HOME_BODY.match(/<h2 class="mm-section-label">/g) || [];
-  assert.strictEqual(h2.length, 4, 'Train / This Week / Nutrition / Progress');
-  assert.match(HOME_BODY, /<h3 class="mm-hero-title"/, 'hero title is an h3');
-  assert.ok(!/<h4|<h5|<h6/.test(HOME_BODY), 'no skipped-level headings');
+  assert.strictEqual(h2.length, 3, 'This Week / Nutrition / Progress');
+  // With the Train label removed, the hero title IS that section's heading —
+  // leaving it an h3 would skip a level straight from the h1.
+  assert.match(HOME_BODY, /<h2 class="mm-hero-title"/, 'hero title is an h2');
+  assert.ok(!/<h3|<h4|<h5|<h6/.test(HOME_BODY), 'no skipped-level headings');
 });
 
 /* ── 3 · Hero ───────────────────────────────────────────────────────────── */
@@ -75,10 +89,58 @@ test('hero: uses the shared primitive and keeps the dominant action', () => {
   assert.match(HOME_BODY, /<section class="mm-hero" aria-labelledby="todayTitle">/);
   assert.match(HOME_BODY, /class="mm-hero-cta" id="todayCta"/, 'CTA is the hero primitive');
   // The secondary path stays quiet — a text action, never a second slab.
-  assert.match(HOME_BODY, /class="home-action" id="todayAlt"/);
+  assert.match(HOME_BODY, /class="home-action home-action--hero" id="todayAlt"/);
   const alt = (HOME_CSS.match(/\.home-action\s*\{([^}]*)\}/) || [])[1] || '';
   assert.ok(!/background:\s*var\(--mm-accent\)/.test(alt), 'secondary action is not a filled button');
   assert.match(alt, /min-height:\s*44px/, 'but it is still a real tap target');
+});
+
+test('hero: the alternate path sits INSIDE the card, beneath the CTA', () => {
+  // Standing on the background between two sections it read as a competing
+  // action; inside the card it is plainly one level below START WORKOUT.
+  const hero = (HOME_BODY.match(/<section class="mm-hero"[\s\S]*?<\/section>/) || [''])[0];
+  assert.ok(hero.includes('id="todayAlt"'), 'the alternate action is in the hero');
+  const ctaAt = hero.indexOf('id="todayCta"');
+  assert.ok(ctaAt > -1 && hero.indexOf('id="todayAlt"') > ctaAt, 'and it follows the CTA');
+
+  // Subordinate by type, not by a second button: no accent fill, smaller text.
+  const modifier = (HOME_CSS.match(/\.home-action--hero\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.ok(modifier.length, '.home-action--hero exists');
+  assert.ok(!/background|border:|font-size/.test(modifier),
+    'placement only — it inherits the quiet .home-action treatment');
+  assert.match(modifier, /display:\s*flex/, 'it drops onto its own line under the CTA');
+  assert.match(modifier, /width:\s*fit-content/,
+    'the 44px box must not span the card and become an invisible full-width target');
+  // The compaction is margin-only: the tap target itself is never shrunk.
+  assert.ok(!/min-height/.test(modifier), 'the 44px minimum is not overridden');
+
+  // Two actions in the card, and only ONE of them is a filled slab.
+  assert.strictEqual((hero.match(/mm-hero-cta/g) || []).length, 1, 'one primary CTA');
+  assert.ok(!/mm-hero-cta[^"]*" id="todayAlt"/.test(hero), 'the alternate is not a second CTA');
+});
+
+test('hero: the alternate action keeps its exact existing behaviour', () => {
+  // Same element, same handler, same destinations — this refinement moved it
+  // and renamed one label; it did not touch what it does.
+  assert.match(HOME, /alt\.onclick = t\.secondary\.action === 'discard'\s*\?\s*discardSession/,
+    'discard still routes to discardSession');
+  assert.match(HOME, /window\.location\.href = t\.secondary\.href;/,
+    'every other state still navigates to the model href');
+  assert.match(HOME, /if \(t\.secondary\) \{[\s\S]{0,320}?alt\.hidden = true;/,
+    'and it still hides when the state has no alternate');
+
+  const DM = require('./dashboard-model.js');
+  const start = DM.buildToday({
+    snapshot: { training: {} },
+    program: { sessionLabel: 'Upper Body', href: 'workout.html?program=x' },
+  });
+  assert.strictEqual(start.secondary.href, 'workout.html', 'destination unchanged');
+  assert.strictEqual(start.secondary.label, 'Choose a different workout',
+    'copy names the alternative to the session already proposed above it');
+  // The no-program state proposes nothing, so "a different workout" would be
+  // wrong there — that label is deliberately untouched.
+  const choose = DM.buildToday({ snapshot: {}, program: { needsSelection: true } });
+  assert.strictEqual(choose.secondary.label, 'Choose workout');
 });
 
 test('hero: ships no photography in V4', () => {
@@ -99,10 +161,8 @@ test('hero: long titles are handled by the primitive, not truncated on Home', ()
 
 /* ── 4 · This Week ──────────────────────────────────────────────────────── */
 
-test('week: strip and meter are the shared primitives', () => {
+test('week: the strip is the shared primitive', () => {
   assert.match(HOME_BODY, /<div class="mm-daystrip" id="weekStrip"/);
-  assert.match(HOME_BODY, /<div class="mm-meter" id="weekMeter"/);
-  assert.match(HOME_BODY, /role="progressbar"[^>]*aria-label="Weekly training progress"/);
 });
 
 test('week: the count and the strip share one source', () => {
@@ -112,9 +172,43 @@ test('week: the count and the strip share one source', () => {
   assert.match(HOME, /\(w\.days \|\| \[\]\)\.map/);
 });
 
-test('week: with no declared target the meter is hidden, not zeroed', () => {
-  assert.match(HOME, /if \(w\.hasData && w\.planned\)[\s\S]{0,400}?meter\.hidden = false;[\s\S]{0,400}?meter\.hidden = true;/,
-    'no target → no progress bar toward an invented denominator');
+test('week: the duplicated horizontal progress bar is gone', () => {
+  // The count says how many, the strip says which days — a bar restated the
+  // same number a third time and was the only duplicated indicator on Home.
+  assert.ok(!/weekMeter/.test(HOME), 'no weekly meter element or wiring remains');
+  assert.ok(!/aria-label="Weekly training progress"/.test(HOME),
+    'and no orphaned progressbar role is left behind');
+  // Nutrition still owns the only two meters on the page.
+  const meters = HOME_BODY.match(/class="mm-meter"/g) || [];
+  assert.strictEqual(meters.length, 0, 'no static meter markup outside rendered nutrition');
+  assert.strictEqual((HOME.match(/class="mm-meter" id="nut(Cal|Pro)Meter"/g) || []).length, 2);
+});
+
+test('week: every day state survived the bar removal', () => {
+  // The strip was already the stronger of the two indicators; nothing about
+  // distinguishing today / completed / neutral / future may weaken.
+  assert.match(HOME, /d\.completed \? ' is-done' : ''/);
+  assert.match(HOME, /d\.isToday \? ' is-today' : ''/);
+  assert.match(HOME, /d\.isFuture \? ' is-future' : ''/);
+  assert.match(HOME, /\(d\.isToday \? 'today, ' : ''\) \+ \(d\.completed \? 'completed' : 'not completed'\)/);
+  // The count remains, including the honest no-target form.
+  assert.match(HOME, /weekValue'\)\.textContent = w\.hasData \? w\.label : '—'/);
+  const DM = require('./dashboard-model.js');
+  const withTarget = DM.buildWeek({ snapshot: { training: { week: { days: [], completed: 1, planned: 3 } } } });
+  assert.strictEqual(withTarget.label, '1 / 3 workouts');
+});
+
+test('week: the row containing the strip is still a real tap target', () => {
+  // With the meter gone the link is shorter, so its height now comes from the
+  // day cells alone: 10px label + 7px gap + 22px dot + padding ≈ 45px.
+  assert.match(HOME_BODY, /<a class="home-row" href="workout-history\.html">/);
+  const dot = (SHELL.match(/\.mm-day-dot\s*\{([^}]*)\}/) || [])[1] || '';
+  const day = (SHELL.match(/\.mm-day\s*\{([^}]*)\}/) || [])[1] || '';
+  const row = (HOME_CSS.match(/\.home-row\s*\{([^}]*)\}/) || [])[1] || '';
+  const px = (s, re) => Number((s.match(re) || [])[1] || 0);
+  const height = px(dot, /height:\s*(\d+)px/) + px(day, /gap:\s*(\d+)px/) + 10 +
+    px(row, /padding:\s*(\d+)px/) + 4;
+  assert.ok(height >= 44, `the week row measures ~${height}px — must clear 44px`);
 });
 
 /* ── 5 · Nutrition ──────────────────────────────────────────────────────── */
@@ -388,23 +482,84 @@ test('polish: Quick log opens the EXISTING nutrition flow, not a new one', () =>
     'Home implements no logging of its own');
 });
 
-test('polish: the gap under an inline action is evened out, not the sections', () => {
-  assert.match(HOME_CSS, /\.home-action \+ \.mm-section\s*\{[^}]*margin-top:\s*12px/,
-    'only the post-action gap is trimmed');
+test('polish: no orphaned inline action is left between two sections', () => {
+  // The rule that trimmed the gap under a free-standing action existed only for
+  // the alternate-workout button, which now lives inside the hero. Home has no
+  // action floating on the background between sections at all.
+  assert.ok(!/\.home-action \+ \.mm-section/.test(HOME_CSS), 'the compensating rule is gone');
+  // Every .home-action is now inside a hero, a section header or the Progress
+  // row — none is a direct child of <main>.
+  const main = HOME_BODY.replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<section class="mm-hero"[\s\S]*?<\/section>/, '')
+    .replace(/<div class="mm-section">[\s\S]*?<\/div>/g, '')
+    .replace(/<div class="home-progress">[\s\S]*?<\/div>/, '');
+  assert.ok(!/home-action/.test(main), 'no action floats on the background');
   // The shared section rhythm itself is unchanged.
   assert.match(SHELL, /\.mm-section\s*\{[^}]*margin:\s*26px 0 10px/);
 });
 
-test('polish: the first section starts without a dead band under the header', () => {
-  // `:first-child` alone never matched, because the visually-hidden <h1> is the
-  // real first child. The heading case is now matched explicitly — no negative
-  // margins are used to compensate.
+test('polish: the page starts without a dead band under the header', () => {
+  // The hero now leads directly, so it is that element — not a section header —
+  // which must carry no top margin. The primitive owns no margin at all.
+  const hero = (SHELL.match(/\.mm-hero\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.ok(!/margin/.test(hero), 'the hero adds no top margin of its own');
+  // The shell keeps its first-section rule for any page that DOES open with a
+  // section header (`:first-child` alone silently fails behind a hidden h1).
   assert.match(SHELL,
-    /\.mm-section:first-child,\s*\.mm-visually-hidden \+ \.mm-section\s*\{\s*margin-top:\s*0/,
-    'the first section drops its top margin structurally');
-  const structure = HOME_BODY.replace(/<!--[\s\S]*?-->/g, '').replace(/\s+/g, ' ');
-  assert.match(structure, /<h1 class="mm-visually-hidden">[^<]*<\/h1> <div class="mm-section">/,
-    'Home is exactly that structure — the hidden h1 immediately precedes it');
+    /\.mm-section:first-child,\s*\.mm-visually-hidden \+ \.mm-section\s*\{\s*margin-top:\s*0/);
+  // Only the container's own padding separates the header from the card.
+  assert.match(HOME_CSS, /\.container\s*\{[^}]*padding:\s*24px 16px/);
+});
+
+test('polish: Nutrition is tighter but the label/bar pairing still reads', () => {
+  const gap = Number((HOME_CSS.match(/\.home-metric\s*\{[^}]*margin:\s*0 0 (\d+)px/) || [])[1]);
+  const between = Number((HOME_CSS.match(/\.home-metric \+ \.mm-meter\s*\{[^}]*margin-bottom:\s*(\d+)px/) || [])[1]);
+  // Was 7 / 14. Roughly a 10–15% reduction across the section, not a squeeze.
+  assert.ok(gap >= 4 && gap < 7, `label→bar gap tightened to ${gap}px, still legible`);
+  assert.ok(between >= 8 && between < 14, `group gap tightened to ${between}px`);
+  assert.ok(between >= gap * 1.8,
+    'a metric must still sit closer to its own bar than to the next metric');
+
+  // Tightened by spacing alone — type sizes and tap targets are untouched.
+  assert.match(HOME_CSS, /\.home-metric-value\s*\{[^}]*font-size:\s*14px/);
+  assert.match(HOME_CSS, /\.home-action--section\s*\{[^}]*min-height:\s*44px/);
+  assert.match(SHELL, /\.mm-meter\s*\{[^}]*--mm-meter-height:\s*6px/, 'bars keep their height');
+});
+
+test('polish: Nutrition still shows exactly calories and protein', () => {
+  // Tightening the section must not become an excuse to add metrics to it.
+  assert.ok(!/\b(carbs|carbohydrate|fat|fiber|water|sugar|sodium)\b/i.test(
+    HOME.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '')),
+    'no additional macro or hydration metric was introduced');
+  const labels = HOME.match(/class="home-metric-label">([^<]+)</g) || [];
+  assert.deepStrictEqual([...new Set(labels)].sort(),
+    ['class="home-metric-label">Calories<', 'class="home-metric-label">Protein<']);
+  // And calories stays the "remaining" model, not a consumed/target headline.
+  assert.match(HOME, /n\.left\.toLocaleString\(\) \+ ' <span class="sub">kcal ' \+ \(n\.over \? 'over' : 'left'\)/);
+});
+
+test('polish: Coach Insight is compact without losing anything it carries', () => {
+  const insight = (SHELL.match(/\.mm-insight\s*\{([^}]*)\}/) || [])[1] || '';
+  const pad = insight.match(/padding:\s*(\d+)px (\d+)px/);
+  assert.ok(pad, 'the insight declares its padding');
+  assert.ok(Number(pad[1]) < 14 && Number(pad[1]) >= 10,
+    `vertical padding trimmed to ${pad[1]}px — compact, not cramped`);
+
+  // Every part of the surface survives: label, icon, text, action, accent edge.
+  assert.match(HOME_BODY, /<div class="mm-insight-label">Coach Insight<\/div>/);
+  assert.match(HOME_BODY, /class="mm-insight-icon"[\s\S]{0,240}?<svg/, 'the icon remains');
+  assert.match(HOME_BODY, /<p class="mm-insight-text" id="insightText">/);
+  assert.match(HOME_BODY, /class="mm-insight-action" id="insightAction"/);
+  assert.match(SHELL, /\.mm-insight\s*\{[^}]*border-left:\s*2px solid var\(--mm-accent\)/);
+  assert.ok(!/toast|banner/i.test(HOME_BODY.match(/<section class="mm-insight"[\s\S]*?<\/section>/)[0]),
+    'it is still a surface on the page, not a transient toast');
+
+  // The height came out of CHROME, never out of the tap target.
+  const action = (SHELL.match(/\.mm-insight-action\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.match(action, /min-height:\s*44px/, 'the action is still 44px');
+  const negatives = [...action.matchAll(/-(\d+)px/g)].map((m) => Number(m[1]));
+  assert.ok(negatives.length && Math.max(...negatives) < 44,
+    'margins absorb dead space but can never collapse the target itself');
 });
 
 test('polish: Progress keeps its action beside the weight, never stranded', () => {

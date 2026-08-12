@@ -60,7 +60,10 @@
         title: program.sessionLabel,
         status: program.name || null,
         cta: { label: 'Start Workout', href: program.href },
-        secondary: { label: 'Choose workout', href: 'workout.html' },
+        // "a different workout" because a specific session IS already proposed
+        // above it — the label names the alternative to that, not a first
+        // choice. Same destination and behaviour as before.
+        secondary: { label: 'Choose a different workout', href: 'workout.html' },
       };
     }
 

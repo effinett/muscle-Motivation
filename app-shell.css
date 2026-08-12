@@ -618,12 +618,17 @@ header .btn-back:focus-visible {
  * Default treatment is the ACCENT edge. Warning/danger modifiers exist for
  * genuinely semantic insights only; routine coaching nudges must not be
  * dressed as errors.
+ *
+ * Sized as a CONTEXTUAL note, not a panel: the padding and the internal gaps
+ * are the minimum that keeps a one-line insight comfortable, so the surface
+ * never competes with the hero for weight. Only the chrome was trimmed — the
+ * label, the icon, the text and the action are all unchanged.
  */
 .mm-insight {
   display: flex;
   align-items: flex-start;
   gap: 11px;
-  padding: 14px 16px;
+  padding: 12px 14px;
   background: var(--mm-surface-raised);
   border: 1px solid var(--mm-line);
   border-left: 2px solid var(--mm-accent);
@@ -650,14 +655,19 @@ header .btn-back:focus-visible {
   font-size: 14px;
   font-weight: 600;
   color: var(--mm-text);
-  margin: 3px 0 0;
+  margin: 2px 0 0;
 }
 .mm-insight-action {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  min-height: 44px;          /* real tap target */
-  margin-bottom: -10px;      /* absorbed so the card keeps its visual height */
+  min-height: 44px;          /* real tap target — never reduced */
+  /* A 13px label inside a 44px box leaves ~14px of dead space above and below.
+     The BOTTOM half is absorbed so the card keeps its optical padding without
+     growing. The top is deliberately NOT pulled up: at -6px the box overlapped
+     the insight paragraph, so a tap on the last line of the text navigated.
+     The card's remaining height is the 44px target itself, which stays. */
+  margin: 0 0 -12px;
   font-family: 'Barlow', sans-serif;
   font-size: 13px;
   font-weight: 600;

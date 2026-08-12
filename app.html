@@ -84,12 +84,22 @@
     }
     .home-row:active { opacity: 0.75; }
 
-    /* Label + value pair sitting above a meter. */
+    /* Label + value pair sitting above a meter.
+       Spacing is deliberately asymmetric: a label sits CLOSE to the bar it
+       describes (5px) and the two metric groups sit further apart (10px), so
+       the pairing is read by proximity rather than by a divider. Tightened
+       from 7/14 — the section was ~11% taller than it needed to be without
+       either bar gaining legibility. */
     .home-metric {
       display: flex; align-items: baseline; justify-content: space-between;
-      gap: 12px; margin: 0 0 7px;
+      gap: 12px; margin: 0 0 5px;
     }
-    .home-metric + .mm-meter { margin-bottom: 14px; }
+    .home-metric + .mm-meter { margin-bottom: 10px; }
+    /* …and it stays INSIDE Nutrition. Coach Insight is the next item in the
+       hierarchy, not part of the nutrition block, so it keeps the same 26px
+       transition every other section gets. Without this it inherited only the
+       tightened metric spacing and its border sat 14px under the protein bar. */
+    .home-row + .mm-insight { margin-top: 12px; }
     .home-metric-label {
       font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
       text-transform: uppercase; color: var(--mm-text-tertiary);
@@ -146,10 +156,17 @@
       min-height: 44px; margin: -12px 0; align-self: center;
     }
 
-    /* The 44px action box leaves dead space under its text, which made the gap
-       before the next section read larger than every other section gap. Trim it
-       back so the rhythm is even — without tightening the sections themselves. */
-    .home-action + .mm-section { margin-top: 12px; }
+    /* The alternate-workout path, inside the hero beneath the primary CTA.
+       Standing alone under the card it read as a second, competing action; here
+       it is plainly subordinate to START WORKOUT — same quiet text weight, one
+       level down. `display: flex` puts it on its own line after the inline-flex
+       CTA, and `fit-content` stops the 44px box from spanning the whole card
+       and becoming an invisible full-width target. The negative bottom margin
+       absorbs the box's own dead space so the card keeps its 20px optical
+       padding; the tap target itself is untouched. */
+    .home-action--hero {
+      display: flex; width: fit-content; margin: 0 0 -14px;
+    }
 
     /* Progress is ONE row: weight, then trend as quieter context, then the
        action. The weight used to live in the section-header value slot, which
@@ -287,36 +304,37 @@
   <main class="container" id="mmMain" tabindex="-1">
     <h1 class="mm-visually-hidden">Dashboard</h1>
 
-    <!-- ── A · TRAIN / TODAY'S PLAN ─────────────────────────────────────
-         The one dominant surface. Keeps a container because it carries the
-         screen's primary action. Renders the no-image fallback; hero
-         photography remains deferred. -->
-    <div class="mm-section">
-      <h2 class="mm-section-label">Train</h2>
-    </div>
+    <!-- ── A · TODAY'S PLAN ─────────────────────────────────────────────
+         The one dominant surface, and the first thing under the header. It
+         carries no section label: "Today's Plan" already states the context,
+         so a "TRAIN" heading above it was a second, redundant title. Keeps a
+         container because it carries the screen's primary action. Renders the
+         no-image fallback; hero photography remains deferred.
+
+         The alternate path lives INSIDE the card, under the CTA — outside it
+         read as a competing action floating between two sections. -->
     <section class="mm-hero" aria-labelledby="todayTitle">
       <div class="mm-hero-body">
         <div class="mm-hero-eyebrow">Today's Plan</div>
-        <h3 class="mm-hero-title" id="todayTitle">&nbsp;</h3>
+        <h2 class="mm-hero-title" id="todayTitle">&nbsp;</h2>
         <div class="mm-hero-meta" id="todayMeta" hidden></div>
         <a class="mm-hero-cta" id="todayCta" href="workout.html" hidden></a>
+        <button class="home-action home-action--hero" id="todayAlt" hidden></button>
       </div>
     </section>
-    <button class="home-action" id="todayAlt" hidden></button>
 
     <!-- ── B · THIS WEEK ────────────────────────────────────────────────
-         No container. The day strip and meter both read training.week, so the
-         count and the ticks can never disagree. -->
+         No container. The count and the day strip both read training.week, so
+         they can never disagree — which is exactly why the horizontal meter
+         that used to sit beneath the strip was removed: it was a third drawing
+         of the same one number. The strip already shows how many days are
+         ticked AND which ones, so it strictly dominates a bar. -->
     <div class="mm-section">
       <h2 class="mm-section-label">This Week</h2>
       <span class="mm-section-value" id="weekValue">—</span>
     </div>
     <a class="home-row" href="workout-history.html">
       <div class="mm-daystrip" id="weekStrip" role="list"></div>
-      <div class="mm-meter" id="weekMeter" style="margin-top:12px" role="progressbar"
-           aria-valuemin="0" aria-valuemax="100" aria-label="Weekly training progress">
-        <div class="mm-meter-fill"></div>
-      </div>
       <span class="mm-visually-hidden">View workout history</span>
     </a>
 
@@ -566,16 +584,10 @@
         '<span class="mm-visually-hidden">' + esc(d.weekday) + ': ' + state + '</span>' +
       '</div>';
     }).join('');
-
-    var meter = document.getElementById('weekMeter');
-    if (w.hasData && w.planned) {
-      setMeter('weekMeter', w.pct, w.complete ? 'success' : null);
-      meter.hidden = false;
-    } else {
-      // No declared target — the tick count stands alone rather than showing
-      // progress toward a denominator we do not have.
-      meter.hidden = true;
-    }
+    // No meter here by design. w.pct / w.complete stay in the shared model for
+    // other consumers, but Home draws the week ONCE: the count states the
+    // number, the strip states which days. A bar restated the count a third
+    // time and was the only duplicated progress indicator on the screen.
   }
 
   // ── C · NUTRITION ────────────────────────────────────────────────────
