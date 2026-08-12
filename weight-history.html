@@ -389,6 +389,18 @@
   // Shared modal calls this after a successful save.
   window.onWeightSaved = refresh;
 
+  // Deep link from Home's mini trend widget. #chartWrap already existed and is
+  // the container renderChart() fills, so no new target was added; this only
+  // waits for the chart to actually be in the DOM before scrolling, because a
+  // plain anchor would jump to where the empty div sat before its content
+  // existed. It adds no layout, no state and no behaviour to this page.
+  function scrollToTrendFromHash() {
+    if (window.location.hash !== '#chartWrap') return;
+    var el = document.getElementById('chartWrap');
+    if (!el || !el.firstChild) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
   /* ── Body Fat section ────────────────────────────────────────────── */
   function fmtSignedPct(delta) {
     if (delta == null || isNaN(delta)) return '—';
@@ -556,6 +568,7 @@
         document.getElementById('appContent').style.display = 'block';
 
         await refresh();
+        scrollToTrendFromHash();
         bfRefresh();
         msRefresh();
         lucide.createIcons();

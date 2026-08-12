@@ -281,24 +281,46 @@
     .home-trend:empty { display: none; }
     .home-trend .muted { color: var(--mm-text-tertiary); font-weight: 600; }
 
-    /* Sparkline — supporting context only. It is not a tap target, carries no
-       axes, labels, grid or dots, and never appears without the numeric change
-       beside it, so weight direction is never conveyed by the drawing alone.
-       Colour comes from the theme token via currentColor.
+    /* Mini weight-trend widget — a small preview of the full Trend chart, and
+       the control that opens it.
 
-       Sized to BALANCE the reading, not to compete with it: it takes the space
-       left over on the right, capped so it never grows into the dominant
-       element, and shrinks before the weight column does at narrow widths. */
-    .home-spark {
+       On its own the line read as a stray mark floating in empty space. The
+       container is what fixes that, and it is deliberately the SAME object as
+       the Progress page's .chart-card at a smaller size: same raised surface,
+       same hairline border, same radius family. Seeing it here and then seeing
+       the full chart there should feel like one thing, zoomed.
+
+       It carries no axes, ticks, dates, grid, legend or heading — those belong
+       to the full chart. The line is the only content, with enough padding that
+       it never touches the edges. Colour is the theme token via currentColor,
+       so a future user accent flows through.
+
+       Sized to BALANCE the reading, never to compete with it: it takes the
+       space left over on the right, is capped so it cannot grow on a wide
+       screen, and 211 LB remains the largest thing in the section. */
+    .home-trendcard {
+      display: block;
       flex: 0 1 auto;
-      width: 46%; max-width: 168px; min-width: 84px;
-      height: 34px;
+      width: 48%; max-width: 168px; min-width: 140px;
+      height: 78px;
       margin-left: auto;
+      padding: 11px 12px;
+      background: var(--mm-surface-raised);
+      border: 1px solid var(--mm-line);
+      border-radius: 10px;
       color: var(--mm-accent);
-      pointer-events: none;
+      text-decoration: none;
+      transition: border-color 0.2s;
     }
-    .home-spark svg { display: block; width: 100%; height: 100%; overflow: visible; }
-    .home-spark polyline {
+    @media (hover: hover) {
+      .home-trendcard:hover { border-color: var(--mm-line-strong); }
+    }
+    .home-trendcard:active { opacity: 0.8; }
+    .home-trendcard:focus-visible {
+      outline: 2px solid var(--mm-accent); outline-offset: 3px;
+    }
+    .home-trendcard svg { display: block; width: 100%; height: 100%; overflow: visible; }
+    .home-trendcard polyline {
       fill: none; stroke: currentColor; stroke-width: 2;
       stroke-linecap: round; stroke-linejoin: round;
       /* Constant visual weight however wide the phone is — the box is scaled
@@ -500,11 +522,16 @@
          destination for the full history, so the two no longer share a name.
          Nothing about that tab, its label or its route changes.
 
-         Weight and its change anchor the left; the sparkline balances the
-         right. It is decorative support only — hidden from assistive
-         technology, because the change directly above it already states the
-         same thing in words. There is no navigation link here: the Progress
-         tab is always on screen, so a second route to it was redundant. -->
+         Weight and its change anchor the left; the mini trend widget balances
+         the right. The DRAWING stays hidden from assistive technology — the
+         change directly beside it already states the same thing in words — but
+         the widget itself is a labelled link, so what is announced is the
+         destination rather than a wall of coordinates.
+
+         Three distinct interactions live in this area, deliberately: Log
+         weight records a value, the trend widget opens the full chart, and the
+         Progress tab opens the destination generally. `View progress ›` stays
+         removed — the widget now carries that route, and the tab always did. -->
     <div class="mm-section">
       <h2 class="mm-section-label">Weight</h2>
     </div>
@@ -513,7 +540,8 @@
         <span class="home-weight" id="progValue">—</span>
         <span class="home-trend" id="progTrend"></span>
       </div>
-      <div class="home-spark" id="progSpark" hidden></div>
+      <a class="home-trendcard" id="progSpark" href="weight-history.html#chartWrap"
+         aria-label="View weight trend in Progress" hidden></a>
     </div>
     <div class="home-actions">
       <button class="home-log" id="logWeightBtn" onclick="wlOpenModal()">Log weight</button>
@@ -862,9 +890,11 @@
       ' <span class="muted">this month</span>';
   }
 
-  // Supporting visual only. Geometry comes from weight.js (the same module that
-  // owns the full Progress chart) over the exact rows behind the change value;
-  // this page adds no window, no maths and no interpolation of its own.
+  // Geometry comes from weight.js (the same module that owns the full Progress
+  // chart) over the exact rows behind the change value; this page adds no
+  // window, no maths and no interpolation of its own. The widget is hidden
+  // entirely when there is nothing real to draw, so the link never leads
+  // somewhere with no chart at the other end.
   function renderSparkline(series) {
     var el = document.getElementById('progSpark');
     var geo = series && typeof wlSparklinePoints === 'function'

@@ -77,19 +77,35 @@ test('home: the weight snapshot is named WEIGHT; Progress stays the destination'
     'the Progress page still renders its own full chart');
 });
 
-test('home: the redundant second route to Progress is gone', () => {
-  // The Progress tab is on screen at all times, so a link to it inside the
-  // section was a duplicate of a control the user already has.
-  assert.ok(!/View progress/.test(HOME_BODY), 'no View progress action on Home');
-  assert.ok(!/href="weight-history\.html"/.test(HOME_BODY),
-    'and Home content links to the destination zero times');
-  // It was removed, not swapped for another navigation link: the only action
-  // left in the section is the quick log.
+test('home: the redundant "View progress ›" text link stays gone', () => {
+  // It was a duplicate of the always-visible Progress tab. The route now lives
+  // on the trend widget instead, which is a different affordance: it opens the
+  // chart specifically, not the destination generally.
+  // Rendered markup only — comments are prose, not UI.
+  const visible = HOME_BODY.replace(/<!--[\s\S]*?-->/g, '');
+  assert.ok(!/View progress/.test(visible), 'no View progress action on Home');
+  assert.ok(!/class="home-action"[^>]*weight-history/.test(visible),
+    'and no text navigation action was reinstated');
+  // The only ACTION in the section is still the quick log.
   const section = HOME_BODY.slice(HOME_BODY.indexOf('mm-section-label">Weight'));
   const actions = section.match(/class="home-(?:action|log)"/g) || [];
   assert.deepStrictEqual(actions, ['class="home-log"'], 'Log weight alone');
   // The nav still carries the destination.
   assert.match(read('app-nav.js'), /href: 'weight-history\.html'/);
+});
+
+test('weight: three distinct interactions, each with its own job', () => {
+  // Log a value / inspect the chart / open the destination. Collapsing any two
+  // of these would lose an affordance the user relies on.
+  assert.match(HOME_BODY, /<button class="home-log" id="logWeightBtn" onclick="wlOpenModal\(\)">Log weight<\/button>/,
+    'record a weight');
+  assert.match(HOME_BODY,
+    /<a class="home-trendcard" id="progSpark" href="weight-history\.html#chartWrap"/,
+    'inspect the trend');
+  assert.match(read('app-nav.js'), /id: 'progress',\s*label: 'Progress',\s*href: 'weight-history\.html'/,
+    'open Progress generally');
+  // The widget navigates; it must never open the logging modal.
+  assert.ok(!/home-trendcard[^>]*wlOpenModal/.test(HOME_BODY));
 });
 
 test('home: the redundant TRAIN heading above the hero is gone', () => {
@@ -862,17 +878,17 @@ test('progress: the reading anchors left, the sparkline balances right', () => {
     'weight no longer lives in the section header');
   const structure = HOME_BODY.replace(/<!--[\s\S]*?-->/g, '').replace(/\s+/g, ' ');
   assert.match(structure,
-    /<div class="home-progress"> <div class="home-weightstack"> <span class="home-weight" id="progValue">[^<]*<\/span> <span class="home-trend" id="progTrend"><\/span> <\/div> <div class="home-spark" id="progSpark" hidden><\/div> <\/div> <div class="home-actions"> <button class="home-log" id="logWeightBtn" onclick="wlOpenModal\(\)">Log weight<\/button> <\/div>/,
-    'weight + change stacked left, sparkline right, then the logging action');
+    /<div class="home-progress"> <div class="home-weightstack"> <span class="home-weight" id="progValue">[^<]*<\/span> <span class="home-trend" id="progTrend"><\/span> <\/div> <a class="home-trendcard" id="progSpark" href="weight-history\.html#chartWrap" aria-label="View weight trend in Progress" hidden><\/a> <\/div> <div class="home-actions"> <button class="home-log" id="logWeightBtn" onclick="wlOpenModal\(\)">Log weight<\/button> <\/div>/,
+    'weight + change stacked left, trend widget right, then the logging action');
 
-  // Weight and its change stay one group; the sparkline is the element that
-  // takes the remaining space on the right.
+  // Weight and its change stay one group; the widget takes the space on the
+  // right and gives way first when the row cannot hold both.
   const stack = (HOME_CSS.match(/\.home-weightstack\s*\{([^}]*)\}/) || [])[1] || '';
   assert.match(stack, /flex-direction:\s*column/, 'the two readings stack together');
   assert.ok(!/min-width:\s*0/.test(stack),
-    'the reading keeps its intrinsic width — the sparkline is what gives way');
-  const spark = (HOME_CSS.match(/\.home-spark\s*\{([^}]*)\}/) || [])[1] || '';
-  assert.match(spark, /margin-left:\s*auto/, 'the sparkline balances the right');
+    'the reading keeps its intrinsic width — the widget is what gives way');
+  const spark = (HOME_CSS.match(/\.home-trendcard\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.match(spark, /margin-left:\s*auto/, 'the widget balances the right');
 
   // Weight is the primary element; the change is quieter context beside it.
   const weight = (HOME_CSS.match(/\.home-weight\s*\{([^}]*)\}/) || [])[1] || '';
@@ -908,17 +924,44 @@ test('progress: related items stay grouped, and nothing is indented', () => {
   }
 });
 
-test('progress: the sparkline balances the section without dominating it', () => {
-  const spark = (HOME_CSS.match(/\.home-spark\s*\{([^}]*)\}/) || [])[1] || '';
+test('weight: the trend widget balances the section without dominating it', () => {
+  const spark = (HOME_CSS.match(/\.home-trendcard\s*\{([^}]*)\}/) || [])[1] || '';
   const width = Number((spark.match(/width:\s*(\d+)%/) || [])[1]);
-  assert.ok(width && width <= 50, `sparkline takes ${width}% — never more than the reading`);
+  assert.ok(width && width <= 50, `widget takes ${width}% — never more than the reading`);
   assert.match(spark, /max-width:\s*\d+px/, 'capped so it cannot grow on a wide screen');
-  assert.match(spark, /min-width:\s*\d+px/, 'and floored so it never collapses to a smudge');
+  assert.match(spark, /min-width:\s*\d+px/, 'and floored so it stays a readable chart');
   assert.match(spark, /flex:\s*0 1 auto/, 'it shrinks before the weight column does');
+
+  // Sized in the requested band, and the weight value still leads the section:
+  // a 24px Bebas number against a quiet bordered box.
   const h = Number((spark.match(/height:\s*(\d+)px/) || [])[1]);
-  const wSize = Number(((HOME_CSS.match(/\.home-weight\s*\{([^}]*)\}/) || [])[1] || '')
-    .match(/font-size:\s*(\d+)px/)[1]);
-  assert.ok(h <= wSize + 12, `sparkline height ${h}px stays subordinate to the ${wSize}px value`);
+  assert.ok(h >= 70 && h <= 90, `widget height ${h}px sits in the 70–90px band`);
+  const min = Number((spark.match(/min-width:\s*(\d+)px/) || [])[1]);
+  const max = Number((spark.match(/max-width:\s*(\d+)px/) || [])[1]);
+  assert.ok(min >= 140 && max <= 170, `widget spans ${min}–${max}px`);
+  assert.match(HOME_CSS, /\.home-weight\s*\{[^}]*font-size:\s*24px/,
+    'the weight value keeps its scale');
+  assert.match(spark, /padding:/, 'internal breathing room so the line never touches the edge');
+});
+
+test('weight: the widget borrows the Progress chart card, not a new look', () => {
+  // Seeing the mini widget and then the full chart should feel like one object
+  // at two sizes — so it reuses that card's surface, hairline and radius.
+  const mini = (HOME_CSS.match(/\.home-trendcard\s*\{([^}]*)\}/) || [])[1] || '';
+  const full = (read('weight-history.html').match(/\.chart-card\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.ok(full.length, 'the Progress page still defines .chart-card');
+  assert.match(full, /background:\s*var\(--surface-1\)/);
+  assert.match(full, /border:\s*1px solid var\(--border-2\)/);
+  assert.match(full, /border-radius:\s*10px/);
+  // Same steps, named through the current token layer rather than the legacy
+  // aliases (app-shell.css maps --surface-1 → --mm-surface-raised, --border-2 → --mm-line).
+  assert.match(mini, /background:\s*var\(--mm-surface-raised\)/);
+  assert.match(mini, /border:\s*1px solid var\(--mm-line\)/);
+  assert.match(mini, /border-radius:\s*10px/, 'same radius as the full chart card');
+  assert.match(SHELL, /--surface-1:\s*var\(--mm-surface-raised\)/);
+  assert.match(SHELL, /--border-2:\s*var\(--mm-line\)/);
+  // No raw colour anywhere in the widget.
+  assert.ok(!/#[0-9A-Fa-f]{3,8}\b|rgba?\(/.test(mini), 'tokens only');
 });
 
 test('progress: weight direction is never coloured good or bad', () => {
@@ -936,31 +979,61 @@ test('progress: weight direction is never coloured good or bad', () => {
   assert.match(read('weight.js'), /Neutral by design/);
 });
 
-test('progress: the sparkline is decoration, not an interactive surface', () => {
-  const spark = (HOME_CSS.match(/\.home-spark\s*\{([^}]*)\}/) || [])[1] || '';
-  assert.ok(spark.length, '.home-spark exists');
-  assert.match(spark, /pointer-events:\s*none/, 'it can never receive a tap');
-  assert.match(spark, /color:\s*var\(--mm-accent\)/, 'theme token, not a literal');
-  assert.match(HOME_CSS, /\.home-spark polyline\s*\{[^}]*stroke:\s*currentColor/,
-    'the stroke follows the theme colour, so a user accent flows through');
-  assert.ok(!/#[0-9A-Fa-f]{6}/.test(spark), 'no hard-coded colour');
-
-  // Markup: no href, no onclick, no tabindex, no role — and hidden from AT,
-  // because the change text beside the weight already says the same thing.
-  assert.match(HOME, /<div class="home-spark" id="progSpark" hidden><\/div>/);
-  assert.match(HOME, /aria-hidden="true" focusable="false"/, 'decorative to screen readers');
+test('weight: the widget is an accessible navigation target, the SVG is not', () => {
+  // The CONTAINER is the control and announces the destination; the drawing
+  // stays decorative, because the weight and change text already state the
+  // status in words.
+  assert.match(HOME, /<a class="home-trendcard" id="progSpark" href="weight-history\.html#chartWrap"\s*\n?\s*aria-label="View weight trend in Progress" hidden><\/a>/,
+    'a real anchor with a label naming where it goes');
+  assert.match(HOME, /aria-hidden="true" focusable="false"/,
+    'the SVG itself is hidden from assistive technology');
+  // A native <a href> gives keyboard activation and focus for free — no
+  // tabindex or key handler is needed, and none is used.
   const render = (HOME.match(/function renderSparkline[\s\S]*?\n  \}/) || [''])[0];
   assert.ok(render.length, 'renderSparkline exists');
   for (const attr of ['href', 'onclick', 'tabindex', 'role=', 'addEventListener']) {
-    assert.ok(!render.includes(attr), `the emitted sparkline carries no ${attr}`);
+    assert.ok(!render.includes(attr), `the emitted drawing carries no ${attr}`);
   }
+  assert.match(HOME_CSS, /\.home-trendcard:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--mm-accent\)/,
+    'and it uses the app-wide focus ring');
+  // Nothing may suppress the tap it now needs to receive.
+  const spark = (HOME_CSS.match(/\.home-trendcard\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.ok(!/pointer-events:\s*none/.test(spark), 'the widget must be tappable');
+
+  // Theme tokens throughout.
+  assert.match(spark, /color:\s*var\(--mm-accent\)/, 'theme token, not a literal');
+  assert.match(HOME_CSS, /\.home-trendcard polyline\s*\{[^}]*stroke:\s*currentColor/,
+    'the stroke follows the theme colour, so a user accent flows through');
+
   // No chart chrome: no axes, grid, ticks, labels, tooltips or heading.
-  assert.ok(!/<text|tooltip|axis|gridline|TREND/i.test(render),
-    'a sparkline, not a miniature of the full Progress chart');
+  assert.ok(!/<text|tooltip|axis|gridline|TREND|legend/i.test(render),
+    'a preview, not a second full chart');
   // Geometry is borrowed from weight.js — Home computes none of its own.
   assert.match(HOME, /wlSparklinePoints\(series\)/, 'geometry comes from the shared module');
   assert.ok(!/Math\.(min|max)|\/ *span|normali[sz]/i.test(render),
     'Home does no scaling maths of its own');
+});
+
+test('weight: the widget opens the EXISTING Trend chart, adding no new page', () => {
+  const page = read('weight-history.html');
+  // #chartWrap already existed as the container renderChart() fills — no new
+  // target was invented, and the section itself is untouched.
+  assert.match(page, /<div id="chartWrap"><\/div>/, 'the existing container is the anchor');
+  assert.match(page, /wrap\.innerHTML = '<div class="section-label">Trend<\/div><div class="chart-card">' \+ svg/,
+    'the Trend section renders exactly as before');
+  // The only addition is a scroll that waits for the chart to exist, because a
+  // plain anchor would jump to an empty div.
+  assert.match(page, /function scrollToTrendFromHash\(\)/);
+  assert.match(page, /window\.location\.hash !== '#chartWrap'/);
+  assert.match(page, /if \(!el \|\| !el\.firstChild\) return;/, 'never scrolls to an empty container');
+  assert.match(page, /await refresh\(\);\s*\n\s*scrollToTrendFromHash\(\);/, 'called after render');
+
+  // Entering Progress normally is unaffected: the handler is a no-op without
+  // the hash, and nothing else about the page changed.
+  assert.ok(!/scrollToTrendFromHash/.test(page.replace(/function scrollToTrendFromHash[\s\S]*?\n  \}/, '')
+    .replace(/scrollToTrendFromHash\(\);/, '')), 'exactly one definition and one call site');
+  // Home introduces no chart of its own beyond the shared sparkline helper.
+  assert.ok(!/wlChartSVG/.test(HOME), 'the full chart is never duplicated onto Home');
 });
 
 test('progress: remains an open section — never a card', () => {
