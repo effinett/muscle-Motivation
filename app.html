@@ -100,7 +100,8 @@
        the section gap after it looked bigger than every other one despite
        being identical. Trimmed optically so the rhythm matches; Nutrition is
        still clearly its own section, and no other gap is affected (the
-       nutrition row is followed by the insight, not by a section header).
+       nutrition row is followed by its Log food action, not by a section
+       header).
        Sized on device rather than by arithmetic: at 14px (18px total) training
        and nutrition began reading as one group, so the correction is smaller
        than it first looked. 22px puts the total at 26px — clearly two sections
@@ -108,11 +109,6 @@
        section label sits above its own content. */
     .home-row + .mm-section { margin-top: 22px; }
 
-    /* …and it stays INSIDE Nutrition. Coach Insight is the next item in the
-       hierarchy, not part of the nutrition block, so it keeps the same 26px
-       transition every other section gets. Without this it inherited only the
-       tightened metric spacing and its border sat 14px under the protein bar. */
-    .home-row + .mm-insight { margin-top: 12px; }
     .home-metric-label {
       font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
       text-transform: uppercase; color: var(--mm-text-tertiary);
@@ -193,12 +189,19 @@
       outline: 2px solid var(--mm-accent); outline-offset: 3px; border-radius: 6px;
     }
 
-    /* An action sitting in a section header. Keeps the full 44px tap target
-       while collapsing its box vertically, so the header row does not grow. */
-    .home-action--section,
-    .home-log--section {
-      min-height: 44px; margin: -12px 0; align-self: center;
+    /* A row of related actions, left-aligned to the content grid and separated
+       by a controlled gap — never pushed to opposite screen edges, which made
+       a pair that belongs together read as two unrelated links. Wraps rather
+       than cramping on a narrow phone. Used by both logging surfaces, so
+       Log food and Log weight start on the same line of the grid. */
+    .home-actions {
+      display: flex; align-items: center; flex-wrap: wrap;
+      gap: 4px 18px;
     }
+    /* The 44px boxes carry ~15px of their own dead space, which is most of the
+       separation; this is the remainder needed to keep Coach Insight on the
+       same section rhythm as every other transition. */
+    .home-actions + .mm-insight { margin-top: 12px; }
 
     /* The alternate-workout path, inside the hero beneath the primary CTA.
        Standing alone under the card it read as a second, competing action; here
@@ -252,17 +255,18 @@
        is cutting, maintaining or bulking, and nothing here knows that. Green/
        amber would be a judgement the data cannot support, so the change stays
        neutral and the arrow carries the direction. (weight.js says the same of
-       wlDeltaHTML: "Neutral by design".) */
+       wlDeltaHTML: "Neutral by design".)
+
+       It also sits directly beside the weight on a controlled gap rather than
+       being pushed to the far edge: the two are one status statement — "this is
+       your weight, this is how it moved" — and a screen-width gap between them
+       read as two separate facts. */
     .home-trend {
       font-size: 13px; font-weight: 600; color: var(--mm-text-secondary);
-      margin-left: auto; white-space: nowrap;
+      white-space: nowrap;
     }
     /* No trend yet — collapse entirely so nothing marks where one would go. */
     .home-trend:empty { display: none; }
-    /* With no weight to sit beside, the slot carries the empty message instead
-       of a change — so it leads the row rather than being pushed to the right
-       edge, where it would hang with nothing opposite it. */
-    .home-trend.is-empty { margin-left: 0; }
     .home-trend .muted { color: var(--mm-text-tertiary); font-weight: 600; }
 
     /* Sparkline — supporting context only. It is not a tap target, carries no
@@ -281,12 +285,6 @@
       /* Constant visual weight however wide the phone is — the box is scaled
          non-uniformly, and without this the line would thicken with it. */
       vector-effect: non-scaling-stroke;
-    }
-
-    /* Log left, navigate right — creation and navigation never blur together. */
-    .home-actions {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 12px; flex-wrap: wrap;
     }
 
     /* Quiet empty states — never a card, never a paragraph. */
@@ -439,17 +437,25 @@
          No container, deliberately quieter than the hero. -->
     <div class="mm-section">
       <h2 class="mm-section-label">Nutrition</h2>
-      <!-- The section's own action, in the value slot Nutrition leaves empty.
-           Deep-links into the EXISTING Quick Log flow on nutrition.html — the
-           same href as before, so nutrition.html's focusQuickLogFromHash()
-           still brings the real Quick Log input into view and focuses it.
-           A logging action, so it takes the `+` language, not a chevron. -->
-      <a class="home-log home-log--section" href="nutrition.html#quicklog">Log food</a>
     </div>
     <a class="home-row" href="nutrition.html" id="nutRow">
       <div id="nutBody"></div>
       <span class="mm-visually-hidden">Open nutrition</span>
     </a>
+    <!-- Status first, then the action on it: the reading order is calories and
+         protein → log something → what Coach makes of it. Below the metrics
+         rather than beside the heading, on the same content-grid line as
+         Log weight, so the two logging actions read as one pattern.
+
+         It must sit OUTSIDE #nutRow: that whole block is already an anchor to
+         nutrition.html, and an anchor cannot contain another one.
+
+         The href is unchanged, so nutrition.html's focusQuickLogFromHash()
+         still brings the real Quick Log input into view and focuses it — this
+         stays a shortcut, never plain navigation to the top of Nutrition. -->
+    <div class="home-actions">
+      <a class="home-log" href="nutrition.html#quicklog">Log food</a>
+    </div>
 
     <!-- ── D · COACH INSIGHT ────────────────────────────────────────────
          The seat the AI Coach will occupy. Deterministic evidence only, and
@@ -805,7 +811,7 @@
       // No weight to show — the empty state carries the whole message, so a
       // lone em dash beside it would be noise. Log weight stays useful.
       valueEl.hidden = true;
-      trendEl.className = 'home-trend is-empty';
+      trendEl.className = 'home-trend';
       trendEl.innerHTML = '<span class="muted">No weigh-ins yet</span>';
       return;
     }

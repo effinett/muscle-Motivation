@@ -56,7 +56,33 @@ test('today: trained already → completed state with no primary CTA', () => {
   assert.strictEqual(t.title, 'Push Day');
   assert.strictEqual(t.status, 'Complete');
   assert.strictEqual(t.cta, null, 'no dominant CTA once the work is done');
-  assert.strictEqual(t.secondary.href, 'workout.html', 'training again is still possible');
+  assert.strictEqual(t.secondary.href, 'workout.html', 'the picker is still reachable');
+  // Today's session is already done, so this is not a repeat of it — the label
+  // names what the action actually opens. Behaviour is unchanged.
+  assert.strictEqual(t.secondary.label, 'Choose a workout');
+});
+
+test('today: the completed label belongs to the completed state alone', () => {
+  const completed = DM.buildToday({
+    snapshot: snap({ training: { trainedToday: true, lastWorkout: { name: 'Push Day' } } }),
+  });
+  const programmed = DM.buildToday({
+    snapshot: snap(),
+    program: { sessionLabel: 'Upper Body', name: 'Muscle Gain', href: 'workout.html?x' },
+  });
+  const noProgram = DM.buildToday({ snapshot: snap(), program: null });
+
+  assert.strictEqual(completed.secondary.label, 'Choose a workout');
+  // The programmed state proposes a session, so its alternate is still phrased
+  // against that proposal — and it keeps START WORKOUT as the primary action.
+  assert.strictEqual(programmed.cta.label, 'Start Workout');
+  assert.strictEqual(programmed.secondary.label, 'Choose a different workout');
+  assert.strictEqual(noProgram.cta.label, 'Start Workout', 'the open state is untouched');
+  assert.strictEqual(noProgram.secondary, null);
+  // The old wording is gone from every state.
+  for (const t of [completed, programmed, noProgram]) {
+    assert.ok(!/Train again/.test(JSON.stringify(t)));
+  }
 });
 
 test('today: an active program surfaces the next session as the CTA', () => {

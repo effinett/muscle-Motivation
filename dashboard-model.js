@@ -50,7 +50,12 @@
         title: (training.lastWorkout && training.lastWorkout.name) || 'Workout',
         status: 'Complete',
         cta: null,
-        secondary: { label: 'Train again', href: 'workout.html' },
+        // "Choose a workout" rather than "Train again": today's session is
+        // already done, so this is not a repeat of it — it opens the picker,
+        // exactly as before. Same destination, same behaviour, clearer promise.
+        // This label belongs to the COMPLETED state only; the programmed state
+        // below keeps its own "Choose a different workout".
+        secondary: { label: 'Choose a workout', href: 'workout.html' },
       };
     }
 

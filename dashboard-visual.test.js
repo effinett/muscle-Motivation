@@ -524,15 +524,43 @@ test('insight: default treatment is the accent, warning is reserved', () => {
 
 /* ── 6b · V4 polish ─────────────────────────────────────────────────────── */
 
-test('polish: Log food is the Nutrition section action, in its header row', () => {
-  // Sits in the section header's value slot, which Nutrition leaves empty.
-  assert.match(HOME_BODY,
-    /<h2 class="mm-section-label">Nutrition<\/h2>[\s\S]{0,420}?<a class="home-log home-log--section" href="nutrition\.html#quicklog">Log food<\/a>[\s\S]{0,40}?<\/div>/,
-    'Log food sits inside the Nutrition section header');
-  assert.ok(!/home-inline-actions/.test(HOME_BODY), 'the detached action row is gone');
+test('polish: Log food follows the metrics it acts on, not the heading', () => {
+  // Reading order: nutrition status → log something → what Coach makes of it.
+  const structure = HOME_BODY.replace(/<!--[\s\S]*?-->/g, '').replace(/\s+/g, ' ');
+  assert.match(structure,
+    /<h2 class="mm-section-label">Nutrition<\/h2> <\/div> <a class="home-row" href="nutrition\.html" id="nutRow">[\s\S]*?<\/a> <div class="home-actions"> <a class="home-log" href="nutrition\.html#quicklog">Log food<\/a> <\/div>/,
+    'heading, then the metrics row, then Log food beneath it');
+  assert.ok(!/mm-section-label">Nutrition<\/h2>\s*<a class="home-log/.test(HOME_BODY),
+    'it no longer shares the heading row');
+  // It must sit OUTSIDE #nutRow — that block is itself an anchor.
+  const row = (HOME_BODY.match(/<a class="home-row" href="nutrition\.html" id="nutRow">[\s\S]*?<\/a>/) || [''])[0];
+  assert.ok(!row.includes('home-log'), 'never an anchor nested inside an anchor');
+  // The header-slot variants existed only to serve that placement.
+  assert.ok(!/home-log--section|home-action--section/.test(HOME_BODY + HOME_CSS),
+    'the now-unused section-header action variants are removed');
   assert.match(HOME_BODY, /id="logWeightBtn"/, 'Log weight is still in Progress');
-  // The header variant keeps a full tap target without growing the header.
-  assert.match(HOME_CSS, /\.home-action--section,\s*\n?\s*\.home-log--section\s*\{[^}]*min-height:\s*44px/);
+});
+
+test('actions: the two logging actions share one pattern and one grid line', () => {
+  // Same class, so typography, size, weight, plus glyph, accent treatment and
+  // the 44px target are one definition — they cannot drift apart.
+  const logs = HOME_BODY.match(/class="home-log"/g) || [];
+  assert.strictEqual(logs.length, 2, 'Log food and Log weight, both .home-log');
+  assert.ok(!/class="home-log [a-z-]+"/.test(HOME_BODY),
+    'neither carries a positional modifier that would offset it from the other');
+
+  // Both are the first child of a .home-actions row, which is left-aligned to
+  // the content grid — so they start at the same x with no per-action rule.
+  const rows = HOME_BODY.match(/<div class="home-actions">\s*<(a|button) class="home-log"/g) || [];
+  assert.strictEqual(rows.length, 2, 'each logging action leads its own action row');
+  const actions = (HOME_CSS.match(/\.home-actions\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.ok(!/justify-content|margin-left|padding-left|text-align/.test(actions),
+    'no rule shifts one row off the grid line the other sits on');
+  assert.match(actions, /display:\s*flex/);
+
+  // Distinct behaviour is preserved: one deep-links, one opens the modal.
+  assert.match(HOME_BODY, /<a class="home-log" href="nutrition\.html#quicklog">Log food<\/a>/);
+  assert.match(HOME_BODY, /<button class="home-log" id="logWeightBtn" onclick="wlOpenModal\(\)">Log weight<\/button>/);
 });
 
 test('actions: creation and navigation are two distinct visual languages', () => {
@@ -558,7 +586,7 @@ test('actions: creation and navigation are two distinct visual languages', () =>
   assert.ok(!/--mm-accent/.test(log), 'the label itself is not accent-coloured');
 
   // Exact assignment of the language across Home.
-  assert.match(HOME_BODY, /class="home-log home-log--section"[^>]*>Log food</, 'food = creation');
+  assert.match(HOME_BODY, /class="home-log" href="nutrition\.html#quicklog">Log food</, 'food = creation');
   assert.match(HOME_BODY, /class="home-log" id="logWeightBtn"[^>]*>Log weight</, 'weight = creation');
   assert.match(HOME_BODY, /class="home-action" href="weight-history\.html">View progress</,
     'View progress stays a navigation action');
@@ -639,7 +667,7 @@ test('polish: no orphaned inline action is left between two sections', () => {
   const main = HOME_BODY.replace(/<!--[\s\S]*?-->/g, '')
     .replace(/<section class="mm-hero"[\s\S]*?<\/section>/, '')
     .replace(/<div class="mm-section">[\s\S]*?<\/div>/g, '')
-    .replace(/<div class="home-actions">[\s\S]*?<\/div>/, '');
+    .replace(/<div class="home-actions">[\s\S]*?<\/div>/g, '');
   assert.ok(!/home-action|home-log/.test(main), 'no action floats on the background');
   // The shared section rhythm itself is unchanged.
   assert.match(SHELL, /\.mm-section\s*\{[^}]*margin:\s*26px 0 10px/);
@@ -696,7 +724,7 @@ test('polish: Nutrition is tighter but the label/bar pairing still reads', () =>
 
   // Tightened by spacing alone — type sizes and tap targets are untouched.
   assert.match(HOME_CSS, /\.home-metric-value\s*\{[^}]*font-size:\s*14px/);
-  assert.match(HOME_CSS, /\.home-action--section,\s*\n?\s*\.home-log--section\s*\{[^}]*min-height:\s*44px/);
+  assert.match(HOME_CSS, /\.home-log\s*\{[^}]*min-height:\s*44px/);
   assert.match(SHELL, /\.mm-meter\s*\{[^}]*--mm-meter-height:\s*6px/, 'bars keep their height');
 });
 
@@ -817,10 +845,35 @@ test('progress: the snapshot is metric → sparkline → actions, in that order'
   const wSize = Number((weight.match(/font-size:\s*(\d+)px/) || [])[1]);
   const tSize = Number((trend.match(/font-size:\s*(\d+)px/) || [])[1]);
   assert.ok(wSize > tSize, `weight (${wSize}px) must outrank the change (${tSize}px)`);
-  assert.match(trend, /margin-left:\s*auto/, 'the change is right-aligned context');
   // The old standalone twin-button block is still gone.
   assert.ok(!/class="secondary"|class="secondary-btn"/.test(HOME_BODY));
   assert.ok(!/\.secondary-btn\s*\{/.test(HOME_CSS));
+});
+
+test('progress: related items are grouped, never pushed to opposite edges', () => {
+  // Two groups: weight + change is one status statement, and the two actions
+  // are one action pair. A screen-width gap read each pair as unrelated.
+  for (const [name, sel] of [['status row', '.home-progress'], ['action row', '.home-actions']]) {
+    const body = (HOME_CSS.match(new RegExp('\\' + sel + '\\s*\\{([^}]*)\\}')) || [])[1] || '';
+    assert.ok(body.length, `${sel} has a rule`);
+    assert.ok(!/justify-content:\s*space-between/.test(body),
+      `${name} must not force its members to opposite edges`);
+    assert.match(body, /gap:/, `${name} is spaced by a controlled gap`);
+    assert.match(body, /flex-wrap:\s*wrap/, `${name} wraps rather than cramping`);
+  }
+  // Nothing may re-introduce edge separation by another route.
+  assert.ok(!/\.home-trend\s*\{[^}]*margin-left:\s*auto/.test(HOME_CSS),
+    'the change sits beside the weight, not at the far edge');
+  assert.ok(!/\.home-actions [^{]*\{[^}]*margin-left:\s*auto/.test(HOME_CSS),
+    'neither action is pushed right');
+  assert.ok(!/is-empty/.test(HOME_CSS + HOME),
+    'the empty-state realignment existed only to undo that push and is gone');
+
+  // Both rows start on the same content-grid line as each other.
+  const progress = (HOME_CSS.match(/\.home-progress\s*\{([^}]*)\}/) || [])[1] || '';
+  for (const body of [progress, (HOME_CSS.match(/\.home-actions\s*\{([^}]*)\}/) || [])[1] || '']) {
+    assert.ok(!/margin-left|padding-left|text-align/.test(body), 'no row is indented');
+  }
 });
 
 test('progress: weight direction is never coloured good or bad', () => {
@@ -901,11 +954,9 @@ test('progress: with no weight at all, the state is honest and still actionable'
   assert.match(HOME, /if \(!p\.hasData\)[\s\S]{0,320}?valueEl\.hidden = true;/,
     'the weight element is hidden rather than showing a lone em dash');
   assert.match(HOME, /No weigh-ins yet/, 'the empty state says so plainly');
-  // The change slot is right-aligned so it sits opposite the weight. With no
-  // weight there is nothing opposite, so the empty message leads the row
-  // instead of hanging off the right edge.
-  assert.match(HOME, /trendEl\.className = 'home-trend is-empty';/);
-  assert.match(HOME_CSS, /\.home-trend\.is-empty\s*\{[^}]*margin-left:\s*0/);
+  // With the row grouped from the left, the empty message simply leads it —
+  // no special-case realignment is needed any more.
+  assert.match(HOME, /trendEl\.className = 'home-trend';/);
   // The action is outside that branch, so it always remains available.
   const body = (HOME.match(/function renderProgress[\s\S]*?\n  \}/) || [''])[0];
   assert.ok(!/logWeightBtn/.test(body), 'Log weight is never hidden or disabled');
