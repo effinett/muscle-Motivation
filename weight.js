@@ -110,6 +110,32 @@ async function wlSyncProfileWeight(userId) {
 }
 
 /* ── stats ─────────────────────────────────────────────────────────────── */
+
+// The real weigh-ins inside a trailing window, oldest → newest.
+//
+// This is the ONE definition of "recent weight history": wlStats derives
+// change30 from it, and any surface that VISUALISES that change consumes the
+// same rows, so a number and a chart can never describe different sets.
+//
+// It only ever returns rows that exist. body_weight_logs is unique on
+// (user_id, logged_on) — enforced by the wlUpsert conflict target — so there is
+// at most one weigh-in per day and no same-day resolution to invent here.
+function wlRecentSeries(logs, days) {
+  var cutoff = wlParseDate(wlToday());
+  cutoff.setDate(cutoff.getDate() - (days || 30));
+  return (logs || [])
+    .filter(function (l) {
+      return l && l.logged_on && isFinite(+l.weight_lbs) &&
+        wlParseDate(l.logged_on) >= cutoff;
+    })
+    .sort(function (a, b) {
+      return a.logged_on < b.logged_on ? -1 : a.logged_on > b.logged_on ? 1 : 0;
+    })
+    .map(function (l) {
+      return { logged_on: l.logged_on, weight_lbs: +l.weight_lbs };
+    });
+}
+
 // logs: array as returned by wlFetchLogs (any order). profileWeight: fallback.
 function wlStats(logs, profileWeight) {
   var desc = (logs || []).slice().sort(function (a, b) {
@@ -129,9 +155,10 @@ function wlStats(logs, profileWeight) {
     ? win7.reduce(function (s, l) { return s + (+l.weight_lbs); }, 0) / win7.length
     : null;
 
-  var thirtyAgo = new Date(today); thirtyAgo.setDate(thirtyAgo.getDate() - 30);
-  var win30 = desc.filter(function (l) { return wlParseDate(l.logged_on) >= thirtyAgo; });
-  var change30 = win30.length >= 2 ? current - (+win30[win30.length - 1].weight_lbs) : null;
+  // Same rows, same window, same order as every consumer of wlRecentSeries —
+  // ascending, so the oldest in-window weigh-in is the first element.
+  var win30 = wlRecentSeries(desc, 30);
+  var change30 = win30.length >= 2 ? current - win30[0].weight_lbs : null;
 
   return { count: desc.length, current: current, currentFromProfile: false, avg7: avg7, change30: change30 };
 }
@@ -155,9 +182,24 @@ function wlChangeStr(delta) {
 // Generic over the y column: opts.yField (default 'weight_lbs'), opts.ariaLabel,
 // opts.gradId (unique per chart when several render on one page). Rows must
 // carry logged_on. Existing weight callers pass no opts and are unchanged.
+//
+// ONE renderer, two sizes. Home draws a COMPACT preview of this same chart, so
+// what varies is presentation only — box, padding, label size, marker size —
+// never what the chart means. Data, scaling, point selection and the x/y
+// mapping below are shared, so the small chart and the large one can never tell
+// different stories. Every default reproduces the full chart byte for byte, so
+// the Progress page is unaffected by the parameterisation.
+//
+// Colour comes from `currentColor`, set by whichever container the chart is
+// dropped into, so a future user-selectable accent flows through both sizes.
+// The neutral label grey is chrome, not accent, and stays fixed.
 function wlChartSVG(logs, opts) {
   opts = opts || {};
-  var w = opts.width || 640, h = opts.height || 200, pad = 30;
+  var w = opts.width || 640, h = opts.height || 200;
+  var pad = opts.pad != null ? opts.pad : 30;
+  var labelSize = opts.labelSize || 11;
+  var dotR = opts.dotRadius != null ? opts.dotRadius : 2.6;
+  var strokeW = opts.strokeWidth != null ? opts.strokeWidth : 2.5;
   var yField = opts.yField || 'weight_lbs';
   var gradId = opts.gradId || 'wlgrad';
 
@@ -184,23 +226,43 @@ function wlChartSVG(logs, opts) {
   var area = line + ' L ' + X(maxX).toFixed(1) + ' ' + (pad + plotH).toFixed(1) +
              ' L ' + X(minX).toFixed(1) + ' ' + (pad + plotH).toFixed(1) + ' Z';
   var dots = pts.map(function (p, i) {
-    return '<circle cx="' + X(xs[i]).toFixed(1) + '" cy="' + Y(ys[i]).toFixed(1) + '" r="2.6" fill="#B1121B"/>';
+    return '<circle cx="' + X(xs[i]).toFixed(1) + '" cy="' + Y(ys[i]).toFixed(1) + '" r="' + dotR + '" fill="currentColor"/>';
   }).join('');
 
   var hi = Math.max.apply(null, ys), lo = Math.min.apply(null, ys);
+  // Label offsets track the label SIZE rather than being fixed pixel constants.
+  // At the default 11px these round to the original 5 / 14 / 8, so the full
+  // chart is unchanged; at a larger compact size the rows move apart with the
+  // type instead of overlapping it. The caller must keep
+  // `pad > below + bottom`, or the low-value label would land on the dates.
+  var above = Math.round(labelSize * 5 / 11);
+  var below = Math.round(labelSize * 14 / 11);
+  var bottom = Math.round(labelSize * 8 / 11);
+  function label(x, y, text, anchor) {
+    return '<text x="' + x + '" y="' + y + '"' +
+      (anchor ? ' text-anchor="' + anchor + '"' : '') +
+      ' fill="#666" font-size="' + labelSize +
+      '" font-family="Barlow,sans-serif">' + text + '</text>';
+  }
   var yLabels =
-    '<text x="6" y="' + (Y(hi) - 5).toFixed(1) + '" fill="#666" font-size="11" font-family="Barlow,sans-serif">' + wlRound1(hi) + '</text>' +
-    '<text x="6" y="' + (Y(lo) + 14).toFixed(1) + '" fill="#666" font-size="11" font-family="Barlow,sans-serif">' + wlRound1(lo) + '</text>';
+    label(6, (Y(hi) - above).toFixed(1), wlRound1(hi)) +
+    label(6, (Y(lo) + below).toFixed(1), wlRound1(lo));
   var xLabels =
-    '<text x="' + pad + '" y="' + (h - 8) + '" fill="#666" font-size="11" font-family="Barlow,sans-serif">' + wlEsc(wlFmtDate(pts[0].logged_on)) + '</text>' +
-    '<text x="' + (w - pad) + '" y="' + (h - 8) + '" text-anchor="end" fill="#666" font-size="11" font-family="Barlow,sans-serif">' + wlEsc(wlFmtDate(pts[pts.length - 1].logged_on)) + '</text>';
+    label(pad, h - bottom, wlEsc(wlFmtDate(pts[0].logged_on))) +
+    label(w - pad, h - bottom, wlEsc(wlFmtDate(pts[pts.length - 1].logged_on)), 'end');
 
-  return '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%;height:auto;display:block" role="img" aria-label="' + wlEsc(opts.ariaLabel || 'Weight trend') + '">' +
+  // A chart that sits inside its own labelled control announces the control,
+  // not a wall of coordinates — so the drawing can opt out of the a11y tree.
+  var a11y = opts.decorative
+    ? 'aria-hidden="true" focusable="false"'
+    : 'role="img" aria-label="' + wlEsc(opts.ariaLabel || 'Weight trend') + '"';
+
+  return '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%;height:auto;display:block" ' + a11y + '>' +
     '<defs><linearGradient id="' + wlEsc(gradId) + '" x1="0" y1="0" x2="0" y2="1">' +
-    '<stop offset="0%" stop-color="rgba(177,18,27,0.32)"/>' +
-    '<stop offset="100%" stop-color="rgba(177,18,27,0)"/></linearGradient></defs>' +
+    '<stop offset="0%" stop-color="currentColor" stop-opacity="0.32"/>' +
+    '<stop offset="100%" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs>' +
     '<path d="' + area + '" fill="url(#' + wlEsc(gradId) + ')"/>' +
-    '<path d="' + line + '" fill="none" stroke="#B1121B" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>' +
+    '<path d="' + line + '" fill="none" stroke="currentColor" stroke-width="' + strokeW + '" stroke-linejoin="round" stroke-linecap="round"/>' +
     dots + yLabels + xLabels +
     '</svg>';
 }
@@ -262,6 +324,7 @@ if (typeof module !== 'undefined' && module.exports) {
     wlEsc: wlEsc, wlToday: wlToday, wlParseDate: wlParseDate,
     wlFmtDate: wlFmtDate, wlRound1: wlRound1,
     wlStats: wlStats, wlChangeStr: wlChangeStr, wlChartSVG: wlChartSVG,
+    wlRecentSeries: wlRecentSeries,
   };
 }
 

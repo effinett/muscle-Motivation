@@ -7,8 +7,10 @@
  * will require() the pure parts of this file and feed the same shape into
  * every conversation, so anything added here becomes coach context for free.
  *
- * Browser: load AFTER weight.js, nutrition.js and metrics.js (uses their
- * stats helpers + supabaseClient). Node: require()s the sibling libraries.
+ * Browser: load AFTER weight.js and metrics.js (uses their stats helpers +
+ * supabaseClient). It does NOT depend on nutrition.js — food_logs are read
+ * directly here, which is why Home can consume nutrition state without loading
+ * the food-resolution stack. Node: require()s the sibling libraries.
  * Pure computation (snComputeSnapshot + helpers) is separated from fetching
  * (buildUserSnapshot) so both runtimes share identical math.
  * ──────────────────────────────────────────────────────────────────────── */
@@ -18,7 +20,8 @@
 if (typeof module !== 'undefined' && typeof wlStats === 'undefined') {
   var _wl = require('./weight.js');
   var wlToday = _wl.wlToday, wlParseDate = _wl.wlParseDate,
-      wlRound1 = _wl.wlRound1, wlStats = _wl.wlStats;
+      wlRound1 = _wl.wlRound1, wlStats = _wl.wlStats,
+      wlRecentSeries = _wl.wlRecentSeries;
   var _mx = require('./metrics.js');
   var bfStats = _mx.bfStats, msStats = _mx.msStats;
 }
@@ -47,6 +50,98 @@ function dashThisWeekCount(dates) {
     var p = String(ds).split('-'); var d = new Date(+p[0], +p[1] - 1, +p[2]);
     return d >= weekAgo && d <= now;
   }).length;
+}
+
+/* ── weekly training target (pure) ──────────────────────────────────────────
+ * How many sessions the user INTENDS per week, from the global
+ * profiles.training_days setting. Domain state, not presentation: the coach,
+ * reminders, the Train surface and the dashboard all need the same answer.
+ *
+ * Deliberately NOT schedules.js's normalizeTrainingDays(), which buckets any
+ * value into 2–6 to pick a SCHEDULE. Adherence must never invent a target:
+ * "0 — not training yet" or an unset value returns null, and callers show the
+ * completed count alone rather than a fabricated denominator. */
+function snPlannedPerWeek(trainingDays) {
+  var d = parseInt(trainingDays, 10);
+  if (!isFinite(d) || d < 1) return null;
+  return d > 7 ? 7 : d;
+}
+
+// completed vs planned over the same rolling 7-day window dashThisWeekCount
+// uses. `ratio` is null when there is no declared target.
+function snWeekAdherence(completed, trainingDays) {
+  var planned = snPlannedPerWeek(trainingDays);
+  var done = parseInt(completed, 10);
+  if (!isFinite(done) || done < 0) done = 0;
+  return {
+    planned: planned,
+    completed: done,
+    ratio: planned ? Math.round((done / planned) * 100) / 100 : null,
+    met: planned ? done >= planned : null,
+  };
+}
+
+/* ── calendar week (pure) ───────────────────────────────────────────────────
+ * The Monday–Sunday week containing `today`. This is the ONE definition that
+ * powers both the day strip and the completed/target metric — they must never
+ * disagree, which is why both read the same structure.
+ *
+ * Deliberately distinct from dashThisWeekCount(), which is a ROLLING 7-day
+ * window and stays untouched for backward compatibility. New consumers should
+ * use training.week; the rolling figures remain for existing ones.
+ *
+ * Honest state vocabulary only: a day is completed, today, or neither. The
+ * product stores a weekly training COUNT (profiles.training_days), never a
+ * per-weekday plan, so there is no "scheduled" state to derive and inventing
+ * one would fabricate data. */
+function snWeekStart(todayIso) {
+  var d = wlParseDate(todayIso);
+  // getDay(): 0=Sun … 6=Sat. Shift so Monday is the first day of the week.
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+var SN_DAY_LABELS   = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+var SN_DAY_WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+// workoutDates: ISO date strings of COMPLETED workouts (duplicates tolerated —
+// a day counts once, matching a target expressed in training DAYS per week).
+function snCalendarWeek(workoutDates, todayIso, trainingDays) {
+  var today = todayIso || wlToday();
+  var start = snWeekStart(today);
+
+  var done = {};
+  (workoutDates || []).forEach(function (d) { if (d) done[String(d)] = true; });
+
+  var days = [];
+  var completed = 0;
+  for (var i = 0; i < 7; i++) {
+    var d = new Date(start.getTime());
+    d.setDate(start.getDate() + i);          // rolls across month/year ends
+    var iso = dashIso(d);
+    var isDone = done[iso] === true;
+    if (isDone) completed++;
+    days.push({
+      date: iso,
+      label: SN_DAY_LABELS[i],
+      weekday: SN_DAY_WEEKDAYS[i],
+      completed: isDone,
+      isToday: iso === today,
+      isFuture: iso > today,
+    });
+  }
+
+  var planned = snPlannedPerWeek(trainingDays);
+  return {
+    start: days[0].date,
+    end: days[6].date,
+    days: days,
+    completed: completed,
+    planned: planned,
+    ratio: planned ? Math.round((completed / planned) * 100) / 100 : null,
+    met: planned ? completed >= planned : null,
+  };
 }
 
 /* ── nutrition compliance (pure) ───────────────────────────────────────── */
@@ -91,6 +186,12 @@ function snComputeSnapshot(inputs) {
   weight.goal = goalW;
   weight.toGoal = (goalW != null && weight.current != null)
     ? wlRound1(weight.current - goalW) : null;
+  // The actual weigh-ins behind change30, oldest → newest. The rows were
+  // already fetched for wlStats and were simply being discarded, so carrying
+  // them costs nothing: no extra query, no extra round trip. Surfaces that
+  // VISUALISE the change read these instead of re-deriving a window of their
+  // own, which is what keeps a chart and its number describing one same set.
+  weight.recent = wlRecentSeries(inputs.weightLogs || [], 30);
 
   var workouts = inputs.workouts || [];
   var dates = [];
@@ -101,6 +202,7 @@ function snComputeSnapshot(inputs) {
   var last = workouts[0] || null;
 
   var week = snWeekNutrition(inputs.foodRows, today);
+  var thisWeekCount = dashThisWeekCount(dates);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -113,6 +215,7 @@ function snComputeSnapshot(inputs) {
       weight_lbs:      p.weight_lbs      != null ? +p.weight_lbs      : null,
       goal_weight_lbs: goalW,
       body_fat_pct:    p.body_fat_pct    != null ? +p.body_fat_pct    : null,
+      training_days:   p.training_days   != null ? +p.training_days   : null,
     },
     weight: weight,                                   // + goal / toGoal above
     bodyFat: bfStats(inputs.bfLogs || [], p.body_fat_pct),
@@ -124,7 +227,11 @@ function snComputeSnapshot(inputs) {
     training: {
       trainedToday: seen[today] === true,
       streak: dashDayStreak(new Set(dates)),
-      thisWeekCount: dashThisWeekCount(dates),
+      // Rolling 7-day figures — PRESERVED for existing consumers.
+      thisWeekCount: thisWeekCount,
+      weekAdherence: snWeekAdherence(thisWeekCount, p.training_days),
+      // Calendar Monday–Sunday week — the definition new surfaces should use.
+      week: snCalendarWeek(dates, today, p.training_days),
       lastWorkout: last ? { name: last.name || 'Workout', date: last.date } : null,
     },
   };
@@ -183,6 +290,10 @@ if (typeof module !== 'undefined' && module.exports) {
     dashDayStreak: dashDayStreak,
     dashThisWeekCount: dashThisWeekCount,
     snWeekNutrition: snWeekNutrition,
+    snPlannedPerWeek: snPlannedPerWeek,
+    snWeekAdherence: snWeekAdherence,
+    snWeekStart: snWeekStart,
+    snCalendarWeek: snCalendarWeek,
     snComputeSnapshot: snComputeSnapshot,
   };
 }

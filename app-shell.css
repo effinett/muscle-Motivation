@@ -1,0 +1,825 @@
+/* ──────────────────────────────────────────────────────────────────────────
+ * Muscle Motivation — Shared App Shell  ·  Phase 4.3.4 (CP2)
+ *
+ * The shared presentation layer for the authenticated application: the primary
+ * bottom navigation, the ONE bottom-clearance strategy, and the shell-level
+ * accessibility primitives (skip link, focus ring, reduced motion).
+ *
+ * Linked in <head> AFTER each page's inline <style> and BEFORE safe-area.css,
+ * on every page that participates in navigation. Markup is produced by
+ * app-nav.js — this file never assumes a specific page's layout.
+ *
+ * Colour tokens are read from the host page with fallbacks, so the shell adopts
+ * whatever palette a page already defines and never forces a migration.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * DESIGN TOKENS — Phase 4.3.4 V1
+ *
+ * Three deliberately separate tiers. The distinction is the whole point: it is
+ * what lets a user pick their own accent later without refactoring components,
+ * without diluting the Muscle Motivation identity, and without destroying the
+ * meaning of success / warning / danger.
+ *
+ *   1. BRAND     permanent Muscle Motivation identity. Never user-changeable.
+ *   2. ACCENT    the personalization layer. Defaults to brand red today; a
+ *                future theme writes --mm-accent on :root and every consuming
+ *                component follows. Components must NEVER hard-code #B1121B.
+ *   3. SEMANTIC  meaning-carrying colour. Deliberately NOT aliased to the
+ *                accent — if a user picks red, "over target" must not become
+ *                indistinguishable from "primary action", and if they pick
+ *                green, "success" must not silently become their accent.
+ *
+ * This block is the canonical application palette. It is defined here rather
+ * than per page because app-shell.css is linked AFTER each page's inline
+ * <style>, so these values win at equal (0,1,0) specificity. Pages keep their
+ * own :root as a graceful fallback if this sheet ever fails to load.
+ * ══════════════════════════════════════════════════════════════════════════ */
+:root {
+  /* ── 1 · BRAND ───────────────────────────────────────────────────────── */
+  --mm-brand-red:      #B1121B;   /* identity red — not the personalization knob */
+  --mm-bg:             #121011;   /* primary dark background */
+  --mm-surface:        #231F20;   /* secondary dark surface */
+  --mm-neutral-light:  #F7F5F2;   /* primary light neutral */
+  --mm-neutral-muted:  #B8B3B4;   /* muted neutral */
+  --mm-white:          #FFFFFF;   /* functional white */
+
+  /* Derived neutral steps, interpolated between the brand background and
+     surface so every elevation stays on the same warm-charcoal hue. */
+  --mm-surface-raised: #1A1717;
+  --mm-surface-high:   #2C2827;
+  --mm-line-subtle:    #241F20;
+  --mm-line:           #332D2E;
+  --mm-line-strong:    #443C3D;
+
+  /* Text tiers. All three clear WCAG AA on --mm-bg (≈17:1 / 9.3:1 / 5.4:1);
+     the old #555 tertiary sat near 2.3:1 and failed. */
+  --mm-text:           var(--mm-neutral-light);
+  --mm-text-secondary: var(--mm-neutral-muted);
+  --mm-text-tertiary:  #8A8384;
+
+  /* ── 2 · ACCENT (user-selectable later) ──────────────────────────────── */
+  --mm-accent:          var(--mm-brand-red);
+  --mm-accent-contrast: var(--mm-white);   /* text/icon ON the accent */
+  --mm-accent-soft:     rgba(177, 18, 27, 0.12);
+  --mm-accent-border:   rgba(177, 18, 27, 0.30);
+
+  /* ── 3 · SEMANTIC (never aliases the accent) ─────────────────────────── */
+  --mm-success: #22C55E;
+  --mm-warning: #E0A800;
+  --mm-danger:  #DC2626;
+
+  /* ── 4 · DATA CATEGORY ────────────────────────────────────────────────
+   * Identity of a kind of DATA, not a judgement about it and not a
+   * personalization slot. Calories have been green across the nutrition page
+   * since long before this phase (nutrition.html: `.total-cals .bar-fill`),
+   * while macros carry the accent — so green here means "this is calories",
+   * not "this is good".
+   *
+   * It gets its own token rather than borrowing --mm-success on purpose: the
+   * two happen to share a value today, but they answer different questions,
+   * and a future change to the success colour must not silently restyle the
+   * calorie category. Equally it is NOT accent-derived, so a user theme never
+   * collapses the calorie/macro distinction. */
+  --mm-calories: #22C55E;
+}
+
+/* Keep the soft/border accent derivatives following a changed --mm-accent.
+   Declared after the rgba literals so supporting engines take these, and
+   non-supporting engines keep a correct red. */
+@supports (color: color-mix(in srgb, red 50%, transparent)) {
+  :root {
+    --mm-accent-soft:   color-mix(in srgb, var(--mm-accent) 14%, transparent);
+    --mm-accent-border: color-mix(in srgb, var(--mm-accent) 30%, transparent);
+  }
+}
+
+/* ── Legacy bridge ──────────────────────────────────────────────────────────
+ * Every page still declares its own --red / --bg / --surface-* / --text-* set.
+ * Rather than edit six palettes in one step, the historical names are re-pointed
+ * at the tokens above. Pages therefore adopt the approved brand palette with no
+ * per-page change, and component migration can proceed incrementally.
+ * NEW code should consume the --mm-* tokens directly; these names are a
+ * migration aid, not an API. */
+:root {
+  --bg:         var(--mm-bg);
+  --surface-1:  var(--mm-surface-raised);
+  --surface-2:  var(--mm-surface);
+  --surface-3:  var(--mm-surface-high);
+  --border-1:   var(--mm-line-subtle);
+  --border-2:   var(--mm-line);
+  --border-3:   var(--mm-line-strong);
+  --text:       var(--mm-text);
+  --text-2:     var(--mm-text-secondary);
+  --text-muted: var(--mm-text-tertiary);
+  --red:        var(--mm-accent);
+  --red-muted:  var(--mm-accent-soft);
+  --red-border: var(--mm-accent-border);
+  --green:      var(--mm-success);
+  --amber:      var(--mm-warning);
+}
+
+/* ── hidden ─────────────────────────────────────────────────────────────────
+ * The UA's `[hidden] { display: none }` is a bare type-less rule, so ANY class
+ * rule that sets `display` beats it — a `display:flex` component with the
+ * `hidden` attribute stays visible. Browser validation caught exactly that on
+ * the dashboard's Focus surface, which rendered as an empty box. Making the
+ * shell's rule authoritative fixes every current and future use. */
+[hidden] { display: none !important; }
+
+/* ── The one bottom-clearance strategy ──────────────────────────────────────
+ * --mm-nav-base-height   the nav's own height, 0px when no nav is rendered.
+ *                        app-nav.js toggles .mm-has-nav on <html>; nothing else
+ *                        may set this.
+ * --mm-bottom-clearance  the FULL band occupied at the bottom of the viewport
+ *                        (nav + device home indicator). Every page that needs
+ *                        to clear the nav adds this ONE value — no page-specific
+ *                        magic numbers, no duplicated env() arithmetic.
+ * A page's own breathing room stays the page's concern and is added on top. */
+:root {
+  --mm-nav-base-height: 0px;
+  --mm-bottom-clearance: calc(var(--mm-nav-base-height) + env(safe-area-inset-bottom, 0px));
+}
+:root.mm-has-nav {
+  --mm-nav-base-height: 64px;
+}
+
+/* ── Shared app header ──────────────────────────────────────────────────────
+ * Previously copy-pasted into five pages (four byte-identical, one drifted in
+ * formatting). Owned here so the shell has ONE header definition. Page-specific
+ * header children (the dashboard's #signOutBtn / .user-name) stay on their page.
+ * safe-area.css continues to add the notch inset via header:has(.header-logo). */
+header {
+  position: sticky; top: 0; z-index: 100;
+  /* Derived from the page background, not a literal. The old hard-coded
+     rgba(8,8,8,.97) survived the V1 palette migration and rendered DARKER than
+     the #121011 page, producing a visible horizontal seam under the header on
+     device — while the nav, which is token-derived, matched correctly. */
+  background: var(--mm-bg);
+  background: color-mix(in srgb, var(--mm-bg) 97%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--mm-line-subtle);
+  padding: 0 20px;
+  display: flex; align-items: center; justify-content: space-between;
+  height: 60px;
+}
+@supports not (background: color-mix(in srgb, red 50%, transparent)) {
+  header { background: var(--mm-bg); }
+}
+.header-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+.header-logo img { height: 42px; }
+.header-logo span {
+  font-family: 'Bebas Neue', sans-serif; font-size: 18px;
+  letter-spacing: 2.5px; color: var(--mm-text); text-transform: uppercase;
+}
+
+/* The header back-link. Visual treatment is unchanged; it now meets the 44px
+   minimum tap target inside the 60px header (it was ~27px tall).
+   DELIBERATELY scoped to `header` — app.html uses the same .btn-back class name
+   for the recalculate-goals modal's Back button, which must keep its own
+   styling. Never unscope this rule. */
+header .btn-back {
+  display: inline-flex; align-items: center;
+  min-height: 44px;
+  padding: 6px 14px; font-size: 11px; font-family: 'Barlow', sans-serif;
+  font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+  background: transparent; border: 1px solid var(--mm-line);
+  color: var(--mm-text-tertiary); border-radius: 6px; cursor: pointer;
+  transition: border-color 0.2s, color 0.2s; text-decoration: none;
+}
+header .btn-back:hover { border-color: var(--mm-line-strong); color: var(--mm-text-secondary); }
+
+/* The header back-link is a FALLBACK Home path, not a second Home control.
+   Wherever the primary nav renders, its Home destination already does this job,
+   so the redundant link is hidden. It reappears automatically on a suppressed-
+   nav surface (workout.html #activeView), which would otherwise have no visible
+   route out but the logo. */
+:root.mm-has-nav header .btn-back { display: none; }
+
+.header-logo:focus-visible,
+header .btn-back:focus-visible {
+  outline: 2px solid var(--mm-accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@media (max-width: 480px) {
+  header { padding: 0 14px; }
+  .header-logo span { display: none; }
+}
+
+/* ── Primary navigation ─────────────────────────────────────────────────────
+ * z-index sits ABOVE the sticky page header (100) and BELOW every modal /
+ * sheet overlay (190–200), so an open dialog correctly covers the nav, while
+ * toasts (999) and the PWA surfaces stay above everything as before. */
+.mm-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 120;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  height: var(--mm-bottom-clearance);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: var(--mm-surface-raised);
+  background: color-mix(in srgb, var(--mm-bg) 94%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--mm-line);
+}
+
+/* Fallback for engines without color-mix(): an opaque surface is always
+   readable, so the nav never renders as transparent-over-content. */
+@supports not (background: color-mix(in srgb, red 50%, transparent)) {
+  .mm-nav { background: var(--mm-surface-raised); }
+}
+
+.mm-nav-item {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  /* The bar stays full-bleed, but the destinations keep the same rhythm as the
+     680px content column instead of stretching across a desktop window. */
+  max-width: 170px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 4px;
+  text-decoration: none;
+  color: var(--mm-text-tertiary);
+  transition: color 0.18s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* The active indicator is a SHAPE, not only a colour: a filled bar across the
+   top edge of the destination. Paired with a brighter label and aria-current,
+   the current destination is conveyed three independent ways. */
+.mm-nav-item::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  background: var(--mm-accent);
+  transition: width 0.18s ease;
+}
+.mm-nav-item.is-active::before { width: 34px; }
+.mm-nav-item.is-active { color: var(--mm-text); }
+.mm-nav-item.is-active .mm-nav-glyph { color: var(--mm-accent); }
+
+.mm-nav-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+}
+.mm-nav-glyph {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+.mm-nav-label {
+  font-family: 'Barlow', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  line-height: 1;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Hover is a pointer-only affordance — never let it linger on touch. */
+@media (hover: hover) {
+  .mm-nav-item:hover { color: var(--mm-text-secondary); }
+  .mm-nav-item.is-active:hover { color: var(--mm-text); }
+}
+
+/* Narrow phones (320px → 4 × 80px): keep the 64px bar and the full label,
+   only tighten the horizontal padding so nothing is ever truncated. */
+@media (max-width: 360px) {
+  .mm-nav-item { padding-left: 2px; padding-right: 2px; gap: 4px; }
+  .mm-nav-label { letter-spacing: 0.5px; }
+}
+
+/* ── Toast ──────────────────────────────────────────────────────────────────
+ * Shell furniture, previously duplicated verbatim in six pages. Anchored to
+ * BOTH edges with auto margins rather than `left:50% + translateX(-50%)`: with
+ * only a left anchor the shrink-to-fit width is the half-viewport, so at 320px
+ * a normal message collapsed into a 160px, three-line column (and before that,
+ * `white-space: nowrap` made it overflow instead). It rides above the nav via
+ * the shared token; safe-area.css adds the home-indicator inset on top. */
+.toast {
+  position: fixed;
+  left: 16px; right: 16px;
+  bottom: calc(24px + var(--mm-nav-base-height, 0px));
+  margin: 0 auto;
+  width: fit-content;
+  max-width: min(420px, calc(100vw - 32px));
+  z-index: 999;
+  padding: 12px 20px;
+  background: var(--mm-surface);
+  border: 1px solid var(--mm-line-strong);
+  border-radius: 8px;
+  color: var(--mm-text);
+  font-family: 'Barlow', sans-serif;
+  font-size: 14px; font-weight: 600; line-height: 1.4;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(80px);
+  transition: transform 0.35s ease, opacity 0.35s ease;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .toast { transition: opacity 0.01s linear; transform: none; }
+  .toast.show { transform: none; }
+}
+
+/* ── iOS auto-zoom guard ────────────────────────────────────────────────────
+ * Mobile Safari automatically zooms the page when a focusable text control
+ * computes BELOW 16px. That zoom shifts the visual viewport away from the
+ * layout viewport, and while a `position: fixed` overlay is open on a scrolled
+ * page the overlay's hit target no longer lines up with where it is painted —
+ * so the next tap misses the action button entirely and nothing happens. That
+ * is the real-device Nutrition "Add food" defect: focusing the 14px food-search
+ * field triggered the zoom, and the subsequent tap on the red add button was
+ * swallowed. Zooming back out by hand restored the alignment and the same food
+ * logged correctly.
+ *
+ * The accessible fix is to size the CONTROLS so the zoom never fires. The
+ * viewport meta MUST keep pinch-zoom available — never maximum-scale=1 or
+ * user-scalable=no, which would suppress the symptom by removing a genuine
+ * accessibility affordance.
+ *
+ * Scoped to touch pointers and phone widths so desktop typography is untouched.
+ * Checkboxes/radios/ranges/colors have no text to zoom toward and keep their
+ * own sizing.
+ *
+ * `!important` is deliberate and matches the `[hidden]` guard above: page rules
+ * like `.field-group select` (0,1,1) outrank a bare `select` (0,0,1), so without
+ * it every <select> in the app silently kept its 14px and went on zooming. This
+ * is a correctness floor, not styling — it must not lose to page CSS drift. */
+@media (max-width: 480px), (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* ── Shell accessibility primitives ─────────────────────────────────────── */
+
+/* Visible only when focused; the first tab stop on a shell page. */
+.mm-skip-link {
+  position: absolute;
+  left: 8px;
+  top: -100px;
+  z-index: 300;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: var(--mm-surface);
+  border: 1px solid var(--mm-accent);
+  color: var(--mm-text);
+  font-family: 'Barlow', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: top 0.15s ease;
+}
+.mm-skip-link:focus { top: 8px; }
+
+.mm-visually-hidden {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* A single strong, consistent focus ring for shell controls. Deliberately
+   scoped to the shell — existing page controls keep their current treatment
+   and are recorded for a later accessibility pass. */
+.mm-nav-item:focus-visible,
+.mm-skip-link:focus-visible {
+  outline: 2px solid var(--mm-accent);
+  outline-offset: -3px;
+  border-radius: 6px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * SHARED UI PRIMITIVES — Phase 4.3.4 V2
+ *
+ * Presentation-only building blocks for Home, Train, Nutrition, Progress and
+ * the future Coach surface. Every one consumes the V1 token layer, so a user
+ * accent change flows through automatically and no component hard-codes red.
+ *
+ * These are CSS contracts, not markup generators: the consumer chooses the
+ * element (so a section label can be a real <h2> where it is a heading, and a
+ * plain <div> where it is not). Class names and the custom properties called
+ * out below ARE the API — renaming them breaks consumers.
+ *
+ * Defined here, not wired into any page yet: V2 ships the primitives, V4 does
+ * the dashboard restructure that consumes them.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── .mm-section ────────────────────────────────────────────────────────────
+ * A section header that lives ON the background rather than inside a card.
+ * This is the main tool for breaking up card-equality: label left, optional
+ * value right, optional hairline beneath.
+ *
+ *   <div class="mm-section">
+ *     <h2 class="mm-section-label">This Week</h2>
+ *     <span class="mm-section-value">1 / 3</span>
+ *   </div>
+ */
+.mm-section {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 26px 0 10px;
+}
+/* The first section carries no top margin. `:first-child` alone silently failed
+   wherever a page opens with a visually-hidden <h1> — that element is still the
+   first child even though it is out of flow, so the rule never matched and the
+   dashboard began with a dead band under the header. Matching the heading case
+   explicitly is the structural fix; no negative margins are used to compensate. */
+.mm-section:first-child,
+.mm-visually-hidden + .mm-section { margin-top: 0; }
+.mm-section-label {
+  font-family: 'Barlow', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--mm-text-tertiary);
+  margin: 0;
+}
+.mm-section-value {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 20px;
+  letter-spacing: 0.5px;
+  line-height: 1;
+  color: var(--mm-text);
+  white-space: nowrap;
+}
+/* Hairline variant — use when the section needs separating without a card. */
+.mm-section--ruled { padding-bottom: 10px; border-bottom: 1px solid var(--mm-line-subtle); }
+
+/* ── .mm-meter ──────────────────────────────────────────────────────────────
+ * Thin progress bar. Percentage is set through ONE custom property so callers
+ * never touch inline width:
+ *
+ *   el.style.setProperty('--mm-meter-pct', '42%')
+ *
+ * Default fill is the user accent. Semantic modifiers exist for genuinely
+ * meaningful states only — plain progress must stay accent-coloured so that
+ * "over target" keeps its distinct meaning.
+ *
+ *   <div class="mm-meter" role="progressbar" aria-valuenow="42"
+ *        aria-valuemin="0" aria-valuemax="100" aria-label="Calories">
+ *     <div class="mm-meter-fill"></div>
+ *   </div>
+ */
+.mm-meter {
+  --mm-meter-pct: 0%;
+  --mm-meter-height: 6px;
+  height: var(--mm-meter-height);
+  border-radius: 3px;
+  background: var(--mm-surface-high);
+  overflow: hidden;
+}
+.mm-meter-fill {
+  display: block;
+  height: 100%;
+  width: var(--mm-meter-pct);
+  /* A visibility floor of exactly one bar-height, so a very small value renders
+     as a deliberate pill rather than a clipped speck that reads as a rendering
+     artifact. On a 358px track that floor is ~1.7%, so nothing is materially
+     exaggerated — and 0% is hidden outright via data-empty rather than being
+     floored up to something. */
+  min-width: var(--mm-meter-height);
+  max-width: 100%;
+  border-radius: inherit;
+  background: var(--mm-accent);
+  transition: width 0.3s ease;
+}
+.mm-meter--success .mm-meter-fill { background: var(--mm-success); }
+.mm-meter--warning .mm-meter-fill { background: var(--mm-warning); }
+.mm-meter--danger  .mm-meter-fill { background: var(--mm-danger); }
+/* Data-category modifier — identifies WHAT is measured, not how well. */
+.mm-meter--calories .mm-meter-fill { background: var(--mm-calories); }
+/* No data yet: render the track alone rather than a misleading empty fill. */
+.mm-meter[data-empty="true"] .mm-meter-fill { display: none; }
+
+/* ── .mm-daystrip ───────────────────────────────────────────────────────────
+ * Seven day cells across a calendar week. INFORMATIONAL, not interactive —
+ * cells are never tap targets, so the 44px rule applies to the row that
+ * contains the strip, not to a cell.
+ *
+ * Honest state vocabulary — completed / today / neither. There is deliberately
+ * no "scheduled" state: the product stores a weekly training COUNT, never a
+ * per-weekday plan, so implying a day was scheduled would be fabricated.
+ *
+ * State is never colour-only: completed draws a check mark, today draws a
+ * ring, neither is an empty dim circle. Each cell carries its own label.
+ *
+ *   <div class="mm-daystrip">
+ *     <div class="mm-day is-done"><span class="mm-day-label">M</span>
+ *       <span class="mm-day-dot"></span></div>
+ *     …
+ *   </div>
+ */
+.mm-daystrip {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.mm-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+}
+.mm-day-label {
+  font-family: 'Barlow', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--mm-text-tertiary);
+  line-height: 1;
+}
+.mm-day-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid var(--mm-line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+/* Completed — filled accent + a drawn check (shape, not just colour). */
+.mm-day.is-done .mm-day-dot {
+  background: var(--mm-accent);
+  border-color: var(--mm-accent);
+}
+.mm-day.is-done .mm-day-dot::after {
+  content: '';
+  width: 4px;
+  height: 8px;
+  margin-top: -2px;
+  border: solid var(--mm-accent-contrast);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+/* Today — a DETACHED outer ring, plus a brighter label. Deliberately drawn
+   outside the dot rather than as a thicker border: when today is also a
+   completed day the dot is filled with the accent, and an accent border would
+   vanish into that fill, losing the "today" meaning entirely. The gap ring
+   survives both states, so completed-and-today reads as check + ring. */
+/* Today, NOT completed — a single accent outline at the normal dot size. No
+   outer ring: on device, an outer ring plus an outlined dot read as two
+   concentric circles and drew more attention than the primary CTA. */
+.mm-day.is-today .mm-day-dot { border-color: var(--mm-accent); }
+.mm-day.is-today .mm-day-label { color: var(--mm-text); }
+
+/* Today AND completed — the ONLY state that uses the outer ring. The fill and
+   check already say "completed", so the ring is doing one job: adding "and it
+   is today". The 2px background-coloured gap keeps it reading as a deliberate
+   second ring rather than a thick border. */
+.mm-day.is-today.is-done .mm-day-dot {
+  box-shadow: 0 0 0 2px var(--mm-bg), 0 0 0 4px var(--mm-accent);
+}
+/* Days outside the tracked range read as inactive without implying failure. */
+.mm-day.is-future .mm-day-dot { opacity: 0.45; }
+
+/* ── .mm-insight ────────────────────────────────────────────────────────────
+ * The Coach Insight surface — the seat the AI Coach will occupy. One label,
+ * one concise line, one optional action. It is NOT a chat container.
+ *
+ * Default treatment is the ACCENT edge. Warning/danger modifiers exist for
+ * genuinely semantic insights only; routine coaching nudges must not be
+ * dressed as errors.
+ *
+ * Sized as a CONTEXTUAL note, not a panel: the padding and the internal gaps
+ * are the minimum that keeps a one-line insight comfortable, so the surface
+ * never competes with the hero for weight. Only the chrome was trimmed — the
+ * label, the icon, the text and the action are all unchanged.
+ */
+.mm-insight {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 12px 14px;
+  background: var(--mm-surface-raised);
+  border: 1px solid var(--mm-line);
+  border-left: 2px solid var(--mm-accent);
+  border-radius: 12px;
+}
+.mm-insight--warning { border-left-color: var(--mm-warning); }
+.mm-insight--danger  { border-left-color: var(--mm-danger); }
+.mm-insight--success { border-left-color: var(--mm-success); }
+.mm-insight-icon { color: var(--mm-accent); flex-shrink: 0; margin-top: 1px; line-height: 0; }
+.mm-insight--warning .mm-insight-icon { color: var(--mm-warning); }
+.mm-insight--danger  .mm-insight-icon { color: var(--mm-danger); }
+.mm-insight--success .mm-insight-icon { color: var(--mm-success); }
+.mm-insight-body { min-width: 0; }
+.mm-insight-label {
+  font-family: 'Barlow', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--mm-text-tertiary);
+}
+.mm-insight-text {
+  font-family: 'Barlow', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mm-text);
+  margin: 2px 0 0;
+}
+.mm-insight-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;          /* real tap target — never reduced */
+  /* A 13px label inside a 44px box leaves ~14px of dead space above and below.
+     The BOTTOM half is absorbed so the card keeps its optical padding without
+     growing. The top is deliberately NOT pulled up: at -6px the box overlapped
+     the insight paragraph, so a tap on the last line of the text navigated.
+     The card's remaining height is the 44px target itself, which stays. */
+  margin: 0 0 -12px;
+  font-family: 'Barlow', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mm-accent);
+  text-decoration: none;
+}
+.mm-insight-action::after { content: '›'; font-size: 15px; line-height: 1; }
+.mm-insight-action:focus-visible {
+  outline: 2px solid var(--mm-accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ── .mm-hero ───────────────────────────────────────────────────────────────
+ * The Today's Plan panel. Carries the screen's primary action, so it is one of
+ * only two surfaces that keeps a container.
+ *
+ * The optional image layer is DECORATIVE and additive: the panel is complete
+ * without it, adds no layout shift when it loads, and text never sits on the
+ * photograph — a gradient mask keeps the copy over solid surface. With no
+ * image the same geometry is filled by a soft accent wash.
+ *
+ *   <section class="mm-hero">
+ *     <div class="mm-hero-media" aria-hidden="true"><img alt="" …></div>
+ *     <div class="mm-hero-body"> eyebrow / title / meta / CTA </div>
+ *   </section>
+ */
+.mm-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--mm-surface-raised);
+  border: 1px solid var(--mm-line);
+}
+/* No-image default: a restrained accent wash anchored to the corner the
+   photograph would occupy, so both variants share one composition. */
+.mm-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background: radial-gradient(120% 90% at 100% 0%,
+    var(--mm-accent-soft) 0%, transparent 62%);
+}
+.mm-hero-media {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 62%;
+  z-index: -1;
+  pointer-events: none;
+}
+.mm-hero-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  display: block;
+  filter: grayscale(1) contrast(1.05);
+}
+/* The mask that guarantees legibility: copy always sits over solid surface. */
+.mm-hero-media::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg,
+    var(--mm-surface-raised) 0%,
+    var(--mm-surface-raised) 26%,
+    color-mix(in srgb, var(--mm-surface-raised) 55%, transparent) 62%,
+    transparent 100%);
+}
+@supports not (color: color-mix(in srgb, red 50%, transparent)) {
+  .mm-hero-media::after {
+    background: linear-gradient(90deg,
+      var(--mm-surface-raised) 0%, var(--mm-surface-raised) 40%, transparent 100%);
+  }
+}
+.mm-hero-body {
+  position: relative;
+  /* Vertical padding is tighter than horizontal on purpose: the card is the
+     tallest thing on Home, so the space it can give back is vertical. The 20px
+     side padding is untouched — narrowing it would change the card's shape. */
+  padding: 16px 20px;
+  max-width: 74%;            /* copy never runs under the image */
+}
+.mm-hero:not(:has(.mm-hero-media)) .mm-hero-body { max-width: 100%; }
+.mm-hero-eyebrow {
+  font-family: 'Barlow', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--mm-accent);
+}
+.mm-hero-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(34px, 9vw, 46px);
+  line-height: 1.02;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--mm-text);
+  /* The eyebrow, title and meta are one identity block, so they sit close
+     together; the gap that matters is the one before the CTA below them. */
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;   /* long program/session names never overflow */
+}
+.mm-hero-meta {
+  font-family: 'Barlow', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mm-text-secondary);
+  margin-top: 4px;
+}
+.mm-hero-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;          /* button dimensions are unchanged */
+  /* A 48px filled slab separates itself from the copy by its own weight, so it
+     needed less clear space above it than a text element would. */
+  margin-top: 10px;
+  padding: 12px 26px;
+  border: none;
+  border-radius: 10px;
+  background: var(--mm-accent);
+  color: var(--mm-accent-contrast);
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 19px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+.mm-hero-cta:hover { opacity: 0.88; }
+.mm-hero-cta:focus-visible {
+  outline: 2px solid var(--mm-accent-contrast);
+  outline-offset: 3px;
+}
+/* Narrow phones: the image yields space rather than squeezing the copy. */
+@media (max-width: 380px) {
+  .mm-hero-body { max-width: 84%; padding: 18px 16px; }
+  .mm-hero-media { width: 52%; }
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .mm-nav-item,
+  .mm-nav-item::before,
+  .mm-skip-link,
+  .mm-meter-fill,
+  .mm-hero-cta {
+    transition: none;
+  }
+}

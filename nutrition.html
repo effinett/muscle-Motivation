@@ -39,29 +39,11 @@
     #authGate img { width: 72px; margin-bottom: 16px; opacity: 0.6; }
     #authGate p { color: var(--text-muted); font-size: 11px; letter-spacing: 2.5px; text-transform: uppercase; }
 
-    header {
-      position: sticky; top: 0; z-index: 100;
-      background: rgba(8,8,8,0.97); backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border-1);
-      padding: 0 20px;
-      display: flex; align-items: center; justify-content: space-between; height: 60px;
-    }
-    .header-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
-    .header-logo img { height: 42px; }
-    .header-logo span {
-      font-family: 'Bebas Neue', sans-serif; font-size: 18px;
-      letter-spacing: 2.5px; color: var(--text); text-transform: uppercase;
-    }
-    .btn-back {
-      padding: 6px 14px; font-size: 11px; font-family: 'Barlow', sans-serif;
-      font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-      background: transparent; border: 1px solid var(--border-2);
-      color: var(--text-muted); border-radius: 6px; cursor: pointer;
-      transition: border-color 0.2s, color 0.2s; text-decoration: none;
-    }
-    .btn-back:hover { border-color: var(--border-3); color: var(--text-2); }
+    /* header / .header-logo / .btn-back now live in app-shell.css */
 
-    .container { max-width: 680px; margin: 0 auto; padding: 28px 16px 120px; }
+    /* Bottom padding = the page's own breathing room + the shared app-shell
+       clearance (nav height + home indicator). See app-shell.css. */
+    .container { max-width: 680px; margin: 0 auto; padding: 28px 16px calc(24px + var(--mm-bottom-clearance, 0px)); }
 
     .page-title { font-family: 'Bebas Neue', sans-serif; font-size: 34px; letter-spacing: 1.5px; }
     .page-sub { font-size: 13px; color: var(--text-muted); margin-top: 2px; margin-bottom: 8px; }
@@ -591,21 +573,10 @@
     }
     .btn-delete-log:hover { border-color: var(--red); color: var(--red); }
 
-    .toast {
-      position: fixed; bottom: 24px; left: 50%;
-      transform: translateX(-50%) translateY(80px);
-      background: var(--surface-2); border: 1px solid var(--border-3);
-      color: var(--text); padding: 12px 24px; border-radius: 8px;
-      font-size: 14px; font-weight: 600;
-      transition: transform 0.35s ease, opacity 0.35s ease;
-      opacity: 0; z-index: 999; white-space: nowrap;
-    }
-    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    /* .toast now lives in app-shell.css */
 
     @media (max-width: 480px) {
-      header { padding: 0 14px; }
-      .header-logo span { display: none; }
-      .container { padding: 20px 12px 120px; }
+      .container { padding: 20px 12px calc(24px + var(--mm-bottom-clearance, 0px)); }
       .nu-row.nu-row-4 { grid-template-columns: repeat(2, 1fr); }
       /* Keep the 4-up readout from overflowing on narrow phones */
       .nu-readout { padding: 14px 4px; }
@@ -648,6 +619,8 @@
   <script src="pwa-install.js" defer></script>
   <script src="pwa-install-ui.js" defer></script>
   <script src="pwa-install-register.js" defer></script>
+  <script src="app-nav.js" defer></script>
+  <link rel="stylesheet" href="app-shell.css">
   <link rel="stylesheet" href="safe-area.css">
 </head>
 <body>
@@ -658,16 +631,16 @@
 </div>
 
 <div id="appContent" style="display:none;">
+  <a class="mm-skip-link" href="#mmMain">Skip to content</a>
   <header>
     <a class="header-logo" href="app.html">
       <img src="logow.png" alt="Muscle Motivation">
       <span>Muscle Motivation</span>
     </a>
-    <a class="btn-back" href="app.html">← Dashboard</a>
   </header>
 
-  <div class="container">
-    <div class="page-title">Nutrition</div>
+  <main class="container" id="mmMain" tabindex="-1">
+    <h1 class="page-title">Nutrition</h1>
     <div class="page-sub">Log what you eat. Hit your targets, stay consistent.</div>
 
     <!-- Date navigator -->
@@ -704,7 +677,10 @@
 
     <!-- Meals -->
     <div id="mealsWrap"></div>
-  </div>
+  </main>
+
+  <!-- Shared primary navigation (markup owned by app-nav.js) -->
+  <div id="appNavMount"></div>
 </div>
 
 <!-- Add / Edit Food Modal (markup injected by nutrition.js) -->
@@ -1456,6 +1432,18 @@
     }
   }
 
+  /* Deep link from the dashboard's "Quick log" action. Opens the EXISTING
+     Quick Log flow — it only scrolls to and focuses #aiLogInput, adding no
+     second logging path. iOS will not raise the keyboard without a gesture,
+     so the field is brought into view rather than assumed focused. */
+  function focusQuickLogFromHash() {
+    if (window.location.hash !== '#quicklog') return;
+    var input = document.getElementById('aiLogInput');
+    if (!input) return;
+    try { input.scrollIntoView({ block: 'center' }); } catch (e) { input.scrollIntoView(); }
+    setTimeout(function () { try { input.focus({ preventScroll: true }); } catch (e) { input.focus(); } }, 80);
+  }
+
   /* ── refresh ─────────────────────────────────────────────────────── */
   async function refresh() {
     if (!currentUserId) return;
@@ -1488,6 +1476,7 @@
         loadFavChips();
         loadRecentChips();
         lucide.createIcons();
+        focusQuickLogFromHash();
       } catch (err) {
         console.error('Nutrition page error:', err);
         window.location.href = 'auth.html';

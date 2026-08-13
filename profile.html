@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Muscle Motivation – Profile</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --red:          #B1121B;
+      --bg:           #080808;
+      --surface-1:    #0d0d0d;
+      --surface-2:    #131313;
+      --border-1:     #1c1c1c;
+      --border-2:     #252525;
+      --border-3:     #2f2f2f;
+      --text:         #ffffff;
+      --text-2:       #a0a0a0;
+      --text-muted:   #555555;
+      --green:        #22c55e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Barlow', sans-serif;
+      background: var(--bg); color: var(--text);
+      min-height: 100vh; overflow-x: hidden;
+    }
+
+    #authGate {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; min-height: 100vh;
+    }
+    #authGate img { width: 72px; margin-bottom: 16px; opacity: 0.6; }
+    #authGate p {
+      color: var(--text-muted); font-size: 11px;
+      letter-spacing: 2.5px; text-transform: uppercase;
+    }
+
+    /* header / .header-logo live in app-shell.css */
+
+    .container {
+      max-width: 680px; margin: 0 auto;
+      padding: 20px 16px calc(24px + var(--mm-bottom-clearance, 0px));
+    }
+
+    .page-title { font-family: 'Bebas Neue', sans-serif; font-size: 34px; letter-spacing: 1.5px; }
+    .page-sub { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+
+    .section-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--text-muted);
+      margin: 28px 0 10px;
+    }
+
+    .card {
+      background: var(--surface-1); border: 1px solid var(--border-2);
+      border-radius: 12px; padding: 4px 16px;
+    }
+    .item {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 14px; min-height: 56px; padding: 12px 0;
+      border-bottom: 1px solid var(--border-1);
+      text-decoration: none; color: var(--text);
+    }
+    .item:last-child { border-bottom: none; }
+    .item-main { min-width: 0; }
+    .item-name { font-size: 14px; font-weight: 600; }
+    .item-sub { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+    .item-val { font-size: 14px; font-weight: 600; color: var(--text-2); white-space: nowrap; }
+    a.item:hover .item-name { color: var(--mm-accent); }
+    a.item:focus-visible, button.item:focus-visible {
+      outline: 2px solid var(--mm-accent); outline-offset: -2px; border-radius: 8px;
+    }
+    button.item {
+      width: 100%; background: none; border: none; border-bottom: 1px solid var(--border-1);
+      font-family: 'Barlow', sans-serif; text-align: left; cursor: pointer;
+    }
+    button.item:last-child { border-bottom: none; }
+
+    .btn-sm {
+      flex-shrink: 0; min-height: 40px; padding: 8px 14px;
+      background: transparent; border: 1px solid var(--border-2);
+      border-radius: 8px; color: var(--text-2);
+      font-family: 'Barlow', sans-serif; font-size: 11px; font-weight: 700;
+      letter-spacing: 1px; text-transform: uppercase; cursor: pointer;
+      text-decoration: none; display: inline-flex; align-items: center;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .btn-sm:hover { border-color: var(--mm-accent); color: var(--mm-accent); }
+    .btn-sm:focus-visible { outline: 2px solid var(--mm-accent); outline-offset: 2px; }
+    .badge-active {
+      font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--mm-success); flex-shrink: 0;
+    }
+
+    .signout {
+      width: 100%; min-height: 48px; margin-top: 28px; padding: 13px;
+      background: transparent; border: 1px solid var(--border-2);
+      border-radius: 10px; color: var(--text-muted);
+      font-family: 'Barlow', sans-serif; font-size: 12px; font-weight: 700;
+      letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .signout:hover { border-color: var(--mm-accent); color: var(--mm-accent); }
+    .signout:focus-visible { outline: 2px solid var(--mm-accent); outline-offset: 2px; }
+
+    .hint {
+      margin-top: 10px; padding: 10px 14px; font-size: 13px; color: var(--text-2);
+      background: rgba(177,18,27,0.08); border: 1px solid rgba(177,18,27,0.2);
+      border-radius: 8px;
+    }
+    .hint button {
+      background: none; border: none; color: var(--mm-accent); font-weight: 600;
+      font-family: 'Barlow', sans-serif; font-size: 13px; cursor: pointer;
+      text-decoration: underline; padding: 0;
+    }
+
+    /* Recalculate modal */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.82); backdrop-filter: blur(6px);
+      align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: var(--surface-1); border: 1px solid var(--border-2);
+      border-radius: 14px; padding: 24px 20px;
+      width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto;
+    }
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 18px;
+    }
+    .modal-title { font-family: 'Bebas Neue', sans-serif; font-size: 24px; letter-spacing: 1.5px; }
+    .modal-close {
+      min-width: 44px; min-height: 44px; background: none; border: none;
+      color: var(--text-muted); font-size: 18px; cursor: pointer;
+    }
+    .modal-close:hover { color: var(--text); }
+    .modal-close:focus-visible { outline: 2px solid var(--mm-accent); outline-offset: 2px; border-radius: 6px; }
+    .field-group { margin-bottom: 14px; }
+    .field-label {
+      display: block; font-size: 11px; font-weight: 700;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      color: var(--text-muted); margin-bottom: 6px;
+    }
+    .field-optional { font-weight: 400; text-transform: none; letter-spacing: 0; }
+    .field-group input, .field-group select {
+      width: 100%; min-height: 44px; padding: 10px 12px;
+      background: var(--surface-2); border: 1px solid var(--border-2);
+      border-radius: 8px; color: var(--text);
+      font-family: 'Barlow', sans-serif; font-size: 14px; appearance: none;
+    }
+    .field-group input:focus-visible, .field-group select:focus-visible {
+      outline: 2px solid var(--mm-accent); outline-offset: 1px; border-color: var(--mm-accent);
+    }
+    .btn-primary {
+      width: 100%; min-height: 48px; margin-top: 8px; padding: 12px;
+      background: var(--mm-accent); border: none; border-radius: 8px; color: var(--mm-accent-contrast);
+      font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 2px;
+      cursor: pointer;
+    }
+    .btn-primary:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    .results-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .result-cell {
+      background: var(--surface-2); border-radius: 8px;
+      padding: 14px 16px; border-left: 2px solid var(--mm-accent);
+    }
+    .result-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+      text-transform: uppercase; color: var(--text-muted);
+    }
+    .result-val { font-family: 'Bebas Neue', sans-serif; font-size: 26px; margin-top: 4px; line-height: 1; }
+    .result-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 18px; line-height: 1.5; }
+    .modal-actions { display: flex; gap: 10px; }
+    .btn-back-modal {
+      flex: 1; min-height: 44px; background: transparent;
+      border: 1px solid var(--border-2); border-radius: 8px;
+      color: var(--text-muted); font-size: 13px; font-weight: 600;
+      font-family: 'Barlow', sans-serif; cursor: pointer;
+    }
+    .btn-save {
+      flex: 2; min-height: 44px; background: var(--mm-accent); border: none;
+      border-radius: 8px; color: var(--mm-accent-contrast);
+      font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 2px; cursor: pointer;
+    }
+
+    /* .toast now lives in app-shell.css */
+
+    @media (prefers-reduced-motion: reduce) {
+      .btn-sm, .signout, .item { transition: none; }
+    }
+    @media (max-width: 480px) {
+      .container { padding: 16px 12px calc(24px + var(--mm-bottom-clearance, 0px)); }
+    }
+  </style>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#121011">
+  <meta name="application-name" content="Muscle Motivation">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Muscle Motivation">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <script src="app-nav.js" defer></script>
+  <link rel="stylesheet" href="app-shell.css">
+  <link rel="stylesheet" href="safe-area.css">
+</head>
+<body>
+
+<div id="authGate">
+  <img src="logow.png" alt="Muscle Motivation">
+  <p>Loading...</p>
+</div>
+
+<div id="appContent" style="display:none;">
+  <a class="mm-skip-link" href="#mmMain">Skip to content</a>
+  <header>
+    <a class="header-logo" href="app.html">
+      <img src="logow.png" alt="Muscle Motivation">
+      <span>Muscle Motivation</span>
+    </a>
+  </header>
+
+  <main class="container" id="mmMain" tabindex="-1">
+    <h1 class="page-title">Profile</h1>
+    <div class="page-sub" id="profileEmail"></div>
+
+    <!-- Targets -->
+    <div class="section-label">Daily Targets</div>
+    <div class="card">
+      <div class="item">
+        <div class="item-main"><div class="item-name">Calories</div></div>
+        <div class="item-val" id="tgtCalories">—</div>
+      </div>
+      <div class="item">
+        <div class="item-main"><div class="item-name">Protein</div></div>
+        <div class="item-val" id="tgtProtein">—</div>
+      </div>
+      <div class="item">
+        <div class="item-main"><div class="item-name">Carbs</div></div>
+        <div class="item-val" id="tgtCarbs">—</div>
+      </div>
+      <div class="item">
+        <div class="item-main"><div class="item-name">Fat</div></div>
+        <div class="item-val" id="tgtFats">—</div>
+      </div>
+      <button class="item" onclick="openRecalc()">
+        <div class="item-main">
+          <div class="item-name" style="color:var(--mm-accent)">Recalculate Goals</div>
+          <div class="item-sub" id="goalSummary">—</div>
+        </div>
+      </button>
+    </div>
+
+    <!-- Programs -->
+    <div class="section-label">Programs</div>
+    <div class="card" id="programsCard">
+      <div class="item"><div class="item-main"><div class="item-sub">Loading&hellip;</div></div></div>
+    </div>
+    <div class="hint" id="goalMismatch" hidden></div>
+
+    <!-- Membership -->
+    <div id="membershipWrap" hidden>
+      <div class="section-label">Membership</div>
+      <div class="card">
+        <div class="item">
+          <div class="item-main">
+            <div class="item-name">Muscle Motivation Membership</div>
+            <div class="item-sub" id="membershipStatus">—</div>
+          </div>
+          <button class="btn-sm" id="manageBillingBtn" onclick="manageBilling(this)">Manage</button>
+        </div>
+      </div>
+    </div>
+
+    <button class="signout" onclick="signOut()">Sign Out</button>
+  </main>
+
+  <!-- Shared primary navigation (markup owned by app-nav.js) -->
+  <div id="appNavMount"></div>
+</div>
+
+<!-- Recalculate Goals -->
+<div class="modal-overlay" id="recalcModal" onclick="if(event.target===this)closeRecalc()">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="recalcTitle">
+    <div class="modal-header">
+      <div class="modal-title" id="recalcTitle">Update Your Goals</div>
+      <button class="modal-close" onclick="closeRecalc()" aria-label="Close">✕</button>
+    </div>
+
+    <div id="recalcForm">
+      <div class="field-group">
+        <label class="field-label" for="rc-weight">Current Weight (lbs)</label>
+        <input type="number" id="rc-weight" min="50" max="500" placeholder="e.g. 185">
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="rc-bodyfat">Body Fat % <span class="field-optional">(optional)</span></label>
+        <input type="number" id="rc-bodyfat" min="4" max="60" placeholder="e.g. 22">
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="rc-goal">Goal</label>
+        <select id="rc-goal">
+          <option value="fatloss">Fat Loss</option>
+          <option value="recomp">Recomposition</option>
+          <option value="muscle">Muscle Gain</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="rc-steps">Daily Steps</label>
+        <select id="rc-steps">
+          <option value="1.2">Under 4,000 – Sedentary</option>
+          <option value="1.35">4,000–6,000 – Lightly active</option>
+          <option value="1.45">6,000–8,000 – Moderately active</option>
+          <option value="1.55">8,000–10,000 – Active</option>
+          <option value="1.7">10,000+ – Very active</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="rc-training">Training Days / Week</label>
+        <select id="rc-training">
+          <option value="0">0 – Not training yet</option>
+          <option value="2">2 days</option>
+          <option value="3">3 days</option>
+          <option value="4">4 days</option>
+          <option value="5">5 days</option>
+          <option value="6">6 days</option>
+        </select>
+      </div>
+      <button class="btn-primary" onclick="runRecalc()">Calculate New Targets</button>
+    </div>
+
+    <div id="recalcResults" style="display:none;">
+      <div class="results-grid">
+        <div class="result-cell" style="grid-column:1/-1;">
+          <div class="result-label">Target Calories</div>
+          <div class="result-val" id="rc-rCals">—</div>
+        </div>
+        <div class="result-cell">
+          <div class="result-label">Protein</div>
+          <div class="result-val" id="rc-rProtein">—</div>
+        </div>
+        <div class="result-cell">
+          <div class="result-label">Carbs</div>
+          <div class="result-val" id="rc-rCarbs">—</div>
+        </div>
+        <div class="result-cell">
+          <div class="result-label">Fat</div>
+          <div class="result-val" id="rc-rFats">—</div>
+        </div>
+      </div>
+      <div class="result-sub" id="rc-rSub"></div>
+      <div class="modal-actions">
+        <button class="btn-back-modal" onclick="backToRecalcForm()">← Back</button>
+        <button class="btn-save" onclick="saveRecalc()">Save &amp; Update</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.0/dist/umd/supabase.js" integrity="sha384-3wY11tldQ5+yWqAvmTN4XtQvnjoTva0cV15O/O/O5NTtp0ivVopSzLOzsVXWZse9" crossorigin="anonymous"></script>
+<script src="supabase.js"></script>
+<script src="schedules.js"></script>
+<script src="program-state.js"></script>
+<script>
+
+  // Profile is the SECONDARY/account destination — the low-frequency actions
+  // that used to crowd the dashboard. It is not a second dashboard: no metrics,
+  // no trends, no logging. Program/session logic is shared via program-state.js.
+
+  var currentProfile = null;
+  var currentUserId  = null;
+  var ownedPrograms  = [];
+
+  function esc(s) {
+    return String(s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function showToast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(function () { t.classList.remove('show'); }, 3000);
+  }
+
+  window.addEventListener('load', function () {
+    (async () => {
+      try {
+        var session = await requireAuth();
+        currentUserId = session.user.id;
+        currentProfile = await getProfile(currentUserId);
+        if (!currentProfile || !currentProfile.onboarding_complete) {
+          window.location.href = 'onboarding.html';
+          return;
+        }
+
+        document.getElementById('profileEmail').textContent =
+          currentProfile.full_name || session.user.email || '';
+        renderTargets();
+
+        document.getElementById('authGate').style.display = 'none';
+        document.getElementById('appContent').style.display = 'block';
+
+        await renderPrograms();
+        await renderMembership();
+      } catch (err) {
+        console.error('Profile error:', err);
+        window.location.href = 'auth.html';
+      }
+    })();
+  });
+
+  function renderTargets() {
+    var p = currentProfile;
+    document.getElementById('tgtCalories').textContent = p.target_calories ? p.target_calories.toLocaleString() + ' kcal' : '—';
+    document.getElementById('tgtProtein').textContent  = p.protein_target ? p.protein_target + ' g' : '—';
+    document.getElementById('tgtCarbs').textContent    = p.carb_target ? p.carb_target + ' g' : '—';
+    document.getElementById('tgtFats').textContent     = p.fat_target ? p.fat_target + ' g' : '—';
+    var bits = [];
+    if (GOAL_LABELS[p.goal]) bits.push(GOAL_LABELS[p.goal]);
+    if (p.training_days) bits.push(p.training_days + ' days/week');
+    document.getElementById('goalSummary').textContent = bits.join(' · ') || 'Set your goal';
+  }
+
+  // ── Programs ─────────────────────────────────────────────────────────
+  async function renderPrograms() {
+    var card = document.getElementById('programsCard');
+    try {
+      ownedPrograms = await pgLoadOwnedPrograms(currentUserId);
+      var activeSlug = await pgResolveActive(currentUserId, currentProfile, ownedPrograms);
+
+      var html = '';
+      if (!ownedPrograms.length) {
+        html += '<div class="item"><div class="item-main">' +
+          '<div class="item-sub">You don\'t own any programs yet.</div></div></div>';
+      } else {
+        ownedPrograms.forEach(function (slug) {
+          var meta = PROGRAM_META[slug];
+          var isActive = slug === activeSlug;
+          html += '<div class="item">' +
+            '<div class="item-main">' +
+              '<div class="item-name">' + esc(meta.name) + '</div>' +
+              '<div class="item-sub">' + esc(meta.desc) + '</div>' +
+            '</div>' +
+            (isActive
+              ? '<span class="badge-active">Active</span>'
+              : '<button class="btn-sm" onclick="setActive(\'' + esc(slug) + '\')">Make Active</button>') +
+          '</div>';
+        });
+      }
+      html += '<a class="item" href="store.html">' +
+        '<div class="item-main"><div class="item-name">Browse all programs</div></div>' +
+        '<span class="item-val">→</span></a>';
+      card.innerHTML = html;
+
+      renderGoalMismatch(activeSlug);
+    } catch (e) {
+      console.error('renderPrograms:', e);
+      card.innerHTML = '<div class="item"><div class="item-main"><div class="item-sub">Couldn\'t load programs.</div></div></div>';
+    }
+  }
+
+  function renderGoalMismatch(activeSlug) {
+    var el = document.getElementById('goalMismatch');
+    var m = pgGoalMismatch(currentProfile.goal, activeSlug, ownedPrograms);
+    if (!m) { el.hidden = true; return; }
+    el.innerHTML = 'Your goal is <strong>' + esc(m.goalLabel) + '</strong>. ' +
+      '<button onclick="setActive(\'' + esc(m.slug) + '\')">Switch to ' + esc(m.name) + '?</button>';
+    el.hidden = false;
+  }
+
+  async function setActive(slug) {
+    try {
+      await pgSetActive(currentUserId, slug);
+      currentProfile.active_program = slug;
+      await renderPrograms();
+      showToast('Active program updated.');
+    } catch (e) {
+      console.error('setActive:', e);
+      showToast('Error updating program — try again.');
+    }
+  }
+
+  // ── Membership ───────────────────────────────────────────────────────
+  async function renderMembership() {
+    var wrap = document.getElementById('membershipWrap');
+    try {
+      // Include past_due so a member with a failed payment still sees the card
+      // (and a warning) rather than silently losing access to manage billing.
+      var res = await supabaseClient
+        .from('purchases')
+        .select('status, current_period_end, cancel_at_period_end')
+        .eq('user_id', currentUserId)
+        .eq('product', 'ai_membership')
+        .in('status', ['active', 'past_due'])
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (res.error) throw res.error;
+
+      var m = (res.data && res.data[0]) || null;
+      if (!m) { wrap.hidden = true; return; }
+
+      var periodEnd = m.current_period_end ? new Date(m.current_period_end) : null;
+      // Defensive: if a cancellation window has elapsed but the
+      // subscription.deleted webhook hasn't landed yet, treat access as ended.
+      if (m.cancel_at_period_end && periodEnd && periodEnd < new Date()) {
+        wrap.hidden = true;
+        return;
+      }
+
+      var statusEl = document.getElementById('membershipStatus');
+      var dateStr = periodEnd
+        ? periodEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        : null;
+
+      if (m.status === 'past_due') {
+        // Semantic danger, NOT the user accent — a failed payment must read as a
+        // problem even if the user themes the app red, green or anything else.
+        statusEl.innerHTML = '<span style="color:var(--mm-danger);font-weight:700;">Payment failed</span> — update your card to keep access.';
+      } else if (m.cancel_at_period_end) {
+        statusEl.textContent = dateStr ? 'Canceled — access ends ' + dateStr : 'Canceled';
+      } else {
+        statusEl.textContent = dateStr ? 'Active — renews ' + dateStr : 'Active';
+      }
+      wrap.hidden = false;
+    } catch (e) {
+      console.error('renderMembership:', e);
+      wrap.hidden = true;
+    }
+  }
+
+  async function manageBilling(btn) {
+    var orig = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Loading…';
+    try {
+      var session = await getSession();
+      if (!session) { window.location.href = 'auth.html'; return; }
+      var res = await fetch('/api/customer-portal', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + session.access_token },
+      });
+      if (!res.ok) {
+        var d = await res.json().catch(function () { return {}; });
+        throw new Error(d.error || 'Could not open billing portal');
+      }
+      var json = await res.json();
+      window.location.href = json.url;
+    } catch (err) {
+      console.error('manageBilling:', err);
+      showToast(err.message || 'Could not open billing portal.');
+      btn.disabled = false;
+      btn.textContent = orig;
+    }
+  }
+
+  // ── Recalculate Goals ────────────────────────────────────────────────
+  var recalcPlan = null;
+  var recalcOpener = null;
+
+  function openRecalc() {
+    if (!currentProfile) return;
+    recalcOpener = document.activeElement;
+    document.getElementById('rc-weight').value   = currentProfile.weight_lbs || '';
+    document.getElementById('rc-bodyfat').value  = currentProfile.body_fat_pct || '';
+    document.getElementById('rc-goal').value     = currentProfile.goal || 'fatloss';
+    document.getElementById('rc-steps').value    = currentProfile.activity_level || '1.35';
+    document.getElementById('rc-training').value = currentProfile.training_days || '3';
+    backToRecalcForm();
+    document.getElementById('recalcModal').classList.add('open');
+    document.getElementById('rc-weight').focus();
+  }
+
+  function closeRecalc() {
+    document.getElementById('recalcModal').classList.remove('open');
+    if (recalcOpener && typeof recalcOpener.focus === 'function') recalcOpener.focus();
+  }
+
+  function backToRecalcForm() {
+    document.getElementById('recalcForm').style.display = '';
+    document.getElementById('recalcResults').style.display = 'none';
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && document.getElementById('recalcModal').classList.contains('open')) {
+      closeRecalc();
+    }
+  });
+
+  function rcCalcBMR(weightKg, heightCm, age, gender, bodyfat) {
+    if (bodyfat && bodyfat >= 5 && bodyfat <= 55) {
+      return 370 + (21.6 * weightKg * (1 - bodyfat / 100));
+    }
+    var base = (10 * weightKg) + (6.25 * heightCm) - (5 * age);
+    return gender === 'male' ? base + 5 : base - 161;
+  }
+
+  function runRecalc() {
+    var weight   = parseFloat(document.getElementById('rc-weight').value);
+    var bodyfat  = parseFloat(document.getElementById('rc-bodyfat').value) || null;
+    var goal     = document.getElementById('rc-goal').value;
+    var stepMult = parseFloat(document.getElementById('rc-steps').value);
+    var training = parseFloat(document.getElementById('rc-training').value);
+
+    if (!weight) { showToast('Please enter your current weight.'); return; }
+
+    var p = currentProfile;
+    var weightKg = weight * 0.453592;
+    var heightCm = p.height_cm || 175;
+    var age      = p.age || 30;
+    var gender   = p.gender || 'male';
+
+    var bmr  = rcCalcBMR(weightKg, heightCm, age, gender, bodyfat);
+    var tdee = Math.round(bmr * stepMult + (training * 0.75 * 6 * (bmr / 24)) / 7);
+    var minCals = gender === 'female' ? 1350 : 1600;
+    var targetCals;
+
+    if (goal === 'fatloss') {
+      targetCals = Math.max(minCals, tdee - 500);
+    } else if (goal === 'recomp') {
+      targetCals = Math.max(minCals, tdee - 200);
+    } else {
+      targetCals = tdee + 250; // muscle gain — always a surplus
+    }
+
+    var proteinG = Math.round(weight * (goal === 'recomp' ? 1.0 : goal === 'fatloss' ? 0.9 : 0.95));
+    var fatG     = Math.round(targetCals * 0.25 / 9);
+    var carbG    = Math.round(Math.max(0, targetCals - (proteinG * 4) - (fatG * 9)) / 4);
+    var diff     = Math.abs(tdee - targetCals);
+    var subLabel = targetCals < tdee
+      ? diff + ' cal deficit from maintenance (' + tdee.toLocaleString() + ' kcal)'
+      : targetCals > tdee
+        ? diff + ' cal surplus above maintenance (' + tdee.toLocaleString() + ' kcal)'
+        : 'At maintenance';
+
+    document.getElementById('rc-rCals').textContent    = targetCals.toLocaleString() + ' kcal';
+    document.getElementById('rc-rProtein').textContent = proteinG + 'g';
+    document.getElementById('rc-rCarbs').textContent   = carbG + 'g';
+    document.getElementById('rc-rFats').textContent    = fatG + 'g';
+    document.getElementById('rc-rSub').textContent     = subLabel;
+
+    recalcPlan = {
+      weight_lbs: weight, body_fat_pct: bodyfat, goal: goal,
+      activity_level: stepMult, training_days: training,
+      maintenance_calories: tdee, target_calories: targetCals,
+      protein_target: proteinG, fat_target: fatG, carb_target: carbG,
+      training_split: getSplitLabel(training),
+    };
+
+    document.getElementById('recalcForm').style.display = 'none';
+    document.getElementById('recalcResults').style.display = '';
+  }
+
+  async function saveRecalc() {
+    if (!recalcPlan) return;
+    try {
+      var prevTrainingDays = currentProfile.training_days;
+      var res = await supabaseClient
+        .from('profiles').update(recalcPlan).eq('id', currentUserId);
+      if (res.error) throw res.error;
+      Object.assign(currentProfile, recalcPlan);
+      renderTargets();
+      closeRecalc();
+
+      // training_days is global — remap ALL owned programs when it changes.
+      if (recalcPlan.training_days !== prevTrainingDays && ownedPrograms.length) {
+        await pgRemapAllSchedules(currentUserId, ownedPrograms, recalcPlan.training_days);
+      }
+      showToast('Goals updated.');
+    } catch (err) {
+      console.error('saveRecalc:', err);
+      showToast('Error saving — try again.');
+    }
+  }
+
+</script>
+</body>
+</html>

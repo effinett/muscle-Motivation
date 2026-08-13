@@ -9,27 +9,26 @@
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js" integrity="sha384-ouAVEJVCMsf8Svzn+BwqbaBhxBEA0xgeVBhHnxmWd+Wqyv18yhWCQwGegFD/OHLq" crossorigin="anonymous"></script>
   <style>
+    /* Fallback palette only — app-shell.css defines the canonical tokens and
+       overrides these. Kept so the page degrades sanely if the shell 404s. */
     :root {
       --red:          #B1121B;
-      --red-muted:    rgba(177,18,27,0.12);
-      --red-border:   rgba(177,18,27,0.28);
-      --bg:           #080808;
-      --surface-1:    #0d0d0d;
-      --surface-2:    #131313;
-      --surface-3:    #1a1a1a;
-      --border-1:     #1c1c1c;
-      --border-2:     #252525;
-      --border-3:     #2f2f2f;
-      --text:         #ffffff;
-      --text-2:       #a0a0a0;
-      --text-muted:   #555555;
-      --green:        #22c55e;
+      --bg:           #121011;
+      --surface-1:    #1A1717;
+      --surface-2:    #231F20;
+      --surface-3:    #2C2827;
+      --border-1:     #241F20;
+      --border-2:     #332D2E;
+      --border-3:     #443C3D;
+      --text:         #F7F5F2;
+      --text-2:       #B8B3B4;
+      --text-muted:   #8A8384;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Barlow', sans-serif;
-      background: var(--bg);
-      color: var(--text);
+      background: var(--mm-bg);
+      color: var(--mm-text);
       min-height: 100vh;
       overflow-x: hidden;
     }
@@ -42,590 +41,370 @@
     }
     #authGate img { width: 72px; margin-bottom: 16px; opacity: 0.6; }
     #authGate p {
-      color: var(--text-muted); font-size: 11px;
+      color: var(--mm-text-tertiary); font-size: 11px;
       letter-spacing: 2.5px; text-transform: uppercase;
     }
 
-    /* Header */
-    header {
-      position: sticky; top: 0; z-index: 100;
-      background: rgba(8,8,8,0.97);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border-1);
-      padding: 0 20px;
-      display: flex; align-items: center;
-      justify-content: space-between;
-      height: 60px;
+    /* Header — header / .header-logo live in app-shell.css.
+       The avatar is the ONLY Profile entry point; Profile has no Home content. */
+    .header-profile {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 44px; height: 44px; margin-right: -10px;
+      color: var(--mm-text-secondary); text-decoration: none;
+      border-radius: 50%;
+      transition: color 0.2s, background 0.2s;
     }
-    .header-logo {
-      display: flex; align-items: center; gap: 10px;
-      text-decoration: none;
-    }
-    .header-logo img { height: 42px; }
-    .header-logo span {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 18px; letter-spacing: 2.5px;
-      color: var(--text); text-transform: uppercase;
-    }
-    .header-right { display: flex; align-items: center; gap: 14px; }
-    .user-name { font-size: 13px; color: var(--text-muted); }
-    #signOutBtn {
-      padding: 6px 14px;
-      font-size: 11px; font-family: 'Barlow', sans-serif;
-      font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-      background: transparent; border: 1px solid var(--border-2);
-      color: var(--text-muted); border-radius: 6px; cursor: pointer;
-      transition: border-color 0.2s, color 0.2s;
-    }
-    #signOutBtn:hover { border-color: var(--border-3); color: var(--text-2); }
+    .header-profile:hover { color: var(--mm-text); background: var(--mm-surface); }
+    .header-profile:focus-visible { outline: 2px solid var(--mm-accent); outline-offset: 2px; }
 
-    /* Container */
+    /* Bottom padding = the page's own breathing room + the shared app-shell
+       clearance (nav height + home indicator). See app-shell.css. */
     .container {
       max-width: 680px; margin: 0 auto;
-      padding: 28px 16px 80px;
+      padding: 24px 16px calc(24px + var(--mm-bottom-clearance, 0px));
     }
 
-    /* Welcome */
-    .welcome { margin-bottom: 36px; }
-    .welcome-greeting {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: clamp(34px, 7vw, 46px);
-      letter-spacing: 1.5px; text-transform: uppercase;
-      line-height: 1.1;
-    }
-    .welcome-greeting span { color: var(--red); }
-    .welcome-sub {
-      font-size: 13px; color: var(--text-muted);
-      margin-top: 5px;
-    }
-
-    /* Section label */
-    .section-label {
-      font-family: 'Barlow', sans-serif;
-      font-size: 11px; font-weight: 700; letter-spacing: 2px;
-      color: var(--red); text-transform: uppercase;
-      margin-bottom: 12px; margin-top: 32px;
-      display: flex; align-items: center; gap: 10px;
-    }
-    .section-label::after {
-      content: ''; flex: 1; height: 1px; background: var(--border-1);
-    }
-
-    /* Card */
-    .card {
-      background: var(--surface-1);
-      border: 1px solid var(--border-2);
-      border-radius: 10px;
-      padding: 20px 22px;
-      margin-bottom: 12px;
-    }
-    .card-featured { border-top: 2px solid var(--red); }
-
-    /* Today card */
-    .today-header {
-      display: flex; align-items: flex-start;
-      justify-content: space-between; gap: 16px;
-      margin-bottom: 16px;
-    }
-    .today-label {
-      font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
-      text-transform: uppercase; color: var(--text-muted);
-      margin-bottom: 6px;
-    }
-    .split-badge {
-      display: inline-block;
-      background: var(--red-muted);
-      border: 1px solid var(--red-border);
-      color: var(--red); border-radius: 6px;
-      padding: 4px 10px; font-size: 13px;
-      font-weight: 700;
-    }
-    .goal-tag {
-      font-size: 12px; color: var(--text-muted);
-      font-weight: 600; text-align: right;
-      white-space: nowrap; line-height: 1.5;
-      padding-top: 2px;
-    }
-    .today-divider { height: 1px; background: var(--border-1); margin: 16px 0; }
-    .focus-body { font-size: 15px; line-height: 1.75; color: var(--text-2); }
-    .focus-body strong { color: var(--text); font-weight: 600; }
-
-    /* Numbers card */
-    .numbers-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
-    .stat-cell {
-      background: var(--surface-2);
-      border-radius: 8px; padding: 14px 16px;
-      border-left: 2px solid var(--red);
-    }
-    .stat-cell.full { grid-column: 1 / -1; }
-    .stat-label {
-      font-size: 11px; font-weight: 700;
-      color: var(--text-muted); letter-spacing: 1.5px;
-      text-transform: uppercase;
-    }
-    .stat-value {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 28px; color: var(--text);
-      margin-top: 4px; line-height: 1;
-      letter-spacing: 0.5px;
-    }
-    .stat-sub { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
-
-    /* Programs card */
-    .plan-item {
-      display: flex; align-items: center;
-      justify-content: space-between; gap: 16px;
-      padding: 14px 0; border-bottom: 1px solid var(--border-1);
-    }
-    .plan-item:last-child { border-bottom: none; }
-    .plan-name { font-size: 14px; font-weight: 600; }
-    .plan-desc { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
-    .plan-price {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 22px; color: var(--red);
-      white-space: nowrap; letter-spacing: 0.5px;
-    }
-    .plan-action { display: flex; align-items: center; gap: 12px; }
-    .btn-buy {
-      padding: 8px 16px; background: var(--red);
-      border: none; border-radius: 6px; color: white;
-      font-size: 12px; font-weight: 700;
-      font-family: 'Barlow', sans-serif;
-      letter-spacing: 1px; text-transform: uppercase;
-      cursor: pointer; transition: opacity 0.2s;
-      white-space: nowrap; text-decoration: none;
-      display: inline-block;
-    }
-    .btn-buy:hover { opacity: 0.85; }
-    .owned-badge {
-      font-size: 12px; font-weight: 700;
-      letter-spacing: 1px; text-transform: uppercase;
-      color: var(--green); white-space: nowrap;
+    /* ── Open rows ──────────────────────────────────────────────────────
+       A tappable block with NO container: the background is the layout
+       surface. This is what replaces the old bordered cards, so This Week
+       and Nutrition stop competing with the hero for visual weight. */
+    .home-row {
+      display: block;
+      padding: 2px 0 4px;
       text-decoration: none;
+      color: inherit;
+      border-radius: 10px;
     }
-    a.owned-badge:hover { text-decoration: underline; }
-    .browse-link { padding-top: 14px; text-align: right; }
-    .browse-link a {
-      font-size: 12px; font-weight: 600;
-      color: var(--text-muted); text-decoration: none;
-      transition: color 0.2s;
+    .home-row:focus-visible {
+      outline: 2px solid var(--mm-accent);
+      outline-offset: 4px;
     }
-    .browse-link a:hover { color: var(--red); }
+    @media (hover: hover) {
+      .home-row:hover .mm-meter { background: var(--mm-line); }
+    }
+    .home-row:active { opacity: 0.75; }
 
-    /* Recalculate button */
-    .btn-recalc {
-      width: 100%; margin-top: 14px; padding: 10px;
-      background: transparent; border: 1px solid var(--border-2);
-      border-radius: 8px; color: var(--text-muted);
+    /* Label + value pair sitting above a meter.
+       Spacing is deliberately asymmetric: a label sits CLOSE to the bar it
+       describes (5px) and the two metric groups sit further apart (10px), so
+       the pairing is read by proximity rather than by a divider. Tightened
+       from 7/14 — the section was ~11% taller than it needed to be without
+       either bar gaining legibility. */
+    .home-metric {
+      display: flex; align-items: baseline; justify-content: space-between;
+      gap: 12px; margin: 0 0 5px;
+    }
+    .home-metric + .mm-meter { margin-bottom: 10px; }
+    /* The day strip is the one block whose contents are ROUND, so the space
+       under it reads larger than the same measurement under a flat element —
+       the section gap after it looked bigger than every other one despite
+       being identical. Trimmed optically so the rhythm matches; Nutrition is
+       still clearly its own section, and no other gap is affected (the
+       nutrition row is followed by its Log food action, not by a section
+       header).
+       Sized on device rather than by arithmetic: at 14px (18px total) training
+       and nutrition began reading as one group, so the correction is smaller
+       than it first looked. 22px puts the total at 26px — clearly two sections
+       again, still short of the uncorrected 30px, and well above the 10px a
+       section label sits above its own content. */
+    .home-row + .mm-section { margin-top: 22px; }
+
+    .home-metric-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+      text-transform: uppercase; color: var(--mm-text-tertiary);
+    }
+    .home-metric-value {
+      font-size: 14px; font-weight: 600; color: var(--mm-text);
+      white-space: nowrap;
+    }
+    .home-metric-value .sub { color: var(--mm-text-tertiary); font-weight: 600; }
+    /* Calories is the metric checked most often, and at 14px Barlow it read
+       SMALLER than "0 / 3 WORKOUTS" and "213 LB" — inverting its priority.
+       It now borrows the existing section-value scale (Bebas 20px) so it sits
+       level with its siblings, while protein stays deliberately secondary.
+       Nowhere near the old 42px treatment, and still well below the hero. */
+    .home-metric-value.is-lead {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 22px; font-weight: 400; letter-spacing: 0.5px; line-height: 1;
+    }
+    .home-metric-value.is-lead .sub {
+      font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 600;
+    }
+
+    /* Quiet inline action — used for "Choose another workout" and "Log weight".
+       Text-weight, never a button slab, but still a real 44px target. */
+    .home-action {
+      display: inline-flex; align-items: center; gap: 5px;
+      min-height: 44px;
+      background: none; border: none; padding: 0;
+      font-family: 'Barlow', sans-serif;
+      font-size: 13px; font-weight: 600;
+      color: var(--mm-text-secondary);
+      text-decoration: none; cursor: pointer;
+    }
+    .home-action::after { content: '›'; font-size: 16px; line-height: 1; color: var(--mm-text-tertiary); }
+    .home-action:hover { color: var(--mm-text); }
+    .home-action:focus-visible {
+      outline: 2px solid var(--mm-accent); outline-offset: 3px; border-radius: 6px;
+    }
+
+    /* Hero state dot — the text beside it always says the same thing, so the
+       colour is emphasis only, never the sole carrier of meaning. */
+    .mm-hero-meta.is-done::before,
+    .mm-hero-meta.is-live::before {
+      content: ''; display: inline-block;
+      width: 7px; height: 7px; border-radius: 50%;
+      margin-right: 7px; vertical-align: middle;
+    }
+    .mm-hero-meta.is-done::before { background: var(--mm-success); }
+    .mm-hero-meta.is-live::before { background: var(--mm-accent); }
+
+    /* ── Logging actions ────────────────────────────────────────────────
+       A second, deliberately different action language. Home is both a status
+       screen and a launch point, and those are different jobs: a chevron says
+       "go somewhere and look", a plus says "add something". Navigation stays
+       sentence-case + `›` (.home-action); creation is uppercase + `+`.
+
+       Distinguished by CASE and the glyph rather than by size or fill, so it
+       reads as a peer of the navigation actions and never as a second CTA
+       competing with START WORKOUT. Only the `+` carries the accent. */
+    .home-log {
+      display: inline-flex; align-items: center; gap: 6px;
+      min-height: 44px;
+      background: none; border: none; padding: 0;
+      font-family: 'Barlow', sans-serif;
       font-size: 11px; font-weight: 700;
       letter-spacing: 1.5px; text-transform: uppercase;
-      cursor: pointer; transition: border-color 0.2s, color 0.2s;
+      color: var(--mm-text);
+      text-decoration: none; cursor: pointer;
     }
-    .btn-recalc:hover { border-color: var(--red); color: var(--red); }
+    .home-log::before {
+      content: '+';
+      font-size: 15px; font-weight: 700; line-height: 1;
+      color: var(--mm-accent);
+    }
+    .home-log:hover { color: var(--mm-text); }
+    .home-log:hover::before { opacity: 0.85; }
+    .home-log:focus-visible {
+      outline: 2px solid var(--mm-accent); outline-offset: 3px; border-radius: 6px;
+    }
 
-    /* P2 · today's workout status */
-    .workout-status { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; }
-    .workout-status .ws-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
-    .workout-status.done .ws-dot  { background: var(--green); }
-    .workout-status.done .ws-text { color: var(--text); }
-    .workout-status.todo .ws-dot  { background: var(--red); }
-    .workout-status.todo .ws-text { color: var(--text-2); }
-    .workout-status a { color: var(--red); text-decoration: none; font-weight: 700; margin-left: auto; }
-    .workout-status a:hover { text-decoration: underline; }
-    /* Snapshot-fed extras (Phase 4.1): 7-day consistency + body-comp row */
-    .week-consistency { font-size: 12px; color: var(--text-muted); font-weight: 600; margin-top: 10px; }
-    .week-consistency:empty { display: none; }
-    .goal-metrics-row {
-      display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 10px 0 2px;
-      font-size: 13px; font-weight: 600; color: var(--text-2);
+    /* A row of related actions, left-aligned to the content grid and separated
+       by a controlled gap — never pushed to opposite screen edges, which made
+       a pair that belongs together read as two unrelated links. Wraps rather
+       than cramping on a narrow phone. Used by both logging surfaces, so
+       Log food and Log weight start on the same line of the grid. */
+    .home-actions {
+      display: flex; align-items: center; flex-wrap: wrap;
+      gap: 4px 18px;
     }
-    .goal-metrics-row:empty { display: none; }
-    .goal-metrics-row a { color: inherit; text-decoration: none; }
-    .goal-metrics-row a:hover { color: var(--text); }
-    .goal-metrics-row .gm-label { color: var(--text-muted); font-weight: 700; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; margin-right: 5px; }
-    .goal-metrics-row .gm-delta { color: var(--text-muted); font-weight: 600; font-size: 12px; }
+    /* The 44px boxes carry ~15px of their own dead space, which is most of the
+       separation; this is the remainder needed to keep Coach Insight on the
+       same section rhythm as every other transition. */
+    .home-actions + .mm-insight { margin-top: 12px; }
 
-    /* P4 · momentum streak */
-    /* breathing room when a card sits directly under a card-grid (Recent Activity) */
-    .quick-grid + .card { margin-top: 14px; }
-    .momentum-streak { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
-    .momentum-streak:empty { display: none; }
-    .streak-num {
-      font-family: 'Bebas Neue', sans-serif; font-size: 30px; line-height: 1;
-      letter-spacing: 1px; color: var(--red);
-    }
-    .streak-num.cold { color: var(--text-muted); }
-    .streak-label { font-size: 12px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--text-2); }
-    .streak-week { font-size: 12px; color: var(--text-muted); font-weight: 600; margin-left: auto; }
+    /* The alternate-workout path, inside the hero beneath the primary CTA.
+       Standing alone under the card it read as a second, competing action; here
+       it is plainly subordinate to START WORKOUT — same quiet text weight, one
+       level down. `display: flex` puts it on its own line after the inline-flex
+       CTA, and `fit-content` stops the 44px box from spanning the whole card
+       and becoming an invisible full-width target. The negative bottom margin
+       absorbs the box's own dead space so the card keeps its optical padding;
+       the tap target itself is untouched.
 
-    /* P5 · reference */
-    .ref-details { margin-bottom: 12px; }
-    .ref-summary {
-      list-style: none; cursor: pointer; user-select: none;
-      padding: 12px 16px; background: var(--surface-1);
-      border: 1px solid var(--border-2); border-radius: 12px;
-      font-size: 13px; font-weight: 700; color: var(--text-2);
-      display: flex; align-items: center; justify-content: space-between;
-    }
-    .ref-summary::-webkit-details-marker { display: none; }
-    .ref-summary::after { content: '▾'; color: var(--text-muted); transition: transform .2s; }
-    .ref-details[open] .ref-summary { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
-    .ref-details[open] .ref-summary::after { transform: rotate(180deg); }
-    .ref-card { border-top: none; border-top-left-radius: 0; border-top-right-radius: 0; }
-    .ref-link-row {
-      display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
-      padding: 14px 16px; background: var(--surface-1);
-      border: 1px solid var(--border-2); border-radius: 12px;
-      text-decoration: none; color: var(--text-2); cursor: default;
-    }
-    .ref-link-label { font-size: 14px; font-weight: 600; }
-    .ref-soon {
-      margin-left: auto; font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
-      text-transform: uppercase; color: var(--text-muted);
-      border: 1px solid var(--border-2); border-radius: 999px; padding: 3px 9px;
-    }
-    .ref-history { display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 4px 4px 8px; }
-    .ref-history a { font-size: 12px; color: var(--text-muted); text-decoration: none; }
-    .ref-history a:hover { color: var(--text-2); text-decoration: underline; }
+       It is deliberately quieter than the other .home-action instances (Quick
+       log, Log weight). Those sit alone on the background where they are the
+       only thing to act on; this one sits directly under a filled primary CTA,
+       and at the shared 13px treatment it read as that button's peer.
 
-    /* Recalculate modal */
+       The demotion is SIZE, not contrast. Dropping it to --mm-text-tertiary as
+       well took it to 4.8:1 on the card, which measured fine but read as
+       disabled on device — a secondary action has to look reachable. It keeps
+       the standard --mm-text-secondary (8.9:1) and stays subordinate through
+       type alone: 12px Barlow against a 19px Bebas slab on the theme accent.
+       The 44px target, position, spacing and chevron are untouched.
+
+       Scoped to a VISIBLE CTA on purpose. In the completed state ("Train
+       again") the CTA is hidden and this is the card's only action, so it keeps
+       the full-size treatment instead of being shrunk for a competition that
+       is not happening. `:not([hidden])` is required — the hidden CTA is still
+       an adjacent sibling in the DOM, so the bare `+` selector would match. */
+    .home-action--hero {
+      display: flex; width: fit-content; margin: 0 0 -18px;
+    }
+    .mm-hero-cta:not([hidden]) + .home-action--hero {
+      font-size: 12px; color: var(--mm-text-secondary);
+    }
+    .mm-hero-cta:not([hidden]) + .home-action--hero::after { font-size: 14px; }
+
+    /* Weight is a compact snapshot, still open on the background — never a
+       card. Two columns: the reading on the left, the sparkline balancing the
+       right, with the logging action beneath. Centred against each other so a
+       one-line stack (no change yet) still sits level with the line.
+
+       If the two ever cannot share a line — a very large text size, a longer
+       change string — the SPARKLINE wraps below rather than the reading being
+       squeezed: it is the supporting element, so it is the one that gives way.
+       Nothing overflows and no text collides. */
+    /* Top-aligned, not centred. Centring the whole left column against the
+       chart made its three lines read as one three-line stack; aligning the
+       METRIC to the top of the chart lets the action fall away below it, which
+       is the hierarchy the section actually has. */
+    .home-progress {
+      display: flex; align-items: flex-start; flex-wrap: wrap;
+      gap: 8px 14px; margin-top: 2px;
+    }
+    /* The reading column: weight, its change, and the action on it. All three
+       sit beside the chart, which is why Log weight lives here rather than in
+       its own row — it still begins on the same content-grid line as Log food,
+       so the two quick-log actions stay a matched pair. The column is sized by
+       its content so the chart takes whatever is left. */
+    .home-weightstack {
+      display: flex; flex-direction: column; align-items: flex-start;
+      gap: 3px; flex: 0 0 auto;
+    }
+    /* The weight and its change are the METRIC; Log weight is an ACTION on it,
+       not a third line of data. It gets deliberate clear space so the group
+       above it reads as one thing and the action reads as its own. The bottom
+       margin still absorbs the 44px box's trailing dead space, so the target is
+       untouched and the column does not grow past the chart. */
+    .home-weightstack .home-log { margin: 6px 0 -10px; }
+    .home-weight {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 24px; letter-spacing: 0.5px; line-height: 1;
+      color: var(--mm-text); white-space: nowrap;
+    }
+    /* Deliberately NOT coloured by direction. Losing weight is not universally
+       good and gaining is not universally bad — it depends on whether the user
+       is cutting, maintaining or bulking, and nothing here knows that. Green/
+       amber would be a judgement the data cannot support, so the change stays
+       neutral and the arrow carries the direction. (weight.js says the same of
+       wlDeltaHTML: "Neutral by design".)
+
+       It sits directly under the weight, inside the same stack: the two are one
+       status statement — "this is your weight, this is how it moved" — and it
+       is the accessible, explicit account of direction that the sparkline is
+       never allowed to replace. */
+    .home-trend {
+      font-size: 13px; font-weight: 600; color: var(--mm-text-secondary);
+      white-space: nowrap;
+    }
+    /* No trend yet — collapse entirely so nothing marks where one would go. */
+    .home-trend:empty { display: none; }
+    .home-trend .muted { color: var(--mm-text-tertiary); font-weight: 600; }
+
+    /* Mini weight-trend widget — a small preview of the full Trend chart, and
+       the control that opens it.
+
+       On its own the line read as a stray mark floating in empty space. The
+       container is what fixes that, and it is deliberately the SAME object as
+       the Progress page's .chart-card at a smaller size: same raised surface,
+       same hairline border, same radius family. Seeing it here and then seeing
+       the full chart there should feel like one thing, zoomed.
+
+       It carries no axes, ticks, dates, grid, legend or heading — those belong
+       to the full chart. The line is the only content, with enough padding that
+       it never touches the edges. Colour is the theme token via currentColor,
+       so a future user accent flows through.
+
+       Sized to BALANCE the reading, never to compete with it: it takes the
+       space left over on the right, is capped so it cannot grow on a wide
+       screen, and 211 LB remains the largest thing in the section. */
+    .home-trendcard {
+      display: block;
+      /* Takes the width the reading column leaves, so the two together fill the
+         row without either being pinned to a magic number. Basis 0, not auto:
+         the SVG's own intrinsic width would otherwise claim the whole row and
+         push itself onto a second line. */
+      flex: 1 1 0;
+      /* Capped a little tighter than the row would allow. On a large phone the
+         chart was taking enough width to out-weigh 211 LB; pulling the ceiling
+         in gives the reading room to lead without touching the chart's height,
+         labels or geometry. Narrow phones are already below this cap, so they
+         keep every pixel they have — label legibility comes first there. */
+      min-width: 150px; max-width: 262px;
+      margin-left: auto;
+      padding: 2px 4px;
+      background: var(--mm-surface-raised);
+      border: 1px solid var(--mm-line);
+      border-radius: 10px;
+      color: var(--mm-accent);
+      text-decoration: none;
+      transition: border-color 0.2s;
+    }
+    @media (hover: hover) {
+      .home-trendcard:hover { border-color: var(--mm-line-strong); }
+    }
+    .home-trendcard:active { opacity: 0.8; }
+    .home-trendcard:focus-visible {
+      outline: 2px solid var(--mm-accent); outline-offset: 3px;
+    }
+    /* wlChartSVG sizes itself to the container width and keeps its own aspect,
+       so the card's height follows the chart rather than being declared twice. */
+    .home-trendcard svg { display: block; }
+
+    /* Quiet empty states — never a card, never a paragraph. */
+    .home-empty { font-size: 13px; color: var(--mm-text-tertiary); padding: 2px 0 6px; }
+
+    /* ── Log / Edit Weight modal ────────────────────────────────────────
+       Markup comes from weight.js (wlModalMarkup) and uses these shared class
+       names, so Home must style them even though it defines no modal of its
+       own. Without these rules the modal renders inline and always-visible. */
     .modal-overlay {
       display: none; position: fixed; inset: 0; z-index: 200;
       background: rgba(0,0,0,0.82); backdrop-filter: blur(6px);
-      align-items: center; justify-content: center; padding: 20px;
+      align-items: center; justify-content: center; padding: 16px;
     }
     .modal-overlay.open { display: flex; }
     .modal-box {
-      background: var(--surface-1); border: 1px solid var(--border-2);
-      border-radius: 14px; padding: 28px 24px;
-      width: 100%; max-width: 420px;
-      max-height: 90vh; overflow-y: auto;
+      background: var(--mm-surface-raised); border: 1px solid var(--mm-line);
+      border-radius: 14px; padding: 22px 18px;
+      width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto;
     }
     .modal-header {
-      display: flex; align-items: center;
-      justify-content: space-between; margin-bottom: 22px;
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 18px;
     }
-    .modal-title {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 24px; letter-spacing: 1.5px;
-    }
+    .modal-title { font-family: 'Bebas Neue', sans-serif; font-size: 24px; letter-spacing: 1.5px; }
     .modal-close {
-      background: none; border: none; color: var(--text-muted);
-      font-size: 18px; cursor: pointer; padding: 4px 8px;
-      transition: color 0.2s;
+      min-width: 44px; min-height: 44px; background: none; border: none;
+      color: var(--mm-text-tertiary); font-size: 18px; cursor: pointer;
     }
-    .modal-close:hover { color: var(--text); }
+    .modal-close:hover { color: var(--mm-text); }
+    .modal-close:focus-visible { outline: 2px solid var(--mm-accent); outline-offset: 2px; border-radius: 6px; }
     .field-group { margin-bottom: 14px; }
     .field-label {
       display: block; font-size: 11px; font-weight: 700;
       letter-spacing: 1.5px; text-transform: uppercase;
-      color: var(--text-muted); margin-bottom: 6px;
+      color: var(--mm-text-tertiary); margin-bottom: 6px;
     }
     .field-optional { font-weight: 400; text-transform: none; letter-spacing: 0; }
-    .field-group input, .field-group select {
-      width: 100%; padding: 10px 12px;
-      background: var(--surface-2); border: 1px solid var(--border-2);
-      border-radius: 8px; color: var(--text);
-      font-family: 'Barlow', sans-serif; font-size: 14px;
-      appearance: none; outline: none; transition: border-color 0.2s;
+    .field-group input {
+      width: 100%; min-height: 44px; padding: 10px 12px;
+      background: var(--mm-surface); border: 1px solid var(--mm-line);
+      border-radius: 8px; color: var(--mm-text);
+      font-family: 'Barlow', sans-serif; font-size: 16px; appearance: none;
     }
-    .field-group input:focus, .field-group select:focus { border-color: var(--red); }
+    .field-group input:focus-visible {
+      outline: 2px solid var(--mm-accent); outline-offset: 1px; border-color: var(--mm-accent);
+    }
     .btn-calc {
-      width: 100%; margin-top: 8px; padding: 12px;
-      background: var(--red); border: none; border-radius: 8px;
-      color: white; font-family: 'Bebas Neue', sans-serif;
-      font-size: 18px; letter-spacing: 2px; cursor: pointer;
-      transition: opacity 0.2s;
-    }
-    .btn-calc:hover { opacity: 0.85; }
-    .results-grid {
-      display: grid; grid-template-columns: 1fr 1fr;
-      gap: 10px; margin-bottom: 10px;
-    }
-    .result-cell {
-      background: var(--surface-2); border-radius: 8px;
-      padding: 14px 16px; border-left: 2px solid var(--red);
-    }
-    .result-label {
-      font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
-      text-transform: uppercase; color: var(--text-muted);
-    }
-    .result-val {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 26px; color: var(--text);
-      margin-top: 4px; line-height: 1;
-    }
-    .result-sub {
-      font-size: 12px; color: var(--text-muted);
-      margin-bottom: 20px; line-height: 1.5;
-    }
-    .modal-actions { display: flex; gap: 10px; }
-    .btn-back {
-      flex: 1; padding: 11px; background: transparent;
-      border: 1px solid var(--border-2); border-radius: 8px;
-      color: var(--text-muted); font-size: 13px; font-weight: 600;
-      cursor: pointer; transition: border-color 0.2s;
-    }
-    .btn-back:hover { border-color: var(--border-3); }
-    .btn-save {
-      flex: 2; padding: 11px; background: var(--red);
-      border: none; border-radius: 8px; color: white;
-      font-family: 'Bebas Neue', sans-serif; font-size: 18px;
-      letter-spacing: 2px; cursor: pointer; transition: opacity 0.2s;
-    }
-    .btn-save:hover { opacity: 0.85; }
-
-    /* Start Workout / Browse Programs button */
-    .btn-start {
-      display: block; width: 100%; margin-top: 18px;
-      padding: 13px 20px;
-      background: var(--red); border: none; border-radius: 8px;
-      color: white; text-align: center;
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 18px; letter-spacing: 2px;
-      text-decoration: none; text-transform: uppercase;
-      transition: opacity 0.2s;
-    }
-    .btn-start:hover { opacity: 0.85; }
-    .btn-choose-workout {
-      display: block; width: 100%; margin-top: 10px;
-      padding: 12px 20px;
-      background: transparent; border: 1px solid var(--border-2); border-radius: 8px;
-      color: var(--text); text-align: center;
-      font-family: 'Barlow', sans-serif; font-weight: 700;
-      font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase;
-      text-decoration: none; transition: border-color 0.2s, color 0.2s;
-    }
-    .btn-choose-workout:hover { border-color: var(--red); color: var(--red); }
-
-    /* Active program section */
-    .active-prog-row {
-      display: flex; align-items: flex-start;
-      justify-content: space-between; gap: 12px;
-      margin-top: 16px; padding-top: 16px;
-      border-top: 1px solid var(--border-1);
-    }
-    .active-prog-label {
-      font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
-      text-transform: uppercase; color: var(--text-muted);
-    }
-    .active-prog-name { font-size: 15px; font-weight: 600; margin-top: 3px; }
-    .btn-change-prog {
-      flex-shrink: 0; padding: 6px 12px; background: transparent;
-      border: 1px solid var(--border-2); border-radius: 6px;
-      color: var(--text-muted); font-size: 11px; font-weight: 700;
-      letter-spacing: 1px; text-transform: uppercase;
-      cursor: pointer; font-family: 'Barlow', sans-serif;
-      transition: border-color 0.2s, color 0.2s;
-    }
-    .btn-change-prog:hover { border-color: var(--red); color: var(--red); }
-    .no-program-msg {
-      font-size: 14px; color: var(--text-2); line-height: 1.5;
-      margin-top: 16px; padding-top: 16px;
-      border-top: 1px solid var(--border-1);
-    }
-    .program-picker-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-    .program-picker-btn {
-      display: block; width: 100%; padding: 12px 16px;
-      background: var(--surface-2); border: 1px solid var(--border-2);
-      border-radius: 8px; color: var(--text); font-size: 14px; font-weight: 600;
-      font-family: 'Barlow', sans-serif; text-align: left;
-      cursor: pointer; transition: border-color 0.2s;
-    }
-    .program-picker-btn:hover { border-color: var(--red); }
-    /* ── Workout selector dropdown ─────────────────────────────────── */
-    .workout-selector-label {
-      font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
-      text-transform: uppercase; color: var(--text-muted);
-      margin-top: 18px; margin-bottom: 8px;
-    }
-    .workout-selector-btn {
-      display: flex; align-items: center; justify-content: space-between;
-      width: 100%; padding: 14px 16px;
-      background: var(--surface-2); border: 1.5px solid var(--border-2);
-      border-radius: 10px; color: var(--text);
-      font-family: 'Barlow', sans-serif; font-size: 16px; font-weight: 700;
-      cursor: pointer; transition: border-color 0.2s, background 0.2s;
-      text-align: left;
-    }
-    .workout-selector-btn:hover { border-color: var(--red); }
-    .workout-selector-btn.open { border-color: var(--red); background: rgba(177,18,27,0.06); }
-    .workout-selector-chevron { flex-shrink: 0; transition: transform .2s; color: var(--text-muted); }
-    .workout-selector-btn.open .workout-selector-chevron { transform: rotate(180deg); }
-    .workout-dropdown {
-      display: none; flex-direction: column; gap: 6px; margin-top: 6px;
-    }
-    .workout-dropdown.open { display: flex; }
-    .workout-dropdown-option {
-      display: flex; align-items: center; justify-content: space-between;
-      width: 100%; padding: 12px 16px;
-      background: var(--surface-2); border: 1.5px solid var(--border-2);
-      border-radius: 8px; color: var(--text); font-size: 14px; font-weight: 600;
-      font-family: 'Barlow', sans-serif; text-align: left;
-      cursor: pointer; transition: border-color 0.2s;
-    }
-    .workout-dropdown-option:hover { border-color: var(--red); }
-    .workout-dropdown-option.active { border-color: var(--red); background: rgba(177,18,27,0.08); }
-    .workout-dropdown-tag {
-      font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-      color: var(--red); flex-shrink: 0;
-    }
-    .discard-session-link {
-      font-size: 12px; color: var(--text-muted); text-decoration: none;
-      transition: color .2s;
-    }
-    .discard-session-link:hover { color: var(--red); }
-    .mismatch-hint {
-      margin-top: 12px;
-      background: rgba(177,18,27,0.08); border: 1px solid rgba(177,18,27,0.2);
-      border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--text-2);
-    }
-    .mismatch-hint a { color: var(--red); text-decoration: none; font-weight: 600; }
-    .mismatch-hint a:hover { text-decoration: underline; }
-
-    /* Quick Actions */
-    .quick-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
-    .quick-grid-3 { grid-template-columns: repeat(3, 1fr); }
-    .quick-grid-3 .quick-btn { padding: 16px 8px; }
-    .quick-grid-3 .quick-btn-label { font-size: 10px; }
-    .quick-btn {
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      gap: 8px;
-      background: var(--surface-1);
-      border: 1px solid var(--border-2);
-      border-radius: 10px; padding: 18px 12px;
-      text-decoration: none; color: var(--text);
-      transition: border-color 0.2s, background 0.2s;
+      width: 100%; min-height: 48px; margin-top: 8px; padding: 12px;
+      background: var(--mm-accent); border: none; border-radius: 8px;
+      color: var(--mm-accent-contrast);
+      font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 2px;
       cursor: pointer;
     }
-    .quick-btn:hover { border-color: var(--red); background: var(--surface-2); }
-    .quick-btn-icon { color: var(--red); }
-    .quick-btn-label {
-      font-size: 11px; font-weight: 700;
-      letter-spacing: 1.5px; text-transform: uppercase;
-      color: var(--text-2);
-    }
+    .btn-calc:focus-visible { outline: 2px solid var(--mm-accent-contrast); outline-offset: 2px; }
 
-    /* My Activity */
-    .activity-group { margin-bottom: 12px; }
-    .activity-group:last-child { margin-bottom: 0; }
-    .activity-head {
-      display: flex; align-items: center; justify-content: space-between; gap: 12px;
-      margin-bottom: 8px;
-    }
-    .activity-title {
-      font-size: 13px; font-weight: 700; letter-spacing: 0.5px; color: var(--text);
-    }
-    .activity-viewall {
-      font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-      color: var(--red); text-decoration: none; white-space: nowrap; flex-shrink: 0;
-    }
-    .activity-viewall:hover { text-decoration: underline; }
-    .activity-viewall.disabled { color: var(--text-muted); cursor: default; pointer-events: none; }
-    /* Today's Nutrition summary card */
-    .nut-hero { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
-    .nut-hero-num {
-      font-family: 'Bebas Neue', sans-serif; font-size: 40px; line-height: 0.9;
-      letter-spacing: 1px; color: var(--green); flex-shrink: 0;
-    }
-    .nut-hero-num.over { color: #e0a800; }
-    .nut-hero-meta { min-width: 0; }
-    .nut-hero-label {
-      font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
-      text-transform: uppercase; color: var(--text-2);
-    }
-    .nut-hero-sub { font-size: 12px; color: var(--text-muted); font-weight: 600; margin-top: 2px; }
-    .nut-track { height: 6px; background: var(--surface-3); border-radius: 4px; overflow: hidden; }
-    .nut-track-cal { margin-bottom: 14px; }
-    .nut-fill { height: 100%; background: var(--red); border-radius: 4px; transition: width .3s ease; }
-    .nut-fill.cal { background: var(--green); }
-    .nut-fill.over { background: #e0a800; }
-    .nut-macro { margin-top: 10px; }
-    .nut-macro-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 5px; }
-    .nut-macro-label {
-      font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
-      text-transform: uppercase; color: var(--text-2);
-    }
-    .nut-macro-val { font-size: 12px; color: var(--text); font-weight: 600; }
-    .nut-macro-val small { color: var(--text-muted); font-weight: 500; }
-    .nut-note { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
-    .activity-row {
-      display: flex; align-items: center; justify-content: space-between; gap: 12px;
-      background: var(--surface-2); border: 1px solid var(--border-2);
-      border-radius: 8px; padding: 11px 14px; margin-bottom: 6px;
-      text-decoration: none; color: var(--text);
-      transition: border-color 0.2s;
-    }
-    a.activity-row:hover { border-color: var(--red); }
-    .activity-row:last-child { margin-bottom: 0; }
-    .activity-row-main { min-width: 0; }
-    .activity-row-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .activity-row-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-    .activity-row-sub .prog { color: var(--red); font-weight: 600; }
-    .activity-row-date { font-size: 12px; color: var(--text-muted); white-space: nowrap; flex-shrink: 0; }
-    .activity-empty {
-      font-size: 13px; color: var(--text-muted); padding: 6px 2px;
-    }
-    .activity-soon {
-      display: flex; align-items: center; gap: 8px;
-      font-size: 13px; color: var(--text-muted); padding: 11px 14px;
-      background: var(--surface-2); border: 1px dashed var(--border-2); border-radius: 8px;
-    }
-    .activity-soon-badge {
-      font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-      color: var(--text-muted); border: 1px solid var(--border-2); border-radius: 4px;
-      padding: 2px 7px;
-    }
+    /* .toast lives in app-shell.css */
 
-    /* Weigh-in summary strip + delta pills */
-    .wi-summary {
-      display: flex; gap: 8px; margin-bottom: 8px;
+    @media (prefers-reduced-motion: reduce) {
+      .home-row, .header-profile { transition: none; }
     }
-    .wi-stat {
-      flex: 1; background: var(--surface-2); border: 1px solid var(--border-2);
-      border-radius: 8px; padding: 9px 10px; min-width: 0;
-    }
-    .wi-stat-label {
-      font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-      color: var(--text-muted);
-    }
-    .wi-stat-val {
-      font-family: 'Bebas Neue', sans-serif; font-size: 22px; line-height: 1;
-      margin-top: 4px; color: var(--text);
-    }
-    .wi-stat-val small { font-family: 'Barlow', sans-serif; font-size: 11px; color: var(--text-muted); font-weight: 600; }
-    .wi-delta {
-      font-size: 12px; font-weight: 700; white-space: nowrap; flex-shrink: 0;
-      color: var(--text-2);
-    }
-    .wi-delta.same { color: var(--text-muted); }
-
-    /* Toast */
-    .toast {
-      position: fixed; bottom: 24px; left: 50%;
-      transform: translateX(-50%) translateY(80px);
-      background: var(--surface-2); border: 1px solid var(--border-3);
-      color: var(--text); padding: 12px 24px;
-      border-radius: 8px; font-size: 14px; font-weight: 600;
-      transition: transform 0.35s ease, opacity 0.35s ease;
-      opacity: 0; z-index: 999; white-space: nowrap;
-    }
-    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 
     @media (max-width: 480px) {
-      header { padding: 0 14px; }
-      .header-logo span { display: none; }
-      .container { padding: 20px 12px 80px; }
-      .numbers-grid { grid-template-columns: 1fr 1fr; }
+      .container { padding: 20px 12px calc(24px + var(--mm-bottom-clearance, 0px)); }
     }
   </style>
   <link rel="manifest" href="/manifest.webmanifest">
@@ -643,6 +422,8 @@
   <script src="pwa-install.js" defer></script>
   <script src="pwa-install-ui.js" defer></script>
   <script src="pwa-install-register.js" defer></script>
+  <script src="app-nav.js" defer></script>
+  <link rel="stylesheet" href="app-shell.css">
   <link rel="stylesheet" href="safe-area.css">
 </head>
 <body>
@@ -656,377 +437,193 @@
 <!-- Dashboard -->
 <div id="appContent" style="display:none;">
 
+  <a class="mm-skip-link" href="#mmMain">Skip to content</a>
+
   <header>
     <a class="header-logo" href="app.html">
       <img src="logow.png" alt="Muscle Motivation">
       <span>Muscle Motivation</span>
     </a>
-    <div class="header-right">
-      <span class="user-name" id="headerName"></span>
-      <button id="signOutBtn" onclick="signOut()">Sign Out</button>
-    </div>
+    <a class="header-profile" href="profile.html" aria-label="Profile and settings">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/>
+      </svg>
+    </a>
   </header>
 
-  <div class="container">
+  <main class="container" id="mmMain" tabindex="-1">
+    <h1 class="mm-visually-hidden">Dashboard</h1>
 
-    <!-- Welcome -->
-    <div class="welcome">
-      <div class="welcome-greeting">Good to see you, <span id="dashName">—</span></div>
-      <div class="welcome-sub" id="dashDate"></div>
+    <!-- ── A · TODAY'S PLAN ─────────────────────────────────────────────
+         The one dominant surface, and the first thing under the header. It
+         carries no section label: "Today's Plan" already states the context,
+         so a "TRAIN" heading above it was a second, redundant title. Keeps a
+         container because it carries the screen's primary action. Renders the
+         no-image fallback; hero photography remains deferred.
+
+         The alternate path lives INSIDE the card, under the CTA — outside it
+         read as a competing action floating between two sections. -->
+    <section class="mm-hero" aria-labelledby="todayTitle">
+      <div class="mm-hero-body">
+        <div class="mm-hero-eyebrow">Today's Plan</div>
+        <h2 class="mm-hero-title" id="todayTitle">&nbsp;</h2>
+        <div class="mm-hero-meta" id="todayMeta" hidden></div>
+        <a class="mm-hero-cta" id="todayCta" href="workout.html" hidden></a>
+        <button class="home-action home-action--hero" id="todayAlt" hidden></button>
+      </div>
+    </section>
+
+    <!-- ── B · THIS WEEK ────────────────────────────────────────────────
+         No container. The count and the day strip both read training.week, so
+         they can never disagree — which is exactly why the horizontal meter
+         that used to sit beneath the strip was removed: it was a third drawing
+         of the same one number. The strip already shows how many days are
+         ticked AND which ones, so it strictly dominates a bar. -->
+    <div class="mm-section">
+      <h2 class="mm-section-label">This Week</h2>
+      <span class="mm-section-value" id="weekValue">—</span>
     </div>
-
-    <!-- 1 · Today's Workout -->
-    <div class="section-label">Today's Workout</div>
-    <div class="card card-featured">
-      <div class="today-header">
-        <div>
-          <div class="today-label">Training Split</div>
-          <div class="split-badge" id="dashSplit">—</div>
-        </div>
-        <div class="goal-tag" id="dashGoalTag">—</div>
-      </div>
-      <div class="today-divider"></div>
-      <div class="focus-body" id="dashFocusText">—</div>
-
-      <!-- Active program (shown when a program is active) -->
-      <div id="activeProgramSection" style="display:none;">
-        <div class="active-prog-row">
-          <div>
-            <div class="active-prog-label">Active Program</div>
-            <div class="active-prog-name" id="activeProgramName">—</div>
-          </div>
-          <button class="btn-change-prog" id="changeProgramBtn" style="display:none;" onclick="openProgramPicker()">Change</button>
-        </div>
-        <!-- Workout selector (shown when no unfinished session exists) -->
-        <div id="chooseWorkoutWrap" style="display:none;">
-          <div class="workout-selector-label">Today's Workout</div>
-          <button class="workout-selector-btn" id="workoutSelectorBtn" onclick="toggleWorkoutDropdown()">
-            <span id="workoutSelectorLabel">—</span>
-            <svg class="workout-selector-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-          </button>
-          <div id="workoutDropdown" class="workout-dropdown"></div>
-        </div>
-      </div>
-
-      <!-- No programs owned -->
-      <div id="noProgramSection" style="display:none;">
-        <div class="no-program-msg">You don't have an active workout program yet.</div>
-      </div>
-
-      <!-- Multiple programs owned, none active — picker -->
-      <div id="programPickerSection" style="display:none;">
-        <div class="no-program-msg">You own multiple programs — choose one to activate:</div>
-        <div id="programPickerList" class="program-picker-list"></div>
-      </div>
-
-      <!-- CTA buttons (mutually exclusive) -->
-      <a class="btn-start" id="btnStartWorkout" href="#" style="display:none;">Start Workout</a>
-      <a class="btn-start" id="btnBrowsePrograms" href="store.html" style="display:none;">Browse Programs</a>
-      <!-- Discard in-progress session (shown alongside Resume Workout) -->
-      <div id="discardSessionRow" style="display:none; text-align:center; margin-top:10px;">
-        <a href="#" class="discard-session-link" onclick="discardDashboardSession(); return false;">Discard unfinished session</a>
-      </div>
-
-      <!-- Secondary: always-available path to the full workout chooser
-           (recommended program workout, saved templates, one-off, history). -->
-      <a class="btn-choose-workout" href="workout.html">Choose Workout</a>
-
-      <!-- Goal / program mismatch hint -->
-      <div id="mismatchHint" style="display:none;" class="mismatch-hint"></div>
-    </div>
-
-    <!-- 2 · Quick Actions -->
-    <div class="section-label">Quick Actions</div>
-    <div class="quick-grid quick-grid-3">
-      <a class="quick-btn" href="workout.html">
-        <span class="quick-btn-icon"><i data-lucide="dumbbell"></i></span>
-        <span class="quick-btn-label">Log Workout</span>
-      </a>
-      <a class="quick-btn" href="nutrition.html">
-        <span class="quick-btn-icon"><i data-lucide="utensils"></i></span>
-        <span class="quick-btn-label">Log Food</span>
-      </a>
-      <a class="quick-btn" href="#" onclick="wlOpenModal(); return false;">
-        <span class="quick-btn-icon"><i data-lucide="scale"></i></span>
-        <span class="quick-btn-label">Log Weight</span>
-      </a>
-    </div>
-
-    <!-- 3 · Nutrition Progress -->
-    <div class="section-label">Nutrition Progress</div>
-    <div class="card">
-      <div id="nutritionSummary">
-        <div class="activity-empty">Loading…</div>
-      </div>
-      <div class="today-divider"></div>
-      <div id="workoutStatusToday" class="workout-status">
-        <span class="ws-dot"></span>
-        <span class="ws-text">Checking today's workout…</span>
-      </div>
-      <div id="weekConsistency" class="week-consistency"></div>
-    </div>
-
-    <!-- 4 · Recent Activity -->
-    <div class="section-label">Recent Activity</div>
-    <div class="quick-grid quick-grid-3">
-      <a class="quick-btn" href="workout-history.html">
-        <span class="quick-btn-icon"><i data-lucide="history"></i></span>
-        <span class="quick-btn-label">Workout History</span>
-      </a>
-      <a class="quick-btn" href="weight-history.html">
-        <span class="quick-btn-icon"><i data-lucide="trending-up"></i></span>
-        <span class="quick-btn-label">Progress</span>
-      </a>
-      <a class="quick-btn" href="nutrition.html">
-        <span class="quick-btn-icon"><i data-lucide="clipboard-list"></i></span>
-        <span class="quick-btn-label">Nutrition History</span>
-      </a>
-    </div>
-    <div class="card">
-      <div id="momentumStreak" class="momentum-streak"></div>
-      <div class="activity-head">
-        <span class="activity-title">Recent Workouts</span>
-        <a class="activity-viewall" href="workout-history.html">View All →</a>
-      </div>
-      <div id="recentWorkouts">
-        <div class="activity-empty">Loading…</div>
-      </div>
-    </div>
-
-    <!-- 5 · Goal Progress & Weight Trend -->
-    <div class="section-label">Goal Progress</div>
-    <div class="card">
-      <div class="activity-head">
-        <span class="activity-title">Weight</span>
-        <a class="activity-viewall" href="weight-history.html">View All →</a>
-      </div>
-      <div id="weighInSummary"></div>
-      <div id="recentWeighIns">
-        <div class="activity-empty">Loading…</div>
-      </div>
-      <div id="goalMetricsRow" class="goal-metrics-row"></div>
-      <button class="btn-recalc" onclick="openRecalcModal()">Recalculate Goals</button>
-    </div>
-
-    <details class="ref-details">
-      <summary class="ref-summary">Targets &amp; macros</summary>
-      <div class="card ref-card">
-        <div class="numbers-grid">
-          <div class="stat-cell full">
-            <div class="stat-label">Target Calories</div>
-            <div class="stat-value" id="dashCalories">—</div>
-            <div class="stat-sub" id="dashCalSub"></div>
-          </div>
-          <div class="stat-cell">
-            <div class="stat-label">Protein</div>
-            <div class="stat-value" id="dashProtein">—</div>
-            <div class="stat-sub">grams / day</div>
-          </div>
-          <div class="stat-cell">
-            <div class="stat-label">Carbs</div>
-            <div class="stat-value" id="dashCarbs">—</div>
-            <div class="stat-sub">grams / day</div>
-          </div>
-          <div class="stat-cell">
-            <div class="stat-label">Fats</div>
-            <div class="stat-value" id="dashFats">—</div>
-            <div class="stat-sub">grams / day</div>
-          </div>
-          <div class="stat-cell">
-            <div class="stat-label">Current Weight</div>
-            <div class="stat-value" id="dashStartWeight">—</div>
-          </div>
-          <div class="stat-cell">
-            <div class="stat-label">Goal Weight</div>
-            <div class="stat-value" id="dashGoalWeight">—</div>
-          </div>
-        </div>
-      </div>
-    </details>
-
-    <!-- 6 · Programs -->
-    <div class="section-label">Programs</div>
-    <div class="card">
-      <div class="plan-item" data-product="fat_loss_blueprint">
-        <div>
-          <div class="plan-name">90 Day Fat Loss Blueprint</div>
-          <div class="plan-desc">12-week fat loss system</div>
-        </div>
-        <div class="plan-action">
-          <span class="plan-price">$49</span>
-          <a class="btn-buy" href="store.html">Buy</a>
-        </div>
-      </div>
-      <div class="plan-item" data-product="muscle_gain">
-        <div>
-          <div class="plan-name">Muscle Gain</div>
-          <div class="plan-desc">8-week hypertrophy program</div>
-        </div>
-        <div class="plan-action">
-          <span class="plan-price">$59</span>
-          <a class="btn-buy" href="store.html">Buy</a>
-        </div>
-      </div>
-      <div class="plan-item" data-product="glute_builder">
-        <div>
-          <div class="plan-name">Glute Builder</div>
-          <div class="plan-desc">Women's lower-body program</div>
-        </div>
-        <div class="plan-action">
-          <span class="plan-price">$39</span>
-          <a class="btn-buy" href="store.html">Buy</a>
-        </div>
-      </div>
-      <div class="browse-link">
-        <a href="store.html">Browse all programs →</a>
-      </div>
-    </div>
-
-    <!-- Membership (shown only to subscribers) -->
-    <div id="membershipSection" style="display:none;">
-      <div class="section-label">Membership</div>
-      <div class="card">
-        <div class="plan-item">
-          <div>
-            <div class="plan-name">Muscle Motivation Membership</div>
-            <div class="plan-desc" id="membershipStatus">—</div>
-          </div>
-          <div class="plan-action">
-            <button class="btn-buy" id="manageBillingBtn" onclick="manageBilling(this)">Manage</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 7 · AI Coaching -->
-    <div class="section-label">AI Coaching</div>
-    <a class="ref-link-row" href="#" aria-disabled="true" onclick="return false;">
-      <span class="quick-btn-icon"><i data-lucide="bot"></i></span>
-      <span class="ref-link-label">AI Coach</span>
-      <span class="ref-soon">Coming Soon</span>
+    <a class="home-row" href="workout-history.html">
+      <div class="mm-daystrip" id="weekStrip" role="list"></div>
+      <span class="mm-visually-hidden">View workout history</span>
     </a>
 
-  </div><!-- /container -->
+    <!-- ── C · NUTRITION ────────────────────────────────────────────────
+         No container, deliberately quieter than the hero. -->
+    <div class="mm-section">
+      <h2 class="mm-section-label">Nutrition</h2>
+    </div>
+    <a class="home-row" href="nutrition.html" id="nutRow">
+      <div id="nutBody"></div>
+      <span class="mm-visually-hidden">Open nutrition</span>
+    </a>
+    <!-- Status first, then the action on it: the reading order is calories and
+         protein → log something → what Coach makes of it. Below the metrics
+         rather than beside the heading, on the same content-grid line as
+         Log weight, so the two logging actions read as one pattern.
+
+         It must sit OUTSIDE #nutRow: that whole block is already an anchor to
+         nutrition.html, and an anchor cannot contain another one.
+
+         The href is unchanged, so nutrition.html's focusQuickLogFromHash()
+         still brings the real Quick Log input into view and focuses it — this
+         stays a shortcut, never plain navigation to the top of Nutrition. -->
+    <div class="home-actions">
+      <a class="home-log" href="nutrition.html#quicklog">Log food</a>
+    </div>
+
+    <!-- ── D · COACH INSIGHT ────────────────────────────────────────────
+         The seat the AI Coach will occupy. Deterministic evidence only, and
+         hidden entirely when nothing is evidence-backed. -->
+    <section class="mm-insight" id="insightRow" hidden>
+      <span class="mm-insight-icon" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="1.8" stroke-linecap="round" focusable="false">
+          <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.4"/>
+        </svg>
+      </span>
+      <div class="mm-insight-body">
+        <div class="mm-insight-label">Coach Insight</div>
+        <p class="mm-insight-text" id="insightText"></p>
+        <a class="mm-insight-action" id="insightAction" hidden></a>
+      </div>
+    </section>
+
+    <!-- ── E · WEIGHT ───────────────────────────────────────────────────
+         No container — a compact snapshot on the background, never a card.
+         Labelled WEIGHT rather than Progress because that is exactly what it
+         is: a quick weight status. "Progress" is the persistent bottom-nav
+         destination for the full history, so the two no longer share a name.
+         Nothing about that tab, its label or its route changes.
+
+         Weight and its change anchor the left; the mini trend widget balances
+         the right. The DRAWING stays hidden from assistive technology — the
+         change directly beside it already states the same thing in words — but
+         the widget itself is a labelled link, so what is announced is the
+         destination rather than a wall of coordinates.
+
+         Three distinct interactions live in this area, deliberately: Log
+         weight records a value, the trend widget opens the full chart, and the
+         Progress tab opens the destination generally. `View progress ›` stays
+         removed — the widget now carries that route, and the tab always did. -->
+    <div class="mm-section">
+      <h2 class="mm-section-label">Weight</h2>
+    </div>
+    <div class="home-progress">
+      <div class="home-weightstack">
+        <span class="home-weight" id="progValue">—</span>
+        <span class="home-trend" id="progTrend"></span>
+        <button class="home-log" id="logWeightBtn" onclick="wlOpenModal()">Log weight</button>
+      </div>
+      <a class="home-trendcard" id="progSpark" href="weight-history.html#chartWrap"
+         aria-label="View weight trend in Progress" hidden></a>
+    </div>
+
+  </main>
+
+  <!-- Shared primary navigation (markup owned by app-nav.js) -->
+  <div id="appNavMount"></div>
 </div><!-- /appContent -->
-
-<!-- Recalculate Goals Modal -->
-<div class="modal-overlay" id="recalcModal" onclick="closeRecalcModal(event)">
-  <div class="modal-box">
-    <div class="modal-header">
-      <div class="modal-title">Update Your Goals</div>
-      <button class="modal-close" onclick="document.getElementById('recalcModal').classList.remove('open')">✕</button>
-    </div>
-
-    <div id="recalcForm">
-      <div class="field-group">
-        <label class="field-label">Current Weight (lbs)</label>
-        <input type="number" id="rc-weight" min="50" max="500" placeholder="e.g. 185">
-      </div>
-      <div class="field-group">
-        <label class="field-label">Body Fat % <span class="field-optional">(optional)</span></label>
-        <input type="number" id="rc-bodyfat" min="4" max="60" placeholder="e.g. 22">
-      </div>
-      <div class="field-group">
-        <label class="field-label">Goal</label>
-        <select id="rc-goal">
-          <option value="fatloss">Fat Loss</option>
-          <option value="recomp">Recomposition</option>
-          <option value="muscle">Muscle Gain</option>
-        </select>
-      </div>
-      <div class="field-group">
-        <label class="field-label">Daily Steps</label>
-        <select id="rc-steps">
-          <option value="1.2">Under 4,000 – Sedentary</option>
-          <option value="1.35">4,000–6,000 – Lightly active</option>
-          <option value="1.45">6,000–8,000 – Moderately active</option>
-          <option value="1.55">8,000–10,000 – Active</option>
-          <option value="1.7">10,000+ – Very active</option>
-        </select>
-      </div>
-      <div class="field-group">
-        <label class="field-label">Training Days / Week</label>
-        <select id="rc-training">
-          <option value="0">0 – Not training yet</option>
-          <option value="2">2 days</option>
-          <option value="3">3 days</option>
-          <option value="4">4 days</option>
-          <option value="5">5 days</option>
-          <option value="6">6 days</option>
-        </select>
-      </div>
-      <button class="btn-calc" onclick="runRecalc()">Calculate New Targets</button>
-    </div>
-
-    <div id="recalcResults" style="display:none;">
-      <div class="results-grid">
-        <div class="result-cell" style="grid-column:1/-1;">
-          <div class="result-label">Target Calories</div>
-          <div class="result-val" id="rc-rCals">—</div>
-        </div>
-        <div class="result-cell">
-          <div class="result-label">Protein</div>
-          <div class="result-val" id="rc-rProtein">—</div>
-        </div>
-        <div class="result-cell">
-          <div class="result-label">Carbs</div>
-          <div class="result-val" id="rc-rCarbs">—</div>
-        </div>
-        <div class="result-cell">
-          <div class="result-label">Fats</div>
-          <div class="result-val" id="rc-rFats">—</div>
-        </div>
-      </div>
-      <div class="result-sub" id="rc-rSub"></div>
-      <div class="modal-actions">
-        <button class="btn-back" onclick="document.getElementById('recalcForm').style.display='';document.getElementById('recalcResults').style.display='none';">← Back</button>
-        <button class="btn-save" onclick="saveRecalc()">Save & Update</button>
-      </div>
-    </div>
-  </div>
-</div>
 
 <!-- Log / Edit Weight Modal (markup injected by weight.js) -->
 <div id="weightModalMount"></div>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.0/dist/umd/supabase.js" integrity="sha384-3wY11tldQ5+yWqAvmTN4XtQvnjoTva0cV15O/O/O5NTtp0ivVopSzLOzsVXWZse9" crossorigin="anonymous"></script>
 <script src="supabase.js"></script>
 <script src="schedules.js"></script>
+<script src="program-state.js"></script>
 <script src="weight.js"></script>
-<script src="food-core.js"></script>
-<script src="food-display.js"></script>
-<script src="nutrition.js"></script>
 <script src="metrics.js"></script>
 <script src="snapshot.js"></script>
+<script src="dashboard-model.js"></script>
 <script>
 
-  var currentProfile    = null;
-  var currentUserId     = null;
-  var ownedProgramsList = [];
+  // Home consumes SHARED state only: snapshot.js supplies training, nutrition,
+  // weight and body-composition domain state; program-state.js supplies the
+  // active program/session; dashboard-model.js decides priority and fallbacks.
+  // This page owns no fitness intelligence and performs no per-metric queries.
 
-  // Mount the shared Log/Edit Weight modal (markup lives in weight.js).
+  var currentProfile = null;
+  var currentUserId  = null;
+  var inProgressId   = null;
+
   document.getElementById('weightModalMount').innerHTML = wlModalMarkup();
 
-  var GOAL_LABELS = { fatloss: 'Fat Loss', recomp: 'Recomposition', muscle: 'Muscle Gain' };
+  function esc(s) {
+    return String(s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
 
-  var GOAL_PROGRAM_MAP = { fatloss: 'fat_loss_blueprint', muscle: 'muscle_gain' };
+  function showToast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(function () { t.classList.remove('show'); }, 3000);
+  }
 
-  // Session labels (SESSION_LABELS) + PROGRAM_SCHEDULES + getScheduleForDays
-  // all come from schedules.js (single source of truth).
+  // Meters are driven by ONE custom property (the .mm-meter contract).
+  function setMeter(id, pct, modifier) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var p = Math.max(0, Math.min(100, Math.round(pct || 0)));
+    el.className = 'mm-meter' + (modifier ? ' mm-meter--' + modifier : '');
+    el.style.setProperty('--mm-meter-pct', p + '%');
+    el.setAttribute('aria-valuenow', String(p));
+    // Zero reads as an empty track. Only a genuine non-zero value draws a fill,
+    // which the shell then floors to one bar-height so it stays visible.
+    if (p === 0) el.setAttribute('data-empty', 'true');
+    else el.removeAttribute('data-empty');
+  }
 
-  var PROGRAM_META = {
-    fat_loss_blueprint: { name: '90 Day Fat Loss Blueprint' },
-    muscle_gain:        { name: 'Muscle Gain' },
-    glute_builder:      { name: 'Glute Builder' },
-  };
-
-  window.addEventListener('load', function() {
+  window.addEventListener('load', function () {
     (async () => {
       try {
         var session = await requireAuth();
-        var user    = session.user;
+        var user = session.user;
         currentUserId = user.id;
         var profile = await getProfile(user.id);
         currentProfile = profile;
@@ -1041,56 +638,16 @@
         // Narrow signal only — no logged/user content is included.
         try { window.dispatchEvent(new CustomEvent('mm:pwa-value', { detail: { type: 'dashboard' } })); } catch (e) {}
 
-        var firstName = (profile.full_name || user.email).split(' ')[0];
-        document.getElementById('headerName').textContent = firstName;
-        document.getElementById('dashName').textContent   = firstName;
-
-        document.getElementById('dashDate').textContent = new Date().toLocaleDateString('en-US', {
-          weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
-        });
-
-        var timelineLabels = { aggressive: 'Aggressive', steady: 'Steady', relaxed: 'Long Game' };
-        var goalTag = (GOAL_LABELS[profile.goal] || profile.goal || '—');
-        if (profile.timeline) goalTag += ' · ' + (timelineLabels[profile.timeline] || profile.timeline);
-        document.getElementById('dashGoalTag').textContent = goalTag;
-
-        // Neutral frequency label — never a program-specific split name here
-        document.getElementById('dashSplit').textContent = getFrequencyLabel(profile.training_days);
-
-        document.getElementById('dashCalories').textContent = profile.target_calories
-          ? profile.target_calories.toLocaleString() + ' kcal' : '—';
-
-        if (profile.target_calories && profile.maintenance_calories) {
-          var diff = Math.abs(profile.target_calories - profile.maintenance_calories);
-          document.getElementById('dashCalSub').textContent = profile.target_calories < profile.maintenance_calories
-            ? diff + ' cal deficit from maintenance'
-            : diff + ' cal surplus above maintenance';
-        }
-
-        document.getElementById('dashProtein').textContent    = profile.protein_target ? profile.protein_target + 'g' : '—';
-        document.getElementById('dashCarbs').textContent      = profile.carb_target    ? profile.carb_target + 'g'    : '—';
-        document.getElementById('dashFats').textContent       = profile.fat_target     ? profile.fat_target + 'g'     : '—';
-        document.getElementById('dashStartWeight').textContent = profile.weight_lbs      ? profile.weight_lbs + ' lbs'      : '—';
-        document.getElementById('dashGoalWeight').textContent  = profile.goal_weight_lbs ? profile.goal_weight_lbs + ' lbs' : '—';
-
-        document.getElementById('dashFocusText').innerHTML = buildFocus(profile);
-
-        document.getElementById('authGate').style.display   = 'none';
+        document.getElementById('authGate').style.display = 'none';
         document.getElementById('appContent').style.display = 'block';
+        lucide.createIcons();
 
-        await loadPurchases(user.id);
-        await checkDashboardInProgress(user.id);
-        await loadRecentActivity(user.id);
-        await loadRecentWeighIns(user.id);
-        await loadNutritionSummary(user.id);
-        await loadTrainedToday(user.id);
-        await loadStreak(user.id);
-        loadSnapshotExtras(user.id);   // supplementary lines — never blocks the dashboard
+        await renderDashboard(user.id);
+
         if (new URLSearchParams(window.location.search).get('purchase') === 'success') {
           showToast('Purchase successful — your program is now unlocked.');
           history.replaceState(null, '', window.location.pathname);
         }
-
       } catch (err) {
         console.error('Dashboard error:', err);
         window.location.href = 'auth.html';
@@ -1098,818 +655,360 @@
     })();
   });
 
-  function buildFocus(profile) {
-    var cals    = profile.target_calories ? profile.target_calories.toLocaleString() : null;
-    var protein = profile.protein_target || null;
-    var lead = {
-      fatloss: "You're in a calorie deficit today — fat loss is the mission.",
-      recomp:  'Recomp mode: eat near maintenance and let training drive the change.',
-      muscle:  "You're in a building surplus — fuel up and push your lifts."
-    }[profile.goal] || 'Stay consistent and hit your targets today.';
-    var parts = ['<strong>' + lead + '</strong>'];
-    if (cals && protein) {
-      parts.push('Aim for <strong>' + cals + ' kcal</strong> and lock in <strong>' + protein + 'g of protein</strong> — protein first, everything else follows.');
-    } else if (protein) {
-      parts.push('Lock in <strong>' + protein + 'g of protein</strong> — protein first, everything else follows.');
+  // ONE pass: every section is derived from the same shared state.
+  async function renderDashboard(userId) {
+    var results = await Promise.all([
+      buildUserSnapshot(userId, { profile: currentProfile }).catch(function (e) {
+        console.error('snapshot:', e); return null;
+      }),
+      loadProgramState(userId),
+      loadInProgress(userId),
+    ]);
+
+    var model = DashboardModel.buildDashboardModel({
+      snapshot: results[0],
+      profile: currentProfile,
+      program: results[1],
+      inProgressWorkout: results[2],
+      hourOfDay: new Date().getHours(),
+    });
+
+    renderToday(model.today);
+    renderWeek(model.week);
+    renderNutrition(model.nutrition);
+    renderInsight(model.focus);
+    renderProgress(model.progress);
+  }
+
+  async function loadProgramState(userId) {
+    try {
+      var owned = await pgLoadOwnedPrograms(userId);
+      var activeSlug = await pgResolveActive(userId, currentProfile, owned);
+      if (!activeSlug) return owned.length > 1 ? { needsSelection: true } : null;
+      return await pgResolveSession(userId, activeSlug, currentProfile.training_days);
+    } catch (e) {
+      console.error('loadProgramState:', e);
+      return null;
     }
-    parts.push('Move your body, drink your water, and check in tomorrow.');
-    return parts.join(' ');
   }
 
-  function showToast(msg) {
-    var t = document.getElementById('toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    setTimeout(function() { t.classList.remove('show'); }, 3000);
+  async function loadInProgress(userId) {
+    try {
+      // Most recent unfinished workout, regardless of age — an unfinished
+      // session must never become an invisible orphan.
+      var res = await supabaseClient
+        .from('workouts').select('id, name')
+        .eq('user_id', userId).eq('completed', false)
+        .order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (!res.data) return null;
+      inProgressId = res.data.id;
+      return res.data;
+    } catch (e) {
+      console.error('loadInProgress:', e);
+      return null;
+    }
   }
 
-  lucide.createIcons();
+  // ── A · TODAY'S PLAN ─────────────────────────────────────────────────
+  // Every priority state from the model renders in the same hero shape:
+  // resume · already trained · programmed session · choose program · open.
+  function renderToday(t) {
+    document.getElementById('todayTitle').textContent = t.title;
 
-  const PROGRAM_URLS = {
-    fat_loss_blueprint: 'program-fat-loss.html',
-    muscle_gain:        'program-muscle-gain.html',
-    glute_builder:      'program-glute-builder.html',
+    var meta = document.getElementById('todayMeta');
+    if (t.status) {
+      meta.textContent = t.status;
+      meta.className = 'mm-hero-meta' +
+        (t.state === 'done' ? ' is-done' : t.state === 'resume' ? ' is-live' : '');
+      meta.hidden = false;
+    } else {
+      meta.hidden = true;
+    }
+
+    var cta = document.getElementById('todayCta');
+    if (t.cta) {
+      cta.textContent = t.cta.label;
+      cta.href = t.cta.href;
+      cta.hidden = false;
+    } else {
+      cta.hidden = true;
+    }
+
+    var alt = document.getElementById('todayAlt');
+    if (t.secondary) {
+      alt.textContent = t.secondary.label;
+      alt.hidden = false;
+      alt.onclick = t.secondary.action === 'discard'
+        ? discardSession
+        : function () { window.location.href = t.secondary.href; };
+    } else {
+      alt.hidden = true;
+    }
+  }
+
+  // ── B · THIS WEEK ────────────────────────────────────────────────────
+  // Day cells carry only honest state: completed, today, or neither.
+  function renderWeek(w) {
+    document.getElementById('weekValue').textContent = w.hasData ? w.label : '—';
+
+    var strip = document.getElementById('weekStrip');
+    strip.innerHTML = (w.days || []).map(function (d) {
+      var cls = 'mm-day' +
+        (d.completed ? ' is-done' : '') +
+        (d.isToday ? ' is-today' : '') +
+        (!d.completed && !d.isToday && d.isFuture ? ' is-future' : '');
+      // Both meanings are announced when a day is today AND completed.
+      var state = (d.isToday ? 'today, ' : '') + (d.completed ? 'completed' : 'not completed');
+      return '<div class="' + cls + '" role="listitem">' +
+        '<span class="mm-day-label" aria-hidden="true">' + esc(d.label) + '</span>' +
+        '<span class="mm-day-dot"></span>' +
+        '<span class="mm-visually-hidden">' + esc(d.weekday) + ': ' + state + '</span>' +
+      '</div>';
+    }).join('');
+    // No meter here by design. w.pct / w.complete stay in the shared model for
+    // other consumers, but Home draws the week ONCE: the count states the
+    // number, the strip states which days. A bar restated the count a third
+    // time and was the only duplicated progress indicator on the screen.
+  }
+
+  // ── C · NUTRITION ────────────────────────────────────────────────────
+  // Two compact metrics + two thin meters. Ordinary progress uses the ACCENT;
+  // amber appears only when genuinely over target.
+  function renderNutrition(n) {
+    var body = document.getElementById('nutBody');
+
+    if (!n.hasData) {
+      body.innerHTML = '<div class="home-empty">Not available</div>';
+      return;
+    }
+    if (!n.logged) {
+      body.innerHTML = '<div class="home-empty">Nothing logged yet today</div>';
+      return;
+    }
+
+    // Category colouring, matching the nutrition page: green identifies
+    // CALORIES, the accent identifies macro progress. Amber still overrides
+    // when genuinely over target — that is semantic, not categorical.
+    var calValue, calPct, calMod = 'calories';
+    if (n.hasTargets) {
+      calValue = n.left.toLocaleString() + ' <span class="sub">kcal ' + (n.over ? 'over' : 'left') + '</span>';
+
+      calPct = n.pct;
+      if (n.over) calMod = 'warning';
+    } else {
+      calValue = n.consumed.toLocaleString() + ' <span class="sub">kcal today</span>';
+      calPct = 0;
+    }
+
+    var html =
+      '<div class="home-metric">' +
+        '<span class="home-metric-label">Calories</span>' +
+        '<span class="home-metric-value is-lead">' + calValue + '</span>' +
+      '</div>' +
+      '<div class="mm-meter" id="nutCalMeter"' + (n.hasTargets ? '' : ' data-empty="true"') +
+        ' role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Calories">' +
+        '<div class="mm-meter-fill"></div></div>';
+
+    if (n.protein.target) {
+      html +=
+        '<div class="home-metric">' +
+          '<span class="home-metric-label">Protein</span>' +
+          '<span class="home-metric-value">' + n.protein.consumed +
+            ' <span class="sub">/ ' + n.protein.target + ' g</span></span>' +
+        '</div>' +
+        '<div class="mm-meter" id="nutProMeter" role="progressbar" aria-valuemin="0"' +
+          ' aria-valuemax="100" aria-label="Protein">' +
+          '<div class="mm-meter-fill"></div></div>';
+    } else if (n.protein.consumed) {
+      html +=
+        '<div class="home-metric">' +
+          '<span class="home-metric-label">Protein</span>' +
+          '<span class="home-metric-value">' + n.protein.consumed + ' <span class="sub">g</span></span>' +
+        '</div>';
+    }
+
+    body.innerHTML = html;
+    setMeter('nutCalMeter', calPct, calMod);
+    if (n.protein.target) {
+      // Hitting a protein target IS a genuine achievement, so success colour
+      // is earned here — unlike ordinary partial progress.
+      // Protein stays on the ACCENT at every value. Turning it green on
+      // completion would give green two meanings on one screen — "this is
+      // calories" and "this is finished" — which is exactly the category
+      // ambiguity this treatment exists to remove. Hitting the target is
+      // already conveyed by the numbers reading 217 / 217 g and a full bar.
+      setMeter('nutProMeter', n.protein.pct, null);
+    }
+  }
+
+  // ── D · COACH INSIGHT ────────────────────────────────────────────────
+  // One evidence-backed line, or nothing at all. Never AI-flavoured, never a
+  // paragraph. Default treatment is the accent — not a warning.
+  function renderInsight(f) {
+    var el = document.getElementById('insightRow');
+    var action = document.getElementById('insightAction');
+    if (!f) { el.hidden = true; return; }
+
+    document.getElementById('insightText').textContent = f.text;
+    // Default is the theme accent. Semantic styling is applied ONLY when the
+    // model marks an insight as genuinely semantic — a routine nudge like
+    // "food logged 1 of 7 days" must never be dressed as an error.
+    el.className = 'mm-insight' + (f.severity ? ' mm-insight--' + f.severity : '');
+
+    if (f.action) {
+      action.textContent = f.action.label;
+      action.href = f.action.href;
+      action.hidden = false;
+    } else {
+      action.hidden = true;
+    }
+    el.hidden = false;
+  }
+
+  // ── E · PROGRESS ─────────────────────────────────────────────────────
+  // Every state is driven by real weigh-ins: no history means no trend and no
+  // drawing, and the model decides both — this only renders what it is given.
+  function renderProgress(p) {
+    var valueEl = document.getElementById('progValue');
+    var trendEl = document.getElementById('progTrend');
+
+    renderSparkline(p.series);
+
+    if (!p.hasData) {
+      // No weight to show — the empty state carries the whole message, so a
+      // lone em dash beside it would be noise. Log weight stays useful.
+      valueEl.hidden = true;
+      trendEl.className = 'home-trend';
+      trendEl.innerHTML = '<span class="muted">No weigh-ins yet</span>';
+      return;
+    }
+    valueEl.hidden = false;
+    valueEl.textContent = p.current + ' ' + p.unit;
+
+    if (p.change30 == null) {
+      // One weigh-in is not a trend — say nothing rather than invent one.
+      trendEl.className = 'home-trend';
+      trendEl.textContent = '';
+      return;
+    }
+    // The arrow is decoration; the direction is also stated in words for screen
+    // readers, since "↓" alone announces poorly or not at all.
+    var arrow = p.direction === 'down' ? '↓' : p.direction === 'up' ? '↑' : '±';
+    var spoken = p.direction === 'down' ? 'Down' : p.direction === 'up' ? 'Up' : 'No change,';
+    trendEl.className = 'home-trend ' + esc(p.direction);
+    trendEl.innerHTML =
+      '<span aria-hidden="true">' + arrow + '</span>' +
+      '<span class="mm-visually-hidden">' + spoken + ' </span> ' +
+      Math.abs(p.change30) + ' ' + esc(p.unit) +
+      ' <span class="muted">this month</span>';
+  }
+
+  // Geometry comes from weight.js (the same module that owns the full Progress
+  // chart) over the exact rows behind the change value; this page adds no
+  // window, no maths and no interpolation of its own. The widget is hidden
+  // entirely when there is nothing real to draw, so the link never leads
+  // somewhere with no chart at the other end.
+  // COMPACT MODE of the Progress page's chart — the same wlChartSVG, the same
+  // rows, the same scaling. Only the box, padding, label size and marker size
+  // differ, so tapping through to the full chart shows the same shape larger.
+  // Labels are deliberately bigger than a proportional shrink would give: at
+  // this size an 11px label would render around 8px and be unreadable.
+  // The chart is authored at the size it will actually occupy, measured from
+  // the card, rather than at a fixed box scaled to fit. An SVG sized with
+  // width:100% scales its TEXT too, so a fixed viewBox would render these
+  // labels near 12px on a 430pt phone but around 7px on a 320pt one —
+  // unreadable exactly where legibility matters most. Drawing 1:1 keeps the
+  // labels at their stated size, and the line and markers at the same visual
+  // weight as the full chart, on every device.
+  //
+  // Height is held constant so the card is a consistent shape; only the width
+  // follows the row. `pad` clears the two label rows the renderer stacks at the
+  // bottom, so the low-weight value never lands on the dates.
+  var HOME_TREND = {
+    height: 124, pad: 34, minWidth: 150,
+    labelSize: 13, dotRadius: 3.4, strokeWidth: 2.5,
+    gradId: 'homeTrendGrad', decorative: true,
   };
+  var homeTrendSeries = null;
 
-  // ── Recalculate Goals ──────────────────────────────────────────
-  var recalcPlan = null;
-
-  function openRecalcModal() {
-    if (!currentProfile) return;
-    document.getElementById('rc-weight').value   = currentProfile.weight_lbs || '';
-    document.getElementById('rc-bodyfat').value  = currentProfile.body_fat_pct || '';
-    document.getElementById('rc-goal').value     = currentProfile.goal || 'fatloss';
-    document.getElementById('rc-steps').value    = currentProfile.activity_level || '1.35';
-    document.getElementById('rc-training').value = currentProfile.training_days || '3';
-    document.getElementById('recalcForm').style.display    = '';
-    document.getElementById('recalcResults').style.display = 'none';
-    document.getElementById('recalcModal').classList.add('open');
-  }
-
-  function closeRecalcModal(e) {
-    if (e && e.target !== document.getElementById('recalcModal')) return;
-    document.getElementById('recalcModal').classList.remove('open');
-  }
-
-  function rcCalcBMR(weightKg, heightCm, age, gender, bodyfat) {
-    if (bodyfat && bodyfat >= 5 && bodyfat <= 55) {
-      return 370 + (21.6 * weightKg * (1 - bodyfat / 100));
-    }
-    var base = (10 * weightKg) + (6.25 * heightCm) - (5 * age);
-    return gender === 'male' ? base + 5 : base - 161;
-  }
-
-  function rcGetSplit(days) {
-    // Delegate to the shared source of truth so the label always matches
-    // the schedule that getScheduleForDays will actually launch.
-    return getSplitLabel(days);
-  }
-
-  function runRecalc() {
-    var weight   = parseFloat(document.getElementById('rc-weight').value);
-    var bodyfat  = parseFloat(document.getElementById('rc-bodyfat').value) || null;
-    var goal     = document.getElementById('rc-goal').value;
-    var stepMult = parseFloat(document.getElementById('rc-steps').value);
-    var training = parseFloat(document.getElementById('rc-training').value);
-
-    if (!weight) { showToast('Please enter your current weight.'); return; }
-
-    var p        = currentProfile;
-    var weightKg = weight * 0.453592;
-    var heightCm = p.height_cm  || 175;
-    var age      = p.age        || 30;
-    var gender   = p.gender     || 'male';
-
-    var bmr  = rcCalcBMR(weightKg, heightCm, age, gender, bodyfat);
-    var tdee = Math.round(bmr * stepMult + (training * 0.75 * 6 * (bmr / 24)) / 7);
-    var minCals = gender === 'female' ? 1350 : 1600;
-    var targetCals;
-
-    if (goal === 'fatloss') {
-      targetCals = Math.max(minCals, tdee - 500);
-    } else if (goal === 'recomp') {
-      targetCals = Math.max(minCals, tdee - 200);
-    } else {
-      // muscle gain — always a surplus above maintenance
-      targetCals = tdee + 250;
-    }
-
-    console.log('[Recalculate] Goal:', goal, '| Maintenance:', tdee, '| Target:', targetCals);
-
-    var proteinG = Math.round(weight * (goal === 'recomp' ? 1.0 : goal === 'fatloss' ? 0.9 : 0.95));
-    var fatG     = Math.round(targetCals * 0.25 / 9);
-    var carbG    = Math.round(Math.max(0, targetCals - (proteinG * 4) - (fatG * 9)) / 4);
-    var diff     = Math.abs(tdee - targetCals);
-    var subLabel = targetCals < tdee
-      ? diff + ' cal deficit from maintenance (' + tdee.toLocaleString() + ' kcal)'
-      : targetCals > tdee
-        ? diff + ' cal surplus above maintenance (' + tdee.toLocaleString() + ' kcal)'
-        : 'At maintenance';
-
-    document.getElementById('rc-rCals').textContent    = targetCals.toLocaleString() + ' kcal';
-    document.getElementById('rc-rProtein').textContent = proteinG + 'g';
-    document.getElementById('rc-rCarbs').textContent   = carbG + 'g';
-    document.getElementById('rc-rFats').textContent    = fatG + 'g';
-    document.getElementById('rc-rSub').textContent     = subLabel;
-
-    recalcPlan = {
-      weight_lbs: weight, body_fat_pct: bodyfat, goal,
-      activity_level: stepMult, training_days: training,
-      maintenance_calories: tdee, target_calories: targetCals,
-      protein_target: proteinG, fat_target: fatG, carb_target: carbG,
-      training_split: rcGetSplit(training),
-    };
-
-    document.getElementById('recalcForm').style.display    = 'none';
-    document.getElementById('recalcResults').style.display = '';
-  }
-
-  async function saveRecalc() {
-    if (!recalcPlan) return;
-    try {
-      var prevTrainingDays = currentProfile.training_days;
-      var { data: s } = await supabaseClient.auth.getSession();
-      var { error } = await supabaseClient
-        .from('profiles').update(recalcPlan).eq('id', s.session.user.id);
-      if (error) throw error;
-      Object.assign(currentProfile, recalcPlan);
-
-      document.getElementById('dashCalories').textContent  = recalcPlan.target_calories.toLocaleString() + ' kcal';
-      var diff = Math.abs(recalcPlan.target_calories - recalcPlan.maintenance_calories);
-      document.getElementById('dashCalSub').textContent    = recalcPlan.target_calories < recalcPlan.maintenance_calories
-        ? diff + ' cal deficit from maintenance' : diff + ' cal surplus above maintenance';
-      document.getElementById('dashProtein').textContent   = recalcPlan.protein_target + 'g';
-      document.getElementById('dashCarbs').textContent     = recalcPlan.carb_target + 'g';
-      document.getElementById('dashFats').textContent      = recalcPlan.fat_target + 'g';
-      document.getElementById('dashSplit').textContent     = getFrequencyLabel(recalcPlan.training_days);
-      document.getElementById('recalcModal').classList.remove('open');
-
-      // training_days is global — remap ALL owned programs when it changes
-      if (recalcPlan.training_days !== prevTrainingDays && ownedProgramsList.length > 0) {
-        await remapAllProgramSchedules(s.session.user.id, recalcPlan.training_days);
-      }
-
-      showToast('Goals updated!');
-    } catch (err) {
-      console.error('saveRecalc:', err);
-      showToast('Error saving — try again.');
-    }
-  }
-
-  // training_days is a GLOBAL profile setting — one source of truth, no per-program frequency.
-  // This function remaps ALL owned programs to the new schedule at once.
-  async function remapAllProgramSchedules(userId, newTrainingDays) {
-    if (!ownedProgramsList.length) return;
-
-    // Fetch all existing user_programs rows for owned slugs in one query
-    var { data: rows } = await supabaseClient
-      .from('user_programs').select('*')
-      .eq('user_id', userId)
-      .in('program_slug', ownedProgramsList);
-
-    var rowMap = {};
-    (rows || []).forEach(function(r) { rowMap[r.program_slug] = r; });
-
-    var days = parseInt(newTrainingDays, 10) || 3;
-
-    await Promise.all(ownedProgramsList.map(async function(slug) {
-      var up      = rowMap[slug];
-      if (!up) return; // no row yet — bootstrapped on first workout finish with correct days
-
-      var newKeys = getScheduleForDays(slug, days);
-      var oldKeys = up.schedule_keys || [];
-      if (oldKeys.join(',') === newKeys.join(',')) return; // already correct, skip
-
-      var curKey = oldKeys[up.current_index % (oldKeys.length || 1)];
-      var newIdx = newKeys.indexOf(curKey);
-      if (newIdx < 0) newIdx = (up.current_index || 0) % newKeys.length;
-
-      // user_programs holds progression only — training_days lives on profiles
-      await supabaseClient.from('user_programs')
-        .update({ schedule_keys: newKeys, current_index: newIdx })
-        .eq('id', up.id);
-    }));
-
-    // Refresh Today card to show the updated next session for the active program
-    if (currentProfile.active_program) {
-      await showActiveProgramState(userId, currentProfile.active_program, ownedProgramsList.length > 1);
-    }
-  }
-
-  async function loadPurchases(userId) {
-    try {
-      const { data, error } = await supabaseClient
-        .from('purchases').select('product, status')
-        .eq('user_id', userId).eq('status', 'active');
-      if (error) throw error;
-      const owned = new Set((data || []).map(p => p.product));
-
-      // Update Open Program / Buy badges in Programs section
-      document.querySelectorAll('.plan-item[data-product]').forEach(item => {
-        if (owned.has(item.dataset.product)) {
-          const url = PROGRAM_URLS[item.dataset.product];
-          item.querySelector('.plan-action').innerHTML = url
-            ? `<a class="owned-badge" href="${url}">✓ Open Program →</a>`
-            : '<span class="owned-badge">✓ Owned</span>';
-        }
-      });
-
-      // Resolve which program to show in Today card
-      ownedProgramsList = [...owned].filter(p => PROGRAM_META[p]);
-      await resolveActiveProgram(userId, ownedProgramsList);
-    } catch (err) {
-      console.error('loadPurchases error:', err);
-    }
-    await renderMembership(userId);
-  }
-
-  // ── Membership status + billing portal ────────────────────────────
-  async function renderMembership(userId) {
-    var section = document.getElementById('membershipSection');
-    try {
-      // Include past_due so a member with a failed payment still sees the card
-      // (and a warning) rather than silently losing access to manage billing.
-      var { data, error } = await supabaseClient
-        .from('purchases')
-        .select('status, current_period_end, cancel_at_period_end')
-        .eq('user_id', userId)
-        .eq('product', 'ai_membership')
-        .in('status', ['active', 'past_due'])
-        .order('created_at', { ascending: false })
-        .limit(1);
-      if (error) throw error;
-
-      var m = (data && data[0]) || null;
-      if (!m) { section.style.display = 'none'; return; }
-
-      var periodEnd = m.current_period_end ? new Date(m.current_period_end) : null;
-
-      // Defensive: if a cancellation window has already elapsed but the
-      // subscription.deleted webhook hasn't landed yet, treat access as ended.
-      if (m.cancel_at_period_end && periodEnd && periodEnd < new Date()) {
-        section.style.display = 'none';
-        return;
-      }
-
-      var statusEl = document.getElementById('membershipStatus');
-      var dateStr = periodEnd
-        ? periodEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-        : null;
-
-      if (m.status === 'past_due') {
-        statusEl.innerHTML = '<span style="color:var(--red);font-weight:700;">Payment failed</span> — update your card to keep access.';
-      } else if (m.cancel_at_period_end) {
-        statusEl.innerHTML = dateStr
-          ? '<span style="color:var(--text-muted);">Canceled — access ends on ' + dateStr + '</span>'
-          : '<span style="color:var(--text-muted);">Canceled</span>';
-      } else {
-        statusEl.textContent = dateStr ? ('Active — renews ' + dateStr) : 'Active';
-      }
-      section.style.display = '';
-    } catch (err) {
-      console.error('renderMembership error:', err);
-      section.style.display = 'none';
-    }
-  }
-
-  async function manageBilling(btn) {
-    var orig = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = 'Loading…';
-    try {
-      var session = await getSession();
-      if (!session) { window.location.href = 'auth.html'; return; }
-      var res = await fetch('/api/customer-portal', {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + session.access_token },
-      });
-      if (!res.ok) {
-        var d = await res.json().catch(function(){ return {}; });
-        throw new Error(d.error || 'Could not open billing portal');
-      }
-      var json = await res.json();
-      window.location.href = json.url;
-    } catch (err) {
-      console.error('manageBilling:', err);
-      alert(err.message || 'Could not open billing portal. Please try again.');
-      btn.disabled = false;
-      btn.textContent = orig;
-    }
-  }
-
-  // ── Active program logic ──────────────────────────────────────────
-
-  async function resolveActiveProgram(userId, programs) {
-    var activeSlug = currentProfile.active_program || null;
-
-    // If stored active program is no longer owned, clear it
-    if (activeSlug && !programs.includes(activeSlug)) {
-      activeSlug = null;
-      await supabaseClient.from('profiles').update({ active_program: null }).eq('id', userId);
-      currentProfile.active_program = null;
-    }
-
-    if (programs.length === 0) {
-      showNoProgramState();
+  function renderSparkline(series) {
+    var el = document.getElementById('progSpark');
+    homeTrendSeries = series || null;
+    if (!homeTrendSeries || typeof wlChartSVG !== 'function') {
+      el.hidden = true; el.innerHTML = '';
       return;
     }
-
-    if (programs.length === 1 && !activeSlug) {
-      // Auto-set the single owned program
-      activeSlug = programs[0];
-      await supabaseClient.from('profiles').update({ active_program: activeSlug }).eq('id', userId);
-      currentProfile.active_program = activeSlug;
-    }
-
-    if (!activeSlug) {
-      // Multiple programs, none chosen yet
-      showProgramPickerState(programs);
-      return;
-    }
-
-    await showActiveProgramState(userId, activeSlug, programs.length > 1);
+    // Unhide before measuring — a hidden element has no width to read.
+    el.hidden = false;
+    drawTrend(el, false);
   }
 
-  async function showActiveProgramState(userId, activeSlug, canChange) {
-    var meta = PROGRAM_META[activeSlug];
-    if (!meta) return;
+  function trendInnerWidth(el) {
+    var style = window.getComputedStyle(el);
+    return el.clientWidth - parseFloat(style.paddingLeft || 0)
+      - parseFloat(style.paddingRight || 0);
+  }
 
-    // Schedule is driven by profile.training_days — not hardcoded
-    var correctKeys = getScheduleForDays(activeSlug, currentProfile.training_days);
+  function drawTrend(el, isRetry) {
+    var width = Math.max(HOME_TREND.minWidth,
+      Math.round(trendInnerWidth(el)) || HOME_TREND.minWidth);
 
-    var { data: up } = await supabaseClient
-      .from('user_programs').select('id, schedule_keys, current_index')
-      .eq('user_id', userId).eq('program_slug', activeSlug).maybeSingle();
+    var svg = wlChartSVG(homeTrendSeries, {
+      width: width, height: HOME_TREND.height, pad: HOME_TREND.pad,
+      labelSize: HOME_TREND.labelSize, dotRadius: HOME_TREND.dotRadius,
+      strokeWidth: HOME_TREND.strokeWidth,
+      gradId: HOME_TREND.gradId, decorative: true,
+    });
+    if (!svg) { el.hidden = true; el.innerHTML = ''; return; }
+    el.innerHTML = svg;
 
-    var keys, idx;
-    if (!up || !(up.schedule_keys || []).length) {
-      keys = correctKeys;
-      idx  = 0;
-    } else {
-      keys = up.schedule_keys;
-      idx  = up.current_index || 0;
-      // Auto-remap if stored schedule doesn't match current training_days
-      if (keys.join(',') !== correctKeys.join(',')) {
-        var curKey = keys[idx % keys.length];
-        var newIdx = correctKeys.indexOf(curKey);
-        if (newIdx < 0) newIdx = idx % correctKeys.length;
-        supabaseClient.from('user_programs')
-          .update({ schedule_keys: correctKeys, current_index: newIdx })
-          .eq('id', up.id).then(function(){});
-        keys = correctKeys;
-        idx  = newIdx;
-      }
-    }
-
-    var sessionKey = keys[idx % keys.length];
-
-    // Stash schedule state so the manual workout picker can offer every session
-    // in the current schedule (the recommended one stays the default).
-    activeProgramSlug      = activeSlug;
-    activeScheduleKeys     = keys;
-    recommendedSessionKey  = sessionKey;
-    selectedSessionKey     = sessionKey;
-
-    document.getElementById('activeProgramName').textContent    = meta.name;
-    document.getElementById('changeProgramBtn').style.display   = canChange ? '' : 'none';
-    document.getElementById('activeProgramSection').style.display = '';
-    document.getElementById('noProgramSection').style.display    = 'none';
-    document.getElementById('programPickerSection').style.display = 'none';
-
-    var btn = document.getElementById('btnStartWorkout');
-    // Dashboard launches are the progression driver — mode=progression so
-    // finishing advances current_index (program-page launches use mode=optional).
-    btn.href = 'workout.html?program=' + activeSlug + '&session=' + sessionKey + '&mode=progression';
-    btn.textContent = 'Start Workout';
-    btn.style.display = '';
-    document.getElementById('btnBrowsePrograms').style.display = 'none';
-
-    // Show the workout selector (defaults to recommended, user can change).
-    document.getElementById('workoutDropdown').classList.remove('open');
-    document.getElementById('workoutSelectorBtn').classList.remove('open');
-    document.getElementById('chooseWorkoutWrap').style.display = '';
-    renderWorkoutSelector();
-
-    // Goal / active program mismatch hint
-    var expectedSlug = GOAL_PROGRAM_MAP[currentProfile.goal];
-    var hintEl = document.getElementById('mismatchHint');
-    if (expectedSlug && expectedSlug !== activeSlug && PROGRAM_META[expectedSlug] && ownedProgramsList.includes(expectedSlug)) {
-      var goalLabel    = GOAL_LABELS[currentProfile.goal] || currentProfile.goal;
-      var expectedName = PROGRAM_META[expectedSlug].name;
-      hintEl.innerHTML = 'Your goal is <strong>' + goalLabel + '</strong>. '
-        + '<a href="#" onclick="setActiveProgram(\'' + expectedSlug + '\'); return false;">Switch to ' + expectedName + '?</a>';
-      hintEl.style.display = '';
-    } else {
-      hintEl.style.display = 'none';
+    // The row's final width is only settled once the browser has laid the card
+    // out, and authoring at a stale width would leave the drawing scaled —
+    // which shrinks the labels and changes the card's height. Re-author ONCE at
+    // the settled width; the retry flag stops any chance of a loop.
+    if (!isRetry) {
+      requestAnimationFrame(function () {
+        if (Math.abs(Math.round(trendInnerWidth(el)) - width) > 1) drawTrend(el, true);
+      });
     }
   }
 
-  function showNoProgramState() {
-    document.getElementById('activeProgramSection').style.display  = 'none';
-    document.getElementById('programPickerSection').style.display   = 'none';
-    document.getElementById('mismatchHint').style.display            = 'none';
-    document.getElementById('noProgramSection').style.display        = '';
-    document.getElementById('btnStartWorkout').style.display          = 'none';
-    document.getElementById('btnBrowsePrograms').style.display        = '';
+  // Rotation changes the row width, and with it the size the chart should have
+  // been authored at. Re-rendering from the SAME series redraws the identical
+  // data at the new size; it re-fetches nothing.
+  window.addEventListener('resize', function () {
+    clearTimeout(window.__mmTrendResize);
+    window.__mmTrendResize = setTimeout(function () {
+      if (homeTrendSeries) renderSparkline(homeTrendSeries);
+    }, 150);
+  });
+
+  // Barlow arrives after first paint, and the reading column is sized by its
+  // text — so the row is still shifting when the chart is first authored. Left
+  // alone the drawing ends up scaled to a width it no longer has, which shrinks
+  // the labels and the card with them. Redraw once the real metrics are known.
+  if (document.fonts && document.fonts.ready && document.fonts.ready.then) {
+    document.fonts.ready.then(function () {
+      if (homeTrendSeries) renderSparkline(homeTrendSeries);
+    });
   }
 
-  function showProgramPickerState(programs) {
-    document.getElementById('activeProgramSection').style.display  = 'none';
-    document.getElementById('noProgramSection').style.display       = 'none';
-    document.getElementById('mismatchHint').style.display            = 'none';
-    document.getElementById('btnStartWorkout').style.display          = 'none';
-    document.getElementById('btnBrowsePrograms').style.display        = 'none';
-
-    var listEl = document.getElementById('programPickerList');
-    listEl.innerHTML = programs.map(function(slug) {
-      var m = PROGRAM_META[slug];
-      return '<button class="program-picker-btn" onclick="setActiveProgram(\'' + slug + '\')">' + m.name + '</button>';
-    }).join('');
-    document.getElementById('programPickerSection').style.display = '';
-  }
-
-  async function setActiveProgram(slug) {
-    try {
-      var { data: s } = await supabaseClient.auth.getSession();
-      var userId = s.session.user.id;
-      await supabaseClient.from('profiles').update({ active_program: slug }).eq('id', userId);
-      currentProfile.active_program = slug;
-
-      document.getElementById('activeProgramSection').style.display  = 'none';
-      document.getElementById('noProgramSection').style.display       = 'none';
-      document.getElementById('programPickerSection').style.display   = 'none';
-      document.getElementById('mismatchHint').style.display            = 'none';
-
-      await showActiveProgramState(userId, slug, ownedProgramsList.length > 1);
-    } catch (err) {
-      console.error('setActiveProgram error:', err);
-      showToast('Error updating program — try again.');
-    }
-  }
-
-  function openProgramPicker() {
-    document.getElementById('activeProgramSection').style.display = 'none';
-    document.getElementById('btnStartWorkout').style.display       = 'none';
-    document.getElementById('mismatchHint').style.display           = 'none';
-    document.getElementById('chooseWorkoutWrap').style.display      = 'none';
-    showProgramPickerState(ownedProgramsList);
-  }
-
-  // ── Workout selector dropdown ─────────────────────────────────────
-  // Always defaults to the recommended next workout; user can open the dropdown
-  // and pick any session in the current schedule. Picking only changes the
-  // Start link — active_program and current_index are not touched.
-  var activeProgramSlug     = null;
-  var activeScheduleKeys    = [];
-  var recommendedSessionKey = null;
-  var selectedSessionKey    = null;
-
-  function toggleWorkoutDropdown() {
-    var dropdown = document.getElementById('workoutDropdown');
-    var btn      = document.getElementById('workoutSelectorBtn');
-    var open     = dropdown.classList.contains('open');
-    dropdown.classList.toggle('open', !open);
-    btn.classList.toggle('open', !open);
-  }
-
-  function renderWorkoutSelector() {
-    // Update the selector button label
-    document.getElementById('workoutSelectorLabel').textContent =
-      SESSION_LABELS[selectedSessionKey] || selectedSessionKey || '—';
-
-    // Rebuild the dropdown options
-    var dropdown = document.getElementById('workoutDropdown');
-    dropdown.innerHTML = activeScheduleKeys.map(function(key) {
-      var isActive = key === selectedSessionKey;
-      var isRec    = key === recommendedSessionKey;
-      var tag = isRec ? '<span class="workout-dropdown-tag">Next up</span>' : '';
-      return '<button class="workout-dropdown-option' + (isActive ? ' active' : '') + '" ' +
-        'onclick="selectDashWorkout(\'' + key + '\')">' +
-        '<span>' + (SESSION_LABELS[key] || key) + '</span>' + tag + '</button>';
-    }).join('');
-  }
-
-  function selectDashWorkout(key) {
-    if (activeScheduleKeys.indexOf(key) < 0) return;
-    selectedSessionKey = key;
-    // Only the recommended "Next up" session is a progression workout. Any other
-    // session the user picks here is an OPTIONAL one-off: it logs to history and
-    // feeds per-exercise progression, but must NEVER advance current_index. The
-    // active program only advances after completing the intended progression
-    // workout (Tier 2.2 rule — the next programmed workout stays next until it's
-    // the one actually completed).
-    var mode = (key === recommendedSessionKey) ? 'progression' : 'optional';
-    var btn = document.getElementById('btnStartWorkout');
-    btn.href = 'workout.html?program=' + activeProgramSlug + '&session=' + key + '&mode=' + mode;
-    btn.textContent = 'Start Workout';
-    // Close the dropdown after selection
-    document.getElementById('workoutDropdown').classList.remove('open');
-    document.getElementById('workoutSelectorBtn').classList.remove('open');
-    renderWorkoutSelector();
-  }
-
-  // ── My Activity: Recent Workouts ──────────────────────────────────
-  // Compact, read-only preview of the 3 most recent completed workouts.
-  // Full detail (expand/edit/delete) lives on workout-history.html.
-  function escActivity(str) {
-    return String(str)
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-  }
-
-  async function loadRecentActivity(userId) {
-    var el = document.getElementById('recentWorkouts');
-    if (!el) return;
-    try {
-      var { data } = await supabaseClient
-        .from('workouts')
-        .select('id, name, created_at, duration_minutes, program_slug')
-        .eq('user_id', userId).eq('completed', true)
-        .order('created_at', { ascending: false }).limit(3);
-
-      if (!data || data.length === 0) {
-        el.innerHTML = '<div class="activity-empty">No completed workouts yet.</div>';
-        return;
-      }
-
-      el.innerHTML = data.map(function(w) {
-        var d = new Date(w.created_at);
-        var date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        var prog = (w.program_slug && typeof programName === 'function') ? programName(w.program_slug) : '';
-        var subBits = [];
-        if (prog) subBits.push('<span class="prog">' + escActivity(prog) + '</span>');
-        if (w.duration_minutes) subBits.push(w.duration_minutes + ' min');
-        var sub = subBits.length ? '<div class="activity-row-sub">' + subBits.join(' · ') + '</div>' : '';
-        return '<a class="activity-row" href="workout-history.html">' +
-          '<div class="activity-row-main">' +
-            '<div class="activity-row-name">' + escActivity(w.name || 'Workout') + '</div>' +
-            sub +
-          '</div>' +
-          '<div class="activity-row-date">' + date + '</div>' +
-        '</a>';
-      }).join('');
-    } catch (err) {
-      console.error('loadRecentActivity error:', err);
-      el.innerHTML = '<div class="activity-empty">Couldn\'t load workouts.</div>';
-    }
-  }
-
-  // ── P2 · Trained today? ────────────────────────────────────────
-  async function loadTrainedToday(userId) {
-    var el = document.getElementById('workoutStatusToday');
-    if (!el) return;
-    var today = (typeof nuToday === 'function') ? nuToday()
-      : new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-    try {
-      var { data } = await supabaseClient.from('workouts')
-        .select('id').eq('user_id', userId).eq('completed', true).eq('date', today).limit(1);
-      if (data && data.length) {
-        el.className = 'workout-status done';
-        el.innerHTML = '<span class="ws-dot"></span><span class="ws-text">Trained today ✓</span>';
-      } else {
-        el.className = 'workout-status todo';
-        el.innerHTML = '<span class="ws-dot"></span><span class="ws-text">No workout logged yet today</span>';
-      }
-    } catch (err) {
-      console.error('loadTrainedToday error:', err);
-      el.className = 'workout-status';
-      el.innerHTML = '<span class="ws-dot"></span><span class="ws-text">Workout status unavailable</span>';
-    }
-  }
-
-  // ── P4 · Momentum (workout streak + this-week count) ───────────
-  // dashIso / dashDayStreak / dashThisWeekCount moved verbatim to snapshot.js
-  // (Phase 4.1) — one home for streak logic, shared with the AI Coach contract.
-  async function loadStreak(userId) {
-    var el = document.getElementById('momentumStreak');
-    if (!el) return;
-    try {
-      var { data } = await supabaseClient.from('workouts')
-        .select('date').eq('user_id', userId).eq('completed', true)
-        .order('date', { ascending: false }).limit(180);
-      var dates = Array.from(new Set((data || []).map(function (w) { return w.date; })));
-      if (!dates.length) { el.innerHTML = ''; return; }
-      var streak = dashDayStreak(new Set(dates));
-      var week = dashThisWeekCount(dates);
-      el.innerHTML =
-        '<span class="streak-num' + (streak === 0 ? ' cold' : '') + '">' + streak + '</span>' +
-        '<span class="streak-label">day streak</span>' +
-        '<span class="streak-week">This week: ' + week + '</span>';
-    } catch (err) {
-      console.error('loadStreak error:', err);
-      el.innerHTML = '';
-    }
-  }
-
-  // ── Today's Nutrition (dashboard) ──────────────────────────────
-  // Read-only summary of today's food logs vs. profile targets.
-  // NEVER writes targets — those are owned by Recalculate Goals.
-  async function loadNutritionSummary(userId) {
-    var el = document.getElementById('nutritionSummary');
-    if (!el) return;
-    try {
-      var logs = await nuFetchLogs(userId, nuToday());
-      if (!logs.length) {
-        el.innerHTML = '<div class="activity-empty">No food logged today — tap <strong>Log Food</strong> to start tracking.</div>';
-        return;
-      }
-      var t = nuDayTotals(logs);
-      var p = currentProfile || {};
-      var calTarget = +p.target_calories || 0;
-
-      // Compact macro bar: label · consumed/target · fill (amber when over target).
-      function macroBar(label, consumed, target) {
-        var c = nuRound(consumed);
-        var pct = target ? Math.min(100, Math.round(consumed / target * 100)) : 0;
-        var over = target && consumed > target;
-        var val = target ? (c + ' <small>/ ' + target + ' g</small>') : (c + ' g');
-        return '<div class="nut-macro">' +
-            '<div class="nut-macro-head">' +
-              '<span class="nut-macro-label">' + label + '</span>' +
-              '<span class="nut-macro-val">' + val + '</span>' +
-            '</div>' +
-            '<div class="nut-track"><div class="nut-fill' + (over ? ' over' : '') + '" style="width:' + pct + '%"></div></div>' +
-          '</div>';
-      }
-
-      var html;
-      if (calTarget) {
-        // Hero = calories left (or over). Bar green, amber once over target.
-        var consumedCal = nuRound(t.calories);
-        var left = calTarget - consumedCal;
-        var over = left < 0;
-        var pct = Math.min(100, Math.round(consumedCal / calTarget * 100));
-        html =
-          '<div class="nut-hero">' +
-            '<div class="nut-hero-num' + (over ? ' over' : '') + '">' + (over ? '−' + Math.abs(left) : left) + '</div>' +
-            '<div class="nut-hero-meta">' +
-              '<div class="nut-hero-label">' + (over ? 'Calories Over' : 'Calories Left') + '</div>' +
-              '<div class="nut-hero-sub">' + consumedCal.toLocaleString() + ' / ' + calTarget.toLocaleString() + ' kcal</div>' +
-            '</div>' +
-          '</div>' +
-          '<div class="nut-track nut-track-cal"><div class="nut-fill cal' + (over ? ' over' : '') + '" style="width:' + pct + '%"></div></div>' +
-          macroBar('Protein', t.protein, +p.protein_target || 0) +
-          macroBar('Carbs',   t.carbs,   +p.carb_target    || 0) +
-          macroBar('Fat',     t.fat,     +p.fat_target     || 0);
-      } else {
-        // No calorie target yet — show consumed totals + nudge (can't compute "left").
-        html =
-          '<div class="nut-hero">' +
-            '<div class="nut-hero-num">' + nuRound(t.calories).toLocaleString() + '</div>' +
-            '<div class="nut-hero-meta">' +
-              '<div class="nut-hero-label">Calories Today</div>' +
-              '<div class="nut-hero-sub">P ' + nuRound(t.protein) + 'g · C ' + nuRound(t.carbs) + 'g · F ' + nuRound(t.fat) + 'g</div>' +
-            '</div>' +
-          '</div>' +
-          '<div class="nut-note">Set your targets (Recalculate Goals) to track progress.</div>';
-      }
-      el.innerHTML = html;
-    } catch (err) {
-      console.error('loadNutritionSummary error:', err);
-      el.innerHTML = '<div class="activity-empty">Couldn\'t load nutrition.</div>';
-    }
-  }
-
-  // ── Snapshot-fed extras (Phase 4.1) ────────────────────────────
-  // ONE buildUserSnapshot call powers the two new lines. Existing loaders are
-  // untouched; when the AI Coach ships they can migrate onto this snapshot.
-  async function loadSnapshotExtras(userId) {
-    try {
-      var snap = await buildUserSnapshot(userId, { profile: currentProfile });
-
-      // Goal Progress: body composition beside the scale numbers.
-      var gm = document.getElementById('goalMetricsRow');
-      if (gm) {
-        var bits = [];
-        function delta30(d, unit) {
-          if (d == null) return '';
-          var r = wlRound1(d);
-          return ' <span class="gm-delta">(' + (r > 0 ? '+' : r < 0 ? '−' : '±') + Math.abs(r) + unit + ' · 30d)</span>';
-        }
-        if (snap.bodyFat.count > 0) {
-          bits.push('<span><span class="gm-label">Body Fat</span>' +
-            wlRound1(snap.bodyFat.current) + '%' + delta30(snap.bodyFat.change30, '%') + '</span>');
-        }
-        if (snap.waist.count > 0) {
-          bits.push('<span><span class="gm-label">Waist</span>' +
-            wlRound1(snap.waist.current) + ' in' + delta30(snap.waist.change30, ' in') + '</span>');
-        }
-        gm.innerHTML = bits.length
-          ? '<a href="weight-history.html">' + bits.join('') + '</a>'
-          : '';
-      }
-
-      // Scoreboard: 7-day consistency line.
-      var wc = document.getElementById('weekConsistency');
-      if (wc) {
-        var n = snap.nutrition.week;
-        var parts = [];
-        if (n.daysLogged > 0) parts.push('food logged ' + n.daysLogged + ' of 7 days');
-        if (snap.training.thisWeekCount > 0) {
-          parts.push(snap.training.thisWeekCount + (snap.training.thisWeekCount === 1 ? ' workout' : ' workouts'));
-        }
-        wc.textContent = parts.length ? 'This week: ' + parts.join(' · ') : '';
-      }
-    } catch (err) {
-      console.error('loadSnapshotExtras error:', err);
-    }
-  }
-
-  // ── Weigh-Ins (dashboard) ──────────────────────────────────────
-  async function loadRecentWeighIns(userId) {
-    var listEl = document.getElementById('recentWeighIns');
-    var sumEl  = document.getElementById('weighInSummary');
-    if (!listEl) return;
-    try {
-      // Pull a 60-row window so 7-day avg / 30-day change can be computed.
-      var logs = await wlFetchLogs(userId, 60);
-      var profileWeight = currentProfile ? currentProfile.weight_lbs : null;
-      var stats = wlStats(logs, profileWeight);
-
-      if (stats.count === 0) {
-        sumEl.innerHTML = '';
-        listEl.innerHTML = profileWeight
-          ? '<div class="activity-empty">No weigh-ins yet. Your starting weight is <strong>' + wlEsc(wlRound1(profileWeight)) + ' lbs</strong> — tap <strong>Log Weight</strong> to start tracking.</div>'
-          : '<div class="activity-empty">No weigh-ins yet — tap <strong>Log Weight</strong> to start tracking.</div>';
-        return;
-      }
-
-      var cells = [];
-      cells.push('<div class="wi-stat"><div class="wi-stat-label">Current</div><div class="wi-stat-val">' + wlRound1(stats.current) + ' <small>lbs</small></div></div>');
-      if (stats.avg7 != null)
-        cells.push('<div class="wi-stat"><div class="wi-stat-label">7-Day Avg</div><div class="wi-stat-val">' + wlRound1(stats.avg7) + ' <small>lbs</small></div></div>');
-      if (stats.change30 != null)
-        cells.push('<div class="wi-stat"><div class="wi-stat-label">30-Day</div><div class="wi-stat-val" style="font-size:18px;">' + wlChangeStr(stats.change30) + '</div></div>');
-      if (currentProfile && currentProfile.goal_weight_lbs)
-        cells.push('<div class="wi-stat"><div class="wi-stat-label">Goal</div><div class="wi-stat-val">' + wlRound1(currentProfile.goal_weight_lbs) + ' <small>lbs</small></div></div>');
-      sumEl.innerHTML = '<div class="wi-summary">' + cells.join('') + '</div>';
-
-      // Last 3 entries, each with delta vs the next-older entry (logs is desc).
-      listEl.innerHTML = logs.slice(0, 3).map(function (l, i) {
-        var prev  = logs[i + 1];
-        var delta = prev ? (+l.weight_lbs - +prev.weight_lbs) : null;
-        return '<a class="activity-row" href="weight-history.html">' +
-          '<div class="activity-row-main">' +
-            '<div class="activity-row-name">' + wlRound1(l.weight_lbs) + ' lbs</div>' +
-            (l.note ? '<div class="activity-row-sub">' + wlEsc(l.note) + '</div>' : '') +
-          '</div>' +
-          '<div class="activity-row-date">' + wlDeltaHTML(delta) + ' &nbsp; ' + wlEsc(wlFmtDate(l.logged_on)) + '</div>' +
-        '</a>';
-      }).join('');
-    } catch (err) {
-      console.error('loadRecentWeighIns error:', err);
-      listEl.innerHTML = '<div class="activity-empty">Couldn\'t load weigh-ins.</div>';
-    }
-  }
-
-  // Refresh the dashboard weigh-ins after the shared modal saves.
-  // wlSave() has already synced profiles.weight_lbs (and currentProfile) to the
-  // latest weigh-in, so mirror it into the Current Weight card too.
+  // ── Weight modal hook ────────────────────────────────────────────────
+  // wlSave() already toasts and has synced profiles.weight_lbs — just re-derive.
   window.onWeightSaved = async function () {
     if (!currentUserId) return;
-    if (currentProfile && currentProfile.weight_lbs != null) {
-      document.getElementById('dashStartWeight').textContent = currentProfile.weight_lbs + ' lbs';
-    }
-    await loadRecentWeighIns(currentUserId);
+    currentProfile = await getProfile(currentUserId);
+    await renderDashboard(currentUserId);
   };
 
-  var inProgressId = null;
-
-  async function checkDashboardInProgress(userId) {
-    // Most recent unfinished workout, regardless of age — an unfinished session
-    // must never become an invisible orphan. Resume/discard is the only way out.
-    var { data } = await supabaseClient
-      .from('workouts').select('id, name')
-      .eq('user_id', userId).eq('completed', false)
-      .order('created_at', { ascending: false }).limit(1).maybeSingle();
-    if (!data) return;
-    inProgressId = data.id;
-    var btn = document.getElementById('btnStartWorkout');
-    btn.textContent = 'Resume Workout';
-    btn.href        = 'workout.html';
-    btn.style.display = '';
-    document.getElementById('btnBrowsePrograms').style.display = 'none';
-    document.getElementById('discardSessionRow').style.display = '';
-    // Safety: can't start a different workout until the unfinished one is
-    // resumed or discarded — hide the manual selection control for now.
-    document.getElementById('chooseWorkoutWrap').style.display = 'none';
-  }
-
-  async function discardDashboardSession() {
+  async function discardSession() {
     if (!inProgressId) return;
     if (!confirm('Discard this unfinished session? This cannot be undone.')) return;
-    var { error } = await supabaseClient.from('workouts').delete().eq('id', inProgressId);
-    if (error) { showToast('Error discarding — try again.'); return; }
+    var res = await supabaseClient.from('workouts').delete().eq('id', inProgressId);
+    if (res.error) { showToast('Error discarding — try again.'); return; }
     inProgressId = null;
-    document.getElementById('discardSessionRow').style.display = 'none';
-    var btn = document.getElementById('btnStartWorkout');
-    btn.textContent = 'Start Workout';
-    btn.href = 'workout.html';
     showToast('Session discarded.');
-    await resolveActiveProgram(
-      (await supabaseClient.auth.getSession()).data.session.user.id,
-      ownedProgramsList
-    );
+    await renderDashboard(currentUserId);
   }
 
 </script>
