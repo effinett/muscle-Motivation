@@ -246,8 +246,12 @@
        change string — the SPARKLINE wraps below rather than the reading being
        squeezed: it is the supporting element, so it is the one that gives way.
        Nothing overflows and no text collides. */
+    /* Top-aligned, not centred. Centring the whole left column against the
+       chart made its three lines read as one three-line stack; aligning the
+       METRIC to the top of the chart lets the action fall away below it, which
+       is the hierarchy the section actually has. */
     .home-progress {
-      display: flex; align-items: center; flex-wrap: wrap;
+      display: flex; align-items: flex-start; flex-wrap: wrap;
       gap: 8px 14px; margin-top: 2px;
     }
     /* The reading column: weight, its change, and the action on it. All three
@@ -259,9 +263,12 @@
       display: flex; flex-direction: column; align-items: flex-start;
       gap: 3px; flex: 0 0 auto;
     }
-    /* The 44px box would otherwise add ~15px of dead space above the action and
-       push the column taller than the chart beside it. */
-    .home-weightstack .home-log { margin: -8px 0 -10px; }
+    /* The weight and its change are the METRIC; Log weight is an ACTION on it,
+       not a third line of data. It gets deliberate clear space so the group
+       above it reads as one thing and the action reads as its own. The bottom
+       margin still absorbs the 44px box's trailing dead space, so the target is
+       untouched and the column does not grow past the chart. */
+    .home-weightstack .home-log { margin: 6px 0 -10px; }
     .home-weight {
       font-family: 'Bebas Neue', sans-serif;
       font-size: 24px; letter-spacing: 0.5px; line-height: 1;
@@ -310,7 +317,12 @@
          the SVG's own intrinsic width would otherwise claim the whole row and
          push itself onto a second line. */
       flex: 1 1 0;
-      min-width: 150px; max-width: 320px;
+      /* Capped a little tighter than the row would allow. On a large phone the
+         chart was taking enough width to out-weigh 211 LB; pulling the ceiling
+         in gives the reading room to lead without touching the chart's height,
+         labels or geometry. Narrow phones are already below this cap, so they
+         keep every pixel they have — label legibility comes first there. */
+      min-width: 150px; max-width: 262px;
       margin-left: auto;
       padding: 2px 4px;
       background: var(--mm-surface-raised);
@@ -928,10 +940,18 @@
     }
     // Unhide before measuring — a hidden element has no width to read.
     el.hidden = false;
+    drawTrend(el, false);
+  }
+
+  function trendInnerWidth(el) {
     var style = window.getComputedStyle(el);
-    var inner = el.clientWidth - parseFloat(style.paddingLeft || 0)
+    return el.clientWidth - parseFloat(style.paddingLeft || 0)
       - parseFloat(style.paddingRight || 0);
-    var width = Math.max(HOME_TREND.minWidth, Math.round(inner) || HOME_TREND.minWidth);
+  }
+
+  function drawTrend(el, isRetry) {
+    var width = Math.max(HOME_TREND.minWidth,
+      Math.round(trendInnerWidth(el)) || HOME_TREND.minWidth);
 
     var svg = wlChartSVG(homeTrendSeries, {
       width: width, height: HOME_TREND.height, pad: HOME_TREND.pad,
@@ -941,6 +961,16 @@
     });
     if (!svg) { el.hidden = true; el.innerHTML = ''; return; }
     el.innerHTML = svg;
+
+    // The row's final width is only settled once the browser has laid the card
+    // out, and authoring at a stale width would leave the drawing scaled —
+    // which shrinks the labels and changes the card's height. Re-author ONCE at
+    // the settled width; the retry flag stops any chance of a loop.
+    if (!isRetry) {
+      requestAnimationFrame(function () {
+        if (Math.abs(Math.round(trendInnerWidth(el)) - width) > 1) drawTrend(el, true);
+      });
+    }
   }
 
   // Rotation changes the row width, and with it the size the chart should have
@@ -952,6 +982,16 @@
       if (homeTrendSeries) renderSparkline(homeTrendSeries);
     }, 150);
   });
+
+  // Barlow arrives after first paint, and the reading column is sized by its
+  // text — so the row is still shifting when the chart is first authored. Left
+  // alone the drawing ends up scaled to a width it no longer has, which shrinks
+  // the labels and the card with them. Redraw once the real metrics are known.
+  if (document.fonts && document.fonts.ready && document.fonts.ready.then) {
+    document.fonts.ready.then(function () {
+      if (homeTrendSeries) renderSparkline(homeTrendSeries);
+    });
+  }
 
   // ── Weight modal hook ────────────────────────────────────────────────
   // wlSave() already toasts and has synced profiles.weight_lbs — just re-derive.

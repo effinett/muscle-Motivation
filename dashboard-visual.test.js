@@ -930,6 +930,78 @@ test('progress: related items stay grouped, and nothing is indented', () => {
   }
 });
 
+test('weight: the metric group and the action are separated, not one stack', () => {
+  // 211 LB and its change are one reading; Log weight is an action ON that
+  // reading, not a third line of it. The separation is what says so.
+  const stack = (HOME_CSS.match(/\.home-weightstack\s*\{([^}]*)\}/) || [])[1] || '';
+  const inner = Number((stack.match(/gap:\s*(\d+)px/) || [])[1]);
+  const logRule = (HOME_CSS.match(/\.home-weightstack \.home-log\s*\{([^}]*)\}/) || [])[1] || '';
+  const top = Number((logRule.match(/margin:\s*(-?\d+)px/) || [])[1]);
+  assert.ok(Number.isFinite(top), 'the action declares its own top margin');
+  assert.ok(top > inner, `action clearance (${top}px) must exceed the ${inner}px inside the metric`);
+
+  // The whole three-line column is NOT centred against the chart — the metric
+  // aligns to the top and the action falls away below it.
+  const row = (HOME_CSS.match(/\.home-progress\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.match(row, /align-items:\s*flex-start/,
+    'centring the column made all three lines read as one stack');
+
+  // The action itself is unchanged: same class, same handler, same target.
+  assert.match(HOME_BODY, /<button class="home-log" id="logWeightBtn" onclick="wlOpenModal\(\)">Log weight<\/button>/);
+  assert.ok(!/background|border:|font-size|border-radius/.test(logRule),
+    'spacing only — no pill, no fill, no restyle');
+  assert.ok(!/min-height/.test(logRule), 'and the 44px target is untouched');
+});
+
+test('weight: the separation rule cannot reach + LOG FOOD', () => {
+  // Both actions share .home-log, so the clearance must be scoped to the
+  // weight column or Nutrition's approved layout would shift with it.
+  assert.match(HOME_CSS, /\.home-weightstack \.home-log\s*\{/,
+    'the rule is scoped to the weight column');
+  const base = (HOME_CSS.match(/\.home-log\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.ok(!/margin/.test(base), 'the shared .home-log declares no margin of its own');
+  assert.match(HOME_BODY,
+    /<div class="home-actions">\s*<a class="home-log" href="nutrition\.html#quicklog">Log food<\/a>/,
+    'Log food still leads its own unchanged action row');
+  const actions = (HOME_CSS.match(/\.home-actions\s*\{([^}]*)\}/) || [])[1] || '';
+  assert.match(actions, /gap:\s*4px 18px/, 'and that row keeps its spacing');
+});
+
+test('weight: the chart is capped narrower, but nothing about it shrank', () => {
+  const card = (HOME_CSS.match(/\.home-trendcard\s*\{([^}]*)\}/) || [])[1] || '';
+  const max = Number((card.match(/max-width:\s*(\d+)px/) || [])[1]);
+  assert.ok(max < 320, `the ceiling came down from 320px to ${max}px`);
+  assert.ok(max >= 250, 'but not so far that it stops reading as a chart');
+  assert.match(card, /min-width:\s*150px/,
+    'narrow phones are below the cap and keep every pixel — labels come first there');
+
+  // Only the WIDTH ceiling moved. Every renderer option is untouched, so the
+  // drawing itself — height, padding, label size, markers, stroke — is identical.
+  const opts = (HOME.match(/var HOME_TREND = \{([\s\S]*?)\};/) || [])[1] || '';
+  assert.match(opts, /height:\s*124/, 'chart height unchanged');
+  assert.match(opts, /pad:\s*34/);
+  assert.match(opts, /labelSize:\s*13/, 'internal labels unchanged');
+  assert.match(opts, /dotRadius:\s*3\.4/, 'marker size unchanged');
+  assert.match(opts, /strokeWidth:\s*2\.5/);
+  assert.ok(!/height:/.test(card.replace(/\/\*[\s\S]*?\*\//g, '')),
+    'the card takes its height from the drawing, not a CSS override');
+});
+
+test('weight: the chart is authored at the width it settles at', () => {
+  // Web fonts land after first paint and widen the reading column, so the row
+  // is still moving when the chart is first drawn. Authoring at a stale width
+  // leaves the SVG scaled, which shrinks its labels and its height with them.
+  assert.match(HOME, /document\.fonts\.ready\.then/, 'redraw once the real metrics are known');
+  assert.match(HOME, /requestAnimationFrame\(function \(\) \{[\s\S]{0,200}?drawTrend\(el, true\)/,
+    'and once the layout has settled');
+  assert.match(HOME, /if \(!isRetry\) \{/, 'the retry flag prevents a redraw loop');
+  // Redrawing uses the SAME series — it never refetches or recomputes data.
+  assert.match(HOME, /if \(homeTrendSeries\) renderSparkline\(homeTrendSeries\)/);
+  const draw = (HOME.match(/function drawTrend[\s\S]*?\n  \}/) || [''])[0];
+  assert.ok(!/fetch|await|supabase|wlRecentSeries|wlStats/.test(draw),
+    'a redraw touches no data');
+});
+
 test('weight: the chart is substantial but the weight value still leads', () => {
   const spark = (HOME_CSS.match(/\.home-trendcard\s*\{([^}]*)\}/) || [])[1] || '';
   assert.match(spark, /max-width:\s*\d+px/, 'capped so it cannot grow on a wide screen');
@@ -1114,8 +1186,9 @@ test('weight: the widget is an accessible navigation target, the SVG is not', ()
   assert.ok(!/<text|tooltip|axis|gridline|legend|<h[1-6]/i.test(render),
     'a preview, not a second full chart');
   // Geometry is borrowed from weight.js — Home computes none of its own.
-  assert.match(render, /wlChartSVG\(homeTrendSeries/, 'geometry comes from the shared module');
-  assert.ok(!/\/ *span|normali[sz]|minX|maxY/i.test(render),
+  const draw = (HOME.match(/function drawTrend[\s\S]*?\n  \}/) || [''])[0];
+  assert.match(draw, /wlChartSVG\(homeTrendSeries/, 'geometry comes from the shared module');
+  assert.ok(!/\/ *span|normali[sz]|minX|maxY/i.test(render + draw),
     'Home does no scaling maths of its own');
 });
 
@@ -1141,11 +1214,12 @@ test('weight: the widget opens the EXISTING Trend chart, adding no new page', ()
   // own: no scaling maths, no path building, no second geometry.
   // Math.max appears only as the min-width floor for the measured box; nothing
   // that plots a point, scales an axis or emits SVG lives here.
-  const render = (HOME.match(/function renderSparkline[\s\S]*?\n  \}/) || [''])[0];
-  for (const own of ['viewBox', '<path', '<circle', '<svg', 'polyline', 'toFixed', 'logged_on']) {
-    assert.ok(!render.includes(own), `Home must not build chart geometry itself (${own})`);
+  const own = (HOME.match(/function renderSparkline[\s\S]*?\n  \}/) || [''])[0] +
+    (HOME.match(/function drawTrend[\s\S]*?\n  \}/) || [''])[0];
+  for (const token of ['viewBox', '<path', '<circle', '<svg', 'polyline', 'toFixed', 'logged_on']) {
+    assert.ok(!own.includes(token), `Home must not build chart geometry itself (${token})`);
   }
-  assert.match(render, /Math\.max\(HOME_TREND\.minWidth/,
+  assert.match(own, /Math\.max\(HOME_TREND\.minWidth/,
     'the only arithmetic is the width floor');
 });
 
