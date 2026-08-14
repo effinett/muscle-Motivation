@@ -168,7 +168,11 @@ header {
   header { background: var(--mm-bg); }
 }
 .header-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
-.header-logo img { height: 42px; }
+/* Phase 4.3.5A — the mark reads slightly more present without touching the
+   60px header. 48px leaves 6px of optical clearance above and below, so the
+   header height, its sticky offset and --mm-nav-base-height are all unchanged
+   and no layout shifts. Do not grow this past 48px without re-sizing header. */
+.header-logo img { height: 48px; }
 .header-logo span {
   font-family: 'Bebas Neue', sans-serif; font-size: 18px;
   letter-spacing: 2.5px; color: var(--mm-text); text-transform: uppercase;

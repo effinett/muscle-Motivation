@@ -407,18 +407,43 @@
       border-radius: 16px 16px 0 0;
       /* safe-area padding keeps Cancel above the home indicator */
       padding: 24px 20px calc(20px + env(safe-area-inset-bottom, 0px));
-      width: 100%; max-width: 680px; max-height: 80vh;
+      width: 100%; max-width: 680px;
       display: flex; flex-direction: column;
-      transition: transform 0.15s ease;
+      /* 80vh normally; when the keyboard lifts the overlay's bottom edge
+         (4.3.5B) the sheet shrinks to whatever the overlay still occupies
+         instead of overflowing it. The bare 80vh is the fallback for engines
+         without min(). No transform is animated here any more — a transformed
+         ancestor mis-places the text caret in WebKit. */
+      max-height: 80vh;
+      max-height: min(80vh, 100%);
     }
     .picker-drag { width: 40px; height: 4px; background: var(--border-3); border-radius: 2px; margin: 0 auto 18px; }
     .picker-title { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 1.5px; margin-bottom: 12px; }
+    /* Phase 4.3.5B — the caret sits where the text does.
+       Three things were making it drift:
+        1. `font-size: 15px` disagreed with app-shell.css's 16px !important
+           form-control floor, so the box the caret is measured in changed
+           between pointer types. Declaring 16px makes both paths identical.
+        2. No explicit line-height/min-height, so the content box height came
+           from the UA's `normal` line box while the ELEMENT height came from
+           the flex row's `align-items: stretch` (matching .btn-filter). The
+           caret is drawn against the content box, so the two disagreed and the
+           caret sat high inside a taller field.
+        3. iOS adds its own inner padding to a default-appearance text input on
+           top of ours, offsetting the text from the caret origin.
+       line-height is unitless and the min-height is content-box height + the
+       vertical padding, so the field's own geometry is now fully determined
+       here and never inherited from a sibling. */
     .picker-search {
       width: 100%; padding: 10px 14px; background: var(--surface-2);
       border: 1px solid var(--border-2); border-radius: 8px; color: var(--text);
-      font-family: 'Barlow', sans-serif; font-size: 15px; outline: none; margin-bottom: 10px;
+      font-family: 'Barlow', sans-serif; font-size: 16px; outline: none; margin-bottom: 10px;
+      -webkit-appearance: none; appearance: none;
+      line-height: 1.25; min-height: 42px;
     }
     .picker-search:focus { border-color: var(--red); }
+    /* Focus must be perceivable without relying on the border colour alone. */
+    .picker-search:focus-visible { outline: 2px solid var(--red); outline-offset: 1px; }
     /* Custom "+ Add" lives in a fixed zone under the search, above the scroll
        list — so it stays visible while the keyboard is open and the list scrolls. */
     .picker-add-row { flex-shrink: 0; }
@@ -446,11 +471,15 @@
     .picker-item-plus { color: var(--red); flex-shrink: 0; }
 
     /* ── Filter UI (Phase 4.2.1I) ─────────────────────────────────────── */
-    .picker-search-row { display: flex; gap: 8px; align-items: stretch; margin-bottom: 10px; }
+    /* `align-items: center` (was stretch) so the input's height is its OWN
+       declared geometry and is never derived from the Filters button beside it
+       — that derivation was what decoupled the caret from the text box. Both
+       controls now declare a 42px minimum, so they still align exactly. */
+    .picker-search-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
     .picker-search-row .picker-search { margin-bottom: 0; flex: 1; min-width: 0; }
     .btn-filter {
       flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px;
-      padding: 0 12px; min-height: 40px; background: var(--surface-2);
+      padding: 0 12px; min-height: 42px; background: var(--surface-2);
       border: 1px solid var(--border-2); border-radius: 8px; color: var(--text-2);
       font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer;
       transition: border-color 0.15s, color 0.15s;
@@ -823,9 +852,17 @@
     <div class="picker-drag"></div>
     <div class="picker-title">Add Exercise</div>
     <div class="picker-search-row">
+      <!-- Phase 4.3.5B: autocorrect/autocapitalise/spellcheck are off because
+           this field is an exercise-name search, not prose. On iOS each of them
+           re-writes the field's contents mid-typing, which moves the caret and
+           re-fires the filter with text the user did not type. `enterkeyhint`
+           labels the keyboard's action key; the field stays type="text" so no
+           UA clear-button is injected into the box the caret is measured in. -->
       <input class="picker-search" type="text" id="pickerSearch"
         placeholder="Search exercises or type custom…" oninput="filterPicker(this.value)"
-        aria-label="Search exercises">
+        aria-label="Search exercises"
+        autocomplete="off" autocorrect="off" autocapitalize="none"
+        spellcheck="false" enterkeyhint="search">
       <button type="button" class="btn-filter" id="pickerFilterBtn" onclick="toggleFilterPanel()"
         aria-expanded="false" aria-controls="pickerFilterPanel">
         <i data-lucide="sliders-horizontal"></i>
@@ -1757,14 +1794,32 @@
   // esc() lives in workout-history.js (shared) — used here by the exercise picker too
 
   // ── Exercise picker ───────────────────────────────────────────────
-  function openPicker() {
-    pickerMode = 'workout';
+  // ONE open path for both picker modes (Phase 4.3.5B). The workout and template
+  // entry points differed only in `pickerMode` yet each carried its own copy of
+  // the open sequence, so a fix to one silently missed the other.
+  function openPickerFor(mode) {
+    pickerMode = mode;
     resetPickerState();
     document.getElementById('pickerModal').classList.add('open');
     document.addEventListener('keydown', handlePickerKeydown);
     bindPickerViewport();
-    setTimeout(function() { document.getElementById('pickerSearch').focus(); }, 80);
+    focusPickerSearch();
   }
+  // `preventScroll` stops the UA from scrolling the focused field into view.
+  // Inside a position:fixed sheet there is nothing to scroll TO, so that
+  // built-in scroll only ever moved the page behind the picker and shifted the
+  // visual viewport — the "typing moves the picker" report. Engines without the
+  // options argument simply focus as before.
+  function focusPickerSearch() {
+    var input = document.getElementById('pickerSearch');
+    if (!input) return;
+    // One frame, so the overlay is laid out and focusable before we focus it.
+    requestAnimationFrame(function () {
+      try { input.focus({ preventScroll: true }); }
+      catch (e) { input.focus(); }
+    });
+  }
+  function openPicker() { openPickerFor('workout'); }
   function closePicker() {
     toggleFilterPanel(false);   // collapse panel + detach the outside-click listener
     document.getElementById('pickerModal').classList.remove('open');
@@ -1795,31 +1850,52 @@
   // visible (visualViewport) area, so the search field, the "+ Add" row and a
   // scrollable result list all stay reachable without dismissing the keyboard.
   // No-op on desktop, where the keyboard inset is always 0 (CSS 80vh governs).
+  // Phase 4.3.5B — keyboard avoidance by LAYOUT, never by transform.
+  //
+  // The previous implementation lifted the sheet with
+  // `transform: translateY(-kb)` and animated it via `transition: transform`.
+  // Two defects followed from that, and both were reported:
+  //   • WebKit positions a text caret from the element's UNTRANSFORMED box, so
+  //     inside a translated ancestor the caret is painted at an offset from the
+  //     text it belongs to. That is the "caret doesn't sit in the field" bug.
+  //   • It was rebound on visualViewport `scroll`, which iOS fires continuously
+  //     while the keyboard is open, so the sheet chased the viewport and the
+  //     0.15s transition made every correction visible as drift.
+  //
+  // The replacement moves the OVERLAY's bottom edge — a layout property on a
+  // position:fixed box, which the caret geometry follows correctly — and caps
+  // the sheet's height to the space that remains. `resize` alone is the
+  // keyboard signal; `scroll` is deliberately not bound, so page panning can no
+  // longer move the sheet. No-op wherever visualViewport is absent.
+  var pickerVvRaf = 0;
   function syncPickerViewport() {
     var vv = window.visualViewport;
-    var sheet = document.querySelector('.picker-sheet');
-    if (!vv || !sheet) return;
-    var kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-    if (kb > 0) {
-      sheet.style.maxHeight = (vv.height - 12) + 'px';
-      sheet.style.transform = 'translateY(-' + kb + 'px)';
-    } else {
-      sheet.style.maxHeight = '';   // restore CSS 80vh — desktop unchanged
-      sheet.style.transform = '';
-    }
+    var overlay = document.getElementById('pickerModal');
+    if (!vv || !overlay) return;
+    // Keyboard height = layout viewport minus the visible viewport, ignoring
+    // offsetTop (that is pinch-pan, not the keyboard).
+    var kb = Math.max(0, Math.round(window.innerHeight - vv.height));
+    // Sub-pixel jitter from the URL bar collapsing is not a keyboard.
+    overlay.style.bottom = kb > 24 ? kb + 'px' : '';
+  }
+  function onPickerViewportChange() {
+    if (pickerVvRaf) return;                       // coalesce to one frame
+    pickerVvRaf = requestAnimationFrame(function () {
+      pickerVvRaf = 0;
+      syncPickerViewport();
+    });
   }
   function bindPickerViewport() {
     if (!window.visualViewport) return;
-    window.visualViewport.addEventListener('resize', syncPickerViewport);
-    window.visualViewport.addEventListener('scroll', syncPickerViewport);
+    window.visualViewport.addEventListener('resize', onPickerViewportChange);
     syncPickerViewport();
   }
   function unbindPickerViewport() {
-    var sheet = document.querySelector('.picker-sheet');
-    if (sheet) { sheet.style.maxHeight = ''; sheet.style.transform = ''; }
+    var overlay = document.getElementById('pickerModal');
+    if (overlay) overlay.style.bottom = '';
+    if (pickerVvRaf) { cancelAnimationFrame(pickerVvRaf); pickerVvRaf = 0; }
     if (!window.visualViewport) return;
-    window.visualViewport.removeEventListener('resize', syncPickerViewport);
-    window.visualViewport.removeEventListener('scroll', syncPickerViewport);
+    window.visualViewport.removeEventListener('resize', onPickerViewportChange);
   }
 
   // Build one picker row. `id` is the real exercises.id for a global catalog hit
@@ -2748,14 +2824,7 @@
     '</div>';
   }
 
-  function openTemplatePicker() {
-    pickerMode = 'template';
-    resetPickerState();
-    document.getElementById('pickerModal').classList.add('open');
-    document.addEventListener('keydown', handlePickerKeydown);
-    bindPickerViewport();
-    setTimeout(function() { document.getElementById('pickerSearch').focus(); }, 80);
-  }
+  function openTemplatePicker() { openPickerFor('template'); }
 
   function addTemplateExercise(name, pickedId) {
     editingTemplate.exercises.push({

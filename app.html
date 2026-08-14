@@ -777,14 +777,17 @@
   function renderNutrition(n) {
     var body = document.getElementById('nutBody');
 
+    // `hasData: false` means the snapshot itself is missing — genuinely unknown,
+    // which is NOT the same as "nothing logged". Only that case degrades.
     if (!n.hasData) {
       body.innerHTML = '<div class="home-empty">Not available</div>';
       return;
     }
-    if (!n.logged) {
-      body.innerHTML = '<div class="home-empty">Nothing logged yet today</div>';
-      return;
-    }
+    // Phase 4.3.5A — an unlogged day renders the SAME structure at zero rather
+    // than collapsing to a message. The user sees Calories, Protein, their
+    // targets and two empty tracks, so they know where progress will appear
+    // before logging anything. Nothing is fabricated: every number below comes
+    // from the shared model, and a zero meter renders as an empty track.
 
     // Category colouring, matching the nutrition page: green identifies
     // CALORIES, the accent identifies macro progress. Amber still overrides
@@ -819,7 +822,10 @@
         '<div class="mm-meter" id="nutProMeter" role="progressbar" aria-valuemin="0"' +
           ' aria-valuemax="100" aria-label="Protein">' +
           '<div class="mm-meter-fill"></div></div>';
-    } else if (n.protein.consumed) {
+    } else {
+      // No protein target set. Protein still ALWAYS appears (4.3.5A) — the
+      // consumed total alone, with no meter, because a bar without a target
+      // would have nothing honest to measure against.
       html +=
         '<div class="home-metric">' +
           '<span class="home-metric-label">Protein</span>' +

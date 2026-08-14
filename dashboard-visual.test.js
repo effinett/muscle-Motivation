@@ -445,11 +445,16 @@ test('nutrition: ordinary progress uses the accent, not semantic colour', () => 
 
 test('nutrition: every real-world state is handled', () => {
   assert.match(HOME, /if \(!n\.hasData\)/, 'no data');
-  assert.match(HOME, /if \(!n\.logged\)/, 'nothing logged');
   assert.match(HOME, /if \(n\.hasTargets\)/, 'with and without a calorie target');
   assert.match(HOME, /n\.over \? 'over' : 'left'/, 'over vs remaining');
   assert.match(HOME, /if \(n\.protein\.target\)/, 'protein with a target');
-  assert.match(HOME, /else if \(n\.protein\.consumed\)/, 'protein without a target');
+  // Phase 4.3.5A: an unlogged day is no longer an early return — it renders the
+  // ordinary structure at zero. The behavioural contract for that lives in
+  // dashboard-zero-state.test.js; here we only pin that the bail-out is gone.
+  assert.ok(!/if \(!n\.logged\)/.test(HOME),
+    'nothing-logged no longer short-circuits the nutrition module');
+  assert.ok(!/Nothing logged yet today/.test(HOME),
+    'the message-only zero state is removed');
   // Protein achieved is conveyed by the numbers and a full bar, not by a
   // colour change — see the category-colouring tests above.
 });

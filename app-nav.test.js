@@ -303,7 +303,9 @@ test('header: app-shell.css owns the header, logo and back-link rules', () => {
   assert.match(SHELL_CSS, /\nheader\s*\{[^}]*position:\s*sticky[^}]*height:\s*60px/,
     'the sticky 60px header lives in the shell');
   assert.match(SHELL_CSS, /\.header-logo\s*\{[^}]*display:\s*flex/);
-  assert.match(SHELL_CSS, /\.header-logo img\s*\{[^}]*height:\s*42px/);
+  // The exact size is a 4.3.5A concern and is asserted, with its header-fit
+  // constraint, in shell-primitives.test.js. Here we only pin OWNERSHIP.
+  assert.match(SHELL_CSS, /\.header-logo img\s*\{[^}]*height:\s*\d+px/);
   assert.match(SHELL_CSS, /\.header-logo span\s*\{[^}]*Bebas Neue/);
 });
 

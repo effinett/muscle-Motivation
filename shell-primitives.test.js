@@ -214,6 +214,31 @@ test('primitives: V2 did not regress the protected shell contracts', () => {
   assert.match(SHELL, /:root\.mm-has-nav\s*\{[^}]*--mm-nav-base-height:\s*64px/, 'nav height');
 });
 
+/* ── Shared header (Phase 4.3.5A) ───────────────────────────────────────── */
+
+test('header: the logo grew but still fits the header with clearance', () => {
+  const header = rulesFor('header').find((r) => r.selector === 'header');
+  assert.ok(header, 'the shared header rule exists');
+  const headerH = Number((header.body.match(/height:\s*(\d+)px/) || [])[1]);
+  const logoH = Number((bodiesFor('.header-logo img').match(/height:\s*(\d+)px/) || [])[1]);
+  assert.ok(headerH > 0 && logoH > 0, 'both heights are declared in px');
+
+  assert.ok(logoH > 42, 'the mark is larger than the pre-4.3.5 42px');
+  // It must never crowd or grow the bar: the header height is the constraint,
+  // and a logo that met or exceeded it would push the sticky header taller and
+  // shift --mm-nav-base-height clearance calculations on every page.
+  assert.ok(logoH <= headerH - 8,
+    `logo (${logoH}px) keeps at least 4px optical clearance inside the ${headerH}px header`);
+});
+
+test('header: growing the logo did not change the header geometry', () => {
+  const header = rulesFor('header').find((r) => r.selector === 'header').body;
+  assert.match(header, /height:\s*60px/, 'header height is unchanged');
+  assert.match(header, /position:\s*sticky/, 'still sticky');
+  // safe-area.css keeps adding the notch inset on top via header:has(.header-logo).
+  assert.match(read('safe-area.css'), /header:has\(\.header-logo\)/);
+});
+
 /* ── Home consumes the primitives (wired in V4) ─────────────────────────── */
 
 test('primitives: Home actually consumes every one of them', () => {
