@@ -54,8 +54,9 @@ exit-criterion result.
 - Nutrition open loops: portion-correction persistence and gram-edit capture; meal-context confidence
   gating (shipped default-off); word-order ranking sensitivity; yogurt fat-basis presentation ordering.
   Carried forward to **5.4.12–5.4.14**.
-- Branch protection requiring the `verify` check — recorded as deferred in `.github/workflows/ci.yml` and
-  still open. See "Open repository actions" below.
+- Branch protection requiring the `verify` check — recorded as deferred in `.github/workflows/ci.yml`.
+  Deferred at the time; **subsequently configured on 2026-08-14** — see "Completed repository actions"
+  below.
 
 **Exit criterion** — no written exit criterion existed at the time. Evidence of completion: the
 `npm run verify` gate is green in CI, and the committed evaluation baseline records 288 cases at 100%
@@ -175,37 +176,41 @@ established and is the foundation 4.3.5 hardens.
 
 ---
 
-# Open repository actions
+# Completed repository actions
 
-Tracked here because they are repository-level obligations rather than product phases.
+Repository-level obligations rather than product phases. Closed entries stay here.
 
-## Branch protection — `verify` required on `main` · **OPEN**
+## Branch protection — `verify` required on `main` · **CONFIGURED 2026-08-14**
 
-**Required by** `docs/ROADMAP.md` §2.2 (Engineering Invariants). This precedes 4.3.5 implementation; it is
-deliberately not a paid-launch item.
+**Required by** `docs/ROADMAP.md` §2.2 (Engineering Invariants). Precedes 4.3.5 implementation; it was
+deliberately not left as a paid-launch item.
 
-**Why it is not done:** GitHub branch-protection settings cannot be changed from the development
-environment. Attempted again on **2026-08-14** during pre-4.3.5 repository setup and confirmed
-blocked on three counts: the `gh` and `hub` CLIs are not installed; the available GitHub tooling
-exposes repository, branch, file, issue, and pull-request operations but **no branch-protection or
-ruleset API**; and no GitHub API token is present in the environment for a direct REST call (git
-authenticates over SSH, which cannot be used for the REST settings endpoint).
+**Configured on:** 2026-08-14
+**Branch:** `main`
+**Configured by:** Effi (repository owner), manually in the GitHub web UI
 
-This requires a repository administrator acting in the GitHub web UI.
+**Settings reported as enabled:**
 
-**Exact remaining manual step** (repository administrator, once):
+- Require a pull request before merging
+- Require status checks to pass before merging
+- Require branches to be up to date before merging
+- Required status check: **`verify`** (workflow *Continuous Evaluation*, `.github/workflows/ci.yml`)
 
-1. Open `https://github.com/effinett/muscle-Motivation/settings/branches`.
-2. **Add branch protection rule** (or edit the existing rule) with branch name pattern `main`.
-3. Enable **Require a pull request before merging**.
-4. Enable **Require status checks to pass before merging**, then enable **Require branches to be up to
-   date before merging**.
-5. In the status-check search box, select the check named exactly **`verify`**
-   (workflow *Continuous Evaluation*, `.github/workflows/ci.yml`).
-6. Save.
+**Evidence — read this distinction carefully:**
 
-Once configured, append a dated note to this section recording who enabled it and when. Do not mark it
-complete until it is actually configured.
+| Fact | How it is known |
+|---|---|
+| `main` is protected | **Tool-verified.** The GitHub branches API returns `"protected": true` for `main` (read 2026-08-14 at `aec3acc`). |
+| The four specific settings above | **Owner-confirmed, not tool-read-back.** |
+
+The available GitHub tooling exposes no branch-protection or ruleset endpoint, so the individual
+settings could not be read back programmatically from this environment (no `gh`/`hub` CLI, no
+protection API in the toolset, no API token for a direct REST call — git authenticates over SSH,
+which cannot sign REST settings requests). The `protected: true` flag confirms a rule **exists**; it
+does not enumerate what the rule contains. The settings list above is recorded on the owner's
+confirmation.
+
+**If the configuration is ever revised**, append a new dated entry rather than editing this one.
 
 ---
 

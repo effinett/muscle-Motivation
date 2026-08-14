@@ -96,10 +96,11 @@ visual, small, or documentation-adjacent.
 The `verify` check **must be required** for merges to `main`. This is repository hardening that precedes
 4.3.5 implementation; it is deliberately **not** a paid-launch roadmap item.
 
-**Current status (2026-08-14): NOT YET CONFIGURED.** GitHub branch-protection settings cannot be changed
-from the development environment (no `gh` CLI; the available GitHub tooling exposes no branch-protection
-API). The exact remaining manual step is recorded in `docs/ROADMAP-HISTORY.md` under "Open repository
-actions" and must be completed by a repository administrator.
+**Current status (2026-08-14): CONFIGURED.** Branch protection is active on `main`, requiring a pull
+request before merging, passing status checks with **`verify`** as a required check, and branches to be
+up to date before merging. Configured manually in the GitHub UI by the repository owner; the branches
+API reads back `protected: true` for `main`. Full record, including the limits of that verification, is
+in `docs/ROADMAP-HISTORY.md` → "Completed repository actions".
 
 ## 2.3 Nutrition evaluation governance
 
@@ -990,9 +991,10 @@ default-off (5.4.14) · word-order ranking sensitivity and yogurt fat-basis pres
 ## 10.6 Android PWA install validation
 Deferred since 4.3.1. **Resolve in 4.3.5K.**
 
-## 10.7 Branch protection
-The `verify` check is not yet required on `main`. See §2.2 and the open-actions section of
-`docs/ROADMAP-HISTORY.md`.
+## 10.7 Branch protection — **RESOLVED 2026-08-14**
+The `verify` check is now required on `main`, alongside a required pull request and an
+up-to-date-branch requirement. See §2.2 and "Completed repository actions" in
+`docs/ROADMAP-HISTORY.md`. Retained here as a closed entry rather than deleted, per §12.2.
 
 ---
 
