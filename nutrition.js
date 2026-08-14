@@ -272,7 +272,7 @@ function nuOpenModal(prefill) {
   }
   nuUpdateTotalPreview();
 
-  document.getElementById('foodModal').classList.add('open');
+  nuOpenFoodModal();
 
   if (prefill.id) {
     // Editing an existing entry → straight to the form (fields already filled).
@@ -317,11 +317,17 @@ function nuSetMode(isUsda) {
   if (isUsda) { var rw = document.getElementById('nuRecentWrap'); if (rw) rw.style.display = 'none'; }
 }
 
-function nuCloseModal(e) {
-  if (e && e.target !== document.getElementById('foodModal')) return;
-  nuStopScanner();                  // never leave the camera running behind a closed modal
-  document.getElementById('foodModal').classList.remove('open');
+// Phase 4.3.5C — the food modal opens through the shared overlay primitive, so
+// it inherits background scroll locking, Escape, backdrop dismissal and focus
+// capture/restore. Stopping the scanner moved into onClose, which means the
+// camera is now released on EVERY dismissal path (Escape and backdrop included);
+// previously only the explicit ✕ and the backdrop handler did it.
+function nuOpenFoodModal() {
+  MMSheet.open(document.getElementById('foodModal'), {
+    onClose: function () { nuStopScanner(); },
+  });
 }
+function nuCloseModal() { MMSheet.close(document.getElementById('foodModal')); }
 
 async function nuSave() {
   var name = document.getElementById('nuName').value.trim();
@@ -356,7 +362,7 @@ async function nuSave() {
       src: src,
     });
     if (res.error) throw res.error;
-    document.getElementById('foodModal').classList.remove('open');
+    nuCloseModal();
     showToast('Food logged!');
     // PWA install onboarding (Phase 4.3.3): emit only AFTER a confirmed food_logs
     // write. Narrow signal — no logged food content is included.
@@ -378,7 +384,7 @@ async function nuDeleteFromModal() {
   try {
     var res = await nuDeleteLog(id);
     if (res.error) throw res.error;
-    document.getElementById('foodModal').classList.remove('open');
+    nuCloseModal();
     showToast('Entry removed.');
     if (typeof window.onFoodSaved === 'function') await window.onFoodSaved();
   } catch (err) {
@@ -1327,7 +1333,7 @@ function nuOpenModalWithFood(item, opts) {
   document.getElementById('nuRecentWrap').style.display = 'none';
   nu_recentLoaded = false;
   nuResetModalState();
-  document.getElementById('foodModal').classList.add('open');
+  nuOpenFoodModal();
 
   var raw = item && item.raw_food;
   if (raw && raw.fdcId != null) {
@@ -1615,13 +1621,13 @@ function nuModalMarkup() {
     return '<option value="' + m + '">' + NU_MEAL_LABELS[m] + '</option>';
   }).join('');
   return '' +
-  '<div class="modal-overlay" id="foodModal" onclick="nuCloseModal(event)">' +
+  '<div class="modal-overlay" id="foodModal">' +
     '<div class="modal-box">' +
       '<div class="modal-header">' +
         '<button class="nu-back" id="nuBackBtn" style="display:none;" onclick="nuModalBack()" title="Back">←</button>' +
         '<div class="modal-title" id="nuModalTitle">Add Food</div>' +
         '<button class="nu-fav" id="nuFavBtn" style="display:none;" onclick="nuToggleFavorite()" title="Save to favorites">☆</button>' +
-        '<button class="modal-close" onclick="nuStopScanner();document.getElementById(\'foodModal\').classList.remove(\'open\')">✕</button>' +
+        '<button class="modal-close" onclick="nuCloseModal()" aria-label="Close">✕</button>' +
       '</div>' +
       '<div id="nuAddView">' +
         '<input type="hidden" id="nuFoodId">' +

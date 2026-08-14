@@ -3,11 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark">
   <title>Muscle Motivation – Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Phase 4.3.5F — navigation performance. Every destination pulled scripts
+       from two extra origins (unpkg, jsdelivr) and talked to Supabase
+       immediately, with no preconnect to any of them: each cost a full
+       DNS + TCP + TLS handshake on the critical path of every tab switch.
+       These warm the connections while the HTML is still parsing. -->
+  <link rel="preconnect" href="https://unpkg.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://igzvphmhyrdjjvzbxnuh.supabase.co" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js" integrity="sha384-ouAVEJVCMsf8Svzn+BwqbaBhxBEA0xgeVBhHnxmWd+Wqyv18yhWCQwGegFD/OHLq" crossorigin="anonymous"></script>
+  <script defer src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js" integrity="sha384-ouAVEJVCMsf8Svzn+BwqbaBhxBEA0xgeVBhHnxmWd+Wqyv18yhWCQwGegFD/OHLq" crossorigin="anonymous"></script>
   <style>
     /* Fallback palette only — app-shell.css defines the canonical tokens and
        overrides these. Kept so the page degrades sanely if the shell 404s. */
@@ -423,8 +432,12 @@
   <script src="pwa-install-ui.js" defer></script>
   <script src="pwa-install-register.js" defer></script>
   <script src="app-nav.js" defer></script>
+  <script src="mm-dirty.js" defer></script>
+  <script src="mm-sheet.js" defer></script>
+  <link rel="stylesheet" href="mm-sheet.css">
   <link rel="stylesheet" href="app-shell.css">
   <link rel="stylesheet" href="safe-area.css">
+  <script src="mm-errors.js" defer></script>
 </head>
 <body>
 
@@ -777,14 +790,17 @@
   function renderNutrition(n) {
     var body = document.getElementById('nutBody');
 
+    // `hasData: false` means the snapshot itself is missing — genuinely unknown,
+    // which is NOT the same as "nothing logged". Only that case degrades.
     if (!n.hasData) {
       body.innerHTML = '<div class="home-empty">Not available</div>';
       return;
     }
-    if (!n.logged) {
-      body.innerHTML = '<div class="home-empty">Nothing logged yet today</div>';
-      return;
-    }
+    // Phase 4.3.5A — an unlogged day renders the SAME structure at zero rather
+    // than collapsing to a message. The user sees Calories, Protein, their
+    // targets and two empty tracks, so they know where progress will appear
+    // before logging anything. Nothing is fabricated: every number below comes
+    // from the shared model, and a zero meter renders as an empty track.
 
     // Category colouring, matching the nutrition page: green identifies
     // CALORIES, the accent identifies macro progress. Amber still overrides
@@ -819,7 +835,10 @@
         '<div class="mm-meter" id="nutProMeter" role="progressbar" aria-valuemin="0"' +
           ' aria-valuemax="100" aria-label="Protein">' +
           '<div class="mm-meter-fill"></div></div>';
-    } else if (n.protein.consumed) {
+    } else {
+      // No protein target set. Protein still ALWAYS appears (4.3.5A) — the
+      // consumed total alone, with no meter, because a bar without a target
+      // would have nothing honest to measure against.
       html +=
         '<div class="home-metric">' +
           '<span class="home-metric-label">Protein</span>' +

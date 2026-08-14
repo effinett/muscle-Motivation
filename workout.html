@@ -3,11 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark">
   <title>Log Workout — Muscle Motivation</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Phase 4.3.5F — navigation performance. Every destination pulled scripts
+       from two extra origins (unpkg, jsdelivr) and talked to Supabase
+       immediately, with no preconnect to any of them: each cost a full
+       DNS + TCP + TLS handshake on the critical path of every tab switch.
+       These warm the connections while the HTML is still parsing. -->
+  <link rel="preconnect" href="https://unpkg.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://igzvphmhyrdjjvzbxnuh.supabase.co" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js" integrity="sha384-ouAVEJVCMsf8Svzn+BwqbaBhxBEA0xgeVBhHnxmWd+Wqyv18yhWCQwGegFD/OHLq" crossorigin="anonymous"></script>
+  <script defer src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js" integrity="sha384-ouAVEJVCMsf8Svzn+BwqbaBhxBEA0xgeVBhHnxmWd+Wqyv18yhWCQwGegFD/OHLq" crossorigin="anonymous"></script>
   <style>
     :root {
       --red:         #B1121B;
@@ -285,7 +294,12 @@
       cursor: pointer; display: flex; align-items: center; justify-content: center;
       transition: background 0.15s, border-color 0.15s, color 0.15s;
     }
-    .btn-check:hover { border-color: var(--green); color: var(--green); }
+    /* Pointer-only (Phase 4.3.5E). On touch, iOS retains :hover on the last
+       tapped element, so an unguarded hover leaves a stale highlight behind —
+       and here the hover colour is the same one that encodes a real state. */
+    @media (hover: hover) {
+      .btn-check:hover { border-color: var(--green); color: var(--green); }
+    }
     .btn-check.checked { background: var(--green-muted); border-color: var(--green); color: var(--green); }
     .btn-del-set {
       background: none; border: none; color: var(--border-3);
@@ -407,30 +421,84 @@
       border-radius: 16px 16px 0 0;
       /* safe-area padding keeps Cancel above the home indicator */
       padding: 24px 20px calc(20px + env(safe-area-inset-bottom, 0px));
-      width: 100%; max-width: 680px; max-height: 80vh;
+      width: 100%; max-width: 680px;
       display: flex; flex-direction: column;
-      transition: transform 0.15s ease;
+      /* 80vh normally; when the keyboard lifts the overlay's bottom edge
+         (4.3.5B) the sheet shrinks to whatever the overlay still occupies
+         instead of overflowing it. The bare 80vh is the fallback for engines
+         without min(). No transform is animated here any more — a transformed
+         ancestor mis-places the text caret in WebKit. */
+      max-height: 80vh;
+      max-height: min(80vh, 100%);
     }
-    .picker-drag { width: 40px; height: 4px; background: var(--border-3); border-radius: 2px; margin: 0 auto 18px; }
+    /* .picker-drag is gone — the handle is now the shared .mm-sheet-handle,
+       which carries the real 44px gesture area (app-shell.css, Phase 4.3.5C). */
     .picker-title { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 1.5px; margin-bottom: 12px; }
+    /* Phase 4.3.5B — the caret sits where the text does.
+       Three things were making it drift:
+        1. `font-size: 15px` disagreed with app-shell.css's 16px !important
+           form-control floor, so the box the caret is measured in changed
+           between pointer types. Declaring 16px makes both paths identical.
+        2. No explicit line-height/min-height, so the content box height came
+           from the UA's `normal` line box while the ELEMENT height came from
+           the flex row's `align-items: stretch` (matching .btn-filter). The
+           caret is drawn against the content box, so the two disagreed and the
+           caret sat high inside a taller field.
+        3. iOS adds its own inner padding to a default-appearance text input on
+           top of ours, offsetting the text from the caret origin.
+       line-height is unitless and the min-height is content-box height + the
+       vertical padding, so the field's own geometry is now fully determined
+       here and never inherited from a sibling. */
     .picker-search {
       width: 100%; padding: 10px 14px; background: var(--surface-2);
       border: 1px solid var(--border-2); border-radius: 8px; color: var(--text);
-      font-family: 'Barlow', sans-serif; font-size: 15px; outline: none; margin-bottom: 10px;
+      font-family: 'Barlow', sans-serif; font-size: 16px; outline: none; margin-bottom: 10px;
+      -webkit-appearance: none; appearance: none;
+      line-height: 1.25; min-height: 42px;
     }
     .picker-search:focus { border-color: var(--red); }
+    /* Focus must be perceivable without relying on the border colour alone. */
+    .picker-search:focus-visible { outline: 2px solid var(--red); outline-offset: 1px; }
     /* Custom "+ Add" lives in a fixed zone under the search, above the scroll
        list — so it stays visible while the keyboard is open and the list scrolls. */
     .picker-add-row { flex-shrink: 0; }
     .picker-add-row:empty { display: none; }
     .picker-add-row .picker-item { border-bottom: 1px solid var(--border-2); }
-    .picker-list { overflow-y: auto; flex: 1; min-height: 0; -webkit-overflow-scrolling: touch; }
+    /* Scrolling itself (overflow, overscroll containment, momentum) belongs to
+       the shared .mm-sheet-scroll contract; only the flex sizing is local. */
+    .picker-list { flex: 1; min-height: 0; }
+    /* Phase 4.3.5E — a picker row is a <button>, not a <div onclick>.
+       Three defects came out of the old markup + hover rule:
+        1. "Random exercises appear highlighted red." iOS keeps :hover on the
+           LAST-TAPPED element until something else is tapped, so a row the user
+           had already chosen stayed red the next time the picker opened.
+        2. "The highlight changes as I scroll." During a touch-scroll the
+           element under the finger receives :hover frame by frame, so the red
+           name appeared to run down the list.
+        3. The list was unreachable by keyboard — a <div onclick> is not
+           focusable, so Tab skipped every exercise in the picker.
+       The hover rule is now pointer-only (the same guard .mm-nav-item already
+       used), the pressed state is a real transient :active, and the row is a
+       native control with a real focus ring. */
     .picker-item {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 11px 4px; border-bottom: 1px solid var(--border-1);
+      width: 100%; text-align: left;
+      padding: 11px 4px; border: none; border-bottom: 1px solid var(--border-1);
+      background: none; color: inherit;
+      font-family: 'Barlow', sans-serif; font-size: inherit;
       cursor: pointer; transition: color 0.15s; gap: 10px;
+      /* The OS tap flash is replaced by our own :active state below, so the
+         feedback matches the design system and clears predictably. */
+      -webkit-tap-highlight-color: transparent;
     }
-    .picker-item:hover .picker-item-name { color: var(--red); }
+    @media (hover: hover) {
+      .picker-item:hover .picker-item-name { color: var(--red); }
+    }
+    /* Pressed — present only while the finger/button is down, on every device. */
+    .picker-item:active { background: var(--surface-2); }
+    .picker-item:focus-visible {
+      outline: 2px solid var(--red); outline-offset: -2px; border-radius: 6px;
+    }
     .picker-item:last-child { border-bottom: none; }
     /* min-width:0 lets the text column shrink so a long name wraps instead of
        pushing the + icon off-screen (mobile overflow fix, Phase 4.2.1I). */
@@ -446,17 +514,23 @@
     .picker-item-plus { color: var(--red); flex-shrink: 0; }
 
     /* ── Filter UI (Phase 4.2.1I) ─────────────────────────────────────── */
-    .picker-search-row { display: flex; gap: 8px; align-items: stretch; margin-bottom: 10px; }
+    /* `align-items: center` (was stretch) so the input's height is its OWN
+       declared geometry and is never derived from the Filters button beside it
+       — that derivation was what decoupled the caret from the text box. Both
+       controls now declare a 42px minimum, so they still align exactly. */
+    .picker-search-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
     .picker-search-row .picker-search { margin-bottom: 0; flex: 1; min-width: 0; }
     .btn-filter {
       flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px;
-      padding: 0 12px; min-height: 40px; background: var(--surface-2);
+      padding: 0 12px; min-height: 42px; background: var(--surface-2);
       border: 1px solid var(--border-2); border-radius: 8px; color: var(--text-2);
       font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer;
       transition: border-color 0.15s, color 0.15s;
     }
     .btn-filter i { width: 15px; height: 15px; }
-    .btn-filter:hover { border-color: var(--border-3); color: var(--text); }
+    @media (hover: hover) {
+      .btn-filter:hover { border-color: var(--border-3); color: var(--text); }
+    }
     .btn-filter[aria-expanded="true"] { border-color: var(--red-border); color: var(--text); }
     .btn-filter.has-active { border-color: var(--red-border); color: var(--text); }
     .filter-count {
@@ -469,7 +543,7 @@
     .filter-panel {
       border: 1px solid var(--border-2); border-radius: 10px; background: var(--surface-2);
       padding: 12px; margin-bottom: 10px; flex-shrink: 0;
-      max-height: 46vh; overflow-y: auto; -webkit-overflow-scrolling: touch;
+      max-height: 46vh;   /* scrolling comes from .mm-sheet-scroll */
     }
     .filter-group { margin-bottom: 12px; }
     .filter-group:last-of-type { margin-bottom: 8px; }
@@ -485,7 +559,11 @@
       font-family: 'Barlow', sans-serif; font-size: 12.5px; font-weight: 600;
       cursor: pointer; transition: background 0.12s, border-color 0.12s, color 0.12s;
     }
-    .filter-chip:hover { border-color: var(--border-3); color: var(--text); }
+    @media (hover: hover) {
+      /* A stuck hover here is read as a SELECTED filter, which is exactly
+         what aria-pressed="true" already means — two states, one look. */
+      .filter-chip:hover { border-color: var(--border-3); color: var(--text); }
+    }
     .filter-chip[aria-pressed="true"] {
       background: var(--red-muted); border-color: var(--red-border); color: var(--text);
     }
@@ -510,7 +588,9 @@
       font-family: 'Barlow', sans-serif; font-size: 12px; font-weight: 600; cursor: pointer;
     }
     .active-filter-chip i { width: 13px; height: 13px; color: var(--text-2); }
-    .active-filter-chip:hover i { color: var(--text); }
+    @media (hover: hover) {
+      .active-filter-chip:hover i { color: var(--text); }
+    }
     .picker-empty {
       text-align: center; color: var(--text-muted); font-size: 13px; padding: 20px 8px;
     }
@@ -674,8 +754,12 @@
   <script src="pwa-install-ui.js" defer></script>
   <script src="pwa-install-register.js" defer></script>
   <script src="app-nav.js" defer></script>
+  <script src="mm-dirty.js" defer></script>
+  <script src="mm-sheet.js" defer></script>
+  <link rel="stylesheet" href="mm-sheet.css">
   <link rel="stylesheet" href="app-shell.css">
   <link rel="stylesheet" href="safe-area.css">
+  <script src="mm-errors.js" defer></script>
 </head>
 <body>
 
@@ -818,14 +902,26 @@
 </div>
 
 <!-- Exercise Picker -->
-<div class="overlay" id="pickerModal" onclick="onPickerBgClick(event)">
+<!-- Backdrop dismissal, Escape, scroll lock and focus handling are owned by
+     mm-sheet.js (Phase 4.3.5C) — this overlay carries no inline onclick. -->
+<div class="overlay" id="pickerModal">
   <div class="picker-sheet" role="dialog" aria-modal="true" aria-label="Add exercise">
-    <div class="picker-drag"></div>
+    <!-- A real drag control, not decoration: mm-sheet.js binds the gesture to
+         .mm-sheet-handle and the shell gives it a 44px catch area. -->
+    <div class="mm-sheet-handle" aria-hidden="true"></div>
     <div class="picker-title">Add Exercise</div>
     <div class="picker-search-row">
+      <!-- Phase 4.3.5B: autocorrect/autocapitalise/spellcheck are off because
+           this field is an exercise-name search, not prose. On iOS each of them
+           re-writes the field's contents mid-typing, which moves the caret and
+           re-fires the filter with text the user did not type. `enterkeyhint`
+           labels the keyboard's action key; the field stays type="text" so no
+           UA clear-button is injected into the box the caret is measured in. -->
       <input class="picker-search" type="text" id="pickerSearch"
         placeholder="Search exercises or type custom…" oninput="filterPicker(this.value)"
-        aria-label="Search exercises">
+        aria-label="Search exercises"
+        autocomplete="off" autocorrect="off" autocapitalize="none"
+        spellcheck="false" enterkeyhint="search">
       <button type="button" class="btn-filter" id="pickerFilterBtn" onclick="toggleFilterPanel()"
         aria-expanded="false" aria-controls="pickerFilterPanel">
         <i data-lucide="sliders-horizontal"></i>
@@ -835,18 +931,22 @@
     </div>
     <!-- Collapsible filter panel (Phase 4.2.1I). Chip groups rendered by
          renderFilterUI() from ExerciseFilters vocab — one source of truth. -->
-    <div class="filter-panel" id="pickerFilterPanel" hidden role="group" aria-label="Filter exercises"></div>
+    <div class="filter-panel mm-sheet-scroll" id="pickerFilterPanel" hidden role="group" aria-label="Filter exercises"></div>
     <!-- Active-filter chips (removable). aria-live so screen readers announce
          when the active filter set changes. -->
     <div class="picker-active-filters" id="pickerActiveFilters" aria-live="polite"></div>
     <div class="picker-add-row" id="pickerAddRow"></div>
-    <div class="picker-list" id="pickerList"></div>
+    <!-- .mm-sheet-scroll is BEHAVIOURAL, not cosmetic: it contains overscroll
+         so a flick at the end of the list cannot chain to the workout behind
+         it, and it is the marker mm-sheet.js reads to tell a mid-list scroll
+         apart from a dismissal drag (Phase 4.3.5D). -->
+    <div class="picker-list mm-sheet-scroll" id="pickerList"></div>
     <button class="btn-picker-close" onclick="closePicker()">Cancel</button>
   </div>
 </div>
 
 <!-- Finish Workout Modal -->
-<div class="overlay" id="finishModal" onclick="onFinishBgClick(event)">
+<div class="overlay" id="finishModal">
   <div class="modal-box">
     <div class="modal-title">Finish Workout?</div>
     <div class="modal-sub" id="finishSummary">—</div>
@@ -859,7 +959,7 @@
 </div>
 
 <!-- Discard Confirm Modal -->
-<div class="overlay" id="discardModal" onclick="onDiscardBgClick(event)">
+<div class="overlay" id="discardModal">
   <div class="modal-box">
     <div class="modal-title">Discard Workout?</div>
     <div class="modal-sub">This will permanently delete the session and all sets logged. This cannot be undone.</div>
@@ -872,7 +972,7 @@
 
 <!-- Custom Exercise — Edit Name (Phase 4.2.1H). Modal (not native confirm) so
      the flow is verifiable and consistent with the design system. -->
-<div class="overlay" id="customEditModal" onclick="onCustomEditBgClick(event)">
+<div class="overlay" id="customEditModal">
   <div class="modal-box">
     <div class="modal-title">Edit Exercise</div>
     <div class="modal-sub">Rename your custom exercise. Your logged history keeps the name it was saved under.</div>
@@ -890,7 +990,7 @@
 
 <!-- Custom Exercise — Archive / Restore / Delete confirm (Phase 4.2.1H). One
      reusable confirm modal; the action + copy are set per invocation. -->
-<div class="overlay" id="customConfirmModal" onclick="onCustomConfirmBgClick(event)">
+<div class="overlay" id="customConfirmModal">
   <div class="modal-box">
     <div class="modal-title" id="customConfirmTitle">Archive Exercise?</div>
     <div class="modal-sub" id="customConfirmSub">—</div>
@@ -901,7 +1001,12 @@
   </div>
 </div>
 
-<!-- Live PR Trophy (mid-workout, transient) -->
+<!-- Live PR Trophy (mid-workout, transient).
+     DELIBERATELY NOT migrated to mm-sheet.js (Phase 4.3.5C): it is a celebration
+     that auto-dismisses, holds no focusable content and demands no decision.
+     Trapping focus in it and freezing the page would turn a moment of feedback
+     into an interruption, and restoring focus afterwards would fight the timer.
+     Any tap anywhere dismisses it, which is the correct model for this surface. -->
 <div class="overlay" id="prModal" onclick="closeLivePr()">
   <div class="pr-celebrate">
     <div class="pr-badge-wrap">
@@ -985,6 +1090,15 @@
         currentUser = session.user;
 
         var profile = await getProfile(currentUser.id);
+        // Phase 4.3.5H — onboarding routing is enforced on every protected
+        // destination, not only Home. A deep link or a bookmark could
+        // previously drop a half-onboarded user straight here, where every
+        // target is missing and the page reads as broken. `replace` so the
+        // back button cannot bounce them into the same dead end.
+        if (!profile || !profile.onboarding_complete) {
+          window.location.replace('onboarding.html');
+          return;
+        }
         var defaultName;
         if (profile && profile.training_split) {
           var day = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date().getDay()];
@@ -1243,11 +1357,12 @@
     editingCustomId = id;
     document.getElementById('customEditInput').value = c.name;
     document.getElementById('customEditError').textContent = '';
-    document.getElementById('customEditModal').classList.add('open');
-    setTimeout(function(){ document.getElementById('customEditInput').focus(); }, 60);
+    MMSheet.open(document.getElementById('customEditModal'), {
+      initialFocus: '#customEditInput',
+      onClose: function () { editingCustomId = null; },
+    });
   }
-  function closeCustomEditModal() { document.getElementById('customEditModal').classList.remove('open'); editingCustomId = null; }
-  function onCustomEditBgClick(e) { if (e.target === document.getElementById('customEditModal')) closeCustomEditModal(); }
+  function closeCustomEditModal() { MMSheet.close(document.getElementById('customEditModal')); }
 
   async function submitCustomEdit() {
     if (!editingCustomId || typeof ExerciseCustom === 'undefined') return;
@@ -1282,10 +1397,11 @@
     } else {
       btn.style.display = 'none'; pendingCustomAction = null;
     }
-    document.getElementById('customConfirmModal').classList.add('open');
+    MMSheet.open(document.getElementById('customConfirmModal'), {
+      onClose: function () { pendingCustomAction = null; },
+    });
   }
-  function closeCustomConfirmModal() { document.getElementById('customConfirmModal').classList.remove('open'); pendingCustomAction = null; }
-  function onCustomConfirmBgClick(e) { if (e.target === document.getElementById('customConfirmModal')) closeCustomConfirmModal(); }
+  function closeCustomConfirmModal() { MMSheet.close(document.getElementById('customConfirmModal')); }
   async function runCustomConfirm() { var action = pendingCustomAction; closeCustomConfirmModal(); if (action) await action(); }
 
   function askArchiveCustom(id) {
@@ -1656,6 +1772,20 @@
     document.getElementById('activeWorkoutName').value  = currentWorkout.name;
     renderExercises();
     startTimer();
+    registerActiveWorkoutDirty();
+  }
+
+  // ── Unsaved-work contract (Phase 4.3.5G) ──────────────────────────
+  // Every set is written the moment it is entered, so a live session is not
+  // "unsaved" in the database sense. What a reload DOES destroy is the session's
+  // in-memory state — the elapsed timer and any running rest timer — and this is
+  // the one surface where an interruption genuinely costs the user something.
+  // So the live workout is a dirty source; a finished or discarded one is not.
+  function registerActiveWorkoutDirty() {
+    if (typeof MMDirty === 'undefined') return;
+    MMDirty.register('activeWorkout', function () {
+      return !!(currentWorkout && !currentWorkout.completed);
+    }, 'a workout in progress');
   }
 
   // ── Rename workout ────────────────────────────────────────────────
@@ -1757,21 +1887,36 @@
   // esc() lives in workout-history.js (shared) — used here by the exercise picker too
 
   // ── Exercise picker ───────────────────────────────────────────────
-  function openPicker() {
-    pickerMode = 'workout';
+  // ONE open path for both picker modes (Phase 4.3.5B). The workout and template
+  // entry points differed only in `pickerMode` yet each carried its own copy of
+  // the open sequence, so a fix to one silently missed the other.
+  // Phase 4.3.5C — the picker is the app's one true bottom sheet, so it opens
+  // through the shared primitive with `variant: 'sheet'`. Everything the picker
+  // used to own itself — background scroll locking, Escape, backdrop dismissal,
+  // focus capture and restore, keyboard avoidance, drag-to-dismiss — now lives
+  // in mm-sheet.js and is identical on every surface that uses it.
+  function openPickerFor(mode) {
+    pickerMode = mode;
     resetPickerState();
-    document.getElementById('pickerModal').classList.add('open');
-    document.addEventListener('keydown', handlePickerKeydown);
-    bindPickerViewport();
-    setTimeout(function() { document.getElementById('pickerSearch').focus(); }, 80);
+    MMSheet.open(document.getElementById('pickerModal'), {
+      variant: 'sheet',
+      panel: '.picker-sheet',
+      initialFocus: '#pickerSearch',
+      // Escape collapses the filter panel FIRST when it is open; only a second
+      // press closes the picker. Returning true consumes the key.
+      onEscape: function () {
+        if (!filterPanelOpen) return false;
+        toggleFilterPanel(false);
+        return true;
+      },
+      // Runs however the sheet was dismissed — Cancel, Escape, backdrop or
+      // swipe — so the filter panel can never be left open with its
+      // outside-click listener still attached.
+      onClose: function () { toggleFilterPanel(false); },
+    });
   }
-  function closePicker() {
-    toggleFilterPanel(false);   // collapse panel + detach the outside-click listener
-    document.getElementById('pickerModal').classList.remove('open');
-    document.removeEventListener('keydown', handlePickerKeydown);
-    unbindPickerViewport();
-  }
-  function onPickerBgClick(e) { if (e.target === document.getElementById('pickerModal')) closePicker(); }
+  function openPicker() { openPickerFor('workout'); }
+  function closePicker() { MMSheet.close(document.getElementById('pickerModal')); }
 
   // Reset the picker to a clean selection session: clear search, clear filters
   // (session-scoped — never persisted), collapse the filter panel, re-render.
@@ -1783,56 +1928,19 @@
     filterPicker('');
   }
 
-  // Escape collapses the filter panel first (if open), else closes the picker.
-  function handlePickerKeydown(e) {
-    if (e.key !== 'Escape') return;
-    if (filterPanelOpen) toggleFilterPanel(false);
-    else closePicker();
-  }
-
-  // ── Mobile keyboard handling ──────────────────────────────────────
-  // Lift the bottom sheet above the on-screen keyboard and cap its height to the
-  // visible (visualViewport) area, so the search field, the "+ Add" row and a
-  // scrollable result list all stay reachable without dismissing the keyboard.
-  // No-op on desktop, where the keyboard inset is always 0 (CSS 80vh governs).
-  function syncPickerViewport() {
-    var vv = window.visualViewport;
-    var sheet = document.querySelector('.picker-sheet');
-    if (!vv || !sheet) return;
-    var kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-    if (kb > 0) {
-      sheet.style.maxHeight = (vv.height - 12) + 'px';
-      sheet.style.transform = 'translateY(-' + kb + 'px)';
-    } else {
-      sheet.style.maxHeight = '';   // restore CSS 80vh — desktop unchanged
-      sheet.style.transform = '';
-    }
-  }
-  function bindPickerViewport() {
-    if (!window.visualViewport) return;
-    window.visualViewport.addEventListener('resize', syncPickerViewport);
-    window.visualViewport.addEventListener('scroll', syncPickerViewport);
-    syncPickerViewport();
-  }
-  function unbindPickerViewport() {
-    var sheet = document.querySelector('.picker-sheet');
-    if (sheet) { sheet.style.maxHeight = ''; sheet.style.transform = ''; }
-    if (!window.visualViewport) return;
-    window.visualViewport.removeEventListener('resize', syncPickerViewport);
-    window.visualViewport.removeEventListener('scroll', syncPickerViewport);
-  }
-
   // Build one picker row. `id` is the real exercises.id for a global catalog hit
   // (stamped onto the logged set as canonical identity) or '' for a custom / free
   // add. The displayed + saved name is ALWAYS the canonical exercise name (never
   // the matched alias text), so search text never becomes stored identity.
   function pickerRowHtml(name, id, category, equipment) {
-    return '<div class="picker-item" data-name="' + esc(name) + '" data-id="' + esc(id || '') +
+    // A native <button>: keyboard-reachable, Enter/Space activated, and it
+    // carries a real focus ring — none of which a <div onclick> had.
+    return '<button type="button" class="picker-item" data-name="' + esc(name) + '" data-id="' + esc(id || '') +
       '" onclick="selectExercise(this.dataset.name, this.dataset.id)">' +
       '<div class="picker-item-text"><div class="picker-item-name">' + esc(name) + '</div>' +
       '<div class="picker-item-cat">' + esc(category || '') + (equipment ? ' · ' + esc(equipment) : '') + '</div></div>' +
       '<span class="picker-item-plus"><i data-lucide="plus" style="width:16px;height:16px;"></i></span>' +
-      '</div>';
+      '</button>';
   }
 
   function filterPicker(query) {
@@ -1885,11 +1993,11 @@
     // not a filtered search result.
     var addRow = '';
     if (q && !shownNames[qKey] && !exerciseLibrary.find(function(e) { return e.name.toLowerCase() === qKey; })) {
-      addRow = '<div class="picker-item" data-name="' + esc(q) + '" data-id="" onclick="selectExercise(this.dataset.name, this.dataset.id)">' +
+      addRow = '<button type="button" class="picker-item" data-name="' + esc(q) + '" data-id="" onclick="selectExercise(this.dataset.name, this.dataset.id)">' +
         '<div class="picker-item-text"><div class="picker-item-name">+ Add “' + esc(q) + '”</div>' +
         '<div class="picker-item-cat">Custom exercise</div></div>' +
         '<span class="picker-item-plus"><i data-lucide="plus" style="width:16px;height:16px;"></i></span>' +
-        '</div>';
+        '</button>';
     }
     document.getElementById('pickerAddRow').innerHTML = addRow;
     var listHtml = (hint ? '<div class="picker-hint">' + hint + '</div>' : '') + rows.join('');
@@ -2321,10 +2429,9 @@
     document.getElementById('finishSummary').textContent =
       exercises.length + ' exercise' + (exercises.length !== 1 ? 's' : '') +
       ' · ' + doneSets + '/' + totalSets + ' sets done · ' + elapsed + ' min';
-    document.getElementById('finishModal').classList.add('open');
+    MMSheet.open(document.getElementById('finishModal'));
   }
-  function closeFinishModal() { document.getElementById('finishModal').classList.remove('open'); }
-  function onFinishBgClick(e) { if (e.target === document.getElementById('finishModal')) closeFinishModal(); }
+  function closeFinishModal() { MMSheet.close(document.getElementById('finishModal')); }
 
   // ── Duplicate-submit protection (Phase 4.2.1J) ────────────────────────────
   // Persistence is incremental (each add/edit writes immediately), so the real
@@ -2353,6 +2460,8 @@
     if (!updated || !updated.length) {
       // Already completed elsewhere — go straight to the recap, no re-processing.
       showToast('This workout was already finished.');
+    // A deliberate, saving navigation — never warn about it (Phase 4.3.5G).
+    if (typeof MMDirty !== 'undefined') MMDirty.suspend();
       window.location.href = 'workout-complete.html?workout_id=' + currentWorkout.id;
       return;
     }
@@ -2374,6 +2483,9 @@
       await advanceProgramSession(progSlug, sessKey);
     }
     closeFinishModal();
+    // The workout is saved and complete — this navigation is the SUCCESS path,
+    // so the unsaved-work guard must not challenge it (Phase 4.3.5G).
+    if (typeof MMDirty !== 'undefined') MMDirty.suspend();
     // Dedicated full-screen recap page (Phase 4A) — replaces the inline modal.
     window.location.href = 'workout-complete.html?workout_id=' + currentWorkout.id;
   }
@@ -2477,10 +2589,9 @@
   // ── Discard workout ───────────────────────────────────────────────
   function openDiscardModal() {
     closeFinishModal();
-    document.getElementById('discardModal').classList.add('open');
+    MMSheet.open(document.getElementById('discardModal'));
   }
-  function closeDiscardModal() { document.getElementById('discardModal').classList.remove('open'); }
-  function onDiscardBgClick(e) { if (e.target === document.getElementById('discardModal')) closeDiscardModal(); }
+  function closeDiscardModal() { MMSheet.close(document.getElementById('discardModal')); }
 
   async function discardWorkout() {
     var { error } = await supabaseClient.from('workouts').delete().eq('id', currentWorkout.id);
@@ -2488,6 +2599,8 @@
     if (timerInterval) clearInterval(timerInterval);
     stopRest();
     localStorage.removeItem('wkt_start_' + currentWorkout.id);
+    // A deliberate, saving navigation — never warn about it (Phase 4.3.5G).
+    if (typeof MMDirty !== 'undefined') MMDirty.suspend();
     window.location.href = 'app.html';
   }
 
@@ -2748,14 +2861,7 @@
     '</div>';
   }
 
-  function openTemplatePicker() {
-    pickerMode = 'template';
-    resetPickerState();
-    document.getElementById('pickerModal').classList.add('open');
-    document.addEventListener('keydown', handlePickerKeydown);
-    bindPickerViewport();
-    setTimeout(function() { document.getElementById('pickerSearch').focus(); }, 80);
-  }
+  function openTemplatePicker() { openPickerFor('template'); }
 
   function addTemplateExercise(name, pickedId) {
     editingTemplate.exercises.push({

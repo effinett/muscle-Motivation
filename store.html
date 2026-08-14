@@ -105,10 +105,12 @@
       display: block; width: 22px; height: 2px;
       background: var(--text); border-radius: 2px;
     }
+    /* Position and layering moved to .mm-menu-drawer (mm-menu.css, 4.3.5I).
+       `position: relative` here kept the drawer in document flow, which is why
+       opening it pushed the page down and drew it off-screen when scrolled. */
     .mobile-nav {
       display: none; flex-direction: column;
       background: var(--surface); border-bottom: 1px solid var(--border);
-      position: relative; z-index: 199;
     }
     .mobile-nav a {
       padding: 15px 6%; color: var(--light);
@@ -677,7 +679,13 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <script src="mm-dirty.js" defer></script>
+  <script src="mm-sheet.js" defer></script>
+  <script src="mm-menu.js" defer></script>
+  <link rel="stylesheet" href="mm-sheet.css">
+  <link rel="stylesheet" href="mm-menu.css">
   <link rel="stylesheet" href="safe-area.css">
+  <script src="mm-errors.js" defer></script>
 </head>
 <body>
 
@@ -688,7 +696,10 @@
     <span>Muscle Motivation</span>
   </a>
   <nav class="header-nav">
-    <a href="index.html">Home</a>
+    <!-- Phase 4.3.5H — "Home" must mean the user's OWN home. For a signed-in
+         member that is the dashboard, not the public landing page; the href is
+         rewritten by applyAuthNav() below. -->
+    <a id="headerHomeLink" href="index.html">Home</a>
     <a href="calculator.html">Calculator</a>
     <a href="#contact-section">Contact</a>
     <a id="headerLoginBtn" href="auth.html" class="btn-login">Login</a>
@@ -699,7 +710,7 @@
 </header>
 
 <nav class="mobile-nav" id="mobileNav">
-  <a href="index.html">Home</a>
+  <a id="mobileHomeLink" href="index.html">Home</a>
   <a href="calculator.html">Free Calculator</a>
   <a id="mobileLoginLink" href="auth.html">Login / Sign Up</a>
 </nav>
@@ -936,10 +947,10 @@
     <img src="logow.png" alt="Muscle Motivation">
   </div>
   <nav class="footer-links">
-    <a href="index.html">Home</a>
+    <a id="footerHomeLink" href="index.html">Home</a>
     <a href="calculator.html">Free Calculator</a>
     <a href="get-fit-guide.html">Free Guide</a>
-    <a href="auth.html">Member Login</a>
+    <a id="footerLoginLink" href="auth.html">Member Login</a>
     <a href="https://wa.me/18455389705">Contact</a>
   </nav>
   <p>© 2026 Muscle Motivation. All rights reserved. Not medical advice.</p>
@@ -989,10 +1000,9 @@
 
 <script>
   // ── Mobile nav ──────────────────────────────────────────────
-  const menuToggle = document.getElementById('menuToggle');
-  const mobileNav  = document.getElementById('mobileNav');
-  menuToggle.addEventListener('click', () => mobileNav.classList.toggle('open'));
-  mobileNav.querySelectorAll('a').forEach(a => a.addEventListener('click', () => mobileNav.classList.remove('open')));
+  // Owned by mm-menu.js (Phase 4.3.5I): viewport-anchored placement, no document
+  // jump, correct layering above the sticky header, Escape, outside-tap, focus
+  // move-in and focus return. It self-attaches to #menuToggle / #mobileNav.
 
   // ── Filter logic ────────────────────────────────────────────
   const pills    = document.querySelectorAll('.filter-pill');
@@ -1031,25 +1041,17 @@
   });
 
   // ── Free Guide Modal ────────────────────────────────────────
+  // Phase 4.3.5C — routed through the shared overlay primitive. The previous
+  // lock was `document.body.style.overflow = 'hidden'`, which does not stop
+  // scrolling in Mobile Safari, and the Escape handler was bound permanently at
+  // page level and fired even when no modal was open.
   function openFreeGuide() {
-    document.getElementById('freeGuideModal').classList.add('open');
-    document.body.style.overflow = 'hidden';
+    MMSheet.open(document.getElementById('freeGuideModal'), { initialFocus: '#leadName' });
   }
 
   function closeFreeGuide() {
-    document.getElementById('freeGuideModal').classList.remove('open');
-    document.body.style.overflow = '';
+    MMSheet.close(document.getElementById('freeGuideModal'));
   }
-
-  // Close on overlay click
-  document.getElementById('freeGuideModal').addEventListener('click', function(e) {
-    if (e.target === this) closeFreeGuide();
-  });
-
-  // Close on Escape
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closeFreeGuide();
-  });
 
   // ── Lead submission ─────────────────────────────────────────
   async function submitLead() {
@@ -1141,17 +1143,41 @@
     history.replaceState(null, '', window.location.pathname);
   }
 
-  // Update nav for logged-in users: logo links to dashboard, Login → My Dashboard.
+  // ── Authenticated navigation (Phase 4.3.5H) ──────────────────────
+  // Store is a public page that signed-in members reach from inside the app, so
+  // its navigation has to be correct in BOTH states. The defect this fixes:
+  // every "Home" link here pointed at the public landing page, so a member who
+  // browsed Programs and tapped Home was dropped out of the application onto
+  // marketing — which reads as having been signed out.
+  //
+  // Only link TARGETS and labels change. Nothing here grants or revokes access,
+  // and the page stays fully usable signed-out (roadmap 4.5.9 keeps public
+  // lead-generation pages ungated).
+  function applyAuthNav(signedIn) {
+    const home = signedIn ? 'app.html' : 'index.html';
+    for (const id of ['headerLogoLink', 'headerHomeLink', 'mobileHomeLink', 'footerHomeLink']) {
+      const el = document.getElementById(id);
+      if (el) el.href = home;
+    }
+    const SIGNED_OUT_LABEL = {
+      headerLoginBtn: 'Login',
+      mobileLoginLink: 'Login / Sign Up',
+      footerLoginLink: 'Member Login',
+    };
+    for (const id of Object.keys(SIGNED_OUT_LABEL)) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      el.textContent = signedIn ? 'My Dashboard' : SIGNED_OUT_LABEL[id];
+      el.href = signedIn ? 'app.html' : 'auth.html';
+    }
+  }
+
   window.addEventListener('load', async function() {
-    const session = await getSession();
-    if (!session) return;
-    document.getElementById('headerLogoLink').href = 'app.html';
-    const loginBtn = document.getElementById('headerLoginBtn');
-    loginBtn.textContent = 'My Dashboard';
-    loginBtn.href = 'app.html';
-    const mobileLogin = document.getElementById('mobileLoginLink');
-    mobileLogin.textContent = 'My Dashboard';
-    mobileLogin.href = 'app.html';
+    // Fails closed: any error resolving the session leaves the public nav in
+    // place, which is always safe to show.
+    let session = null;
+    try { session = await getSession(); } catch (e) { session = null; }
+    applyAuthNav(!!session);
   });
 </script>
 

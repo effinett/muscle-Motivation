@@ -278,14 +278,13 @@ function wlOpenModal(prefill) {
   document.getElementById('wlWeight').value = prefill.weight_lbs != null ? prefill.weight_lbs : '';
   document.getElementById('wlNote').value = prefill.note || '';
   document.getElementById('wlModalTitle').textContent = prefill.logged_on ? 'Edit Weigh-In' : 'Log Weight';
-  document.getElementById('weightModal').classList.add('open');
-  setTimeout(function () { document.getElementById('wlWeight').focus(); }, 60);
+  MMSheet.open(document.getElementById('weightModal'), { initialFocus: '#wlWeight' });
 }
 
-function wlCloseModal(e) {
-  if (e && e.target !== document.getElementById('weightModal')) return;
-  document.getElementById('weightModal').classList.remove('open');
-}
+// Phase 4.3.5C — opened through the shared overlay primitive (mm-sheet.js),
+// which owns background scroll locking, Escape, backdrop dismissal and focus
+// capture/restore. The modal's own markup and styling are unchanged.
+function wlCloseModal() { MMSheet.close(document.getElementById('weightModal')); }
 
 async function wlSave() {
   var weight = parseFloat(document.getElementById('wlWeight').value);
@@ -303,7 +302,7 @@ async function wlSave() {
     var res = await wlUpsert(uid, wlRound1(weight), date, note);
     if (res.error) throw res.error;
     await wlSyncProfileWeight(uid); // keep profiles.weight_lbs on the latest weigh-in
-    document.getElementById('weightModal').classList.remove('open');
+    wlCloseModal();
     showToast('Weight logged!');
     // PWA install onboarding (Phase 4.3.3): emit only AFTER a confirmed
     // body_weight_logs write. Narrow signal — no body-metric value is included.
@@ -331,7 +330,7 @@ if (typeof module !== 'undefined' && module.exports) {
 // Reusable modal markup (kept identical on every page that logs weight).
 function wlModalMarkup() {
   return '' +
-  '<div class="modal-overlay" id="weightModal" onclick="wlCloseModal(event)">' +
+  '<div class="modal-overlay" id="weightModal">' +
     '<div class="modal-box">' +
       '<div class="modal-header">' +
         '<div class="modal-title" id="wlModalTitle">Log Weight</div>' +

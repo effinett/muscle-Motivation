@@ -1,0 +1,51 @@
+/* ──────────────────────────────────────────────────────────────────────────
+ * Muscle Motivation — Shared Responsive Header Menu (CSS)  ·  Phase 4.3.5I
+ *
+ * The positional half of mm-menu.js. Like mm-sheet.css it styles NOTHING
+ * cosmetic: each page keeps its own drawer background, borders, link padding
+ * and type. What lives here is only the part that was actually broken — where
+ * the drawer is, and what it is stacked above.
+ *
+ * `--mm-menu-top` and `--mm-menu-z` are written by mm-menu.js from the live
+ * header rect at open time. They are variables rather than literals because the
+ * two consumers have different header heights (80px / 68px, and both change at
+ * their breakpoints) and very different header stacking values (1000 / 200) —
+ * any fixed number here would be wrong on one of them.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+.mm-menu-drawer {
+  /* OUT OF FLOW. This one declaration is the fix: in flow, revealing the drawer
+     inserted its height into the layout and pushed the page down, and it
+     rendered at its position in the DOCUMENT rather than under the pinned
+     header — so at any scroll depth it appeared somewhere off-screen above. */
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: var(--mm-menu-top, 0px);
+  z-index: var(--mm-menu-z, 1001);
+
+  /* A long menu on a short screen scrolls itself instead of overflowing the
+     viewport, and contains that scroll so it never chains to the page behind. */
+  max-height: calc(100vh - var(--mm-menu-top, 0px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prefer the dynamic viewport unit where it exists: on mobile browsers `100vh`
+   is the height with the URL bar HIDDEN, so a drawer sized against it can be
+   taller than the space actually visible. */
+@supports (height: 100dvh) {
+  .mm-menu-drawer { max-height: calc(100dvh - var(--mm-menu-top, 0px)); }
+}
+
+/* The home-indicator inset, so the last link is never under it. */
+.mm-menu-drawer { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* Focus must be visible inside the drawer — it is now a real keyboard
+   destination, with focus moved into it on open and returned on close. */
+.mm-menu-drawer a:focus-visible,
+.mm-menu-drawer button:focus-visible {
+  outline: 2px solid var(--red, #B1121B);
+  outline-offset: -2px;
+}

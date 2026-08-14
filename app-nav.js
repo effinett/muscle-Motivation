@@ -106,6 +106,7 @@
   var MOUNT_ID = 'appNavMount';
   var NAV_ID = 'mmNav';
   var HAS_NAV_CLASS = 'mm-has-nav';
+  var PENDING_CLASS = 'is-pending';
 
   /* Inline, stroke-based icons. Deliberately NOT an icon-library dependency:
    * the nav must render identically regardless of when (or whether) a page
@@ -165,6 +166,31 @@
       if (d.available && d.href) out.push(d);
     }
     return out;
+  }
+
+  /* ── Pure: navigation-performance policy (Phase 4.3.5F) ─────────────────
+   *
+   * Prefetching a destination is only ever worth it when the connection can
+   * afford it. This is the whole decision, kept pure so it is testable and so
+   * the rule is stated once rather than scattered through event handlers.
+   *
+   * conn — a navigator.connection-shaped object, or null when the API is
+   *        absent (most browsers): unknown means "assume a normal connection",
+   *        which is the same assumption the app already makes for every other
+   *        request it issues.
+   *
+   * IMPORTANT — what may be prefetched. Only the destination's HTML SHELL,
+   * which is a static document containing no user data: every authenticated
+   * value on every page is loaded client-side from the data layer after the
+   * document has parsed. This respects roadmap §2.5 — no authenticated
+   * response, no /api/* route and no auth or session state is ever prefetched
+   * or cached, and nothing here touches the service worker or its caches. */
+  function shouldPrefetch(conn) {
+    if (!conn) return true;                        // API unavailable → normal assumption
+    if (conn.saveData === true) return false;      // the user asked us not to
+    var t = conn.effectiveType;
+    if (typeof t === 'string' && (t === 'slow-2g' || t === '2g')) return false;
+    return true;
   }
 
   /* ── Pure: participation rules ─────────────────────────────────────────── */
@@ -244,11 +270,84 @@
         if (show) root.classList.add(HAS_NAV_CLASS);
         else root.classList.remove(HAS_NAV_CLASS);
       }
+      if (show) bindNavPerformance(doc.getElementById(NAV_ID));
     } catch (e) {
       return false;
     }
     state.mounted = show;
     return show;
+  }
+
+  /* ── Navigation performance (Phase 4.3.5F) ──────────────────────────────
+   *
+   * Two effects, both presentation-only, both bound once per nav render.
+   *
+   * 1 · TAP ACKNOWLEDGEMENT (the phase's one hard target, ≤100ms).
+   *     `:active` in the shell gives the press itself an immediate paint. This
+   *     handler then moves the ACTIVE INDICATOR to the tapped destination on
+   *     click, before the browser has fetched anything, so the nav already
+   *     reads as "you are going here" while the document loads.
+   *
+   *     It is deliberately optimistic. If the navigation is somehow abandoned,
+   *     the indicator is briefly wrong on a page that was about to be replaced;
+   *     `pageshow` puts it back when a document returns from the bfcache. That
+   *     trade is worth an unconditional sub-frame response to every tap.
+   *
+   * 2 · INTENT PREFETCH. On the first sign of intent — a pointer entering the
+   *     item, or a finger landing on it — the destination's static HTML shell
+   *     is prefetched. On a touch device that is the ~80-120ms between touch
+   *     and release; with a mouse it is longer. `rel=prefetch` is a hint: an
+   *     engine that ignores it (Safari) simply behaves exactly as before.
+   *     Each destination is hinted at most once per document. */
+  var prefetched = {};
+
+  function connection() {
+    try { return (global && global.navigator && global.navigator.connection) || null; }
+    catch (e) { return null; }
+  }
+
+  function prefetchDestination(href) {
+    if (!doc || !href || prefetched[href]) return false;
+    if (!shouldPrefetch(connection())) return false;
+    prefetched[href] = true;
+    try {
+      var link = doc.createElement('link');
+      link.rel = 'prefetch';
+      link.href = href;
+      // A document, not a subresource — the shell we are about to navigate to.
+      link.as = 'document';
+      (doc.head || doc.documentElement).appendChild(link);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function markPending(item) {
+    if (!item || !item.parentNode) return;
+    var items = item.parentNode.children;
+    for (var i = 0; i < items.length; i++) items[i].classList.remove(PENDING_CLASS);
+    // Never fight the real active state when the user re-taps where they are.
+    if (!item.classList.contains('is-active')) item.classList.add(PENDING_CLASS);
+  }
+
+  function bindNavPerformance(nav) {
+    if (!nav) return;
+    function itemFrom(ev) {
+      var t = ev.target;
+      return (t && t.closest) ? t.closest('.mm-nav-item') : null;
+    }
+    // Intent: whichever comes first for this input device.
+    function onIntent(ev) {
+      var item = itemFrom(ev);
+      if (item) prefetchDestination(item.getAttribute('href'));
+    }
+    nav.addEventListener('pointerenter', onIntent, true);
+    nav.addEventListener('pointerdown', onIntent, true);
+    nav.addEventListener('click', function (ev) {
+      var item = itemFrom(ev);
+      if (item) markPending(item);
+    }, true);
   }
 
   // Record the host page's view state and re-evaluate. Called by workout.html
@@ -270,6 +369,14 @@
     } else {
       mount();
     }
+    // A document restored from the back/forward cache keeps whatever optimistic
+    // pending state it had when the user navigated away. Re-deriving the nav
+    // from the URL is the cheapest correct answer (Phase 4.3.5F).
+    if (global && typeof global.addEventListener === 'function') {
+      global.addEventListener('pageshow', function (ev) {
+        if (ev && ev.persisted) refresh();
+      });
+    }
   }
 
   var AppNav = {
@@ -279,6 +386,8 @@
     MOUNT_ID: MOUNT_ID,
     NAV_ID: NAV_ID,
     HAS_NAV_CLASS: HAS_NAV_CLASS,
+    PENDING_CLASS: PENDING_CLASS,
+    shouldPrefetch: shouldPrefetch,
     normalizeRoute: normalizeRoute,
     getDestination: getDestination,
     resolveDestinationId: resolveDestinationId,

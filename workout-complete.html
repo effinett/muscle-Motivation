@@ -3,11 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark">
   <title>Workout Complete — Muscle Motivation</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Phase 4.3.5F — navigation performance. Every destination pulled scripts
+       from two extra origins (unpkg, jsdelivr) and talked to Supabase
+       immediately, with no preconnect to any of them: each cost a full
+       DNS + TCP + TLS handshake on the critical path of every tab switch.
+       These warm the connections while the HTML is still parsing. -->
+  <link rel="preconnect" href="https://unpkg.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://igzvphmhyrdjjvzbxnuh.supabase.co" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js" integrity="sha384-ouAVEJVCMsf8Svzn+BwqbaBhxBEA0xgeVBhHnxmWd+Wqyv18yhWCQwGegFD/OHLq" crossorigin="anonymous"></script>
+  <script defer src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js" integrity="sha384-ouAVEJVCMsf8Svzn+BwqbaBhxBEA0xgeVBhHnxmWd+Wqyv18yhWCQwGegFD/OHLq" crossorigin="anonymous"></script>
   <style>
     :root {
       --red:#B1121B; --red-muted:rgba(177,18,27,0.12); --red-border:rgba(177,18,27,0.28);
@@ -193,6 +202,7 @@
   <script src="pwa-install-ui.js" defer></script>
   <script src="pwa-install-register.js" defer></script>
   <link rel="stylesheet" href="safe-area.css">
+  <script src="mm-errors.js" defer></script>
 </head>
 <body>
 

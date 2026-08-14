@@ -3,11 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark">
   <title>Nutrition — Muscle Motivation</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Phase 4.3.5F — navigation performance. Every destination pulled scripts
+       from two extra origins (unpkg, jsdelivr) and talked to Supabase
+       immediately, with no preconnect to any of them: each cost a full
+       DNS + TCP + TLS handshake on the critical path of every tab switch.
+       These warm the connections while the HTML is still parsing. -->
+  <link rel="preconnect" href="https://unpkg.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://igzvphmhyrdjjvzbxnuh.supabase.co" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js" integrity="sha384-ouAVEJVCMsf8Svzn+BwqbaBhxBEA0xgeVBhHnxmWd+Wqyv18yhWCQwGegFD/OHLq" crossorigin="anonymous"></script>
+  <script defer src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js" integrity="sha384-ouAVEJVCMsf8Svzn+BwqbaBhxBEA0xgeVBhHnxmWd+Wqyv18yhWCQwGegFD/OHLq" crossorigin="anonymous"></script>
   <style>
     :root {
       --red:         #B1121B;
@@ -620,8 +629,12 @@
   <script src="pwa-install-ui.js" defer></script>
   <script src="pwa-install-register.js" defer></script>
   <script src="app-nav.js" defer></script>
+  <script src="mm-dirty.js" defer></script>
+  <script src="mm-sheet.js" defer></script>
+  <link rel="stylesheet" href="mm-sheet.css">
   <link rel="stylesheet" href="app-shell.css">
   <link rel="stylesheet" href="safe-area.css">
+  <script src="mm-errors.js" defer></script>
 </head>
 <body>
 
@@ -687,7 +700,7 @@
 <div id="foodModalMount"></div>
 
 <!-- Save Meal (name prompt) -->
-<div class="modal-overlay" id="saveMealModal" onclick="if(event.target===this)closeSaveMeal()">
+<div class="modal-overlay" id="saveMealModal">
   <div class="modal-box" style="max-width: 380px;">
     <div class="modal-header">
       <div class="modal-title">Save Meal</div>
@@ -704,7 +717,7 @@
 </div>
 
 <!-- Saved-meal sheet: re-add the whole meal in two taps, or delete it -->
-<div class="modal-overlay" id="mealSheet" onclick="if(event.target===this)closeMealSheet()">
+<div class="modal-overlay" id="mealSheet">
   <div class="modal-box" style="max-width: 420px;">
     <div class="modal-header">
       <div class="modal-title" id="mealSheetTitle">Meal</div>
@@ -727,7 +740,7 @@
 </div>
 
 <!-- Quick Log review sheet — nothing saves until ADD TO LOG (CLAUDE.md §11) -->
-<div class="modal-overlay" id="aiSheet" onclick="if(event.target===this)closeAiSheet()">
+<div class="modal-overlay" id="aiSheet">
   <div class="modal-box">
     <div class="modal-header">
       <div class="modal-title">Review &amp; Add</div>
@@ -995,13 +1008,10 @@
       m.items.length + (m.items.length === 1 ? ' food · ' : ' foods · ') +
       nuRound(tot.calories) + ' kcal · ' + nuRound(tot.protein) + ' g protein';
     document.getElementById('mealSheetSlot').value = suggestMeal();
-    document.getElementById('mealSheet').classList.add('open');
+    MMSheet.open(document.getElementById('mealSheet'), { onClose: function () { sheetMeal = null; } });
   }
 
-  function closeMealSheet() {
-    document.getElementById('mealSheet').classList.remove('open');
-    sheetMeal = null;
-  }
+  function closeMealSheet() { MMSheet.close(document.getElementById('mealSheet')); }
 
   async function confirmAddMeal() {
     if (!sheetMeal) return;
@@ -1048,14 +1058,14 @@
     document.getElementById('saveMealHint').textContent =
       'Saves the ' + rows.length + (rows.length === 1 ? ' food' : ' foods') +
       ' in ' + NU_MEAL_LABELS[meal] + '. Re-saving an existing name updates it.';
-    document.getElementById('saveMealModal').classList.add('open');
-    setTimeout(function () { input.focus(); input.select(); }, 60);
+    MMSheet.open(document.getElementById('saveMealModal'), {
+      initialFocus: '#saveMealName',
+      onClose: function () { pendingSaveMeal = null; },
+    });
+    requestAnimationFrame(function () { input.select(); });
   }
 
-  function closeSaveMeal() {
-    document.getElementById('saveMealModal').classList.remove('open');
-    pendingSaveMeal = null;
-  }
+  function closeSaveMeal() { MMSheet.close(document.getElementById('saveMealModal')); }
 
   async function confirmSaveMeal() {
     var name = document.getElementById('saveMealName').value.trim();
@@ -1166,7 +1176,7 @@
       document.getElementById('aiSheetSrc').textContent = '“' + text + '”';
       document.getElementById('aiSheetMeal').value = parsed.meal || suggestMeal();
       renderAiSheet();
-      document.getElementById('aiSheet').classList.add('open');
+      MMSheet.open(document.getElementById('aiSheet'), { onClose: function () { aiItems = []; } });
       input.value = '';
       if (parsed.remaining <= 5) {
         document.getElementById('aiLogHint').textContent =
@@ -1408,10 +1418,7 @@
     if (inp.value) nuUsdaInputChanged();
   }
 
-  function closeAiSheet() {
-    document.getElementById('aiSheet').classList.remove('open');
-    aiItems = [];
-  }
+  function closeAiSheet() { MMSheet.close(document.getElementById('aiSheet')); }
 
   async function confirmAiAdd() {
     var matched = aiItems.filter(function (it) { return !it.unmatched && !it.needsChoice; });
@@ -1460,12 +1467,38 @@
     loadRecentChips();
   };
 
+  // ── Unsaved-work contract (Phase 4.3.5G) ──────────────────────────────
+  // Quick Log text is the one thing on this page that lives only in the DOM: a
+  // logged food is written immediately, but a meal the user has typed and not
+  // yet submitted is lost on navigation or a service-worker refresh. The
+  // predicate reports only WHETHER text is present — never the text itself.
+  function registerQuickLogDirty() {
+    if (typeof MMDirty === 'undefined') return;
+    MMDirty.register('quickLogText', function () {
+      var el = document.getElementById('aiLogInput');
+      return !!(el && el.value && el.value.trim().length > 0);
+    }, 'text you have typed into Quick Log');
+    // The guard attaches and detaches with the field's content, so a page with
+    // an empty Quick Log stays back/forward-cache eligible.
+    var input = document.getElementById('aiLogInput');
+    if (input) input.addEventListener('input', function () { MMDirty.refresh(); });
+  }
+
   window.addEventListener('load', function () {
     (async () => {
       try {
         var session = await requireAuth();
         currentUserId = session.user.id;
         currentProfile = await getProfile(currentUserId);
+        // Phase 4.3.5H — onboarding routing is enforced on every protected
+        // destination, not only Home. A deep link or a bookmark could
+        // previously drop a half-onboarded user straight here, where every
+        // target is missing and the page reads as broken. `replace` so the
+        // back button cannot bounce them into the same dead end.
+        if (!currentProfile || !currentProfile.onboarding_complete) {
+          window.location.replace('onboarding.html');
+          return;
+        }
 
         document.getElementById('authGate').style.display   = 'none';
         document.getElementById('appContent').style.display = 'block';
@@ -1477,6 +1510,7 @@
         loadRecentChips();
         lucide.createIcons();
         focusQuickLogFromHash();
+        registerQuickLogDirty();
       } catch (err) {
         console.error('Nutrition page error:', err);
         window.location.href = 'auth.html';

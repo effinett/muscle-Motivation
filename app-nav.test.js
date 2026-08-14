@@ -303,7 +303,9 @@ test('header: app-shell.css owns the header, logo and back-link rules', () => {
   assert.match(SHELL_CSS, /\nheader\s*\{[^}]*position:\s*sticky[^}]*height:\s*60px/,
     'the sticky 60px header lives in the shell');
   assert.match(SHELL_CSS, /\.header-logo\s*\{[^}]*display:\s*flex/);
-  assert.match(SHELL_CSS, /\.header-logo img\s*\{[^}]*height:\s*42px/);
+  // The exact size is a 4.3.5A concern and is asserted, with its header-fit
+  // constraint, in shell-primitives.test.js. Here we only pin OWNERSHIP.
+  assert.match(SHELL_CSS, /\.header-logo img\s*\{[^}]*height:\s*\d+px/);
   assert.match(SHELL_CSS, /\.header-logo span\s*\{[^}]*Bebas Neue/);
 });
 
@@ -531,4 +533,159 @@ test('a11y: nav tap targets clear 44px and are never shrunk on narrow phones', (
   assert.ok(!/--mm-nav-base-height/.test(narrow[1]),
     'the nav is never made shorter on narrow phones');
   assert.ok(!/display:\s*none/.test(narrow[1]), 'no label is dropped on narrow phones');
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * 12 · Navigation performance (Phase 4.3.5F)
+ *
+ * The roadmap records one HARD target — a tap acknowledged within 100ms — and
+ * three structural ones: zero white flashes, no duplicated shared bootstrap,
+ * and no SPA conversion. These pin the structure that delivers them. The two
+ * latency numbers are device measurements and are validated in 4.3.5K, not here.
+ * ══════════════════════════════════════════════════════════════════════ */
+
+const PERF_DESTINATIONS = ['app.html', 'workout.html', 'nutrition.html', 'weight-history.html'];
+
+test('perf: every origin a destination contacts is preconnected', () => {
+  // Before this, only the two font origins were warmed, while every page also
+  // pulled scripts from unpkg and jsdelivr and talked to Supabase immediately —
+  // three unwarmed origins, each costing DNS + TCP + TLS on the critical path.
+  const REQUIRED = [
+    'https://fonts.googleapis.com', 'https://fonts.gstatic.com',
+    'https://unpkg.com', 'https://cdn.jsdelivr.net',
+    'https://igzvphmhyrdjjvzbxnuh.supabase.co',
+  ];
+  for (const p of PERF_DESTINATIONS) {
+    const head = read(p).split('</head>')[0];
+    for (const origin of REQUIRED) {
+      assert.ok(head.includes('rel="preconnect" href="' + origin + '"'),
+        `${p} preconnects to ${origin}`);
+    }
+  }
+});
+
+test('perf: the preconnected set matches the origins actually used', () => {
+  // A preconnect to an origin the page never uses wastes a connection.
+  for (const p of PERF_DESTINATIONS) {
+    const src = read(p);
+    const head = src.split('</head>')[0];
+    for (const m of head.matchAll(/rel="preconnect" href="(https:\/\/[^"]+)"/g)) {
+      const origin = m[1];
+      // fonts.gstatic is fetched by the stylesheet from fonts.googleapis, so it
+      // never appears literally in the page source.
+      if (origin === 'https://fonts.gstatic.com') continue;
+      assert.ok(src.includes(origin), `${p}: preconnects to unused origin ${origin}`);
+    }
+  }
+});
+
+test('perf: no destination has a render-blocking script in its head', () => {
+  // Lucide is decorative. It was a blocking cross-origin script in <head> on
+  // every destination; it is safe to defer because every createIcons() call
+  // sits inside a function that runs at or after load, never at parse time.
+  for (const p of PERF_DESTINATIONS) {
+    const head = read(p).split('</head>')[0];
+    const blocking = (head.match(/<script(?![^>]*\b(?:defer|async)\b)[^>]*\ssrc=/g) || []);
+    assert.deepStrictEqual(blocking, [], `${p} has a render-blocking head script`);
+  }
+});
+
+test('perf: lucide is never used before the deferred script has run', () => {
+  // The guarantee that makes `defer` safe. An inline <script> at end-of-body
+  // executes BEFORE deferred scripts, so a parse-time reference would throw.
+  for (const p of PERF_DESTINATIONS) {
+    for (const m of read(p).matchAll(/^(\s*)lucide\./gm)) {
+      assert.ok(m[1].length > 2,
+        `${p}: a lucide reference at indent ${m[1].length} may run at parse time`);
+    }
+  }
+});
+
+test('perf: the dark canvas is declared early enough to prevent a white flash', () => {
+  // The UA paints its default canvas before any stylesheet resolves, so CSS
+  // cannot prevent the flash between destinations — only this meta can.
+  for (const p of PERF_DESTINATIONS.concat(['profile.html', 'workout-history.html'])) {
+    assert.match(read(p), /<meta name="color-scheme" content="dark">/,
+      `${p} declares its colour scheme`);
+  }
+});
+
+test('perf: a tap is acknowledged by paint, not by waiting for the next page', () => {
+  assert.match(SHELL_CSS, /\.mm-nav-item:active\s*\{[^}]*background:/,
+    'a pressed state exists at all — there was none before');
+  // The active indicator moves optimistically, before anything is fetched.
+  assert.match(SHELL_CSS, /\.mm-nav-item\.is-pending::before\s*\{[^}]*width:\s*34px/,
+    'the pending state draws the same indicator as is-active');
+  assert.match(NAV_SRC, /function markPending\(item\)/);
+  assert.match(NAV_SRC, /nav\.addEventListener\('click', function \(ev\) \{[\s\S]*?markPending\(item\)/);
+  assert.strictEqual(AppNav.PENDING_CLASS, 'is-pending');
+});
+
+test('perf: the press feedback survives reduced motion; only its animation stops', () => {
+  const rm = [...SHELL_CSS.matchAll(/@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/g)]
+    .map((m) => m[1]).join('\n');
+  assert.ok(rm.includes('.mm-nav-glyph'), 'the glyph transition is disabled');
+  assert.ok(rm.includes('.mm-nav-item:active .mm-nav-glyph { transform: none; }'),
+    'the scale is dropped');
+  // …but the background press state is NOT inside the reduced-motion block: it
+  // is the acknowledgement itself, not decoration.
+  assert.ok(!/\.mm-nav-item:active\s*\{[^}]*background:\s*(none|transparent)/.test(rm));
+});
+
+test('perf: an optimistic indicator never survives a bfcache restore', () => {
+  assert.match(NAV_SRC, /addEventListener\('pageshow', function \(ev\) \{\s*if \(ev && ev\.persisted\) refresh\(\)/);
+});
+
+test('perf: prefetch respects the connection and the user\'s data preference', () => {
+  assert.strictEqual(AppNav.shouldPrefetch({ saveData: true }), false, 'Save-Data is honoured');
+  assert.strictEqual(AppNav.shouldPrefetch({ effectiveType: '2g' }), false);
+  assert.strictEqual(AppNav.shouldPrefetch({ effectiveType: 'slow-2g' }), false);
+  assert.strictEqual(AppNav.shouldPrefetch({ effectiveType: '4g' }), true);
+  assert.strictEqual(AppNav.shouldPrefetch(null), true, 'no API → the normal assumption');
+});
+
+test('perf: prefetch only ever touches static destination shells (§2.5)', () => {
+  const code = NAV_SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/[^\n]*$/gm, '');
+  // It hints the destination's own href — a static document with no user data,
+  // since every authenticated value is fetched client-side after load.
+  assert.match(code, /link\.rel = 'prefetch'/);
+  assert.match(code, /link\.href = href/);
+  assert.match(code, /link\.as = 'document'/);
+  // And it never reaches for anything authenticated or cache-related.
+  for (const forbidden of [/\/api\//, /supabase/i, /\bcaches\b/, /serviceWorker/,
+    /\b(localStorage|sessionStorage|indexedDB)\b/, /\bfetch\s*\(/, /XMLHttpRequest/]) {
+    assert.ok(!forbidden.test(code), `prefetch path must not reference ${forbidden}`);
+  }
+  assert.match(code, /if \(!doc \|\| !href \|\| prefetched\[href\]\) return false/,
+    'each destination is hinted at most once per document');
+});
+
+test('perf: no SPA conversion — every destination is still its own document', () => {
+  // The scope boundary is binding. Navigation remains ordinary <a href> links.
+  for (const d of AppNav.navigableDestinations()) {
+    assert.match(d.href, /\.html$/, `${d.id} is a real document route`);
+  }
+  const markup = AppNav.navMarkup({ pathname: '/app.html' });
+  assert.match(markup, /<a class="mm-nav-item/, 'destinations are anchors');
+  const code = NAV_SRC.replace(/\/\*[\s\S]*?\*\//g, '');
+  for (const spa of ['history.pushState', 'popstate', 'ev.preventDefault()', 'XMLHttpRequest']) {
+    assert.ok(!code.includes(spa), `app-nav.js must not contain ${spa}`);
+  }
+});
+
+test('perf: shared bootstrap is loaded once per document, never twice', () => {
+  // "Zero duplicate shared-bootstrap fetch/init within a session."
+  for (const p of NAV_PAGES) {
+    const srcs = [...read(p).matchAll(/<script[^>]+src="([a-z0-9.\-]+\.js)"/g)].map((m) => m[1]);
+    const dupes = srcs.filter((s, i) => srcs.indexOf(s) !== i);
+    assert.deepStrictEqual([...new Set(dupes)], [], `${p} loads a script twice`);
+  }
+});
+
+test('perf: each destination resolves auth and the profile exactly once on load', () => {
+  for (const p of ['app.html', 'workout.html', 'nutrition.html', 'weight-history.html']) {
+    const src = read(p);
+    const auth = (src.match(/await (requireAuth|getSession)\(\)/g) || []).length;
+    assert.strictEqual(auth, 1, `${p} performs one auth round-trip on bootstrap`);
+  }
 });
