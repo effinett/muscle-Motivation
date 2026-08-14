@@ -288,7 +288,21 @@
     body.style.top = '';
     // Restore exactly where the user was. Without this the page would jump to
     // the top every time a dialog closed.
-    try { win.scrollTo(0, out.y); } catch (e) { /* contained */ }
+    //
+    // `behavior: 'instant'` is REQUIRED, not tidiness: index.html and store.html
+    // both set `scroll-behavior: smooth` on the root, and the two-argument
+    // scrollTo() inherits it — so closing a dialog visibly ANIMATED the page
+    // back to where it had been instead of simply being there. That is the
+    // "closing must not alter the underlying scroll position" requirement, and
+    // it also means a reduced-motion user would have been shown an animation
+    // they never asked for. Browser validation caught this; a DOM-free test
+    // could not. Older engines ignore the options form, so the two-argument
+    // call is kept as the fallback.
+    try {
+      win.scrollTo({ top: out.y, left: 0, behavior: 'instant' });
+    } catch (e) {
+      try { win.scrollTo(0, out.y); } catch (e2) { /* contained */ }
+    }
   }
 
   /* ── Focus ──────────────────────────────────────────────────────────── */

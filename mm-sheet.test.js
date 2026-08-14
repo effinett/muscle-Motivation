@@ -211,7 +211,14 @@ test('css: the scroll lock freezes the body rather than setting overflow alone',
     'overflow:hidden alone does not stop scrolling in Mobile Safari');
   assert.ok(!/top:/.test(lock), 'top is supplied inline by the script (the captured offset)');
   assert.match(SHEET_JS, /body\.style\.top = '-' \+ lock\.savedY\(\) \+ 'px'/);
-  assert.match(SHEET_JS, /win\.scrollTo\(0, out\.y\)/, 'and the position is restored on release');
+  assert.match(SHEET_JS, /win\.scrollTo\(\{ top: out\.y, left: 0, behavior: 'instant' \}\)/,
+    'and the position is restored on release');
+  // `behavior: instant` is required, not cosmetic: the public pages set
+  // `scroll-behavior: smooth` on the root, which the two-argument scrollTo()
+  // inherits — so the restore ANIMATED instead of simply being correct, and
+  // showed motion to a reduced-motion user. Found by browser validation.
+  assert.match(SHEET_JS, /try \{ win\.scrollTo\(0, out\.y\); \} catch \(e2\)/,
+    'with a two-argument fallback for engines without the options form');
 });
 
 test('css: scrollable regions contain their overscroll', () => {
