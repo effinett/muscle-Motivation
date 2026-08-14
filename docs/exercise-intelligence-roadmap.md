@@ -3,6 +3,24 @@
 **Companion to:** `exercise-intelligence-architecture.md` (the blueprint / source of truth)
 **Status: Plan. No code in this document.**
 
+> **SUPERSEDED FOR ROADMAP NUMBERING.**
+> The canonical roadmap is `docs/ROADMAP.md`. This document remains available for historical rationale
+> and implementation detail, but its phase numbering must not be used for planning.
+>
+> **Delivered** (as Phases 4.2.1E–4.2.1L): Phase 0 vocabulary lock · Phase 1 metadata backfill ·
+> Phase 2 seed expansion (the catalog is now **141** rows, not 57) · Phase 3 alias + ranked search ·
+> Phase 5 filters · Phase 6 ID migration sweep.
+>
+> **Not delivered — carried into `docs/ROADMAP.md`, do not treat as done:**
+> Phase 4 picker detail sheet → **4.3.6H** · Phase 7 favorites/recents → **4.3.6J** ·
+> Phase 9 substitutions → **4.3.6I** · Phase 10 AI integration → **4.7.6** ·
+> Phase 11 media → **5.1.6** · Phase 12 analytics → **5.1.7**.
+>
+> **Phase 8 (Exercise Identity Convergence) is SUPERSEDED** by the Phase 4.2.1K dual-identity
+> architecture (`workout_exercises` / `personal_records` carry mutually exclusive `exercise_id` and
+> `user_exercise_id`). Do not perform that migration unless a new audit proves a residual problem —
+> see `docs/ROADMAP.md` §10.1. Row counts and "NEXT BUILD PHASE" markers below are historical.
+
 Build order is **safest-first**: data quality before search, search before filters, everything before
 the dual-identity schema change. Each phase is independently shippable and **additive** — finish and
 verify one before starting the next.
