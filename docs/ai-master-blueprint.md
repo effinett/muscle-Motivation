@@ -1,5 +1,19 @@
 # Muscle Motivation AI Master Blueprint
 
+> **SUPERSEDED FOR ROADMAP NUMBERING.**
+> The canonical roadmap is `docs/ROADMAP.md`. This document remains available for historical rationale
+> and implementation detail, but its phase numbering must not be used for planning.
+>
+> **Still authoritative and unchanged:** the Vision, the five Core Engineering Principles, the
+> Intelligence Architecture diagram, and the North Star. `CLAUDE.md` §4 depends on them.
+>
+> **Retired here, relocated in `docs/ROADMAP.md`:** `4.3 Voice Logging` → 5.4.7 / 7.0 ·
+> `4.4 Read-Only AI Coach` → 4.4 · `4.5 Action Tools` → 4.7 · `4.6 Meal Recommendations` → 5.4.10 ·
+> `4.7 Preference Learning` → 5.5.10 · `4.8 Proactive Notifications` → 4.6 (infrastructure) + 5.5
+> (content and cadence) · `4.9 Photo Logging` → 5.4.8 · `4.9.5 Personal Knowledge Graph` → 5.5.9 ·
+> `5.0 Full Personal Fitness AI` → 5.5. The "Evolution of Intelligence" stages below reference the
+> retired numbers and should be read as themes, not as a sequence.
+
 ## Vision
 
 Build the world's most intelligent fitness coach.

@@ -1,5 +1,21 @@
 # PWA Foundation — Phase 4.3.1 (Installability Only)
 
+> **SUPERSEDED FOR ROADMAP NUMBERING.**
+> The canonical roadmap is `docs/ROADMAP.md`. This document remains available for historical rationale
+> and implementation detail, but its phase numbering and status statements must not be used for
+> planning.
+>
+> **Status correction (2026-08-14):** Phases **4.3.2 and 4.3.3 are both COMPLETE/CLOSED** and
+> production-validated (see `docs/ROADMAP-HISTORY.md`). The "Phase 4.3.2 — Service-worker foundation
+> (in progress)" section below, its per-checkpoint "not committed or production-validated" markers,
+> and the closing "Phase 4.3.2 is **not shipped or complete**" line are all **historical and no longer
+> accurate**. The design decisions, hard constraints, and privacy rules they document remain binding.
+>
+> **Two deferrals recorded below are still OPEN** and are now owned by Phase 4.3.5:
+> the shared dirty-state / unsaved-work registry → **4.3.5G**; canonical production hostname
+> confirmation for the registration guard (apex vs `www`) → **4.3.5H**. Android install validation →
+> **4.3.5K**.
+
 **Status:** `Live`. This checkpoint makes Muscle Motivation installable as a
 Progressive Web App. It is **installability + platform metadata only**. It
 deliberately ships **no service worker, no Cache Storage, no offline behavior,
@@ -215,5 +231,8 @@ change** before the worker will register in production. Until proven, the
 apex-only guard is left unchanged (fails closed — no registration on an
 unlisted host).
 
-Phase 4.3.2 is **not shipped or complete**. **Android validation remains
-deferred** (from Phase 4.3.1) and does not block this work.
+~~Phase 4.3.2 is **not shipped or complete**.~~ **Historical — superseded.** Phase 4.3.2 shipped
+(merge `a9d93ef`, 2026-08-06) and Phase 4.3.3 closed with production validation (merge `b20ff3a`,
+2026-08-09). See `docs/ROADMAP-HISTORY.md`.
+
+**Android validation remains deferred** (from Phase 4.3.1) and is now owned by **4.3.5K**.
