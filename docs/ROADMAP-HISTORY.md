@@ -185,8 +185,13 @@ Tracked here because they are repository-level obligations rather than product p
 deliberately not a paid-launch item.
 
 **Why it is not done:** GitHub branch-protection settings cannot be changed from the development
-environment — the `gh` CLI is not installed, and the available GitHub tooling exposes no
-branch-protection API.
+environment. Attempted again on **2026-08-14** during pre-4.3.5 repository setup and confirmed
+blocked on three counts: the `gh` and `hub` CLIs are not installed; the available GitHub tooling
+exposes repository, branch, file, issue, and pull-request operations but **no branch-protection or
+ruleset API**; and no GitHub API token is present in the environment for a direct REST call (git
+authenticates over SSH, which cannot be used for the REST settings endpoint).
+
+This requires a repository administrator acting in the GitHub web UI.
 
 **Exact remaining manual step** (repository administrator, once):
 
@@ -201,3 +206,39 @@ branch-protection API.
 
 Once configured, append a dated note to this section recording who enabled it and when. Do not mark it
 complete until it is actually configured.
+
+---
+
+# Roadmap decisions
+
+Decisions that change roadmap scope or targets without closing a phase.
+
+## 2026-08-14 — Phase 4.3.5F navigation-performance target defined
+
+**Decision:** 4.3.5F now carries an explicit requirement, a measured starting point, and provisional
+numeric targets (`docs/ROADMAP.md` → 4.3.5F). Recorded so "effectively instantaneous" has a concrete
+boundary and cannot drift into an unapproved architecture change.
+
+**Static audit taken before any implementation** (unminified source as served; no build step):
+
+- Every destination reloads **133 KB** of shared same-origin JS + **35 KB** of `app-shell.css` and
+  re-fetches **two cross-origin CDN scripts** (lucide via unpkg, supabase-js via jsdelivr) with **no
+  `preconnect`**.
+- Per-destination totals: Home ~289 KB · Train ~463 KB · **Nutrition ~634 KB** · Progress ~226 KB.
+- The service worker's `STATIC_ALLOWLIST` is frozen to five icon paths, so **no HTML/CSS/JS is
+  cache-eligible today**; the two CDN scripts are cross-origin and cannot enter a same-origin
+  allowlist without a separate approved policy change.
+- The only resource hints in the app are two font `preconnect`s — no route prefetch, no CDN or
+  Supabase `preconnect`.
+
+**Targets set:** tap acknowledged ≤ 100 ms (hard) · warm repeat navigation ≤ 600 ms p75 · first
+navigation ≤ 1200 ms p75 · zero white flashes · zero duplicate shared-bootstrap initialization.
+Measured on a mid-tier Android device, judged on Nutrition as the worst case.
+
+**Explicitly recorded guard:** the two latency numbers are engineering targets, not contractual
+thresholds. If the device baseline shows either is unreachable inside the current multi-page
+architecture, **the target is revised — the architecture is not escalated.** SPA conversion, a
+navigation rewrite, a route-system replacement, and an app-shell rebuild all remain outside 4.3.5 and
+require separate explicit approval.
+
+No implementation was performed; 4.3.5 has not started.
