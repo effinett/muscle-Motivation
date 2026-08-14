@@ -241,15 +241,89 @@ Fix random red exercise highlighting, highlights changing during scroll, selecte
 confusion, and recycled-row state leakage.
 
 ### 4.3.5F — Core navigation performance
-Home / Train / Nutrition / Progress should feel effectively instantaneous.
 
-**Scope boundary (binding):** this phase does **not** authorize an SPA rewrite. Target the existing
-multi-page architecture using route prefetching, resource preloading, warmed authenticated bootstrap, safe
-reusable data caching, fewer duplicate requests, reduced unnecessary initialization, practical view-state
-preservation, elimination of full-page white flashes, and better skeleton/loading behavior.
+#### The requirement
 
-**Define and measure a real target** for navigation-tap → meaningful paint on a representative mobile
-device. A full SPA conversion requires its own explicit architectural approval.
+Switching between **Home · Train · Nutrition · Progress** from the bottom navigation should feel as
+close to instant as reasonably possible, with little or no noticeable loading delay.
+
+Concretely:
+
+- Tapping a destination **responds immediately** — the tap is visibly acknowledged and the active
+  state moves before anything loads.
+- **No blank screens and no full-page white flashes** during the transition.
+- Noticeable loading delay is minimized.
+- **Already-loaded or recently visited destinations feel especially fast** where practical.
+- Unnecessary duplicate loading and initialization is reduced.
+- **Authenticated user data stays correct and fresh.** Never fake speed with stale or wrong user data
+  — a fast wrong number is worse than a slow right one.
+
+#### Scope boundary (binding)
+
+**Optimize the current multi-page architecture first.** This phase does **not** authorize, and the
+performance target must never be used to justify:
+
+- SPA conversion
+- a full navigation-architecture rewrite
+- a major route-system replacement
+- rebuilding the app shell
+
+A major architecture conversion requires **separate explicit approval** as its own phase. If the
+baseline below shows a target is unreachable inside the current architecture, **renegotiate the target
+— do not escalate the architecture.**
+
+Permitted techniques: route prefetching · resource preloading and `preconnect` · warmed shared and
+authenticated bootstrap · reducing redundant requests · safe caching within the §2.5 privacy rules ·
+improved loading and skeleton states · practical view/state preservation.
+
+#### Measured starting point (static audit, 2026-08-14)
+
+Recorded so improvement can be proven rather than asserted. Byte counts are unminified source as
+served; no minification or bundling step exists.
+
+| Loaded on every destination | Size |
+|---|---|
+| Shared same-origin JS — `sw-register`, `pwa-install` ×3, `app-nav`, `supabase` | **133 KB** |
+| `app-shell.css` | **35 KB** |
+| Cross-origin CDN scripts — `lucide` (unpkg) + `supabase-js` UMD (jsdelivr) | 2 extra origins, **no `preconnect`** |
+
+| Destination | HTML | Destination-only JS | Approx. total per cold tap |
+|---|---|---|---|
+| Home (`app.html`) | 47 KB | 74 KB | ~289 KB |
+| Train (`workout.html`) | 153 KB | 142 KB | ~463 KB |
+| **Nutrition (`nutrition.html`)** | 73 KB | **393 KB** | **~634 KB** |
+| Progress (`weight-history.html`) | 27 KB | 31 KB | ~226 KB |
+
+Two facts that shape the work:
+
+1. **The service worker cannot help today.** Its `STATIC_ALLOWLIST` is frozen to five icon paths;
+   no HTML, CSS, or JS is cache-eligible. Any change here is a deliberate policy decision that must
+   respect §2.5 — and the two CDN scripts are **cross-origin**, so they can never enter a
+   same-origin-only allowlist without a separate approved policy change.
+2. **The only resource hints that exist are two font `preconnect`s.** There is no prefetch of
+   destination routes and no `preconnect` to the script CDNs or Supabase.
+
+#### Targets
+
+Measure on a **representative mid-tier Android device on a normal mobile connection**, p75 across
+repeated Home ↔ Train ↔ Nutrition ↔ Progress switches. Record the before-numbers first; these targets
+are **provisional until the baseline confirms them.**
+
+| Metric | Target |
+|---|---|
+| **Tap acknowledged** (visible active-state / press feedback) | **≤ 100 ms** — hard requirement; purely a UI concern and achievable regardless of load |
+| **Warm repeat navigation** → destination's primary content painted (same session, warm HTTP cache) | **≤ 600 ms** |
+| **First navigation** to a destination in a session | **≤ 1200 ms** |
+| **Full-page white flashes** | **zero** |
+| **Duplicate shared-bootstrap fetch/init within a session** | **zero** |
+
+The two latency numbers are engineering targets chosen against the payload audit above, **not
+contractual thresholds**. If the recorded baseline shows either is unreachable without an architecture
+change, revise the number and record why in `docs/ROADMAP-HISTORY.md` — the scope boundary holds
+regardless. Nutrition is the worst case and is the destination the target should be judged on.
+
+**Evidence requirement:** capture before-and-after measurements for all four destinations. The phase
+does not close on "it feels faster."
 
 ### 4.3.5G — Dirty-state / unsaved-work protection
 Carries forward the deferred 4.3.2 requirement. Establish a shared understanding of whether the user has
