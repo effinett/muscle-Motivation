@@ -3,11 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark">
   <title>Log Workout — Muscle Motivation</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Phase 4.3.5F — navigation performance. Every destination pulled scripts
+       from two extra origins (unpkg, jsdelivr) and talked to Supabase
+       immediately, with no preconnect to any of them: each cost a full
+       DNS + TCP + TLS handshake on the critical path of every tab switch.
+       These warm the connections while the HTML is still parsing. -->
+  <link rel="preconnect" href="https://unpkg.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://igzvphmhyrdjjvzbxnuh.supabase.co" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js" integrity="sha384-ouAVEJVCMsf8Svzn+BwqbaBhxBEA0xgeVBhHnxmWd+Wqyv18yhWCQwGegFD/OHLq" crossorigin="anonymous"></script>
+  <script defer src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js" integrity="sha384-ouAVEJVCMsf8Svzn+BwqbaBhxBEA0xgeVBhHnxmWd+Wqyv18yhWCQwGegFD/OHLq" crossorigin="anonymous"></script>
   <style>
     :root {
       --red:         #B1121B;
@@ -745,6 +754,7 @@
   <script src="pwa-install-ui.js" defer></script>
   <script src="pwa-install-register.js" defer></script>
   <script src="app-nav.js" defer></script>
+  <script src="mm-dirty.js" defer></script>
   <script src="mm-sheet.js" defer></script>
   <link rel="stylesheet" href="mm-sheet.css">
   <link rel="stylesheet" href="app-shell.css">
@@ -1752,6 +1762,20 @@
     document.getElementById('activeWorkoutName').value  = currentWorkout.name;
     renderExercises();
     startTimer();
+    registerActiveWorkoutDirty();
+  }
+
+  // ── Unsaved-work contract (Phase 4.3.5G) ──────────────────────────
+  // Every set is written the moment it is entered, so a live session is not
+  // "unsaved" in the database sense. What a reload DOES destroy is the session's
+  // in-memory state — the elapsed timer and any running rest timer — and this is
+  // the one surface where an interruption genuinely costs the user something.
+  // So the live workout is a dirty source; a finished or discarded one is not.
+  function registerActiveWorkoutDirty() {
+    if (typeof MMDirty === 'undefined') return;
+    MMDirty.register('activeWorkout', function () {
+      return !!(currentWorkout && !currentWorkout.completed);
+    }, 'a workout in progress');
   }
 
   // ── Rename workout ────────────────────────────────────────────────
@@ -2426,6 +2450,8 @@
     if (!updated || !updated.length) {
       // Already completed elsewhere — go straight to the recap, no re-processing.
       showToast('This workout was already finished.');
+    // A deliberate, saving navigation — never warn about it (Phase 4.3.5G).
+    if (typeof MMDirty !== 'undefined') MMDirty.suspend();
       window.location.href = 'workout-complete.html?workout_id=' + currentWorkout.id;
       return;
     }
@@ -2447,6 +2473,9 @@
       await advanceProgramSession(progSlug, sessKey);
     }
     closeFinishModal();
+    // The workout is saved and complete — this navigation is the SUCCESS path,
+    // so the unsaved-work guard must not challenge it (Phase 4.3.5G).
+    if (typeof MMDirty !== 'undefined') MMDirty.suspend();
     // Dedicated full-screen recap page (Phase 4A) — replaces the inline modal.
     window.location.href = 'workout-complete.html?workout_id=' + currentWorkout.id;
   }
@@ -2560,6 +2589,8 @@
     if (timerInterval) clearInterval(timerInterval);
     stopRest();
     localStorage.removeItem('wkt_start_' + currentWorkout.id);
+    // A deliberate, saving navigation — never warn about it (Phase 4.3.5G).
+    if (typeof MMDirty !== 'undefined') MMDirty.suspend();
     window.location.href = 'app.html';
   }
 

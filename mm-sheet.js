@@ -218,6 +218,43 @@
   var vvRaf = 0;
 
   function isEl(el) { return !!(el && el.nodeType === 1); }
+
+  /* Phase 4.3.5G — the unsaved-work contract, if the page loaded it. The sheet
+   * primitive is the natural place to own this: it already knows which dialogs
+   * are open, so one registration covers every dialog in the app instead of
+   * thirteen separate implementations. Absent MMDirty, everything below is a
+   * no-op and overlays behave exactly as they did. */
+  var DIRTY_ID = 'mm-sheet-open-form';
+  function dirtyApi() {
+    return (global && global.MMDirty && typeof global.MMDirty.register === 'function')
+      ? global.MMDirty : null;
+  }
+  // Dirty when any OPEN dialog's fields differ from what they were when it
+  // opened. Merely opening a dialog is never dirty — only typing in one is.
+  function anyOpenFormEdited() {
+    var api = dirtyApi();
+    if (!api) return false;
+    for (var i = 0; i < stack.length; i++) {
+      var r = stack[i];
+      if (!r.formSnapshot) continue;
+      if (api.formChanged(r.formSnapshot, api.snapshotForm(r.el))) return true;
+    }
+    return false;
+  }
+  function syncDirty() {
+    var api = dirtyApi();
+    if (!api) return;
+    if (stack.length) api.register(DIRTY_ID, anyOpenFormEdited, 'unsaved changes in an open form');
+    else api.unregister(DIRTY_ID);
+  }
+  // MMDirty attaches its beforeunload listener only while something is dirty,
+  // so it has to be told when the answer might have changed. Typing in a dialog
+  // is exactly that moment. Without this the source would be registered while
+  // still clean and the guard would never arm.
+  function onDirtyInput() {
+    var api = dirtyApi();
+    if (api) api.refresh();
+  }
   function rec(el) {
     for (var i = 0; i < stack.length; i++) if (stack[i].el === el) return stack[i];
     return null;
@@ -503,6 +540,12 @@
       returnFocus: doc.activeElement,
       backdropArmed: false,
       drag: null,
+      // Phase 4.3.5G — the form's state at the moment it opened. Comparing
+      // against it is how "the user typed something they have not committed"
+      // is detected for EVERY dialog at once, rather than each one growing its
+      // own dirty tracking. Values are compared and discarded; nothing is
+      // stored, sent or read beyond the boolean answer.
+      formSnapshot: dirtyApi() ? global.MMDirty.snapshotForm(el) : null,
     };
     stack.push(r);
 
@@ -516,6 +559,8 @@
 
     applyLock();
     bindDocument();
+    syncDirty();
+    el.addEventListener('input', onDirtyInput);
     if (opts.variant === 'sheet') { bindDrag(r); bindViewport(); }
     focusInitial(r);
     return true;
@@ -533,6 +578,10 @@
     unbindViewport();
     releaseLock();
     unbindDocument();
+    el.removeEventListener('input', onDirtyInput);
+    // A closed dialog can hold nothing unsaved — whatever was typed in it is
+    // either committed or deliberately abandoned by the user.
+    syncDirty();
 
     // Restore focus to whatever opened the dialog, so keyboard users are not
     // dropped back at the top of the document.

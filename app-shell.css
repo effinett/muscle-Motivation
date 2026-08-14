@@ -309,6 +309,27 @@ header .btn-back:focus-visible {
   .mm-nav-item.is-active:hover { color: var(--mm-text); }
 }
 
+/* ── Tap acknowledgement (Phase 4.3.5F) ─────────────────────────────────────
+ * The roadmap makes this a HARD requirement: a tap must be acknowledged within
+ * 100ms. Before this the nav had no pressed state at all, so tapping a
+ * destination produced no feedback whatsoever until the next document painted —
+ * anywhere from 300ms to well over a second. That reads as a dropped tap, and
+ * it is the reason navigation "felt" slow independently of how fast it was.
+ *
+ * The press is a paint-only change on an element already in the compositor, so
+ * it lands on the very next frame regardless of what the network is doing. The
+ * `is-active` bar is then moved optimistically by app-nav.js on click, so the
+ * destination indicator is correct before the new page exists. */
+.mm-nav-item:active { background: var(--mm-surface); }
+.mm-nav-item:active .mm-nav-glyph { transform: scale(0.92); }
+.mm-nav-glyph { transition: transform 0.1s ease; }
+
+/* Optimistically-activated destination: identical to .is-active, so the visual
+   state has moved before a single byte of the destination has been fetched. */
+.mm-nav-item.is-pending::before { width: 34px; }
+.mm-nav-item.is-pending { color: var(--mm-text); }
+.mm-nav-item.is-pending .mm-nav-glyph { color: var(--mm-accent); }
+
 /* Narrow phones (320px → 4 × 80px): keep the 64px bar and the full label,
    only tighten the horizontal padding so nothing is ever truncated. */
 @media (max-width: 360px) {
@@ -821,9 +842,13 @@ header .btn-back:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .mm-nav-item,
   .mm-nav-item::before,
+  .mm-nav-glyph,
   .mm-skip-link,
   .mm-meter-fill,
   .mm-hero-cta {
     transition: none;
   }
+  /* The press feedback itself is KEPT — it is the acknowledgement that a tap
+     registered, not decoration — but it stops being an animation. */
+  .mm-nav-item:active .mm-nav-glyph { transform: none; }
 }
