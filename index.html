@@ -176,6 +176,8 @@
     border-radius: 2px;
     transition: var(--transition);
   }
+  /* Position and layering belong to .mm-menu-drawer (mm-menu.css, 4.3.5I) —
+     this rule keeps only the drawer's appearance. */
   .mobile-nav {
     display: none;
     flex-direction: column;
@@ -607,7 +609,10 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <script src="mm-menu.js" defer></script>
+  <link rel="stylesheet" href="mm-menu.css">
   <link rel="stylesheet" href="safe-area.css">
+  <script src="mm-errors.js" defer></script>
 </head>
 
 <body>
@@ -779,18 +784,10 @@
 
 <!-- ══ JS ══ -->
 <script>
-  // Mobile menu toggle
-  const toggle = document.getElementById('menuToggle');
-  const mobileNav = document.getElementById('mobileNav');
-
-  toggle.addEventListener('click', () => {
-    mobileNav.classList.toggle('open');
-  });
-
-  // Close mobile nav when a link is clicked
-  mobileNav.querySelectorAll('a').forEach(link => {
-    link.addEventListener('click', () => mobileNav.classList.remove('open'));
-  });
+  // Mobile menu — owned by mm-menu.js (Phase 4.3.5I). It self-attaches to
+  // #menuToggle / #mobileNav and adds viewport-anchored placement, no document
+  // jump on open, correct layering above the sticky header, Escape, outside-tap
+  // dismissal, focus move-in and focus return.
 
   // Scroll-in animations
   const observer = new IntersectionObserver((entries) => {

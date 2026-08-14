@@ -229,6 +229,7 @@
   <link rel="stylesheet" href="mm-sheet.css">
   <link rel="stylesheet" href="app-shell.css">
   <link rel="stylesheet" href="safe-area.css">
+  <script src="mm-errors.js" defer></script>
 </head>
 <body>
 
@@ -580,6 +581,15 @@
         var session = await requireAuth();
         currentUserId = session.user.id;
         currentProfile = await getProfile(currentUserId);
+        // Phase 4.3.5H — onboarding routing is enforced on every protected
+        // destination, not only Home. A deep link or a bookmark could
+        // previously drop a half-onboarded user straight here, where every
+        // target is missing and the page reads as broken. `replace` so the
+        // back button cannot bounce them into the same dead end.
+        if (!currentProfile || !currentProfile.onboarding_complete) {
+          window.location.replace('onboarding.html');
+          return;
+        }
 
         document.getElementById('authGate').style.display   = 'none';
         document.getElementById('appContent').style.display = 'block';

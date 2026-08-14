@@ -759,6 +759,7 @@
   <link rel="stylesheet" href="mm-sheet.css">
   <link rel="stylesheet" href="app-shell.css">
   <link rel="stylesheet" href="safe-area.css">
+  <script src="mm-errors.js" defer></script>
 </head>
 <body>
 
@@ -1089,6 +1090,15 @@
         currentUser = session.user;
 
         var profile = await getProfile(currentUser.id);
+        // Phase 4.3.5H — onboarding routing is enforced on every protected
+        // destination, not only Home. A deep link or a bookmark could
+        // previously drop a half-onboarded user straight here, where every
+        // target is missing and the page reads as broken. `replace` so the
+        // back button cannot bounce them into the same dead end.
+        if (!profile || !profile.onboarding_complete) {
+          window.location.replace('onboarding.html');
+          return;
+        }
         var defaultName;
         if (profile && profile.training_split) {
           var day = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date().getDay()];
