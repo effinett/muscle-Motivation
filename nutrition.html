@@ -620,6 +620,8 @@
   <script src="pwa-install-ui.js" defer></script>
   <script src="pwa-install-register.js" defer></script>
   <script src="app-nav.js" defer></script>
+  <script src="mm-sheet.js" defer></script>
+  <link rel="stylesheet" href="mm-sheet.css">
   <link rel="stylesheet" href="app-shell.css">
   <link rel="stylesheet" href="safe-area.css">
 </head>
@@ -687,7 +689,7 @@
 <div id="foodModalMount"></div>
 
 <!-- Save Meal (name prompt) -->
-<div class="modal-overlay" id="saveMealModal" onclick="if(event.target===this)closeSaveMeal()">
+<div class="modal-overlay" id="saveMealModal">
   <div class="modal-box" style="max-width: 380px;">
     <div class="modal-header">
       <div class="modal-title">Save Meal</div>
@@ -704,7 +706,7 @@
 </div>
 
 <!-- Saved-meal sheet: re-add the whole meal in two taps, or delete it -->
-<div class="modal-overlay" id="mealSheet" onclick="if(event.target===this)closeMealSheet()">
+<div class="modal-overlay" id="mealSheet">
   <div class="modal-box" style="max-width: 420px;">
     <div class="modal-header">
       <div class="modal-title" id="mealSheetTitle">Meal</div>
@@ -727,7 +729,7 @@
 </div>
 
 <!-- Quick Log review sheet — nothing saves until ADD TO LOG (CLAUDE.md §11) -->
-<div class="modal-overlay" id="aiSheet" onclick="if(event.target===this)closeAiSheet()">
+<div class="modal-overlay" id="aiSheet">
   <div class="modal-box">
     <div class="modal-header">
       <div class="modal-title">Review &amp; Add</div>
@@ -995,13 +997,10 @@
       m.items.length + (m.items.length === 1 ? ' food · ' : ' foods · ') +
       nuRound(tot.calories) + ' kcal · ' + nuRound(tot.protein) + ' g protein';
     document.getElementById('mealSheetSlot').value = suggestMeal();
-    document.getElementById('mealSheet').classList.add('open');
+    MMSheet.open(document.getElementById('mealSheet'), { onClose: function () { sheetMeal = null; } });
   }
 
-  function closeMealSheet() {
-    document.getElementById('mealSheet').classList.remove('open');
-    sheetMeal = null;
-  }
+  function closeMealSheet() { MMSheet.close(document.getElementById('mealSheet')); }
 
   async function confirmAddMeal() {
     if (!sheetMeal) return;
@@ -1048,14 +1047,14 @@
     document.getElementById('saveMealHint').textContent =
       'Saves the ' + rows.length + (rows.length === 1 ? ' food' : ' foods') +
       ' in ' + NU_MEAL_LABELS[meal] + '. Re-saving an existing name updates it.';
-    document.getElementById('saveMealModal').classList.add('open');
-    setTimeout(function () { input.focus(); input.select(); }, 60);
+    MMSheet.open(document.getElementById('saveMealModal'), {
+      initialFocus: '#saveMealName',
+      onClose: function () { pendingSaveMeal = null; },
+    });
+    requestAnimationFrame(function () { input.select(); });
   }
 
-  function closeSaveMeal() {
-    document.getElementById('saveMealModal').classList.remove('open');
-    pendingSaveMeal = null;
-  }
+  function closeSaveMeal() { MMSheet.close(document.getElementById('saveMealModal')); }
 
   async function confirmSaveMeal() {
     var name = document.getElementById('saveMealName').value.trim();
@@ -1166,7 +1165,7 @@
       document.getElementById('aiSheetSrc').textContent = '“' + text + '”';
       document.getElementById('aiSheetMeal').value = parsed.meal || suggestMeal();
       renderAiSheet();
-      document.getElementById('aiSheet').classList.add('open');
+      MMSheet.open(document.getElementById('aiSheet'), { onClose: function () { aiItems = []; } });
       input.value = '';
       if (parsed.remaining <= 5) {
         document.getElementById('aiLogHint').textContent =
@@ -1408,10 +1407,7 @@
     if (inp.value) nuUsdaInputChanged();
   }
 
-  function closeAiSheet() {
-    document.getElementById('aiSheet').classList.remove('open');
-    aiItems = [];
-  }
+  function closeAiSheet() { MMSheet.close(document.getElementById('aiSheet')); }
 
   async function confirmAiAdd() {
     var matched = aiItems.filter(function (it) { return !it.unmatched && !it.needsChoice; });

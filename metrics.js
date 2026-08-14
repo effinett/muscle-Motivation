@@ -106,14 +106,13 @@ function bfOpenModal(prefill) {
   document.getElementById('bfPct').value = prefill.body_fat_pct != null ? prefill.body_fat_pct : '';
   document.getElementById('bfNote').value = prefill.note || '';
   document.getElementById('bfModalTitle').textContent = prefill.logged_on ? 'Edit Body Fat' : 'Log Body Fat';
-  document.getElementById('bfModal').classList.add('open');
-  setTimeout(function () { document.getElementById('bfPct').focus(); }, 60);
+  MMSheet.open(document.getElementById('bfModal'), { initialFocus: '#bfPct' });
 }
 
-function bfCloseModal(e) {
-  if (e && e.target !== document.getElementById('bfModal')) return;
-  document.getElementById('bfModal').classList.remove('open');
-}
+// Phase 4.3.5C — opened through the shared overlay primitive (mm-sheet.js),
+// which owns background scroll locking, Escape, backdrop dismissal and focus
+// capture/restore. The modal's own markup and styling are unchanged.
+function bfCloseModal() { MMSheet.close(document.getElementById('bfModal')); }
 
 async function bfSave() {
   var pct = parseFloat(document.getElementById('bfPct').value);
@@ -131,7 +130,7 @@ async function bfSave() {
     var res = await bfUpsert(uid, wlRound1(pct), date, note);
     if (res.error) throw res.error;
     await bfSyncProfileBodyFat(uid); // keep profiles.body_fat_pct on the latest log
-    document.getElementById('bfModal').classList.remove('open');
+    bfCloseModal();
     showToast('Body fat logged!');
     if (typeof window.onBodyFatSaved === 'function') await window.onBodyFatSaved();
   } catch (err) {
@@ -144,7 +143,7 @@ async function bfSave() {
 
 function bfModalMarkup() {
   return '' +
-  '<div class="modal-overlay" id="bfModal" onclick="bfCloseModal(event)">' +
+  '<div class="modal-overlay" id="bfModal">' +
     '<div class="modal-box">' +
       '<div class="modal-header">' +
         '<div class="modal-title" id="bfModalTitle">Log Body Fat</div>' +
@@ -273,8 +272,7 @@ function msOpenModal(prefill) {
   // doesn't silently blank the sites measured earlier that day.
   msFillForm(prefill.id ? prefill : msRowForDate(dateEl.value));
   document.getElementById('msModalTitle').textContent = prefill.id ? 'Edit Measurements' : 'Log Measurements';
-  document.getElementById('msModal').classList.add('open');
-  setTimeout(function () { document.getElementById('ms_waist_in').focus(); }, 60);
+  MMSheet.open(document.getElementById('msModal'), { initialFocus: '#ms_waist_in' });
 }
 
 function msRowForDate(date) {
@@ -286,10 +284,10 @@ function msDateChanged() {
   msFillForm(msRowForDate(document.getElementById('msDate').value));
 }
 
-function msCloseModal(e) {
-  if (e && e.target !== document.getElementById('msModal')) return;
-  document.getElementById('msModal').classList.remove('open');
-}
+// Phase 4.3.5C — opened through the shared overlay primitive (mm-sheet.js),
+// which owns background scroll locking, Escape, backdrop dismissal and focus
+// capture/restore. The modal's own markup and styling are unchanged.
+function msCloseModal() { MMSheet.close(document.getElementById('msModal')); }
 
 async function msSave() {
   var date = document.getElementById('msDate').value || wlToday();
@@ -315,7 +313,7 @@ async function msSave() {
     var uid = s.data.session.user.id;
     var res = await msUpsert(uid, values, date, note);
     if (res.error) throw res.error;
-    document.getElementById('msModal').classList.remove('open');
+    msCloseModal();
     showToast('Measurements logged!');
     if (typeof window.onMeasurementsSaved === 'function') await window.onMeasurementsSaved();
   } catch (err) {
@@ -334,7 +332,7 @@ function msModalMarkup() {
     '</div>';
   }).join('');
   return '' +
-  '<div class="modal-overlay" id="msModal" onclick="msCloseModal(event)">' +
+  '<div class="modal-overlay" id="msModal">' +
     '<div class="modal-box">' +
       '<div class="modal-header">' +
         '<div class="modal-title" id="msModalTitle">Log Measurements</div>' +

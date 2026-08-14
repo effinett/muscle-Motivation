@@ -677,6 +677,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <script src="mm-sheet.js" defer></script>
+  <link rel="stylesheet" href="mm-sheet.css">
   <link rel="stylesheet" href="safe-area.css">
 </head>
 <body>
@@ -1031,25 +1033,17 @@
   });
 
   // ── Free Guide Modal ────────────────────────────────────────
+  // Phase 4.3.5C — routed through the shared overlay primitive. The previous
+  // lock was `document.body.style.overflow = 'hidden'`, which does not stop
+  // scrolling in Mobile Safari, and the Escape handler was bound permanently at
+  // page level and fired even when no modal was open.
   function openFreeGuide() {
-    document.getElementById('freeGuideModal').classList.add('open');
-    document.body.style.overflow = 'hidden';
+    MMSheet.open(document.getElementById('freeGuideModal'), { initialFocus: '#leadName' });
   }
 
   function closeFreeGuide() {
-    document.getElementById('freeGuideModal').classList.remove('open');
-    document.body.style.overflow = '';
+    MMSheet.close(document.getElementById('freeGuideModal'));
   }
-
-  // Close on overlay click
-  document.getElementById('freeGuideModal').addEventListener('click', function(e) {
-    if (e.target === this) closeFreeGuide();
-  });
-
-  // Close on Escape
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closeFreeGuide();
-  });
 
   // ── Lead submission ─────────────────────────────────────────
   async function submitLead() {

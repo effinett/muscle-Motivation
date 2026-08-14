@@ -1,0 +1,99 @@
+/* ──────────────────────────────────────────────────────────────────────────
+ * Muscle Motivation — Shared Overlay / Bottom-Sheet Primitive (CSS)
+ * Phase 4.3.5C
+ *
+ * The presentation half of mm-sheet.js. The two ship together: every page that
+ * loads the script loads this sheet, and neither is useful without the other.
+ *
+ * It deliberately styles NO panel. Every dialog in the app keeps its own visual
+ * design (.picker-sheet, .modal-box, .pr-celebrate, .free-guide) — what lives
+ * here is only what must be IDENTICAL everywhere, because it is behaviour
+ * expressed in CSS: the background scroll lock, the scroll-containment
+ * contract, and the drag affordance.
+ *
+ * It is a SEPARATE file from app-shell.css on purpose. app-shell.css carries
+ * page-level opinions — the application palette, the sticky header, the bottom
+ * nav — and is only appropriate on authenticated shell pages. Overlays exist on
+ * public pages too (store.html's free-guide dialog), and loading the whole shell
+ * there would silently restyle those pages' headers. This file is safe to link
+ * anywhere: it declares no palette, no layout, and touches nothing that does not
+ * carry an mm-sheet class.
+ *
+ * Colour is read through app-shell tokens WITH literal fallbacks, so the
+ * primitive adopts the app palette where it exists and still renders correctly
+ * on a page that has never loaded it.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/* ── Background scroll lock ─────────────────────────────────────────────────
+ * `overflow: hidden` on <html>/<body> does NOT stop scrolling in Mobile Safari,
+ * which is exactly where "the workout scrolls behind the picker" was reported.
+ * Freezing <body> works on every engine. mm-sheet.js supplies the negative
+ * `top` (the captured scroll offset) and restores the position on release, so
+ * opening and closing a dialog never moves the page.
+ *
+ * `position: fixed` descendants — the overlay itself, .mm-nav, and the PWA
+ * update/install surfaces — are positioned against the viewport and are
+ * unaffected by this, so the shipped bottom-control contracts still hold. */
+body.mm-sheet-lock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  width: 100%;
+  overflow: hidden;
+  /* `top` is set inline by mm-sheet.js — never declare it here. */
+}
+
+/* ── Scroll containment ─────────────────────────────────────────────────────
+ * The one class a scrollable region inside an overlay must carry. It is what
+ * stops a flick that reaches the end of the list from chaining to the page
+ * behind it, and it is also the marker mm-sheet.js reads to decide whether a
+ * touch began inside a scrollable region (so a mid-list drag scrolls instead of
+ * dismissing the sheet). Adding this class is therefore behavioural, not
+ * cosmetic — see mm-sheet.js classifyGesture(). */
+.mm-sheet-scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Drag handle ────────────────────────────────────────────────────────────
+ * A real control, not decoration. The visible bar stays 40×4, but the element
+ * carries a 44px-tall catch area around it (the ::before) so the gesture can
+ * actually be started — the previous handle was 4px of pure CSS with no
+ * listener attached to it at all.
+ *
+ * `touch-action: none` tells the compositor not to begin its own scroll on this
+ * element, which is what allows the drag to be claimed on the first frame
+ * rather than after the browser has already started scrolling something. */
+.mm-sheet-handle {
+  position: relative;
+  width: 40px;
+  height: 4px;
+  margin: 0 auto 18px;
+  border-radius: 2px;
+  background: var(--mm-line-strong, #443C3D);
+  touch-action: none;
+  flex-shrink: 0;
+}
+.mm-sheet-handle::before {
+  content: '';
+  position: absolute;
+  left: -22px;
+  right: -22px;
+  top: -20px;
+  bottom: -20px;
+}
+
+/* While a drag is being followed the panel must track the finger exactly — any
+   transition here would make it lag and feel broken. */
+[data-mm-sheet-dragging="true"] {
+  transition: none !important;
+  will-change: transform;
+}
+
+/* Reduced motion: the drag itself is direct manipulation and is preserved (it
+   follows the finger 1:1 and is never an animation), but nothing here may
+   introduce its own motion. */
+@media (prefers-reduced-motion: reduce) {
+  [data-mm-sheet-dragging="true"] { will-change: auto; }
+}

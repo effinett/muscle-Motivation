@@ -208,6 +208,8 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <script src="app-nav.js" defer></script>
+  <script src="mm-sheet.js" defer></script>
+  <link rel="stylesheet" href="mm-sheet.css">
   <link rel="stylesheet" href="app-shell.css">
   <link rel="stylesheet" href="safe-area.css">
 </head>
@@ -287,7 +289,7 @@
 </div>
 
 <!-- Recalculate Goals -->
-<div class="modal-overlay" id="recalcModal" onclick="if(event.target===this)closeRecalc()">
+<div class="modal-overlay" id="recalcModal">
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="recalcTitle">
     <div class="modal-header">
       <div class="modal-title" id="recalcTitle">Update Your Goals</div>
@@ -565,25 +567,24 @@
 
   // ── Recalculate Goals ────────────────────────────────────────────────
   var recalcPlan = null;
-  var recalcOpener = null;
 
   function openRecalc() {
     if (!currentProfile) return;
-    recalcOpener = document.activeElement;
     document.getElementById('rc-weight').value   = currentProfile.weight_lbs || '';
     document.getElementById('rc-bodyfat').value  = currentProfile.body_fat_pct || '';
     document.getElementById('rc-goal').value     = currentProfile.goal || 'fatloss';
     document.getElementById('rc-steps').value    = currentProfile.activity_level || '1.35';
     document.getElementById('rc-training').value = currentProfile.training_days || '3';
     backToRecalcForm();
-    document.getElementById('recalcModal').classList.add('open');
-    document.getElementById('rc-weight').focus();
+    // Phase 4.3.5C — the shared overlay primitive now owns opening, background
+    // scroll locking, Escape, backdrop dismissal, the focus trap AND restoring
+    // focus to whatever opened the dialog, so the local `recalcOpener` bookkeeping
+    // is gone. This dialog was the only one that had focus restore at all; every
+    // dialog in the app has it now.
+    MMSheet.open(document.getElementById('recalcModal'), { initialFocus: '#rc-weight' });
   }
 
-  function closeRecalc() {
-    document.getElementById('recalcModal').classList.remove('open');
-    if (recalcOpener && typeof recalcOpener.focus === 'function') recalcOpener.focus();
-  }
+  function closeRecalc() { MMSheet.close(document.getElementById('recalcModal')); }
 
   function backToRecalcForm() {
     document.getElementById('recalcForm').style.display = '';
