@@ -62,18 +62,50 @@
     // travelling 30deg off vertical still scrolls the list rather than closing
     // the sheet — this is the "slight diagonal must not dismiss" requirement.
     verticalRatio: 1.5,
-    // Fraction of the sheet's own height that must be travelled to dismiss on
-    // release. Proportional, so a short confirm and a tall picker feel alike.
-    dismissFraction: 0.25,
-    // Absolute floor, so a very short sheet still needs a real pull.
-    dismissMinPx: 64,
-    // A fast flick dismisses below the distance threshold. px/ms.
-    flickVelocity: 0.5,
-    // …but only if it also travelled at least this far, so a tap with a jittery
-    // finger can never register as a flick.
-    flickMinPx: 24,
-    // Downward drag past the top edge is resisted rather than followed, so the
-    // sheet cannot be dragged UP out of position.
+
+    /* ── Snap thresholds, as fractions of the sheet's own height ───────────
+     * Revised after real-device testing (Phase 4.3.5 follow-up). The previous
+     * model was binary and dismissed at 0.25 of the sheet, so an ordinary
+     * half-height drag threw the picker away — reported as far too aggressive.
+     *
+     * The distances now describe THREE outcomes, and the gap between collapse
+     * and dismiss is deliberately wide: everything up to well past halfway is
+     * recoverable, and only a long, clearly-committed pull destroys the
+     * selection context. */
+
+    // Past this from open → the sheet settles at its collapsed peek.
+    collapseFraction: 0.18,
+    collapseMinPx: 48,
+    // Past this from open → dismissed. 0.55 is past the midpoint on purpose:
+    // "about halfway" must now COLLAPSE, which is the reported complaint.
+    dismissFraction: 0.55,
+    dismissMinPx: 140,
+    // From the collapsed peek, a shorter downward pull dismisses — the sheet is
+    // already most of the way there and the user has stated intent once.
+    dismissFromCollapsedFraction: 0.22,
+    dismissFromCollapsedMinPx: 56,
+    // Upward from collapsed → back to fully open. Small, because expanding is
+    // non-destructive and should feel eager.
+    expandFraction: 0.10,
+    expandMinPx: 32,
+
+    // A fast flick counts as intent, but never on its own: it must ALSO have
+    // travelled a real distance before it can dismiss. Deliberately its OWN
+    // threshold rather than reusing the collapse distance — a quick flick just
+    // past the collapse point is far more likely to mean "tuck this away" than
+    // "throw it away", and the forgiving reading is the recoverable one.
+    flickVelocity: 0.6,
+    flickMinPx: 40,
+    flickDismissFraction: 0.35,
+    flickDismissMinPx: 110,
+
+    // How much of the sheet is hidden at the collapsed peek. The remainder
+    // stays on screen (handle, title, search, the first rows) while the rest of
+    // the viewport shows the workout being built underneath — which is the
+    // whole point of the state.
+    collapsedFractionHidden: 0.62,
+
+    // The sheet can never be dragged ABOVE its fully-open position.
     maxUpwardPx: 0,
   };
 
@@ -115,34 +147,94 @@
     if (!vertical) return 'scroll';
 
     if (g.fromHandle) return 'drag';
+    // At the collapsed peek the list is only a couple of rows tall and is not
+    // what the user is reaching for — any vertical gesture is aimed at the
+    // sheet itself, to bring it back up or to send it away.
+    if (g.state === 'collapsed') return 'drag';
     if (g.scrollable && num(g.scrollTop) > 0) return 'scroll';
     return dy > 0 ? 'drag' : 'scroll';
   }
 
-  /* On release, does the sheet close or spring back?
-   * g = { dy, elapsedMs, sheetHeight } */
-  function shouldDismiss(g, cfg) {
+  /* Where does the sheet settle when the finger lifts?
+   *
+   * g = {
+   *   state        'open' | 'collapsed' — where the drag STARTED
+   *   dy           px travelled (positive = downward)
+   *   elapsedMs    duration of the gesture, for velocity
+   *   sheetHeight  the panel's own height, so distances scale with the sheet
+   *   collapsible  the consumer opted into a peek state (the picker does;
+   *                confirmations deliberately do not)
+   * }
+   *
+   * Returns 'open' | 'collapsed' | 'dismissed'.
+   *
+   * The ordering matters: distance decides first and velocity only ever ADDS
+   * intent to a gesture that already travelled past the collapse distance. A
+   * fast twitch can therefore never dismiss on its own, which is what made the
+   * previous model feel like it was throwing the picker away. */
+  function resolveSnap(g, cfg) {
     cfg = cfg || SHEET_GESTURE;
     g = g || {};
+    var state = (g.state === 'collapsed') ? 'collapsed' : 'open';
     var dy = num(g.dy);
-    if (dy <= 0) return false;                     // never dismiss on an upward drag
-
-    var height = num(g.sheetHeight);
-    var distance = height > 0
-      ? Math.max(cfg.dismissMinPx, height * cfg.dismissFraction)
-      : cfg.dismissMinPx;
-    if (dy >= distance) return true;
-
+    var h = num(g.sheetHeight);
     var ms = num(g.elapsedMs);
-    if (ms > 0 && dy >= cfg.flickMinPx && (dy / ms) >= cfg.flickVelocity) return true;
-    return false;
+    var speed = ms > 0 ? Math.abs(dy) / ms : 0;
+    var flick = speed >= cfg.flickVelocity && Math.abs(dy) >= cfg.flickMinPx;
+
+    // A threshold in px: proportional to the sheet, never below its floor.
+    function at(fraction, floor) {
+      return h > 0 ? Math.max(floor, h * fraction) : floor;
+    }
+
+    if (state === 'collapsed') {
+      if (dy < 0) {
+        // Upward: expanding is non-destructive, so accept it readily.
+        if (flick) return 'open';
+        return (-dy >= at(cfg.expandFraction, cfg.expandMinPx)) ? 'open' : 'collapsed';
+      }
+      if (dy >= at(cfg.dismissFromCollapsedFraction, cfg.dismissFromCollapsedMinPx)) return 'dismissed';
+      if (flick) return 'dismissed';
+      return 'collapsed';
+    }
+
+    // From open. Upward does nothing — the sheet is already at its top stop.
+    if (dy <= 0) return 'open';
+
+    var collapseAt = at(cfg.collapseFraction, cfg.collapseMinPx);
+    var dismissAt = at(cfg.dismissFraction, cfg.dismissMinPx);
+
+    if (!g.collapsible) {
+      // A sheet with no peek state keeps the two-outcome model — but at the
+      // same forgiving distance, so it cannot be dismissed by a stray pull.
+      if (dy >= dismissAt) return 'dismissed';
+      if (flick && dy >= collapseAt) return 'dismissed';
+      return 'open';
+    }
+
+    if (dy >= dismissAt) return 'dismissed';
+    // Committed: fast AND far. Below this a flick only tucks the sheet away.
+    if (flick && dy >= at(cfg.flickDismissFraction, cfg.flickDismissMinPx)) return 'dismissed';
+    if (dy >= collapseAt) return 'collapsed';
+    if (flick) return 'collapsed';                        // a quick "get out of the way"
+    return 'open';
   }
 
-  /* How far the sheet has actually moved, given a raw finger delta. Upward
-   * travel is clamped so the sheet can never be dragged off the bottom edge. */
-  function dragOffset(dy, cfg) {
+  /* Where the sheet sits at its collapsed peek, in px translated downward. */
+  function collapsedOffset(sheetHeight, cfg) {
     cfg = cfg || SHEET_GESTURE;
-    var v = num(dy);
+    var h = num(sheetHeight);
+    return h > 0 ? Math.round(h * cfg.collapsedFractionHidden) : 0;
+  }
+
+  /* How far the sheet has actually moved, given a raw finger delta and where
+   * the drag began. From the collapsed peek an upward drag walks the offset
+   * back toward 0 (fully open); it can never go above that. */
+  function dragOffset(dy, ctx, cfg) {
+    cfg = cfg || SHEET_GESTURE;
+    // Back-compatible: dragOffset(dy) still means "from open".
+    var base = (ctx && typeof ctx === 'object') ? num(ctx.base) : 0;
+    var v = base + num(dy);
     return v < cfg.maxUpwardPx ? cfg.maxUpwardPx : v;
   }
 
@@ -211,6 +303,7 @@
   var SCROLL_CLASS = 'mm-sheet-scroll';
   var HANDLE_CLASS = 'mm-sheet-handle';
   var DRAG_ATTR = 'data-mm-sheet-dragging';
+  var STATE_ATTR = 'data-mm-sheet-state';   // 'open' | 'collapsed', on the overlay
 
   var lock = createLockCounter();
   var stack = [];        // open records, innermost last
@@ -397,6 +490,70 @@
     return null;
   }
 
+  /* ── Snap states (Phase 4.3.5 real-device follow-up) ────────────────────
+   *
+   * OPT-IN. Only a consumer that passes `collapsible: true` gets a peek state;
+   * every confirmation dialog keeps the plain open/dismissed model, because a
+   * destructive confirm half-hidden behind a collapsed sheet is worse than no
+   * peek at all.
+   *
+   * The collapsed state is expressed as a TRANSFORM on the panel — the standard
+   * bottom-sheet peek, and what the user reaches for. That deliberately
+   * reintroduces the transformed-ancestor condition behind the Phase 4.3.5B
+   * caret fix, so it is paired with a guard: focus entering the panel while
+   * collapsed expands the sheet first (see `onPanelFocusIn`). A text caret can
+   * therefore never sit inside a transformed panel, and typing implies you want
+   * the list anyway.
+   *
+   * The BACKDROP goes transparent while collapsed so the workout underneath is
+   * readable — that is the entire purpose of the state — but it keeps its full
+   * inset and keeps intercepting pointer events, and the body scroll lock is
+   * untouched. The background is therefore VISIBLE but not interactive and not
+   * scrollable, so none of the 4.3.5D isolation work is undone and the builder's
+   * scroll position is preserved across collapse and expand. */
+  function setSheetState(r, state, animate) {
+    if (!r.panel) return false;
+    var next = (state === 'collapsed' && r.opts.collapsible) ? 'collapsed' : 'open';
+    r.state = next;
+
+    var reduce = prefersReducedMotion();
+    // The transition is opt-in per transition, so a drag release animates but a
+    // programmatic open does not fight the entrance.
+    r.panel.style.transition = (animate && !reduce) ? 'transform 0.22s ease' : 'none';
+
+    if (next === 'collapsed') {
+      r.panel.style.transform = 'translateY(' + collapsedOffset(r.panel.offsetHeight) + 'px)';
+    } else {
+      r.panel.style.transform = '';
+    }
+    r.el.setAttribute(STATE_ATTR, next);
+    syncHandleLabel(r);
+    return true;
+  }
+
+  function prefersReducedMotion() {
+    try { return !!(win && win.matchMedia && win.matchMedia('(prefers-reduced-motion: reduce)').matches); }
+    catch (e) { return false; }
+  }
+
+  function handleEl(r) {
+    try { return r.panel && r.panel.querySelector('.' + HANDLE_CLASS); } catch (e) { return null; }
+  }
+
+  // The handle is a real button, which is the NON-GESTURE alternative the shell
+  // accessibility contract requires for every gesture (roadmap §2.6).
+  function syncHandleLabel(r) {
+    var h = handleEl(r);
+    if (!h || !r.opts.collapsible) return;
+    var collapsed = r.state === 'collapsed';
+    h.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    h.setAttribute('aria-label', collapsed ? 'Expand exercise picker' : 'Collapse exercise picker');
+  }
+
+  function toggleCollapsed(r) {
+    setSheetState(r, r.state === 'collapsed' ? 'open' : 'collapsed', true);
+  }
+
   function bindDrag(r) {
     var panel = r.panel;
     if (!panel) return;
@@ -412,6 +569,10 @@
         scrollable: !!region,
         scrollTop: region ? region.scrollTop : 0,
         mode: 'pending',
+        // Where the sheet rests as the drag begins, so the offset is absolute.
+        state: r.state,
+        base: r.state === 'collapsed' ? collapsedOffset(panel.offsetHeight) : 0,
+        lastDy: 0,
       };
     }
     function move(ev) {
@@ -419,11 +580,13 @@
       var t = ev.touches[0];
       var dx = t.clientX - g.x0;
       var dy = t.clientY - g.y0;
+      g.lastDy = dy;
 
       if (g.mode === 'pending') {
         g.mode = classifyGesture({
           dx: dx, dy: dy, fromHandle: g.fromHandle,
           scrollable: g.scrollable, scrollTop: g.scrollTop,
+          state: r.state,
         });
         if (g.mode === 'pending') return;
         if (g.mode === 'scroll') return;               // browser keeps the gesture
@@ -436,20 +599,29 @@
       }
       if (g.mode !== 'drag') return;
       if (ev.cancelable) ev.preventDefault();          // we own this gesture now
-      panel.style.transform = 'translateY(' + dragOffset(dy) + 'px)';
+      // The finger moves the sheet from wherever it currently rests, so a drag
+      // that begins at the collapsed peek walks back up toward fully open.
+      panel.style.transform = 'translateY(' + dragOffset(dy, { base: g.base }) + 'px)';
     }
     function end() {
       if (!g) return;
       var claimed = g.mode === 'drag';
-      var moved = claimed ? parseFloat((panel.style.transform.match(/translateY\((-?[\d.]+)px\)/) || [0, 0])[1]) : 0;
+      var startState = g.state;
+      var travelled = claimed ? (g.lastDy || 0) : 0;
       var elapsed = Date.now() - g.t0;
       g = null;
       panel.removeAttribute(DRAG_ATTR);
-      panel.style.transform = '';
       if (!claimed) return;
-      if (shouldDismiss({ dy: moved, elapsedMs: elapsed, sheetHeight: panel.offsetHeight })) {
-        close(r.el, 'swipe');
-      }
+
+      var settled = resolveSnap({
+        state: startState,
+        dy: travelled,
+        elapsedMs: elapsed,
+        sheetHeight: panel.offsetHeight,
+        collapsible: !!r.opts.collapsible,
+      });
+      if (settled === 'dismissed') { panel.style.transform = ''; close(r.el, 'swipe'); return; }
+      setSheetState(r, settled, true);
     }
 
     r.drag = { start: start, move: move, end: end };
@@ -468,6 +640,7 @@
     r.panel.removeEventListener('touchend', r.drag.end);
     r.panel.removeEventListener('touchcancel', r.drag.end);
     r.panel.style.transform = '';
+    r.panel.style.transition = '';
     r.panel.removeAttribute(DRAG_ATTR);
     r.drag = null;
   }
@@ -554,6 +727,9 @@
       returnFocus: doc.activeElement,
       backdropArmed: false,
       drag: null,
+      state: 'open',
+      onHandleClick: null,
+      onPanelFocusIn: null,
       // Phase 4.3.5G — the form's state at the moment it opened. Comparing
       // against it is how "the user typed something they have not committed"
       // is detected for EVERY dialog at once, rather than each one growing its
@@ -576,6 +752,27 @@
     syncDirty();
     el.addEventListener('input', onDirtyInput);
     if (opts.variant === 'sheet') { bindDrag(r); bindViewport(); }
+
+    // Sheets always start fully open; the attribute exists from the first frame
+    // so the collapsed styling has something to key off and never flashes.
+    r.state = 'open';
+    el.setAttribute(STATE_ATTR, 'open');
+    if (opts.collapsible) {
+      var h = handleEl(r);
+      if (h) {
+        r.onHandleClick = function (ev) { ev.preventDefault(); toggleCollapsed(r); };
+        h.addEventListener('click', r.onHandleClick);
+      }
+      syncHandleLabel(r);
+      // THE CARET GUARD. Focus arriving in a collapsed (transformed) panel would
+      // reproduce the WebKit mis-placed-caret bug that Phase 4.3.5B removed, so
+      // the sheet expands first. Wanting to type is wanting the list anyway.
+      r.onPanelFocusIn = function () {
+        if (r.state === 'collapsed') setSheetState(r, 'open', true);
+      };
+      el.addEventListener('focusin', r.onPanelFocusIn);
+    }
+
     focusInitial(r);
     return true;
   }
@@ -588,6 +785,13 @@
 
     el.classList.remove(OPEN_CLASS);
     el.style.bottom = '';
+    el.removeAttribute(STATE_ATTR);
+    if (r.onHandleClick) {
+      var hh = handleEl(r);
+      if (hh) hh.removeEventListener('click', r.onHandleClick);
+      r.onHandleClick = null;
+    }
+    if (r.onPanelFocusIn) { el.removeEventListener('focusin', r.onPanelFocusIn); r.onPanelFocusIn = null; }
     unbindDrag(r);
     unbindViewport();
     releaseLock();
@@ -620,7 +824,8 @@
     SHEET_GESTURE: SHEET_GESTURE,
     FOCUSABLE: FOCUSABLE,
     classifyGesture: classifyGesture,
-    shouldDismiss: shouldDismiss,
+    resolveSnap: resolveSnap,
+    collapsedOffset: collapsedOffset,
     dragOffset: dragOffset,
     nextFocusIndex: nextFocusIndex,
     createLockCounter: createLockCounter,
@@ -630,6 +835,11 @@
     isOpen: isOpen,
     openCount: openCount,
     isLocked: isLocked,
+    // Sheet state, for consumers and tests. `setState` is the programmatic
+    // equivalent of the handle button — never a second gesture path.
+    sheetState: function (el) { var r = rec(el); return r ? r.state : null; },
+    setState: function (el, state) { var r = rec(el); return r ? setSheetState(r, state, true) : false; },
+    STATE_ATTR: STATE_ATTR,
     LOCK_CLASS: LOCK_CLASS,
     SCROLL_CLASS: SCROLL_CLASS,
     HANDLE_CLASS: HANDLE_CLASS,

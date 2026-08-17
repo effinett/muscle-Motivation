@@ -247,9 +247,13 @@ test('participation: exactly the intended pages load the shared shell', () => {
   }
   for (const p of NO_NAV_PAGES) {
     const html = read(p);
-    assert.ok(!/app-nav\.js/.test(html), `${p} does NOT load app-nav.js`);
-    assert.ok(!/app-shell\.css/.test(html), `${p} does NOT load app-shell.css`);
-    assert.ok(!html.includes('appNavMount'), `${p} has no nav mount point`);
+    // A comment may legitimately EXPLAIN why a page does not load the shell
+    // (store.html says so where it declares its own [hidden] guard), so the
+    // absence is asserted against code, not prose.
+    const code = html.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    assert.ok(!/app-nav\.js/.test(code), `${p} does NOT load app-nav.js`);
+    assert.ok(!/app-shell\.css/.test(code), `${p} does NOT load app-shell.css`);
+    assert.ok(!code.includes('appNavMount'), `${p} has no nav mount point`);
   }
 });
 

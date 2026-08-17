@@ -324,6 +324,11 @@
       cursor: pointer; transition: border-color 0.2s, color 0.2s; margin-bottom: 12px;
     }
     .btn-add-exercise:hover { border-color: var(--red); color: var(--red); }
+    /* Breathing room for the post-add settle (4.3.5 device follow-up). The
+       scroll aligns this button with the bottom of the scrollport; the margin
+       keeps it off the very edge — and clears the home-indicator band in the
+       installed PWA — without any magic number in the scroll call itself. */
+    .btn-add-exercise { scroll-margin-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
 
     /* ── Custom Workout templates (Tier 2) ── */
     .tpl-card {
@@ -854,7 +859,10 @@
 
       <div id="exerciseList"></div>
 
-      <button class="btn-add-exercise" onclick="openPicker()">
+      <!-- The scroll anchor after adding an exercise (4.3.5 device follow-up):
+           bringing THIS button into view necessarily also brings the bottom of
+           the newly added card above it into view. -->
+      <button class="btn-add-exercise" id="addExerciseBtn" onclick="openPicker()">
         <i data-lucide="plus-circle"></i>
         Add Exercise
       </button>
@@ -877,7 +885,7 @@
 
       <div class="section-label">Exercises</div>
       <div id="builderExerciseList"></div>
-      <button class="btn-add-exercise" onclick="openTemplatePicker()">
+      <button class="btn-add-exercise" id="builderAddExerciseBtn" onclick="openTemplatePicker()">
         <i data-lucide="plus"></i>
         Add Exercise
       </button>
@@ -906,9 +914,11 @@
      mm-sheet.js (Phase 4.3.5C) — this overlay carries no inline onclick. -->
 <div class="overlay" id="pickerModal">
   <div class="picker-sheet" role="dialog" aria-modal="true" aria-label="Add exercise">
-    <!-- A real drag control, not decoration: mm-sheet.js binds the gesture to
-         .mm-sheet-handle and the shell gives it a 44px catch area. -->
-    <div class="mm-sheet-handle" aria-hidden="true"></div>
+    <!-- A real control: mm-sheet.js binds BOTH the drag gesture and a click to
+         .mm-sheet-handle, so collapsing the sheet is reachable without a
+         gesture (keyboard, switch control, or just a tap). The shell gives it a
+         44px catch area and mm-sheet.js maintains its aria-expanded/label. -->
+    <button type="button" class="mm-sheet-handle" aria-label="Collapse exercise picker"></button>
     <div class="picker-title">Add Exercise</div>
     <div class="picker-search-row">
       <!-- Phase 4.3.5B: autocorrect/autocapitalise/spellcheck are off because
@@ -1755,7 +1765,7 @@
     // dashboard progression. mode is still stored for a uniform finish path.
     var { data, error } = await supabaseClient
       .from('workouts')
-      .insert({ user_id: currentUser.id, name: name, date: new Date().toISOString().slice(0, 10), mode: 'optional' })
+      .insert({ user_id: currentUser.id, name: name, date: whLocalDate(), mode: 'optional' })
       .select().single();
     if (error) { showToast('Error starting workout — try again.'); return; }
     currentWorkout = data;
@@ -1901,6 +1911,10 @@
     MMSheet.open(document.getElementById('pickerModal'), {
       variant: 'sheet',
       panel: '.picker-sheet',
+      // The picker is the ONE surface that earns a peek state: the user needs
+      // to see which exercises are already in the workout before choosing the
+      // next one. Confirmations deliberately do not opt in.
+      collapsible: true,
       initialFocus: '#pickerSearch',
       // Escape collapses the filter panel FIRST when it is open; only a second
       // press closes the picker. Returning true consumes the key.
@@ -2180,7 +2194,9 @@
       // recommendation and copies the weight forward.
       var rec = recForExercise(ex);
       var nSets = (rec && rec.recommendedSets) ? rec.recommendedSets : 1;
-      for (var k = 0; k < nSets; k++) await addSet(exercises.length - 1);
+      for (var k = 0; k < nSets; k++) await addSet(exercises.length - 1, { silent: true });
+      // ONE settle, after every set exists and the final render has laid out.
+      afterLayout(function () { settleBuilderScroll('addExerciseBtn'); });
     } finally {
       endAction('select');
     }
@@ -2200,7 +2216,7 @@
   }
 
   // ── Sets ──────────────────────────────────────────────────────────
-  async function addSet(exIdx) {
+  async function addSet(exIdx, opts) {
     var ex = exercises[exIdx];
     if (!ex) return;
     var lockKey = 'addset:' + ex.id;
@@ -2224,13 +2240,74 @@
       if (error) { showToast('Error adding set.'); return; }
       ex.sets.push({ id: data.id, set_number: setNum, weight_lbs: weight, reps: null, completed: false });
       renderExercises();
-      setTimeout(function() {
-        var el = document.getElementById('ex-' + ex.id);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }, 60);
+      // A set added by the user on an existing card only needs that card kept in
+      // view. When selectExercise() pre-creates a whole exercise's sets it passes
+      // `silent` and owns the final scroll itself — otherwise N addSet calls each
+      // queued their own smooth scroll and they fought one another.
+      if (!(opts && opts.silent)) {
+        afterLayout(function () {
+          var el = document.getElementById('ex-' + ex.id);
+          if (el) el.scrollIntoView(scrollOpts('nearest'));
+        });
+      }
     } finally {
       endAction(lockKey);
     }
+  }
+
+  /* ── Builder scroll settling (Phase 4.3.5 real-device follow-up) ─────────
+   *
+   * THE DEFECT: after adding an exercise the builder stopped scrolling far
+   * enough from the third exercise onward, so the user had to scroll by hand to
+   * reach Add Exercise.
+   *
+   * THE CAUSE, in three parts:
+   *  1. The scroll targeted the new exercise CARD with `block: 'nearest'`.
+   *     `nearest` scrolls the minimum needed to make the element visible and
+   *     does nothing at all when it is already partly visible — which is
+   *     exactly the case once the list is long enough that the new card starts
+   *     near the bottom edge. It also never accounted for the Add Exercise
+   *     button BELOW the card, which is what the user actually needs next.
+   *     With one or two exercises the page was short enough that everything was
+   *     visible anyway, which is why it only appeared to work then.
+   *  2. It ran on a hard-coded `setTimeout(…, 60)` — a guess at when layout
+   *     would be ready, not a fact about it.
+   *  3. selectExercise() pre-creates the recommended number of sets, so it
+   *     called addSet() N times and queued N competing smooth scrolls.
+   *
+   * THE FIX: one scroll, owned by the operation that added the exercise, aimed
+   * at the Add Exercise button, run after layout has actually settled. The
+   * anchor choice is deliberate and count-independent — the button sits
+   * immediately after the last card, so bringing it into view brings the bottom
+   * of the new card with it, for any workout length. */
+
+  // Run `fn` once the browser has produced layout for whatever was just
+  // rendered. Two frames, because the first only guarantees the style/layout
+  // flush is scheduled; the second runs with the new geometry measurable.
+  // Deliberately NOT a timeout — a delay is a guess, a frame is an event.
+  function afterLayout(fn) {
+    if (typeof requestAnimationFrame !== 'function') { fn(); return; }
+    requestAnimationFrame(function () { requestAnimationFrame(fn); });
+  }
+
+  // Motion is an enhancement; the scroll itself is not. Under reduced motion we
+  // still move, we just do not animate getting there.
+  function scrollOpts(block) {
+    var reduce = false;
+    try { reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
+    catch (e) { /* contained */ }
+    return { behavior: reduce ? 'auto' : 'smooth', block: block, inline: 'nearest' };
+  }
+
+  // Settle the builder so the newly added exercise AND the Add Exercise action
+  // are reachable. `block: 'end'` aligns the anchor with the bottom of the
+  // scrollport, and `.btn-add-exercise` carries a scroll-margin-bottom so it
+  // never lands flush against the edge.
+  function settleBuilderScroll(anchorId) {
+    var anchor = document.getElementById(anchorId);
+    if (!anchor || typeof anchor.scrollIntoView !== 'function') return false;
+    anchor.scrollIntoView(scrollOpts('end'));
+    return true;
   }
 
   async function deleteSet(setId, exIdx, setIdx) {
@@ -2634,7 +2711,7 @@
 
     var { data: workout, error } = await supabaseClient
       .from('workouts')
-      .insert({ user_id: currentUser.id, name: workoutName, date: new Date().toISOString().slice(0, 10), program_slug: programSlug, session_key: sessionKey, mode: mode })
+      .insert({ user_id: currentUser.id, name: workoutName, date: whLocalDate(), program_slug: programSlug, session_key: sessionKey, mode: mode })
       .select().single();
     if (error) { showToast('Error starting workout.'); return; }
 
@@ -2873,6 +2950,9 @@
       exercise_id: (pickedId != null ? pickedId : libraryExerciseId(name))
     });
     renderBuilderExercises();
+    // Same contract as the live builder: the newly added exercise and the Add
+    // Exercise action stay reachable however long the template gets.
+    afterLayout(function () { settleBuilderScroll('builderAddExerciseBtn'); });
   }
 
   function updateTemplateField(idx, field, value) {
@@ -3001,7 +3081,7 @@
 
     var { data: workout, error } = await supabaseClient
       .from('workouts')
-      .insert({ user_id: currentUser.id, name: workoutName, date: new Date().toISOString().slice(0, 10),
+      .insert({ user_id: currentUser.id, name: workoutName, date: whLocalDate(),
                 template_id: tpl.id, mode: 'optional' })
       .select().single();
     if (error) { showToast('Error starting workout.'); return; }

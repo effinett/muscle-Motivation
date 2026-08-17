@@ -253,3 +253,104 @@ test('selection: hover colours that encode a STATE are pointer-gated', () => {
     assert.match(CODE, re, `${sel} is inside a (hover: hover) guard`);
   }
 });
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * Real-device follow-up — builder settling after an exercise is added
+ *
+ * Reported: adding exercise #1 and #2 left Add Exercise visible, but from #3
+ * onward the builder no longer scrolled far enough and the user had to finish
+ * the scroll by hand.
+ *
+ * Root cause, pinned below: the scroll targeted the exercise CARD with
+ * `block: 'nearest'`, which scrolls the minimum needed and does nothing once
+ * the element is already partly visible; it ran on a hard-coded 60ms timeout;
+ * and selectExercise() called addSet() once per recommended set, so several
+ * smooth scrolls competed. The tests assert the SEMANTIC contract — which
+ * anchor, which alignment, and when — rather than any pixel position, so they
+ * hold for a workout of any length.
+ * ══════════════════════════════════════════════════════════════════════ */
+
+test('builder: the scroll anchor is Add Exercise, so the action is what lands in view', () => {
+  // Deliberately not the new card: the button sits immediately after it, so
+  // bringing the button into view brings the card's bottom with it — and it is
+  // the control the user needs next. Count-independent by construction.
+  assert.match(PAGE, /<button class="btn-add-exercise" id="addExerciseBtn" onclick="openPicker\(\)">/);
+  assert.match(PAGE, /function settleBuilderScroll\(anchorId\)/);
+  assert.match(PAGE, /anchor\.scrollIntoView\(scrollOpts\('end'\)\)/,
+    "block: 'end' aligns the anchor with the bottom of the scrollport");
+  assert.ok(!/settleBuilderScroll[\s\S]{0,200}block: 'nearest'/.test(PAGE),
+    "'nearest' is what under-scrolled once the card was already partly visible");
+});
+
+test('builder: the settle waits for layout, never for a timeout', () => {
+  assert.match(PAGE, /function afterLayout\(fn\)/);
+  assert.match(PAGE, /requestAnimationFrame\(function \(\) \{ requestAnimationFrame\(fn\); \}\)/,
+    'two frames: the first schedules the layout flush, the second can measure it');
+  assert.match(PAGE, /if \(typeof requestAnimationFrame !== 'function'\) \{ fn\(\); return; \}/,
+    'and it still runs where rAF is unavailable');
+  // The old guess is gone.
+  assert.ok(!/setTimeout\(function\(\) \{\s*var el = document\.getElementById\('ex-'/.test(PAGE),
+    'the 60ms scroll timeout is removed');
+});
+
+test('builder: exactly ONE scroll per added exercise, however many sets it creates', () => {
+  // selectExercise pre-creates the recommended number of sets. Each addSet used
+  // to queue its own smooth scroll, so a 3-set recommendation fired three
+  // competing animations.
+  assert.match(PAGE, /await addSet\(exercises\.length - 1, \{ silent: true \}\)/,
+    'the per-set scroll is suppressed during the add-exercise flow');
+  assert.match(PAGE, /if \(!\(opts && opts\.silent\)\) \{/, 'addSet honours it');
+  assert.match(PAGE, /afterLayout\(function \(\) \{ settleBuilderScroll\('addExerciseBtn'\); \}\);/,
+    'and selectExercise owns the single settle');
+  // The settle is issued after the set loop, not inside it.
+  const fn = PAGE.match(/async function selectExercise\(name, pickedId\)[\s\S]*?\n  \}/)[0];
+  const loopAt = fn.indexOf('for (var k = 0');
+  const settleAt = fn.indexOf("settleBuilderScroll('addExerciseBtn')");
+  assert.ok(loopAt > -1 && settleAt > loopAt, 'the settle runs after every set exists');
+});
+
+test('builder: a user-initiated Add Set still keeps its own card in view', () => {
+  // Only the add-EXERCISE flow suppresses it. Tapping "+ Add Set" on a card is
+  // a different intent and should not jump to the bottom of the workout.
+  assert.match(PAGE, /var el = document\.getElementById\('ex-' \+ ex\.id\);\s*\n\s*if \(el\) el\.scrollIntoView\(scrollOpts\('nearest'\)\);/);
+});
+
+test('builder: the anchor is not left flush against the viewport edge', () => {
+  // scroll-margin keeps the button clear of the bottom edge — and of the home
+  // indicator in the installed PWA — without a magic number in the scroll call.
+  assert.match(CODE, /\.btn-add-exercise\s*\{[^}]*scroll-margin-bottom:\s*calc\(24px \+ env\(safe-area-inset-bottom/);
+});
+
+test('builder: the settle respects reduced motion', () => {
+  assert.match(PAGE, /function scrollOpts\(block\)/);
+  assert.match(PAGE, /behavior: reduce \? 'auto' : 'smooth'/,
+    'reduced motion still moves — it just does not animate getting there');
+  assert.match(PAGE, /matchMedia\('\(prefers-reduced-motion: reduce\)'\)/);
+});
+
+test('builder: the template builder gets the same contract', () => {
+  // Same page, same picker, same interaction — it had no settling at all.
+  assert.match(PAGE, /<button class="btn-add-exercise" id="builderAddExerciseBtn"/);
+  assert.match(PAGE, /afterLayout\(function \(\) \{ settleBuilderScroll\('builderAddExerciseBtn'\); \}\);/);
+});
+
+test('builder: collapsing or expanding the picker never moves the builder', () => {
+  // The coordination requirement: the body scroll lock is applied on open and
+  // released on close, and a sheet state change touches neither — so the
+  // builder's position is whatever it was, before and after a peek.
+  const sheet = read('mm-sheet.js');
+  const fn = sheet.match(/function setSheetState\(r, state, animate\)[\s\S]*?\n  \}/)[0];
+  for (const forbidden of ['applyLock', 'releaseLock', 'scrollTo', 'scrollIntoView']) {
+    assert.ok(!fn.includes(forbidden), `setSheetState must not call ${forbidden}`);
+  }
+});
+
+test('builder: the settle happens after the picker has closed and released the page', () => {
+  // Order matters: closePicker() restores the pre-open scroll position, so the
+  // settle must run afterwards or it would be immediately overwritten.
+  const fn = PAGE.match(/async function selectExercise\(name, pickedId\)[\s\S]*?\n  \}/)[0];
+  const closeAt = fn.indexOf('closePicker()');
+  const settleAt = fn.indexOf("settleBuilderScroll('addExerciseBtn')");
+  assert.ok(closeAt > -1 && settleAt > closeAt,
+    'the picker closes and the lock is released before the builder settles');
+});
