@@ -19,6 +19,35 @@ var workoutHistory  = [];
 var _histTargetId   = 'historyList';
 var _histEmptyText  = 'No workouts yet — start your first session above.';
 
+/* ── The training date a workout belongs to ─────────────────────────────────
+ * Phase 4.3.5 real-device follow-up.
+ *
+ * `workouts.date` is the CANONICAL TRAINING DATE and is stamped once, when the
+ * session is STARTED. Finishing a workout deliberately never rewrites it, which
+ * is what makes the forgotten-finish case correct: a session begun Monday and
+ * finished Tuesday morning still belongs to Monday.
+ *
+ * It must be the user's LOCAL calendar date. Every consumer of this value —
+ * the dashboard's weekly circles, the streak, the rolling week count — derives
+ * "today" locally (`wlToday()` in weight.js, `dashIso()` in snapshot.js), so a
+ * UTC-derived date silently disagrees with all of them. `toISOString()` alone
+ * returns the UTC date, so for any user west of UTC an evening session was
+ * stamped with TOMORROW's date and the weekly check landed on the wrong day.
+ * Shifting by the timezone offset before formatting is what those two existing
+ * helpers already do; this is the same computation, available on the pages that
+ * actually create workouts.
+ *
+ * NOTE: an identical three-line helper now exists in four places
+ * (weight.js `wlToday`, snapshot.js `dashIso`, nutrition.js, here). Collapsing
+ * them into one shared date module is recorded as a non-blocking follow-up —
+ * it touches three tested modules and is not this phase's concern. */
+function whLocalDate(d) {
+  var when = (d instanceof Date) ? d : new Date();
+  if (isNaN(when.getTime())) when = new Date();
+  return new Date(when.getTime() - when.getTimezoneOffset() * 60000)
+    .toISOString().slice(0, 10);
+}
+
 function esc(str) {
   return String(str)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
@@ -219,4 +248,10 @@ async function saveHistoryEdit(workoutId, wIdx) {
     console.error('saveHistoryEdit', err);
     showToast('Error saving — try again.');
   }
+}
+
+/* Node: export the pure helpers for tests. Guarded so browsers never see
+   `module` (same pattern as snapshot.js / weight.js / exercise-core.js). */
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { whLocalDate: whLocalDate, esc: esc };
 }

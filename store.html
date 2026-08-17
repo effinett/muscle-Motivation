@@ -121,6 +121,14 @@
     .mobile-nav a:hover { color: var(--red); }
     .mobile-nav.open { display: flex; }
 
+    /* store.html does not load app-shell.css, so it does not inherit the
+       shell's authoritative [hidden] guard. Scoped to the nav links that
+       applyAuthNav() toggles, so a future `display` rule on an anchor can never
+       silently resurrect the duplicate Home entry for signed-in members. */
+    .header-nav a[hidden],
+    .mobile-nav a[hidden],
+    .footer-links a[hidden] { display: none !important; }
+
     /* ── Hero strip ── */
     .store-hero {
       position: relative;
@@ -1169,6 +1177,21 @@
       if (!el) continue;
       el.textContent = signedIn ? 'My Dashboard' : SIGNED_OUT_LABEL[id];
       el.href = signedIn ? 'app.html' : 'auth.html';
+    }
+
+    // Signed OUT these are two different places — "Home" is the marketing
+    // landing page and "Login" is the sign-in screen — so both belong.
+    // Signed IN they collapse onto the same authenticated dashboard, which real
+    // device testing surfaced as a menu offering the same destination twice.
+    //
+    // The plain "Home" link is the one that yields: "My Dashboard" names the
+    // destination more precisely for a member, and it is the styled primary
+    // action. Hidden rather than removed, so the signed-out menu is byte-for-byte
+    // what it always was and nothing about the public page changes.
+    // Free Calculator is untouched in both states.
+    for (const id of ['headerHomeLink', 'mobileHomeLink', 'footerHomeLink']) {
+      const el = document.getElementById(id);
+      if (el) el.hidden = signedIn;
     }
   }
 

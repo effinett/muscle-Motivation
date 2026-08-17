@@ -194,3 +194,70 @@ test('the guard still default-denies every other host', () => {
   // test and the constant above must both be revisited deliberately.
   assert.ok(!/www\./.test(sw), 'no www host is whitelisted');
 });
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * 5 · Menu duplication (Phase 4.3.5 real-device follow-up)
+ *
+ * Signed in, the menu offered "Home" and "My Dashboard" as separate items that
+ * went to the same authenticated dashboard. Routing was already correct — this
+ * is redundancy, not a routing defect — so the fix is the smallest one that
+ * removes the duplicate while leaving the signed-out menu untouched.
+ * ══════════════════════════════════════════════════════════════════════ */
+
+test('menu: signed OUT, Home and Login are genuinely different places', () => {
+  const src = read('store.html');
+  assert.match(src, /const home = signedIn \? 'app\.html' : 'index\.html'/);
+  // Nothing is hidden in the public state — the menu is exactly as it was.
+  assert.match(src, /if \(el\) el\.hidden = signedIn;/,
+    'the plain Home link is hidden only when signed in');
+});
+
+test('menu: signed IN, the duplicate Home entry is withdrawn', () => {
+  const src = read('store.html');
+  const fn = src.match(/function applyAuthNav\(signedIn\)[\s\S]*?\n  \}/)[0];
+  // All three Home affordances yield; the dashboard CTA is what remains.
+  for (const id of ['headerHomeLink', 'mobileHomeLink', 'footerHomeLink']) {
+    assert.ok(fn.includes(`'${id}'`), `${id} participates`);
+  }
+  assert.match(fn, /for \(const id of \['headerHomeLink', 'mobileHomeLink', 'footerHomeLink'\]\) \{\s*\n\s*const el = document\.getElementById\(id\);\s*\n\s*if \(el\) el\.hidden = signedIn;/);
+});
+
+test('menu: the dashboard entry is the one that survives, and still routes correctly', () => {
+  const fn = read('store.html').match(/function applyAuthNav\(signedIn\)[\s\S]*?\n  \}/)[0];
+  assert.match(fn, /el\.textContent = signedIn \? 'My Dashboard' : SIGNED_OUT_LABEL\[id\]/);
+  assert.match(fn, /el\.href = signedIn \? 'app\.html' : 'auth\.html'/);
+  // The login/dashboard control is never hidden — only the redundant Home is.
+  assert.ok(!/headerLoginBtn[\s\S]{0,80}hidden/.test(fn));
+});
+
+test('menu: Free Calculator is preserved in both states', () => {
+  const src = read('store.html');
+  assert.match(src, /<a href="calculator\.html">Free Calculator<\/a>/, 'in the drawer');
+  assert.match(src, /<a href="calculator\.html">Calculator<\/a>/, 'in the header');
+  // It is never hidden by the auth pass.
+  // Comments explain the intent; only code counts.
+  const fn = src.match(/function applyAuthNav\(signedIn\)[\s\S]*?\n  \}/)[0]
+    .replace(/\/\/[^\n]*/g, '');
+  assert.ok(!/calculator/i.test(fn), 'applyAuthNav does not touch the calculator link');
+});
+
+test('menu: hiding actually takes effect on this page', () => {
+  // store.html does not load app-shell.css, so it does not inherit the shell's
+  // authoritative [hidden] guard — it needs its own, or a future display rule
+  // on an anchor would silently resurrect the duplicate.
+  const css = (read('store.html').match(/<style>([\s\S]*?)<\/style>/) || [])[1] || '';
+  assert.match(css, /\.header-nav a\[hidden\][\s\S]{0,120}display:\s*none\s*!important/);
+  const storeCode = read('store.html').replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.ok(!/app-shell\.css/.test(storeCode),
+    'and it still does not pull in the whole app shell for this');
+});
+
+test('menu: no navigation was redesigned — only the duplicate withdrawn', () => {
+  const src = read('store.html');
+  // The same items exist in the markup as before; nothing was deleted.
+  for (const label of ['Home', 'Free Calculator', 'Contact']) {
+    assert.ok(src.includes('>' + label + '<') || src.includes('>' + label + ' <'),
+      `${label} is still present in the markup`);
+  }
+  assert.match(src, /id="mobileHomeLink"/, 'the Home link is hidden, not removed');
+});
