@@ -334,14 +334,17 @@ test('builder: the template builder gets the same contract', () => {
   assert.match(PAGE, /afterLayout\(function \(\) \{ settleBuilderScroll\('builderAddExerciseBtn'\); \}\);/);
 });
 
-test('builder: collapsing or expanding the picker never moves the builder', () => {
-  // The coordination requirement: the body scroll lock is applied on open and
-  // released on close, and a sheet state change touches neither — so the
-  // builder's position is whatever it was, before and after a peek.
+test('builder: dragging the picker never moves the builder underneath', () => {
+  // The coordination requirement, restated for the two-state model: the body
+  // scroll lock is applied on open and released on close, and the drag preview
+  // changes only the backdrop colour and the panel transform — so the builder's
+  // position is identical before and after a pull that springs back.
   const sheet = read('mm-sheet.js');
-  const fn = sheet.match(/function setSheetState\(r, state, animate\)[\s\S]*?\n  \}/)[0];
-  for (const forbidden of ['applyLock', 'releaseLock', 'scrollTo', 'scrollIntoView']) {
-    assert.ok(!fn.includes(forbidden), `setSheetState must not call ${forbidden}`);
+  for (const fn of ['beginPreview', 'updatePreview', 'endPreview', 'snapOpen']) {
+    const body = sheet.match(new RegExp('function ' + fn + '\\([^)]*\\)[\\s\\S]*?\\n  \\}'))[0];
+    for (const forbidden of ['applyLock', 'releaseLock', 'scrollTo', 'scrollIntoView']) {
+      assert.ok(!body.includes(forbidden), `${fn} must not call ${forbidden}`);
+    }
   }
 });
 
