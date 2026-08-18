@@ -84,63 +84,11 @@ body.mm-sheet-lock {
   bottom: -20px;
 }
 
-/* The handle is a real <button> (Phase 4.3.5 follow-up), because collapsing is
-   a gesture and every gesture owes a non-gesture alternative. Strip the button
-   chrome so it still reads as a handle. */
-button.mm-sheet-handle {
-  display: block;
-  padding: 0;
-  border: 0;
-  appearance: none;
-  -webkit-appearance: none;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.mm-sheet-handle:focus-visible {
-  outline: 2px solid var(--mm-accent, #B1121B);
-  outline-offset: 6px;
-  border-radius: 2px;
-}
-
 /* While a drag is being followed the panel must track the finger exactly — any
    transition here would make it lag and feel broken. */
 [data-mm-sheet-dragging="true"] {
   transition: none !important;
   will-change: transform;
-}
-
-/* ── Collapsed / peek state ─────────────────────────────────────────────────
- * Set by mm-sheet.js on the OVERLAY, and only for a consumer that opted into
- * `collapsible` (today: the exercise picker alone).
- *
- * The backdrop goes fully transparent so the surface underneath — the workout
- * being built — is readable. That is the entire purpose of the state: visual
- * recall of what has already been added, without losing the picker.
- *
- * What does NOT change: the overlay keeps its full inset and keeps intercepting
- * pointer events, and the body scroll lock stays applied. The background is
- * therefore VISIBLE but neither scrollable nor interactive, so none of the
- * 4.3.5D isolation work is undone and the builder's scroll position survives
- * collapse and expand untouched.
- *
- * `!important` is deliberate, and is the same judgement app-shell.css already
- * records for its `[hidden]` guard and its 16px form-control floor: a page's
- * own `.overlay { background: rgba(0,0,0,.82) }` has IDENTICAL (0,1,0)
- * specificity, so without it the winner is decided purely by which file the
- * page happens to link last. Browser validation caught exactly that — the
- * backdrop stayed opaque and the collapsed state showed nothing underneath.
- * This is the state's whole purpose, not styling, so it must not lose to page
- * CSS ordering or later drift. */
-[data-mm-sheet-state="collapsed"] {
-  background: transparent !important;
-  -webkit-backdrop-filter: none !important;
-  backdrop-filter: none !important;
-}
-
-/* A collapsed sheet is a peek, not a scroll surface: the few visible rows are
-   there to be recognised, and any vertical gesture belongs to the sheet. */
-[data-mm-sheet-state="collapsed"] .mm-sheet-scroll {
-  overflow-y: hidden;
 }
 
 /* Reduced motion: the drag itself is direct manipulation and is preserved (it

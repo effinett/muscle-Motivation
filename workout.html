@@ -914,11 +914,13 @@
      mm-sheet.js (Phase 4.3.5C) — this overlay carries no inline onclick. -->
 <div class="overlay" id="pickerModal">
   <div class="picker-sheet" role="dialog" aria-modal="true" aria-label="Add exercise">
-    <!-- A real control: mm-sheet.js binds BOTH the drag gesture and a click to
-         .mm-sheet-handle, so collapsing the sheet is reachable without a
-         gesture (keyboard, switch control, or just a tap). The shell gives it a
-         44px catch area and mm-sheet.js maintains its aria-expanded/label. -->
-    <button type="button" class="mm-sheet-handle" aria-label="Collapse exercise picker"></button>
+    <!-- A drag affordance, not a control. Dragging down reveals the workout
+         underneath and, past the threshold, closes the picker; releasing short
+         of it springs back. It is aria-hidden because the gesture it hints at
+         already has non-gesture equivalents that ARE in the accessibility tree:
+         the Cancel button below and Escape. mm-sheet.js binds the gesture here
+         and the shell gives it a 44px catch area. -->
+    <div class="mm-sheet-handle" aria-hidden="true"></div>
     <div class="picker-title">Add Exercise</div>
     <div class="picker-search-row">
       <!-- Phase 4.3.5B: autocorrect/autocapitalise/spellcheck are off because
@@ -1911,10 +1913,6 @@
     MMSheet.open(document.getElementById('pickerModal'), {
       variant: 'sheet',
       panel: '.picker-sheet',
-      // The picker is the ONE surface that earns a peek state: the user needs
-      // to see which exercises are already in the workout before choosing the
-      // next one. Confirmations deliberately do not opt in.
-      collapsible: true,
       initialFocus: '#pickerSearch',
       // Escape collapses the filter panel FIRST when it is open; only a second
       // press closes the picker. Returning true consumes the key.
