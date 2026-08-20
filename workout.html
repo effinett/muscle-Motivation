@@ -51,7 +51,7 @@
     #authGate img { width: 72px; margin-bottom: 16px; opacity: 0.6; }
     #authGate p { color: var(--text-muted); font-size: 11px; letter-spacing: 2.5px; text-transform: uppercase; }
 
-    /* header / .header-logo / .btn-back now live in app-shell.css */
+    /* header / .header-logo / .mm-back now live in app-shell.css */
 
     /* Bottom padding = the page's own breathing room + the shared app-shell
        clearance (nav height + home indicator). See app-shell.css.
@@ -780,7 +780,7 @@
       <img src="logow.png" alt="Muscle Motivation">
       <span>Muscle Motivation</span>
     </a>
-    <a class="btn-back" href="app.html">← Dashboard</a>
+    <a class="mm-back" href="app.html">Dashboard</a>
   </header>
 
   <main class="container" id="mmMain" tabindex="-1">
@@ -873,7 +873,7 @@
     <!-- Template builder view -->
     <div id="builderView" style="display:none;">
       <div class="builder-header">
-        <button class="btn-back" onclick="cancelBuilder()"><i data-lucide="arrow-left"></i> Back</button>
+        <button type="button" class="mm-back" onclick="cancelBuilder()">Back</button>
         <div class="builder-title">Build Workout</div>
       </div>
       <div class="card">
