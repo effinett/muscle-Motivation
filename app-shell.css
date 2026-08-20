@@ -178,31 +178,84 @@ header {
   letter-spacing: 2.5px; color: var(--mm-text); text-transform: uppercase;
 }
 
-/* The header back-link. Visual treatment is unchanged; it now meets the 44px
-   minimum tap target inside the 60px header (it was ~27px tall).
-   DELIBERATELY scoped to `header` — app.html uses the same .btn-back class name
-   for the recalculate-goals modal's Back button, which must keep its own
-   styling. Never unscope this rule. */
-header .btn-back {
-  display: inline-flex; align-items: center;
+/* ── .mm-back — the one in-app previous-page control ────────────────────────
+ *
+ * WHAT THIS REPLACES. The shell used to style `header .btn-back`: a bordered,
+ * uppercase pill, scoped to `header` so it could not collide with a modal Back
+ * button that app.html owned at the time. Two things went wrong with that.
+ *
+ *   1. The scope made the rule unreachable for an identical control that is not
+ *      in the header. workout.html's Build Workout screen has a Back button in
+ *      `.builder-header`, and when the header rules were centralised here in
+ *      4.3.4 its local styling was deleted while the shared rule could never
+ *      match it. It fell back to the browser's DEFAULT button — a grey rounded
+ *      box with a border — which is the "dark rounded pill" reported on device.
+ *   2. The scope's justification expired. app.html no longer uses .btn-back at
+ *      all; that modal moved to profile.html and was renamed .btn-back-modal
+ *      precisely so it could never collide. The guard was protecting nothing.
+ *
+ * So the treatment is named for its job rather than its position, matching the
+ * rest of the shell vocabulary (.mm-nav-item, .mm-section, .mm-sheet-handle),
+ * and it works wherever the control actually sits.
+ *
+ * VISUAL DIRECTION. Lighter than the pill it replaces: no border, no fill, no
+ * uppercase button voice. It reads as navigation, not as a call to action, and
+ * it sits quietly beside a page title instead of competing with it.
+ *
+ * The arrow is supplied HERE rather than in each consumer's markup, so spacing
+ * and alignment cannot drift between pages and no consumer depends on an icon
+ * pass having run. A text glyph is the established shell affordance — see
+ * .mm-insight-action's '›' below.
+ *
+ * TAP TARGET. Visually compact, physically not: the 44px minimum is kept, and
+ * the negative margin cancels the horizontal padding so the GLYPH lines up with
+ * the content column while the hit area extends past it toward the edge.
+ */
+.mm-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   min-height: 44px;
-  padding: 6px 14px; font-size: 11px; font-family: 'Barlow', sans-serif;
-  font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-  background: transparent; border: 1px solid var(--mm-line);
-  color: var(--mm-text-tertiary); border-radius: 6px; cursor: pointer;
-  transition: border-color 0.2s, color 0.2s; text-decoration: none;
+  padding: 0 6px;
+  margin-left: -6px;
+  background: none;
+  border: 0;
+  color: var(--mm-text-secondary);
+  font-family: 'Barlow', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.2s;
+  -webkit-tap-highlight-color: transparent;
 }
-header .btn-back:hover { border-color: var(--mm-line-strong); color: var(--mm-text-secondary); }
+.mm-back::before {
+  content: '←';
+  font-size: 17px;
+  line-height: 1;
+}
+/* Pointer-only, for the reason 4.3.5E established: on touch, iOS leaves :hover
+   on the last-tapped element and it would linger after navigating back. */
+@media (hover: hover) {
+  .mm-back:hover { color: var(--mm-text); }
+}
+.mm-back:focus-visible {
+  outline: 2px solid var(--mm-accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
 
-/* The header back-link is a FALLBACK Home path, not a second Home control.
+/* The HEADER instance is a FALLBACK Home path, not a second Home control.
    Wherever the primary nav renders, its Home destination already does this job,
    so the redundant link is hidden. It reappears automatically on a suppressed-
    nav surface (workout.html #activeView), which would otherwise have no visible
-   route out but the logo. */
-:root.mm-has-nav header .btn-back { display: none; }
+   route out but the logo. Scoped to `header` so it only ever hides that one —
+   an in-page Back control must never disappear because a nav exists. */
+:root.mm-has-nav header .mm-back { display: none; }
 
-.header-logo:focus-visible,
-header .btn-back:focus-visible {
+.header-logo:focus-visible {
   outline: 2px solid var(--mm-accent);
   outline-offset: 2px;
   border-radius: 6px;

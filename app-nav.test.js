@@ -322,31 +322,129 @@ test('header: no participating page redefines the shared header rules', () => {
 });
 
 test('header: the redundant back-link is hidden wherever the nav renders', () => {
-  assert.match(SHELL_CSS, /:root\.mm-has-nav header \.btn-back\s*\{[^}]*display:\s*none/,
+  assert.match(SHELL_CSS, /:root\.mm-has-nav header \.mm-back\s*\{[^}]*display:\s*none/,
     'nav present → the second Home control is hidden');
+  // The hide rule stays scoped to `header`. An in-PAGE Back control must never
+  // disappear just because a bottom nav exists — that is a different job.
+  assert.ok(!/:root\.mm-has-nav \.mm-back\s*\{/.test(SHELL_CSS),
+    'the hide rule must not apply to every .mm-back');
   // Only workout.html keeps the markup: it is the one page that can suppress
   // the nav (#activeView) and would otherwise have no visible route out.
-  assert.match(read('workout.html'), /<a class="btn-back" href="app\.html">/,
+  assert.match(read('workout.html'), /<a class="mm-back" href="app\.html">/,
     'workout.html keeps its fallback back-link');
   for (const p of ['nutrition.html', 'weight-history.html', 'workout-history.html']) {
-    assert.ok(!/class="btn-back"/.test(read(p)), `${p}: redundant back-link removed`);
+    assert.ok(!/class="mm-back"/.test(read(p)), `${p}: redundant back-link removed`);
   }
 });
 
-test('header: the shell back-link is scoped so app.html\'s modal Back button survives', () => {
-  // app.html reuses the .btn-back class for the recalculate-goals modal.
-  // The shell rule MUST stay scoped to `header` or that button is restyled.
-  assert.ok(!/(^|\n)\.btn-back\s*\{/.test(SHELL_CSS),
-    'the shell never defines an unscoped .btn-back');
-  assert.match(SHELL_CSS, /header \.btn-back\s*\{[^}]*min-height:\s*44px/,
-    'the header back-link meets the 44px tap target');
-  // profile.html's modal Back button uses a distinct class precisely so it can
-  // never collide with the shell's header control.
-  const profCss = (read('profile.html').match(/<style>([\s\S]*?)<\/style>/) || [])[1] || '';
-  assert.match(profCss, /\.btn-back-modal\s*\{/, 'the modal Back button is namespaced');
+/* ── 8c · One shared in-app Back control ─────────────────────────────────
+ *
+ * Real-device validation found Build Workout's Back control rendering as a
+ * heavy grey pill. It was not styled that way on purpose — it was the browser's
+ * DEFAULT button. The shared rule was `header .btn-back`, and that control sits
+ * in `.builder-header`, so the selector could never reach it; its local styling
+ * had been deleted when the header rules were centralised in 4.3.4.
+ * ══════════════════════════════════════════════════════════════════════ */
+
+test('back control: one shared primitive, and the legacy pill is gone', () => {
+  assert.match(SHELL_CSS, /\n\.mm-back\s*\{/, 'the shell defines .mm-back');
+  // The class is not position-scoped, so it reaches a control wherever it sits.
+  // The ONLY header-qualified rule allowed is the hide rule, which is behaviour
+  // (a redundant Home path) rather than styling.
+  const headerScoped = [...SHELL_CSS.matchAll(/([^\n{}]*header \.mm-back[^\n{}]*)\{/g)]
+    .map((m) => m[1].trim());
+  assert.deepStrictEqual(headerScoped, [':root.mm-has-nav header .mm-back'],
+    '.mm-back styling must not be scoped to the header — that is what orphaned the builder control');
+  // The superseded rule and its class are gone from the shell entirely.
+  const shellCode = SHELL_CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.ok(!/\.btn-back/.test(shellCode), 'no .btn-back rule remains in the shell');
+});
+
+test('back control: every equivalent app-shell control uses it', () => {
+  const wk = read('workout.html');
+  // Both of workout.html's in-app back controls — the header Home fallback and
+  // the Build Workout control — now render as the same component.
+  assert.strictEqual((wk.match(/class="mm-back"/g) || []).length, 2);
+  assert.match(wk, /<a class="mm-back" href="app\.html">Dashboard<\/a>/);
+  assert.match(wk, /<button type="button" class="mm-back" onclick="cancelBuilder\(\)">Back<\/button>/);
+  // No page-specific duplicate of the same treatment survives on a shell page.
   for (const p of NAV_PAGES) {
     const css = (read(p).match(/<style>([\s\S]*?)<\/style>/) || [])[1] || '';
-    assert.ok(!/(^|\n)\s*\.btn-back\s*\{/.test(css), `${p}: no local .btn-back rule`);
+    assert.ok(!/(^|\n)\s*\.mm-back\s*\{/.test(css), `${p}: no local .mm-back override`);
+    assert.ok(!/(^|\n)\s*\.btn-back\s*\{/.test(css), `${p}: no leftover .btn-back rule`);
+  }
+});
+
+test('back control: the arrow comes from the primitive, not from each page', () => {
+  // Supplying it once is what makes icon/text spacing identical everywhere and
+  // removes any dependence on an icon pass having run.
+  assert.match(SHELL_CSS, /\.mm-back::before\s*\{[^}]*content:\s*'←'/);
+  const wk = read('workout.html');
+  assert.ok(!/class="mm-back"[^>]*>\s*←/.test(wk), 'no page hard-codes the glyph');
+  assert.ok(!/class="mm-back"[\s\S]{0,80}?data-lucide/.test(wk),
+    'and none depends on the icon library for it');
+});
+
+test('back control: it reads as navigation, not as a button', () => {
+  const rule = (SHELL_CSS.match(/\n\.mm-back\s*\{([^}]*)\}/) || [])[1];
+  assert.ok(rule, '.mm-back rule exists');
+  assert.match(rule, /background:\s*none/, 'no fill');
+  assert.match(rule, /border:\s*0/, 'no border — this is what made it read as a pill');
+  assert.ok(!/border-radius/.test(rule), 'and no pill radius');
+  assert.ok(!/text-transform/.test(rule), 'not shouted in uppercase like a CTA');
+  // It is quieter than the page title beside it, and not the accent colour.
+  assert.match(rule, /color:\s*var\(--mm-text-secondary\)/);
+  assert.ok(!/--mm-accent[^-]/.test(rule), 'never styled as a primary action');
+});
+
+test('back control: compact visually, still a real tap target', () => {
+  const rule = (SHELL_CSS.match(/\n\.mm-back\s*\{([^}]*)\}/) || [])[1];
+  assert.match(rule, /min-height:\s*44px/, 'the 44px minimum is kept');
+  // The negative margin cancels the padding so the GLYPH aligns with the
+  // content column while the hit area extends past it — compact look, big target.
+  const pad = Number((rule.match(/padding:\s*0 (\d+)px/) || [])[1]);
+  const pull = Number((rule.match(/margin-left:\s*-(\d+)px/) || [])[1]);
+  assert.strictEqual(pad, pull, 'the pull exactly cancels the padding');
+  assert.ok(pad > 0, 'and there is real padding to extend the target');
+});
+
+test('back control: accessible name, focus ring, and touch-safe hover', () => {
+  const wk = read('workout.html');
+  // A visible text label IS the accessible name — no icon-only control.
+  assert.match(wk, /class="mm-back"[^>]*>Dashboard</);
+  assert.match(wk, /class="mm-back"[^>]*>Back</);
+  assert.match(SHELL_CSS, /\.mm-back:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--mm-accent\)/);
+  // Same lesson as 4.3.5E: an unguarded :hover lingers on touch after you leave.
+  assert.match(SHELL_CSS, /@media \(hover: hover\) \{\s*\n\s*\.mm-back:hover/);
+  // The glyph is decorative punctuation; the label carries the meaning.
+  assert.match(SHELL_CSS, /\.mm-back::before/);
+});
+
+test('back control: routing semantics are unchanged', () => {
+  const wk = read('workout.html');
+  // These two deliberately navigate DIFFERENTLY and both keep their behaviour:
+  // the header link is a fixed route to the dashboard…
+  assert.match(wk, /<a class="mm-back" href="app\.html">/);
+  // …and the builder control returns to the previous VIEW on the same page.
+  assert.match(wk, /onclick="cancelBuilder\(\)"/);
+  assert.match(wk, /function cancelBuilder\(\) \{ showStartView\(\); \}/);
+  // Nothing was converted to history-based navigation.
+  assert.ok(!/history\.back\(\)|history\.go\(-1\)/.test(wk));
+});
+
+test('back control: non-equivalent controls were deliberately left alone', () => {
+  // Wizard STEP navigation, modal back, and public-site links are different
+  // jobs and keep their own treatments. Pinned so a later sweep does not
+  // "helpfully" normalise them into app-shell navigation.
+  assert.match(read('onboarding.html'), /<button class="btn-back" onclick="goStep\(1\)">/,
+    'onboarding step-back is not page navigation');
+  assert.match(read('profile.html'), /class="btn-back-modal"/, 'modal back stays namespaced');
+  assert.match(read('nutrition.js'), /class="nu-back"/, 'the food-modal back arrow is modal navigation');
+  assert.match(read('auth.html'), /class="back-link"/, 'public-site links are untouched');
+  // None of them adopted the shell class.
+  for (const p of ['onboarding.html', 'auth.html', 'reset-password.html',
+    'program-fat-loss.html', 'program-muscle-gain.html', 'program-glute-builder.html']) {
+    assert.ok(!/class="mm-back"/.test(read(p)), `${p}: not an app-shell back control`);
   }
 });
 
