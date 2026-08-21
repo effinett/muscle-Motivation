@@ -195,15 +195,54 @@ later phases must not break them.
 
 > **4.3.5 → 4.3.6 → 4.3.7 → 4.3.8 → 4.4 → 4.5**
 
+**Sequencing exception in force (owner-approved 2026-08-20):** the order above is unchanged, but 4.3.5 and
+4.3.6 may currently **overlap** — 4.3.6 implementation may begin while 4.3.5 stays open on its outstanding
+4.3.5F Android measurement. This is a one-off exception for a single external hardware dependency; it is
+not a general licence to start phases early, and no other pair of phases may overlap without separate
+approval.
+
 ---
 
-## PHASE 4.3.5 — MOBILE UX & APP-SHELL HARDENING · **NEXT**
+## PHASE 4.3.5 — MOBILE UX & APP-SHELL HARDENING · **OPEN — VALIDATION DEBT**
 
 **Goal:** make the existing app stable, fast, predictable, accessible, and premium before building major
 new systems on top of it.
 
 **Internal dependency (do not reorder):** A → B → **C (shared primitive)** → D → E. Build the primitive
 *before* fixing the picker symptoms; do not patch symptoms first and extract the primitive afterward.
+
+### Status — 2026-08-20 · OPEN, NOT CLOSED
+
+Implementation is merged, deployed, and accepted; real-device UX validation is done on iPhone Safari and
+the installed iPhone PWA, with qualitative Android Chrome and Android installed-PWA observation. **The
+phase is still open.** One requirement remains outstanding:
+
+> **4.3.5F — instrumented Android navigation-performance measurement.**
+
+This is an **external hardware-access dependency**, not unfinished implementation work: the owner has no
+access to a physical Android device at present. When a suitable device is available, 4.3.5 resumes at
+**Android USB / `chrome://inspect` instrumented navigation-performance measurement**, and the results are
+judged against the exact then-current 4.3.5F targets below.
+
+**Owner-approved sequencing exception (2026-08-20):** **Phase 4.3.6 implementation may begin** while this
+external dependency is unresolved. 4.3.5 remains open in parallel. Recorded in
+`docs/ROADMAP-HISTORY.md` → "Roadmap decisions".
+
+**This exception does NOT mean any of the following. Do not infer them:**
+
+- ❌ 4.3.5 is complete, or complete because 4.3.6 started. It is **open**.
+- ❌ 4.3.5F passed, was waived, or became optional. It is **binding and outstanding**.
+- ❌ The performance targets were weakened. They are **unchanged**.
+- ❌ Qualitative Android UX observation counts as the instrumented p75 measurement. It does **not**.
+- ❌ 4.3.5 can never close because later phases started. It closes normally once 4.3.5F is measured and
+  §12.5 is satisfied.
+
+**Measurement-integrity condition (binding).** 4.3.6 must not silently modify or invalidate the deferred
+4.3.5F measurement contract. If 4.3.6 (or any later work) materially changes the app-shell or navigation
+performance surface before 4.3.5F is measured, the eventual measurement is interpreted against the
+**actual production state at measurement time**, and that circumstance must be recorded explicitly in
+`docs/ROADMAP-HISTORY.md`. **Never record a claim that the original 4.3.5 build was measured when later
+code is what was actually measured.**
 
 ### 4.3.5A — Dashboard micro-polish
 - Slightly enlarge the top-left Muscle Motivation logo; preserve header balance.
@@ -325,6 +364,15 @@ regardless. Nutrition is the worst case and is the destination the target should
 
 **Evidence requirement:** capture before-and-after measurements for all four destinations. The phase
 does not close on "it feels faster."
+
+#### Status — OUTSTANDING (2026-08-20)
+
+The instrumented Android measurement **has not been performed** — the owner has no physical Android
+device at present. The requirement, the measurement method (Android USB / `chrome://inspect`), and every
+target value above are **unchanged and still binding**; only the *timing* is deferred, by the
+owner-approved sequencing exception recorded in the 4.3.5 status block and in
+`docs/ROADMAP-HISTORY.md`. Qualitative Android UX observation is **not** a substitute for the p75
+measurement. Also tracked in §10.8.
 
 ### 4.3.5G — Dirty-state / unsaved-work protection
 Carries forward the deferred 4.3.2 requirement. Establish a shared understanding of whether the user has
@@ -1036,6 +1084,12 @@ The `verify` check is now required on `main`, alongside a required pull request 
 up-to-date-branch requirement. See §2.2 and "Completed repository actions" in
 `docs/ROADMAP-HISTORY.md`. Retained here as a closed entry rather than deleted, per §12.2.
 
+## 10.8 Instrumented Android navigation-performance validation (4.3.5F)
+Outstanding since 2026-08-20 because the owner has no physical Android device. **4.3.5 stays open until
+this is measured**; the 4.3.5F targets are unchanged and remain binding. Resume at Android USB /
+`chrome://inspect`. 4.3.6 may proceed in parallel by owner-approved exception — that exception defers the
+timing only, never the requirement.
+
 ---
 
 # 11. PROTECTED FUTURE COMMITMENTS
@@ -1186,7 +1240,14 @@ Do not delete useful architecture or design docs. Banner them:
 
 ## Next
 
-### **4.3.5 — Mobile UX & App-Shell Hardening**
+### **4.3.5 — Mobile UX & App-Shell Hardening** · **OPEN, NOT CLOSED**
+
+Implementation is merged and accepted. The phase stays open on one requirement:
+**4.3.5F instrumented Android navigation-performance measurement**, deferred by an external
+hardware-access dependency. Targets unchanged and still binding — see the 4.3.5 status block and §10.8.
+
+**Owner-approved sequencing exception (2026-08-20):** **4.3.6 implementation may begin now**, in parallel
+with 4.3.5 remaining open. This starts no other phase early, closes nothing, and waives nothing.
 
 ## Then, in order
 
