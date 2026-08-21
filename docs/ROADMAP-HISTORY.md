@@ -247,3 +247,41 @@ navigation rewrite, a route-system replacement, and an app-shell rebuild all rem
 require separate explicit approval.
 
 No implementation was performed; 4.3.5 has not started.
+
+---
+
+## 2026-08-20 — Phase 4.8 workout-editing capabilities recorded
+
+**Decision:** two owner-approved capabilities that previously existed only outside the roadmap are now
+written into the canonical roadmap as **4.8.11 — Active workout editing foundation** and **4.8.12 —
+Exercise reordering** (`docs/ROADMAP.md` → Phase 4.8, "Workout editing"), and added to §11 Protected
+Future Commitments.
+
+**Scope recorded:**
+
+- **4.8.11** — rename a workout while it is in progress; the rename persists to the session and into
+  history and survives app/PWA restart; it must **never** silently rename the source template, routine,
+  or program; the architecture distinguishes session-instance name from source-template name with no
+  hidden coupling.
+- **4.8.12** — hold/long-press-and-drag exercise reordering in both builders and active workouts, as
+  **one shared reusable pattern**; edge auto-scroll, stable drop targets, no conflict with ordinary
+  vertical scrolling, persistent order, canonical exercise identity unchanged; a non-drag Move Up /
+  Move Down alternative is binding, not optional.
+
+**Internal sequencing recorded as binding:** 4.8.11 before 4.8.12 — reorder is a drag interaction on top
+of session-editing semantics, and building it on unstable session identity would produce a second
+workout system.
+
+**Numbering note (why 4.8, not 4.7).** The approval named "Phase 4.7 — Training Engine 2.0". In the
+canonical roadmap **4.7 is AI Coach Action Tools** and **4.8 is Training Engine 2.0**, so the name and
+the number pointed at different phases. Effi resolved this on 2026-08-20 in favour of the **name**: the
+capabilities were placed in **Phase 4.8 — Training Engine 2.0**. **No phase was renumbered or
+reordered**; 4.7 is untouched and the post-launch order `4.6 → 4.7 → 4.8 → 4.9 → 5.0 → 5.1` is unchanged.
+
+**Dependency recorded:** §9.5 now names 4.8.12 as the owner of the shared reorder pattern and points at
+5.0.1 (swipe framework), 5.0.3 (gesture-conflict prevention), and 5.0.4 (accessible alternatives) so two
+competing drag systems are not built.
+
+This is a roadmap planning update, not implementation completion. No production code, schema, migration,
+test, or performance target was changed. Phase 4.3.5 remains open and its 4.3.5F targets are unchanged;
+4.8 has not started.
