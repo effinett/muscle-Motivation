@@ -724,6 +724,41 @@ This phase precedes advanced progression (5.1) because it changes what a set fun
   intervals stay accurate when the app backgrounds, the screen locks, the PWA suspends, or the browser
   throttles.
 
+### Workout editing *(approved 2026-08-20)*
+
+Approved capabilities recorded here because they change what an in-progress session **is** and how it is
+edited — the same engine question 4.8.1–4.8.10 answer for timing. **Internal order is binding:
+4.8.11 → 4.8.12.** Reordering is a drag interaction layered on session-editing semantics; building it on
+unstable session identity would produce exactly the second workout system this phase exists to prevent.
+
+- **4.8.11 — Active workout editing foundation.** Establish session-editing semantics before any
+  reorder work.
+  - Rename a workout **while it is already in progress**.
+  - The rename persists to the active workout/session and carries into workout history.
+  - Closing and reopening the app or the installed PWA must not lose the renamed session name.
+  - **Renaming the active session must never silently rename the source workout template, routine, or
+    program.** Renaming a source template/routine/program requires separate explicit user intent.
+  - The architecture must clearly distinguish the **session / workout-instance name** from the **source
+    template / routine / program name**. No hidden coupling between them.
+  - Session identity and history integrity remain correct throughout.
+- **4.8.12 — Exercise reordering.** Rearrange exercise order by hold / long-press and drag, in **both**
+  workout/template building-and-editing **and** an active workout already in progress.
+  - **One shared, reusable reorder pattern serving both surfaces** — never two unrelated page-specific
+    implementations (§2.7).
+  - Interaction: hold / long-press to initiate on touch · drag to a new position · clear lifted/dragging
+    visual state · stable drop target and insertion position · auto-scroll when dragging near the top or
+    bottom edge.
+  - Ordinary vertical scrolling stays easy; long-press/drag must never trigger accidentally during normal
+    page scrolling.
+  - The new order persists, and reopened sessions/templates preserve it.
+  - **Canonical exercise identity is unchanged by reordering** (`exercise_id` / `user_exercise_id`
+    semantics per 4.2.1K are untouched).
+  - **Accessibility (binding):** a non-drag alternative — Move Up / Move Down or an equivalent accessible
+    reorder mechanism — ships with the feature. Drag is never the only way to reorder (§2.6, 5.0.4).
+  - **Dependency to check before implementing:** 5.0.1 owns the shared swipe-action framework and 5.0.3
+    owns gesture-conflict prevention (§9.5). Reconcile with those owners so the platform ends up with one
+    coherent touch-gesture layer rather than two competing drag systems.
+
 ---
 
 ## PHASE 4.9 — PERSONALIZATION
@@ -957,6 +992,11 @@ concern entirely.
 **4.3.5C** owns the bottom sheet; **5.0.1** owns swipe actions. Coach (4.4.9), pickers, filters, and food
 selectors consume them.
 
+**4.8.12** owns the shared long-press **reorder** pattern, consumed by both workout/template builders and
+the active workout. It is a distinct interaction from 5.0.1 swipe actions, but it shares 5.0.3's
+gesture-conflict constraint and 5.0.4's accessible-alternative requirement — reconcile with those owners
+before implementing, so only one touch-gesture layer is built.
+
 ---
 
 # 10. KNOWN TECHNICAL DEBT & PRESERVED DEFERRALS
@@ -1026,6 +1066,9 @@ Removal requires an explicit line: **`CANCELLED — YYYY-MM-DD — reason`**. Ne
 - HIIT
 - circuits
 - hybrid workouts
+- active-workout renaming (session name distinct from the source template/routine/program)
+- exercise reordering (shared long-press/drag pattern in builders and active workouts, with an
+  accessible Move Up / Move Down alternative)
 - habits
 - steps
 - water
