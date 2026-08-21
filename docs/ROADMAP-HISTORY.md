@@ -333,3 +333,52 @@ that the original 4.3.5 build was measured when later code is what was actually 
 implementation file was touched.**
 
 This is a **sequencing exception, not a phase completion.**
+
+---
+
+## 2026-08-21 — Phase 4.3.6 owner decisions O1–O5 and R2 locked (design only)
+
+**Decision (owner-approved, Effi):** following a read-only pre-implementation reconciliation audit of the
+training-content and entitlement architecture, five owner decisions and one access-model decision are
+locked for Phase 4.3.6. Recorded in `docs/ROADMAP.md` → Phase 4.3.6 → "Owner decisions — locked
+2026-08-21". **This is a decision lock, not implementation.**
+
+**Decisions:** O1 membership grants membership-included Programs while standalone purchases remain
+independent and are never devalued · O2 Browse works at zero/one/many ownership, exposing catalog metadata
+only and never protected session prescriptions · O3 the narrowest author mechanism sufficient to separate
+private user Routines from platform-published ones, with no roles/grants system · O4 snapshot-only
+history→Routine conversion with no identity guessing, no custom replacement, and no history mutation ·
+O5 Programs stays inside Train with no fifth bottom-navigation tab.
+
+**R2 — access model for the three live Programs.** `fat_loss_blueprint`, `muscle_gain`, and
+`glute_builder` are each **membership-included AND standalone-purchasable**. Standalone purchases are
+independent entitlements that survive absence, expiry, or cancellation of a membership. Scoped to these
+three Programs only; future Programs may use any combination.
+
+**Canonical directions approved:** evolve `workout_templates` into the canonical Routine (no third
+workout-definition system) · converge `program_workouts` non-destructively toward Routine content plus a
+Program→Routine relationship · create a real canonical Program catalog entity · keep `purchases`
+authoritative for commerce with the Stripe webhook as its only writer and one shared entitlement resolver
+above it. **No `subscriptions` table. No grants table.**
+
+**Audit evidence that motivated these decisions** (read-only, no changes): no Program entity exists — a
+Program is a text slug repeated across **nine** artifacts, one of which is the `purchases.product` CHECK
+constraint, so selling a new Program requires DDL (now recorded as §10.9) · entitlement is interpreted at
+**seven** independent decision points with divergent `status` predicates, one of them inside the
+`program_workouts` RLS policy · `workout_templates` and `program_workouts` carry two hand-synchronised
+JSONB exercise prescriptions · **230 of 610** logged exercise rows still carry legacy name-only identity,
+which is why O4 forbids backfilling · production history shows 115 workouts, **zero** program-launched.
+
+**Unresolved and explicitly deferred to Effi** — three production metadata conflicts blocking the CP1a
+catalog backfill: Fat Loss "90 Day" vs "12-week" · Glute Builder goal (three sources disagree) · Muscle
+Gain canonical display name. **An implementer must not silently resolve these.**
+
+**4.3.5 is unaffected.** It remains **OPEN — VALIDATION DEBT**; 4.3.5F instrumented Android measurement
+remains outstanding and its targets are unchanged. O5 removes the largest threat to that measurement by
+keeping bottom navigation at the four destinations **Home · Train · Nutrition · Progress**, preserving the
+p75 basis. The measurement-integrity condition still binds: later checkpoints touch Home's and Train's
+authenticated bootstrap, so the eventual measurement must be interpreted against the actual production
+state at measurement time and that circumstance recorded here.
+
+No production code, schema, migration, RLS policy, Stripe configuration, test, or performance target was
+changed. No Program was created and no Routine was converted. **CP1a has not started.**

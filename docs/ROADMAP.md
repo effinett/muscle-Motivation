@@ -413,6 +413,54 @@ areas · reduced motion · keyboard navigation and focus · the shipped shell co
 **Goal:** make Programs first-class, create one coherent reusable training-content architecture, and
 complete the Train surface capabilities that earlier exercise phases left unbuilt.
 
+### Owner decisions — locked 2026-08-21
+
+Approved by Effi following the pre-implementation reconciliation audit. These constrain 4.3.6A–L; they do
+not reorder or renumber any phase.
+
+- **O1 — Membership grants Programs.** An active membership grants access to Programs designated
+  membership-included. **Existing standalone purchases remain valid and are never devalued** — a user who
+  bought a Program keeps it whether or not a membership exists, lapses, or is cancelled. A Program declares
+  its own access model; access is not hard-coded globally.
+- **O2 — Browse at any ownership level.** Programs are browsable owning zero, one, or many. Browse exposes
+  **catalog metadata only** — never protected session prescriptions. `program_workouts` RLS therefore
+  cannot remain the only source of Program metadata; a canonical Program catalog entity is approved.
+- **O3 — Narrowest author mechanism.** Only enough representation to distinguish a private user Routine
+  from a platform-authored/published Routine. **No broad roles/grants system** — that stays in the later
+  Trainer/Admin phase. Widening `workout_templates` RLS beyond `auth.uid() = user_id` is
+  security-sensitive and **stops for review**.
+- **O4 — Snapshot-only history conversion.** No guessing or mass-backfilling of legacy name-only
+  identities; no auto-replacing user customs. History is never mutated. Legacy/custom-dependent workouts
+  may become **private drafts only**, never automatically publishable. Dedup considers exercise/set
+  composition, not title.
+- **O5 — Programs stays inside Train.** Bottom navigation remains **Home · Train · Nutrition · Progress**;
+  no fifth tab in 4.3.6. Train exposes Today · Workouts · Programs. **This preserves the 4.3.5F
+  four-destination measurement basis.**
+
+**R2 — access model for the three live Programs (locked 2026-08-21).** `fat_loss_blueprint`,
+`muscle_gain`, and `glute_builder` are each **`included_with_membership = true` AND
+`standalone_purchasable = true`**. An active membership grants all three. Standalone purchases are
+**independent entitlements**: a purchaser keeps that Program with no membership, or after a membership
+expires or is cancelled. **This applies to these three Programs only** — future Programs may independently
+be membership-included, standalone-purchasable, both, or neither/draft.
+
+**Canonical direction approved:** evolve `workout_templates` into the canonical Routine (no third
+workout-definition system); converge `program_workouts` toward Routine content + a Program→Routine
+relationship **non-destructively**; keep `purchases` the authoritative commerce store with the Stripe
+webhook as its only writer, and build **one** shared entitlement resolver over it. **No `subscriptions`
+table. No grants table.**
+
+**Unresolved — blocking the CP1a catalog backfill.** Three Program metadata conflicts exist in production
+today and must be decided by Effi before any catalog row is written. They must **not** be silently
+resolved by an implementer:
+
+1. **Fat Loss duration** — named "90 Day Fat Loss Blueprint" but described as a "12-week system" in both
+   `PROGRAM_META` and `store.html`.
+2. **Glute Builder goal** — `store.html` badges it "Muscle Building", `PROGRAM_META` describes it as a
+   "Women's lower-body program", and `GOAL_PROGRAM_MAP` has no entry for it at all.
+3. **Muscle Gain canonical display name** — `PROGRAM_META.name` is "Muscle Gain"; the `store.html` card
+   title may differ and must be confirmed rather than assumed.
+
 ### 4.3.6A — Permanent Programs destination
 Programs remain discoverable regardless of ownership. Train conceptually exposes **Today · Workouts ·
 Programs** (final visual treatment may differ).
@@ -1089,6 +1137,11 @@ Outstanding since 2026-08-20 because the owner has no physical Android device. *
 this is measured**; the 4.3.5F targets are unchanged and remain binding. Resume at Android USB /
 `chrome://inspect`. 4.3.6 may proceed in parallel by owner-approved exception — that exception defers the
 timing only, never the requirement.
+
+## 10.9 Program catalog vs `purchases.product` CHECK
+`purchases.product` is a hard-coded CHECK enum of four slugs, so **selling any new Program requires a DDL
+migration**. For 4.3.6 the Program catalog's sellable slugs must remain a subset of that enum; a catalog
+row is not a licence to sell. Altering the CHECK is a stop-condition action requiring explicit approval.
 
 ---
 
