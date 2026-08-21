@@ -285,3 +285,51 @@ competing drag systems are not built.
 This is a roadmap planning update, not implementation completion. No production code, schema, migration,
 test, or performance target was changed. Phase 4.3.5 remains open and its 4.3.5F targets are unchanged;
 4.8 has not started.
+
+---
+
+## 2026-08-20 — Phase 4.3.5 stays open; 4.3.6 permitted to begin in parallel
+
+**Decision (owner-approved, Effi):** Phase 4.3.5 — Mobile UX & App-Shell Hardening **remains OPEN and is
+NOT closed**, pending its required instrumented Android navigation-performance validation. That
+external-only validation dependency **does not block Phase 4.3.6 implementation from beginning.**
+
+**Reason:** the sole remaining 4.3.5 item is **4.3.5F instrumented Android measurement**, and the owner has
+**no current access to a physical Android device**. The blocker is external hardware access, not
+unfinished implementation work.
+
+**Accepted state at the time of this decision:** the 4.3.5 implementation is merged, verified, deployed,
+and accepted — including the exercise picker/input fixes, the quick-workout auto-scroll fix, the final
+picker drag-preview interaction, the workout-date integrity fix, the authenticated-menu cleanup, and the
+shared Back-control polish. Real-device UX validation is complete on **iPhone Safari** and the **installed
+iPhone PWA**, with qualitative **Android Chrome** and **Android installed-PWA** observation. No noticeable
+full-page white flashes were observed. CI, local verification, and production state are green.
+
+**What this decision explicitly does NOT do:**
+
+- It does **not** mark 4.3.5 complete, and 4.3.6 starting is **not** evidence that 4.3.5 closed.
+- It does **not** record 4.3.5F as passed, waived, or optional. The measurement obligation stays binding.
+- It does **not** weaken, revise, or delete any performance target. Tap acknowledgement ≤ 100 ms · warm
+  repeat navigation p75 ≤ 600 ms · first navigation p75 ≤ 1200 ms · zero full-page white flashes · zero
+  avoidable duplicate shared-bootstrap fetch/init all stand exactly as defined on 2026-08-14.
+- Qualitative Android UX observation is **not** accepted as the instrumented p75 measurement.
+- It does **not** make 4.3.5 permanently uncloseable. 4.3.5 closes normally once the measurement is taken
+  and §12.5 is satisfied.
+
+**Resumption point:** when a suitable device is available, 4.3.5 resumes at **Android USB /
+`chrome://inspect` instrumented navigation-performance measurement**, evaluated against the exact
+then-current 4.3.5F targets.
+
+**Measurement-integrity condition:** 4.3.6 must not silently modify or invalidate the deferred 4.3.5F
+measurement contract. If 4.3.6 or later work materially changes the app-shell/navigation performance
+surface before 4.3.5F is measured, the eventual measurement is interpreted against the **actual production
+state at measurement time** and that circumstance must be recorded here. **Never create a historical claim
+that the original 4.3.5 build was measured when later code is what was actually measured.**
+
+**Roadmap edits made:** `docs/ROADMAP.md` — 4.3.5 heading status changed from `NEXT` to
+`OPEN — VALIDATION DEBT` with a status block carrying the exception and the anti-inference guards · a
+4.3.5F "Status — OUTSTANDING" note · a §4 overlap note on the critical path · new §10.8 preserved deferral ·
+§13 Execution Order updated. **No phase was reordered, renumbered, or closed; no target was revised; no
+implementation file was touched.**
+
+This is a **sequencing exception, not a phase completion.**
