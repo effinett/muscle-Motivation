@@ -382,3 +382,38 @@ state at measurement time and that circumstance recorded here.
 
 No production code, schema, migration, RLS policy, Stripe configuration, test, or performance target was
 changed. No Program was created and no Routine was converted. **CP1a has not started.**
+
+---
+
+## 2026-08-22 — Phase 4.3.6 CP1b changed the 4.3.5F measurement surface
+
+**Recorded because 4.3.5F is still unmeasured.** Phase 4.3.5 remains **OPEN — VALIDATION DEBT**; the
+instrumented Android navigation measurement has not been taken, and its targets are unchanged. Under the
+measurement-integrity condition, any change to the app-shell/navigation performance surface before that
+measurement must be recorded so the eventual numbers are interpreted against the real production state.
+
+**What changed.** CP1b routed Program identity/catalog metadata through the canonical `public.programs`
+catalog (`program-catalog.js`), retiring `PROGRAM_META`, `PROGRAM_URLS`, `GOAL_PROGRAM_MAP` and the
+`schedules.js` `PROGRAM_NAMES` map. Home (`app.html`), Profile and Train (`workout.html`) now consume the
+catalog; `workout-history.html` and `workout-complete.html` load the module as a cache reader only.
+
+**Effect on the four measured destinations (Home · Train · Nutrition · Progress):**
+
+- **First page load of a browser session** — one additional Supabase request for the 3-row published
+  catalog, issued **in parallel** with an existing query (`purchases` on Home, the ownership check on
+  Train) rather than sequentially. The number of *sequential* round trips on Home's critical path is
+  unchanged.
+- **Every later navigation in that session** — **zero** additional requests. The catalog is held in a
+  session-scoped cache, so the repeat-navigation path the 4.3.5F warm target is judged on pays nothing.
+- **Payload** — `program-catalog.js` (~6 KB unminified) is added to Home, Train, Profile,
+  workout-history and workout-complete.
+- **Nutrition and Progress are untouched.**
+- Bottom navigation is unchanged at four destinations; no route, shell, or prefetch behaviour changed.
+
+**Interpretation rule for the eventual measurement:** the Android p75 numbers, when taken, measure the
+**post-CP1b** production state — not the original 4.3.5 build. That distinction must be stated when the
+result is recorded. **No 4.3.5F target was changed.**
+
+**Also recorded:** roadmap §10.10 — a latent `TRUNCATE` grant to `anon`/`authenticated` across the
+`public` schema (Supabase default; `TRUNCATE` bypasses RLS). Verified **LOW** and not reachable through
+PostgREST, deferred to a dedicated security checkpoint rather than fixed inside feature work.
