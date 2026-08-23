@@ -588,6 +588,7 @@
 <script src="supabase.js"></script>
 <script src="schedules.js"></script>
 <script src="program-catalog.js"></script>
+<script src="entitlement-core.js"></script>
 <script src="program-state.js"></script>
 <script src="weight.js"></script>
 <script src="metrics.js"></script>
@@ -696,7 +697,7 @@
 
   async function loadProgramState(userId) {
     try {
-      var owned = await pgLoadOwnedPrograms(userId);
+      var owned = await pgLoadAccessiblePrograms(userId);
       var activeSlug = await pgResolveActive(userId, currentProfile, owned);
       if (!activeSlug) return owned.length > 1 ? { needsSelection: true } : null;
       return await pgResolveSession(userId, activeSlug, currentProfile.training_days);

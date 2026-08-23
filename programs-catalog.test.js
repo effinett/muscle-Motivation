@@ -288,7 +288,7 @@ test('perf: Home does not add a sequential catalog round trip', () => {
   // 4.3.5F is still unmeasured, so Home's critical path must not grow.
   const src = read('program-state.js');
   assert.match(src, /Promise\.all\(\[\s*\n?\s*pcLoadCatalog\(\)/,
-    'pgLoadOwnedPrograms must parallelise the catalog fetch');
+    'pgLoadAccessiblePrograms must parallelise the catalog fetch');
   assert.ok(!/await pcLoadCatalog\(\);\s*\n\s*var res = await supabaseClient/.test(src),
     'never sequential');
 });

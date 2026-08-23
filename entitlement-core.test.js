@@ -340,32 +340,29 @@ test('determinism: repeated calls agree', () => {
   }
 });
 
-test('scope: CP2a migrated no call site — every legacy check is untouched', () => {
-  // CP2b owns migration. Until then the resolver has zero consumers and CP2a
-  // is removable with no user-visible effect.
-  const consumers = ['program-state.js', 'profile.html', 'workout.html', 'app.html',
-    'store.html', 'program-fat-loss.html', 'program-muscle-gain.html',
-    'program-glute-builder.html'];
-  for (const f of consumers) {
-    assert.ok(!/entitlement-core/.test(read(f)),
-      `${f} must not consume the resolver until CP2b`);
+/* These two were CP2a scope guards asserting the resolver had no consumers.
+ * CP2b deliberately inverted that, so they now pin the opposite invariant.
+ * Kept rather than deleted so the inversion is a recorded decision. */
+
+test('scope: CP2b migrated every Program-access surface onto the resolver', () => {
+  for (const f of ['program-state.js', 'workout.html', 'program-fat-loss.html',
+    'program-muscle-gain.html', 'program-glute-builder.html']) {
+    assert.match(read(f), /entitlement-core|resolveProgramAccess/,
+      `${f} must decide access through the shared resolver`);
   }
 });
 
-test('scope: the legacy per-surface purchase checks still exist unchanged', () => {
-  // Proof the live access path was not quietly altered.
-  for (const f of ['program-fat-loss.html', 'program-muscle-gain.html',
-    'program-glute-builder.html']) {
-    assert.match(read(f), /from\('purchases'\)/, `${f} still does its own check`);
-  }
-  assert.match(read('program-state.js'), /from\('purchases'\)/);
+test('scope: the public store page still has no entitlement dependency', () => {
+  // store.html serves anonymous visitors and gates nothing; it must not gain
+  // an authenticated-only module.
+  assert.ok(!/entitlement-core/.test(read('store.html')));
 });
 
-test('scope: no page loads the module, so no bootstrap surface changed', () => {
-  // 4.3.5F is still unmeasured; CP2a must not touch Home or Train startup.
-  for (const f of ['app.html', 'workout.html', 'profile.html', 'nutrition.html',
-    'weight-history.html']) {
+test('scope: only entitlement surfaces load the module', () => {
+  // 4.3.5F is still unmeasured. Nutrition and Progress make no entitlement
+  // decision, so they must not pay for the resolver.
+  for (const f of ['nutrition.html', 'weight-history.html']) {
     assert.ok(!/entitlement-core\.js/.test(read(f)),
-      `${f} must not load entitlement-core.js in CP2a`);
+      `${f} makes no entitlement decision and must not load the resolver`);
   }
 });

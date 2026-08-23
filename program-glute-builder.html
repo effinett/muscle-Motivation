@@ -649,6 +649,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.0/dist/umd/supabase.js" integrity="sha384-3wY11tldQ5+yWqAvmTN4XtQvnjoTva0cV15O/O/O5NTtp0ivVopSzLOzsVXWZse9" crossorigin="anonymous"></script>
 <script src="supabase.js"></script>
 <script src="schedules.js"></script>
+<script src="program-catalog.js"></script>
+<script src="entitlement-core.js"></script>
 <script>
   var PRODUCT_SLUG = 'glute_builder';
   var PROGRAM_SLUG = 'glute_builder';
@@ -718,17 +720,21 @@
         var session = await requireAuth();
         var user = session.user;
 
-        var { data, error } = await supabaseClient
-          .from('purchases')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('product', PRODUCT_SLUG)
-          .eq('status', 'active')
-          .limit(1);
+        // Entitlement is decided by the shared resolver, not by a page-local
+        // predicate. Purchases are fetched UNFILTERED — the resolver decides
+        // what qualifies, and a status filter here would be a second policy.
+        var both = await Promise.all([
+          pcLoadCatalog(),
+          supabaseClient.from('purchases').select('product, status')
+            .eq('user_id', user.id),
+        ]);
+        var res = both[1];
+        var access = resolveProgramAccess(
+          pcBySlug(both[0], PRODUCT_SLUG), res.error ? null : res.data);
 
         document.getElementById('authGate').style.display = 'none';
 
-        if (!error && data && data.length > 0) {
+        if (access.allowed) {
           document.getElementById('programContent').style.display = 'block';
           await loadUserProgram(user.id);
         } else {

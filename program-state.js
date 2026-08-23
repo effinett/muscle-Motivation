@@ -16,10 +16,13 @@
  * load first. Node: required directly, the same dual-runtime bridge
  * food-memory.js uses for food-ranking/food-core. */
 var _cat = (typeof require === 'function') ? require('./program-catalog.js') : null;
+var _ent = (typeof require === 'function') ? require('./entitlement-core.js') : null;
 
 function _pcByGoal(list, g)  { return _cat ? _cat.pcByGoal(list, g)  : pcByGoal(list, g); }
 function _pcBySlug(list, s)  { return _cat ? _cat.pcBySlug(list, s)  : pcBySlug(list, s); }
-function _pcIsProgram(l, p)  { return _cat ? _cat.pcIsProgramProduct(l, p) : pcIsProgramProduct(l, p); }
+function _resolveAccess(p, rows) {
+  return _ent ? _ent.resolveProgramAccess(p, rows) : resolveProgramAccess(p, rows);
+}
 
 /* Program identity and catalog metadata moved to the canonical catalog in
  * Phase 4.3.6 CP1b. PROGRAM_META, PROGRAM_URLS and GOAL_PROGRAM_MAP were
@@ -64,29 +67,41 @@ function pgGoalMismatch(goal, activeSlug, ownedSlugs, catalog) {
 
 /* ── data access (browser) ──────────────────────────────────────────────── */
 
-// The catalog fetch runs IN PARALLEL with the purchases query, not before it,
-// so routing this through the canonical catalog costs no extra round trip on
-// the critical path. After the first page load in a session the catalog is
-// cached and pcLoadCatalog() resolves without any network at all.
-async function pgLoadOwnedPrograms(userId) {
+// Every Program this user may ACCESS — by standalone purchase or by
+// membership. Renamed from pgLoadOwnedPrograms in CP2b because "owned" is no
+// longer accurate: a membership grants access without ownership.
+//
+// This module no longer interprets purchase status. It fetches rows and hands
+// them to entitlement-core, which is the one client-side policy. Note the
+// query is deliberately UNFILTERED by status — the resolver decides what
+// qualifies, so a status filter here would silently become a second policy.
+//
+// The catalog fetch runs IN PARALLEL with the purchases query, so routing
+// through the canonical catalog costs no extra round trip. After the first
+// page load in a session the catalog is cached and resolves without network.
+// `purchaseRows` is optional: a surface that already fetched the user's
+// purchases (Profile needs them for the billing card too) passes them in so the
+// page makes ONE purchases request instead of two.
+async function pgLoadAccessiblePrograms(userId, purchaseRows) {
   try {
     var both = await Promise.all([
       pcLoadCatalog(),
-      supabaseClient.from('purchases').select('product, status')
-        .eq('user_id', userId).eq('status', 'active'),
+      Array.isArray(purchaseRows)
+        ? { data: purchaseRows, error: null }
+        : supabaseClient.from('purchases').select('product, status')
+            .eq('user_id', userId),
     ]);
     var catalog = both[0];
     var res = both[1];
     if (res.error) throw res.error;
-    var owned = [];
-    (res.data || []).forEach(function (p) {
-      if (_pcIsProgram(catalog, p.product) && owned.indexOf(p.product) < 0) {
-        owned.push(p.product);
-      }
+    var rows = res.data || [];
+    var accessible = [];
+    catalog.forEach(function (program) {
+      if (_resolveAccess(program, rows).allowed) accessible.push(program.slug);
     });
-    return owned;
+    return accessible;
   } catch (e) {
-    console.error('pgLoadOwnedPrograms:', e);
+    console.error('pgLoadAccessiblePrograms:', e);
     return [];
   }
 }
@@ -111,7 +126,7 @@ async function pgResolveActive(userId, profile, owned) {
 // The next session for the active program. Auto-remaps a stored schedule that
 // no longer matches the user's training_days, preserving their place.
 async function pgResolveSession(userId, activeSlug, trainingDays) {
-  // Cache-only read: pgLoadOwnedPrograms already warmed the catalog earlier in
+  // Cache-only read: pgLoadAccessiblePrograms already warmed the catalog earlier in
   // this same flow, so this adds no request. Returning null when the Program is
   // unknown reproduces the retired `if (!PROGRAM_META[activeSlug]) return null`.
   var meta = _pcBySlug(pcCached() || [], activeSlug);
