@@ -1143,6 +1143,24 @@ timing only, never the requirement.
 migration**. For 4.3.6 the Program catalog's sellable slugs must remain a subset of that enum; a catalog
 row is not a licence to sell. Altering the CHECK is a stop-condition action requiring explicit approval.
 
+## 10.10 `TRUNCATE` granted to `anon` / `authenticated` — **LOW, latent**
+Discovered during Phase 4.3.6 CP1a and verified in CP1b. Every table in the `public` schema grants
+`TRUNCATE` to `anon` and `authenticated` (a Supabase project default — confirmed on `exercises`,
+`profiles`, `program_workouts`, `purchases`, `workout_templates`), and **`TRUNCATE` is not subject to
+RLS**, so row-level policies would not stop it.
+
+**Severity: LOW, not exploitable through the shipped surface.** PostgREST maps HTTP verbs only to
+SELECT/INSERT/UPDATE/DELETE — there is no request that issues `TRUNCATE` — so an ordinary `anon` or
+`authenticated` JWT holder cannot reach it via the Supabase client. It is latent defence-in-depth debt
+that would matter only if a direct Postgres connection or a permissive `SECURITY DEFINER` function were
+ever exposed.
+
+**Follow-up:** a dedicated security checkpoint should `REVOKE TRUNCATE ON ALL TABLES IN SCHEMA public
+FROM anon, authenticated` and adjust the default privileges, repo-wide and in one reviewed change.
+**Not fixed piecemeal inside feature work.** CP1a set the precedent narrowly by revoking
+INSERT/UPDATE/DELETE on `programs`; `TRUNCATE` was deliberately left alone there to avoid a silent
+repo-wide privilege change.
+
 ---
 
 # 11. PROTECTED FUTURE COMMITMENTS

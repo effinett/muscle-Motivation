@@ -1041,6 +1041,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.0/dist/umd/supabase.js" integrity="sha384-3wY11tldQ5+yWqAvmTN4XtQvnjoTva0cV15O/O/O5NTtp0ivVopSzLOzsVXWZse9" crossorigin="anonymous"></script>
 <script src="supabase.js"></script>
 <script src="schedules.js"></script>
+<script src="program-catalog.js"></script>
 <script src="workout-history.js"></script>
 <script src="progression.js"></script>
 <!-- Shared exercise-intelligence core (Phase 4.2.1E) — powers the picker's
@@ -2780,8 +2781,18 @@
       var slug = profile && profile.active_program;
       if (!slug || typeof PROGRAM_SCHEDULES === 'undefined' || !PROGRAM_SCHEDULES[slug]) return;
       // Ownership guard — active_program could be stale after a refund.
-      var { data: pur } = await supabaseClient.from('purchases')
-        .select('id').eq('user_id', currentUser.id).eq('product', slug).eq('status', 'active').limit(1);
+      // The catalog load runs in PARALLEL with the ownership check (and is a
+      // cache hit after the first page of the session), so renderRecommended
+      // can name the program without adding a round trip. Entitlement is still
+      // decided by the purchases query below — CP2 owns replacing that.
+      var pur;
+      await Promise.all([
+        typeof pcLoadCatalog === 'function' ? pcLoadCatalog() : Promise.resolve([]),
+        supabaseClient.from('purchases')
+          .select('id').eq('user_id', currentUser.id).eq('product', slug)
+          .eq('status', 'active').limit(1)
+          .then(function (r) { pur = r.data; }),
+      ]);
       if (!pur || !pur.length) return;
       var { data: up } = await supabaseClient.from('user_programs')
         .select('schedule_keys, current_index')

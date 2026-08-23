@@ -113,14 +113,13 @@ function sessionLabel(key) {
   return SESSION_LABELS[key] || key;
 }
 
-/* Display names for each program slug. Shared so workout history (and any other
- * surface) can show a friendly program name from a stored program_slug. */
-var PROGRAM_NAMES = {
-  fat_loss_blueprint: '90-Day Fat Loss Blueprint',
-  muscle_gain:        'Muscle Gain',
-  glute_builder:      'Glute Builder',
-};
-
-function programName(slug) {
-  return PROGRAM_NAMES[slug] || '';
-}
+/* Program DISPLAY NAMES moved to program-catalog.js in Phase 4.3.6 CP1b.
+ * The map here had already drifted from program-state.js ("90-Day Fat Loss
+ * Blueprint" vs "90 Day Fat Loss Blueprint"), which is exactly the duplication
+ * the canonical catalog exists to remove. `programName(slug)` now lives in
+ * program-catalog.js; every call site already guards with
+ * `typeof programName === 'function'`, so a surface that does not load the
+ * catalog degrades to the same empty string it produced for an unknown slug.
+ *
+ * This file keeps what it has always owned: program × training_days → session
+ * keys, and session labels. */

@@ -12,20 +12,24 @@
  * Browser: globals below. Node: guarded module.exports of the pure parts.
  * ──────────────────────────────────────────────────────────────────────── */
 
-var PROGRAM_META = {
-  fat_loss_blueprint: { name: '90 Day Fat Loss Blueprint', price: '$49', desc: '12-week fat loss system' },
-  muscle_gain:        { name: 'Muscle Gain',               price: '$59', desc: '8-week hypertrophy program' },
-  glute_builder:      { name: 'Glute Builder',             price: '$39', desc: "Women's lower-body program" },
-};
+/* Catalog access. Browser: program-catalog.js defines these globals and must
+ * load first. Node: required directly, the same dual-runtime bridge
+ * food-memory.js uses for food-ranking/food-core. */
+var _cat = (typeof require === 'function') ? require('./program-catalog.js') : null;
 
-var PROGRAM_URLS = {
-  fat_loss_blueprint: 'program-fat-loss.html',
-  muscle_gain:        'program-muscle-gain.html',
-  glute_builder:      'program-glute-builder.html',
-};
+function _pcByGoal(list, g)  { return _cat ? _cat.pcByGoal(list, g)  : pcByGoal(list, g); }
+function _pcBySlug(list, s)  { return _cat ? _cat.pcBySlug(list, s)  : pcBySlug(list, s); }
+function _pcIsProgram(l, p)  { return _cat ? _cat.pcIsProgramProduct(l, p) : pcIsProgramProduct(l, p); }
 
+/* Program identity and catalog metadata moved to the canonical catalog in
+ * Phase 4.3.6 CP1b. PROGRAM_META, PROGRAM_URLS and GOAL_PROGRAM_MAP were
+ * retired — program-catalog.js reads public.programs instead, so name,
+ * description, page path and goal→program all have one source.
+ *
+ * GOAL_LABELS stays here on purpose: it is the USER's goal vocabulary
+ * (profiles.goal), not Program catalog metadata. profile.html renders the
+ * user's own goal with it. Programs merely reuse the same vocabulary. */
 var GOAL_LABELS = { fatloss: 'Fat Loss', recomp: 'Recomposition', muscle: 'Muscle Gain' };
-var GOAL_PROGRAM_MAP = { fatloss: 'fat_loss_blueprint', muscle: 'muscle_gain' };
 
 /* ── pure ───────────────────────────────────────────────────────────────── */
 
@@ -49,25 +53,36 @@ function pgSessionIndex(keys, currentIndex) {
 
 // Suggest the program that matches the user's stated goal, when they own it
 // and it is not already active. Returns null when there is nothing to suggest.
-function pgGoalMismatch(goal, activeSlug, ownedSlugs) {
-  var expected = GOAL_PROGRAM_MAP[goal];
-  if (!expected || expected === activeSlug) return null;
-  if (!PROGRAM_META[expected]) return null;
-  if (!ownedSlugs || ownedSlugs.indexOf(expected) < 0) return null;
-  return { slug: expected, name: PROGRAM_META[expected].name, goalLabel: GOAL_LABELS[goal] || goal };
+// `catalog` is the loaded Program catalog; goal→program resolution comes from
+// it (lowest sort_order wins) rather than the retired GOAL_PROGRAM_MAP.
+function pgGoalMismatch(goal, activeSlug, ownedSlugs, catalog) {
+  var match = _pcByGoal(catalog || [], goal);
+  if (!match || match.slug === activeSlug) return null;
+  if (!ownedSlugs || ownedSlugs.indexOf(match.slug) < 0) return null;
+  return { slug: match.slug, name: match.name, goalLabel: GOAL_LABELS[goal] || goal };
 }
 
 /* ── data access (browser) ──────────────────────────────────────────────── */
 
+// The catalog fetch runs IN PARALLEL with the purchases query, not before it,
+// so routing this through the canonical catalog costs no extra round trip on
+// the critical path. After the first page load in a session the catalog is
+// cached and pcLoadCatalog() resolves without any network at all.
 async function pgLoadOwnedPrograms(userId) {
   try {
-    var res = await supabaseClient
-      .from('purchases').select('product, status')
-      .eq('user_id', userId).eq('status', 'active');
+    var both = await Promise.all([
+      pcLoadCatalog(),
+      supabaseClient.from('purchases').select('product, status')
+        .eq('user_id', userId).eq('status', 'active'),
+    ]);
+    var catalog = both[0];
+    var res = both[1];
     if (res.error) throw res.error;
     var owned = [];
     (res.data || []).forEach(function (p) {
-      if (PROGRAM_META[p.product] && owned.indexOf(p.product) < 0) owned.push(p.product);
+      if (_pcIsProgram(catalog, p.product) && owned.indexOf(p.product) < 0) {
+        owned.push(p.product);
+      }
     });
     return owned;
   } catch (e) {
@@ -96,7 +111,10 @@ async function pgResolveActive(userId, profile, owned) {
 // The next session for the active program. Auto-remaps a stored schedule that
 // no longer matches the user's training_days, preserving their place.
 async function pgResolveSession(userId, activeSlug, trainingDays) {
-  var meta = PROGRAM_META[activeSlug];
+  // Cache-only read: pgLoadOwnedPrograms already warmed the catalog earlier in
+  // this same flow, so this adds no request. Returning null when the Program is
+  // unknown reproduces the retired `if (!PROGRAM_META[activeSlug]) return null`.
+  var meta = _pcBySlug(pcCached() || [], activeSlug);
   if (!meta) return null;
 
   var correctKeys = getScheduleForDays(activeSlug, trainingDays);
@@ -171,10 +189,7 @@ async function pgRemapAllSchedules(userId, ownedSlugs, newTrainingDays) {
 /* Node: export the PURE parts only (no fetchers — they need supabaseClient). */
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    PROGRAM_META: PROGRAM_META,
-    PROGRAM_URLS: PROGRAM_URLS,
     GOAL_LABELS: GOAL_LABELS,
-    GOAL_PROGRAM_MAP: GOAL_PROGRAM_MAP,
     pgSessionHref: pgSessionHref,
     pgSessionIndex: pgSessionIndex,
     pgGoalMismatch: pgGoalMismatch,
