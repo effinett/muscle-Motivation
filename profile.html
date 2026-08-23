@@ -382,6 +382,7 @@
 <script src="supabase.js"></script>
 <script src="schedules.js"></script>
 <script src="program-catalog.js"></script>
+<script src="entitlement-core.js"></script>
 <script src="program-state.js"></script>
 <script>
 
@@ -391,7 +392,25 @@
 
   var currentProfile = null;
   var currentUserId  = null;
-  var ownedPrograms  = [];
+  var accessiblePrograms  = [];
+  var purchaseRows        = [];
+
+  // The page's single purchases read. Selects the union of what entitlement
+  // resolution and the billing card need, so neither has to fetch again.
+  async function loadPurchaseRows() {
+    try {
+      var res = await supabaseClient
+        .from('purchases')
+        .select('product, status, current_period_end, cancel_at_period_end, created_at')
+        .eq('user_id', currentUserId)
+        .order('created_at', { ascending: false });
+      if (res.error) throw res.error;
+      return res.data || [];
+    } catch (e) {
+      console.error('loadPurchaseRows:', e);
+      return [];
+    }
+  }
 
   function esc(s) {
     return String(s)
@@ -424,6 +443,9 @@
         document.getElementById('authGate').style.display = 'none';
         document.getElementById('appContent').style.display = 'block';
 
+        // ONE purchases request for the whole page: the Programs list and the
+        // billing card are two questions about the same rows (CP2b).
+        purchaseRows = await loadPurchaseRows();
         await renderPrograms();
         await renderMembership();
       } catch (err) {
@@ -449,16 +471,16 @@
   async function renderPrograms() {
     var card = document.getElementById('programsCard');
     try {
-      ownedPrograms = await pgLoadOwnedPrograms(currentUserId);
-      var activeSlug = await pgResolveActive(currentUserId, currentProfile, ownedPrograms);
+      accessiblePrograms = await pgLoadAccessiblePrograms(currentUserId, purchaseRows);
+      var activeSlug = await pgResolveActive(currentUserId, currentProfile, accessiblePrograms);
 
       var html = '';
-      if (!ownedPrograms.length) {
+      if (!accessiblePrograms.length) {
         html += '<div class="item"><div class="item-main">' +
           '<div class="item-sub">You don\'t own any programs yet.</div></div></div>';
       } else {
-        ownedPrograms.forEach(function (slug) {
-          // Cache-only: pgLoadOwnedPrograms above already warmed the catalog.
+        accessiblePrograms.forEach(function (slug) {
+          // Cache-only: pgLoadAccessiblePrograms above already warmed the catalog.
           var meta = pcBySlug(pcCached() || [], slug);
           if (!meta) return;
           var isActive = slug === activeSlug;
@@ -487,7 +509,7 @@
 
   function renderGoalMismatch(activeSlug) {
     var el = document.getElementById('goalMismatch');
-    var m = pgGoalMismatch(currentProfile.goal, activeSlug, ownedPrograms, pcCached() || []);
+    var m = pgGoalMismatch(currentProfile.goal, activeSlug, accessiblePrograms, pcCached() || []);
     if (!m) { el.hidden = true; return; }
     el.innerHTML = 'Your goal is <strong>' + esc(m.goalLabel) + '</strong>. ' +
       '<button onclick="setActive(\'' + esc(m.slug) + '\')">Switch to ' + esc(m.name) + '?</button>';
@@ -510,19 +532,21 @@
   async function renderMembership() {
     var wrap = document.getElementById('membershipWrap');
     try {
-      // Include past_due so a member with a failed payment still sees the card
-      // (and a warning) rather than silently losing access to manage billing.
-      var res = await supabaseClient
-        .from('purchases')
-        .select('status, current_period_end, cancel_at_period_end')
-        .eq('user_id', currentUserId)
-        .eq('product', 'ai_membership')
-        .in('status', ['active', 'past_due'])
-        .order('created_at', { ascending: false })
-        .limit(1);
-      if (res.error) throw res.error;
+      // Whether a membership qualifies is decided by the shared policy, not by
+      // a page-local status list. This surface already accepted past_due (so a
+      // member with a failed payment can still reach billing) — CP2b keeps that
+      // behaviour and makes every other surface agree with it.
+      if (!entHasQualifyingMembership(purchaseRows)) { wrap.hidden = true; return; }
 
-      var m = (res.data && res.data[0]) || null;
+      // Rows are ordered newest-first by loadPurchaseRows, so the first
+      // qualifying membership row is the current one.
+      var m = null;
+      for (var i = 0; i < purchaseRows.length; i++) {
+        var row = purchaseRows[i];
+        if (row.product === ENT_MEMBERSHIP_PRODUCT && entIsQualifyingStatus(row.status)) {
+          m = row; break;
+        }
+      }
       if (!m) { wrap.hidden = true; return; }
 
       var periodEnd = m.current_period_end ? new Date(m.current_period_end) : null;
@@ -687,8 +711,8 @@
       closeRecalc();
 
       // training_days is global — remap ALL owned programs when it changes.
-      if (recalcPlan.training_days !== prevTrainingDays && ownedPrograms.length) {
-        await pgRemapAllSchedules(currentUserId, ownedPrograms, recalcPlan.training_days);
+      if (recalcPlan.training_days !== prevTrainingDays && accessiblePrograms.length) {
+        await pgRemapAllSchedules(currentUserId, accessiblePrograms, recalcPlan.training_days);
       }
       showToast('Goals updated.');
     } catch (err) {

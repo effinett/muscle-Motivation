@@ -489,3 +489,46 @@ exactly one policy, SELECT) · Stripe · every application file. The §10.10 `TR
 **Phase 4.3.5 remains OPEN — VALIDATION DEBT.** This is a database-only checkpoint: no page, bootstrap,
 route, navigation, or payload changed, so the four-destination 4.3.5F measurement surface is untouched and
 its targets are unchanged. **CP2b did not resume here and is not complete.**
+
+---
+
+## 2026-08-23 — Phase 4.3.6 CP2b — Program access centralized; `past_due` now live
+
+**Approved behaviour change, stated plainly:** Program access for users in Stripe's `past_due` dunning
+window changes **from denied to temporarily allowed**, and a qualifying membership now grants
+membership-included Programs. This matches the CP2a policy and the CP2-RLS database policy. It is not a
+pure refactor.
+
+**Migrated onto `entitlement-core.js`:** the three Program pages (`program-fat-loss`,
+`program-muscle-gain`, `program-glute-builder`), `workout.html` `loadRecommended`, and `program-state.js`
+(`pgLoadOwnedPrograms` → **`pgLoadAccessiblePrograms`**, renamed because a membership grants access
+without ownership). `profile.html` uses `entHasQualifyingMembership` for its billing card rather than a
+fabricated Program object. Every page-local `\.eq('status','active')` and `.in('status', […])` on
+`purchases` is gone; queries are now deliberately unfiltered so the resolver stays the only policy.
+
+**4.3.5F measurement surface — changed again, recorded as required.** The Android measurement is still
+outstanding, so this note keeps the eventual numbers attributable.
+
+- **Home** — still **1** `purchases` request, still parallel with the catalog fetch. The query lost its
+  `status` filter (same round trip, ~5 extra rows at current scale). Sequential round-trip count
+  unchanged.
+- **Train** — still **1** `purchases` request, still parallel with the catalog fetch.
+- **Profile** — **2 → 1**. The Programs list and the billing card now share one fetch. *(Profile is not
+  one of the four measured destinations, but the duplicate is genuinely gone.)*
+- **Payload** — `entitlement-core.js` (~5 KB unminified) added to Home, Train, Profile and the three
+  Program pages. **Nutrition and Progress do not load it** and are untouched.
+- Bottom navigation, routes, prefetch and app-shell architecture are unchanged; **no 4.3.5F target was
+  altered**.
+
+**The eventual Android p75 therefore measures the post-CP2b state**, not the original 4.3.5 build and not
+the post-CP1b state. That must be stated when the result is filed.
+
+**Client ↔ database parity is now a matched pair.** The resolver and the `program_workouts` policy encode
+the same rules, and `entitlement-consumers.test.js` pins that agreement case by case. **Changing one
+without the other reintroduces the CP2b block.** One deliberate asymmetry is documented in those tests:
+the resolver is publication-agnostic, because the catalog loader and the `programs` RLS both filter to
+`status = 'published'`, so an unpublished Program never reaches the client to be resolved.
+
+**Unchanged:** `program_workouts` / `workout_templates` / `purchases` / `programs` RLS · the
+`purchases.product` CHECK · Stripe and the webhook as sole writer · progression, `user_programs`,
+optional/progression mode, workout history and template execution · the public store page. No CP3 work.

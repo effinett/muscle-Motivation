@@ -1042,6 +1042,7 @@
 <script src="supabase.js"></script>
 <script src="schedules.js"></script>
 <script src="program-catalog.js"></script>
+<script src="entitlement-core.js"></script>
 <script src="workout-history.js"></script>
 <script src="progression.js"></script>
 <!-- Shared exercise-intelligence core (Phase 4.2.1E) — powers the picker's
@@ -2780,20 +2781,20 @@
     try {
       var slug = profile && profile.active_program;
       if (!slug || typeof PROGRAM_SCHEDULES === 'undefined' || !PROGRAM_SCHEDULES[slug]) return;
-      // Ownership guard — active_program could be stale after a refund.
-      // The catalog load runs in PARALLEL with the ownership check (and is a
-      // cache hit after the first page of the session), so renderRecommended
-      // can name the program without adding a round trip. Entitlement is still
-      // decided by the purchases query below — CP2 owns replacing that.
-      var pur;
-      await Promise.all([
-        typeof pcLoadCatalog === 'function' ? pcLoadCatalog() : Promise.resolve([]),
-        supabaseClient.from('purchases')
-          .select('id').eq('user_id', currentUser.id).eq('product', slug)
-          .eq('status', 'active').limit(1)
-          .then(function (r) { pur = r.data; }),
+      // Access guard — active_program could be stale after a refund, and a
+      // membership may grant this Program without a standalone purchase.
+      // Decided by the shared resolver (entitlement-core.js), never by a
+      // page-local status predicate. Purchases are fetched UNFILTERED so the
+      // resolver remains the only policy. The catalog load is parallel and a
+      // cache hit after the first page of the session.
+      var both = await Promise.all([
+        pcLoadCatalog(),
+        supabaseClient.from('purchases').select('product, status')
+          .eq('user_id', currentUser.id),
       ]);
-      if (!pur || !pur.length) return;
+      var purRes = both[1];
+      if (!resolveProgramAccess(pcBySlug(both[0], slug),
+                                purRes.error ? null : purRes.data).allowed) return;
       var { data: up } = await supabaseClient.from('user_programs')
         .select('schedule_keys, current_index')
         .eq('user_id', currentUser.id).eq('program_slug', slug).maybeSingle();
