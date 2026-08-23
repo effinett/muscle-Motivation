@@ -417,3 +417,75 @@ result is recorded. **No 4.3.5F target was changed.**
 **Also recorded:** roadmap §10.10 — a latent `TRUNCATE` grant to `anon`/`authenticated` across the
 `public` schema (Supabase default; `TRUNCATE` bypasses RLS). Verified **LOW** and not reachable through
 PostgREST, deferred to a dedicated security checkpoint rather than fixed inside feature work.
+
+---
+
+## 2026-08-23 — Phase 4.3.6 CP2-RLS — `program_workouts` read policy aligned with the entitlement model
+
+**Why this exists.** CP2b (migrating client entitlement call sites to the shared resolver) was **BLOCKED**:
+the CP2a resolver would have returned *allow* for membership-included access and for `past_due`, while the
+`program_workouts` RLS policy still required a standalone purchase with `status = 'active'`. A user would
+have seen an unlocked Program and then received an empty workout. Rather than weaken the client or quietly
+edit a live paid-content policy inside a refactor, database enforcement was aligned first, in its own
+reviewed checkpoint.
+
+**Before** — standalone ownership only, `active` only:
+
+```sql
+EXISTS (SELECT 1 FROM purchases p
+        WHERE p.user_id = auth.uid()
+          AND p.product = program_workouts.program_slug
+          AND p.status  = 'active')
+```
+
+**After** — Branch S OR Branch M, mirroring `entitlement-core.js`. Migration
+`align_program_workouts_entitlement_rls` (2026-08-23), applied with `ALTER POLICY` so the name, command
+(SELECT) and role (`authenticated`) are preserved and the table is never momentarily unprotected:
+
+- **Branch S — standalone ownership.** `p.product = program_slug` with status `active` or `past_due`.
+  Deliberately independent of every catalog fact: a purchased Program stays readable even once it is
+  un-published, retired, or withdrawn from sale. **Sellability is never an ownership condition.**
+- **Branch M — membership.** `p.product = 'ai_membership'` with status `active` or `past_due`, **and** the
+  catalog row for that slug has `included_with_membership = true` **and** `status = 'published'`. Draft
+  and retired Programs are not part of the active membership library.
+
+**Intentional widening.** This checkpoint deliberately widens SELECT for two previously denied cases:
+membership-included access, and `past_due` during Stripe's dunning retry. `canceled` and `refunded` remain
+denied, and `refunded` remains terminal. **No prescription content became public** — the policy is still
+`TO authenticated` and still requires a qualifying purchase; anonymous access returns nothing.
+
+**No `SECURITY DEFINER` helper was needed.** Ordinary RLS composition expresses the model correctly: the
+nested `programs` lookup is itself filtered by the `programs` policy (`status = 'published'`). The policy
+*also* states `g.status = 'published'` explicitly, so that if the `programs` policy is ever widened — for
+an admin surface, say — the membership branch cannot silently begin granting drafts.
+
+**Tested against real RLS** using `SET LOCAL role authenticated` with JWT claims, in rolled-back
+transactions: 6 standalone cases, 7 membership cases, 4 mixed cases, plus anon denial — **17/17 as
+expected**, including the two that matter most (a standalone purchase survives a retired + unsellable +
+un-included Program; membership does **not** grant a draft or retired Program). Every synthetic row was
+rolled back and verified gone: purchases still 5, programs still 3, `program_workouts` still 47, zero test
+users leaked.
+
+**Production equivalence: nobody gained or lost access.** Measured per real identity before and after —
+the owner account still sees 16/15/16 prescriptions across the three Programs; the refunded-only account
+still sees 0. The widening is entirely forward-looking.
+
+**Rollback** (tested in a transaction; restores the previous `qual` byte-for-byte and re-denies
+membership-only access):
+
+```sql
+ALTER POLICY program_workouts_read ON public.program_workouts
+USING (EXISTS (SELECT 1 FROM public.purchases p
+               WHERE p.user_id = auth.uid()
+                 AND p.product = program_workouts.program_slug
+                 AND p.status = 'active'));
+```
+
+**Unchanged:** `purchases` (rows, policies, `product` CHECK, webhook-only writes) · `programs` rows and
+flags · `workout_templates` RLS · all grants (no write privilege widened; `program_workouts` still has
+exactly one policy, SELECT) · Stripe · every application file. The §10.10 `TRUNCATE` debt was deliberately
+**not** bundled in.
+
+**Phase 4.3.5 remains OPEN — VALIDATION DEBT.** This is a database-only checkpoint: no page, bootstrap,
+route, navigation, or payload changed, so the four-destination 4.3.5F measurement surface is untouched and
+its targets are unchanged. **CP2b did not resume here and is not complete.**
