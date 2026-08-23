@@ -450,6 +450,14 @@ relationship **non-destructively**; keep `purchases` the authoritative commerce 
 webhook as its only writer, and build **one** shared entitlement resolver over it. **No `subscriptions`
 table. No grants table.**
 
+**Database enforcement (CP2-RLS, 2026-08-23).** The `program_workouts` read policy now mirrors
+`entitlement-core.js`: standalone ownership (`product = slug`) **OR** membership (`ai_membership` + the
+catalog row being `included_with_membership` **and** `published`), with `active` and `past_due`
+qualifying in both. Standalone ownership stays independent of publication and sellability. This is
+**defence in depth beneath** the client resolver, not a replacement for it — and it is the boundary that
+must stay in step with the resolver: **changing one without the other reintroduces the CP2b block.**
+Rollback SQL and the full test matrix are in `docs/ROADMAP-HISTORY.md`.
+
 **Unresolved — blocking the CP1a catalog backfill.** Three Program metadata conflicts exist in production
 today and must be decided by Effi before any catalog row is written. They must **not** be silently
 resolved by an implementer:
