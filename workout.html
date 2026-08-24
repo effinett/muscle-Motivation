@@ -111,7 +111,12 @@
       font-family: 'Barlow', sans-serif; font-size: 10px; font-weight: 700;
       letter-spacing: 1px; text-transform: uppercase; white-space: nowrap;
     }
-    .pg-badge-owned { background: rgba(177,18,27,0.14); color: var(--red); }
+    /* Owned reads as SUCCESS, not as an accent/alert. Uses the shared success
+       token (--green === --mm-success) and its existing muted tint, the same
+       pair .btn-check.checked and .btn-rest-done already use — no new green.
+       It also fixes a contrast problem: the previous red-on-#0d0d0d badge sat
+       at ~2.8:1, below WCAG AA; green is ~8.5:1. */
+    .pg-badge-owned { background: var(--green-muted); color: var(--green); }
     .pg-badge-member { background: var(--surface-2); color: var(--text-secondary); }
     .pg-desc { font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 10px; }
     .pg-meta {

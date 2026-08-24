@@ -236,6 +236,39 @@ test('states: an empty Browse distinguishes "you have everything" from "nothing 
     /mine\.length[\s\S]{0,120}You have access to all available Programs[\s\S]{0,120}No Programs are available right now/);
 });
 
+test('badge: Owned uses the shared success token, not the accent', () => {
+  const css = TRAIN.match(/<style[\s\S]*?<\/style>/)[0];
+  const rule = css.match(/\.pg-badge-owned\s*\{[^}]*\}/)[0];
+  assert.match(rule, /color:\s*var\(--green\)/, 'success token, not --red');
+  assert.match(rule, /background:\s*var\(--green-muted\)/, 'its existing muted tint');
+  assert.ok(!/--red|rgba\(177,\s*18,\s*27/.test(rule), 'no accent colour remains');
+  // The green must be the shared success value, not an invented one.
+  assert.match(TRAIN, /--green:\s*#22c55e/i);
+  assert.match(read('app-shell.css'), /--mm-success:\s*#22C55E/i, 'same value as the token');
+});
+
+test('badge: the primary CTA stays red and the card is not greened', () => {
+  const css = TRAIN.match(/<style[\s\S]*?<\/style>/)[0];
+  assert.match(css.match(/\.pg-cta-primary\s*\{[^}]*\}/)[0], /background:\s*var\(--red\)/);
+  assert.ok(!/green/i.test(css.match(/\.pg-card\s*\{[^}]*\}/)[0]), 'card stays neutral');
+});
+
+test('badge: Owned clears WCAG AA on the card background', () => {
+  // The previous red-on-#0d0d0d badge measured ~2.8:1, below AA.
+  const lum = (hex) => {
+    const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  const ratio = (a, b) => {
+    const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+  const r = ratio('#22c55e', '#0d0d0d');       // --green on --surface-1
+  assert.ok(r >= 4.5, `AA requires 4.5:1, got ${r.toFixed(2)}:1`);
+  assert.ok(ratio('#b1121b', '#0d0d0d') < 4.5, 'the red it replaced did NOT clear AA');
+});
+
 test('states: badge wording never calls membership access "ownership"', () => {
   assert.match(TRAIN_CODE, /source === 'standalone'[\s\S]{0,80}Owned/);
   assert.match(TRAIN_CODE, /With membership/);
