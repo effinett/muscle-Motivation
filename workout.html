@@ -2985,26 +2985,31 @@
     '</div>';
   }
 
+  // The published catalog is PARTITIONED by the resolver's verdict: a Program
+  // appears under My Programs or under Browse, never both. Showing the full
+  // catalog in Browse duplicated every accessible Program — with access to all
+  // three, the pane rendered the same three cards twice. No extra request: the
+  // catalog and purchase rows are already loaded.
   function renderPrograms(catalog, purchaseRows) {
     var mine = [];
     var browse = [];
     catalog.forEach(function (p) {
       var verdict = resolveProgramAccess(p, purchaseRows);
       var card = programCard(p, verdict);
-      if (verdict.allowed) mine.push(card);
-      browse.push(card);
+      if (verdict.allowed) mine.push(card); else browse.push(card);
     });
 
     document.getElementById('myProgramsList').innerHTML = mine.length
       ? mine.join('')
       : '<div class="empty-state">No Programs yet — browse below to find one that fits your goal.</div>';
 
-    // Browse always shows the full published catalog, including Programs the
-    // user already has. Hiding them would make the catalog look broken once a
-    // user has everything.
+    // Nothing left to browse means either the user has everything (a genuine
+    // completion state) or the catalog is empty — two different messages.
     document.getElementById('browseProgramsList').innerHTML = browse.length
       ? browse.join('')
-      : '<div class="empty-state">No Programs are available right now.</div>';
+      : (mine.length
+          ? '<div class="empty-state">You have access to all available Programs.</div>'
+          : '<div class="empty-state">No Programs are available right now.</div>');
 
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }

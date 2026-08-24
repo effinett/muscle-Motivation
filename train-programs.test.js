@@ -45,14 +45,14 @@ const CATALOG = pcNormalizeCatalog([
 ]);
 const buy = (product, status) => ({ product, status });
 
-// Mirrors renderPrograms(): My Programs is the accessible subset, Browse is
-// always the full published catalog.
+// Mirrors renderPrograms(): the published catalog is PARTITIONED — a Program
+// appears under My Programs or under Browse, never both.
 function split(rows) {
   const mine = [], browse = [];
   for (const p of CATALOG) {
     const v = resolveProgramAccess(p, rows);
     if (v.allowed) mine.push({ slug: p.slug, source: v.source });
-    browse.push(p.slug);
+    else browse.push(p.slug);
   }
   return { mine, browse };
 }
@@ -136,14 +136,15 @@ test('access: membership-only grants all three Programs', () => {
   const { mine, browse } = split([buy('ai_membership', 'active')]);
   assert.strictEqual(mine.length, 3);
   assert.ok(mine.every((m) => m.source === 'membership'));
-  assert.strictEqual(browse.length, 3, 'Browse still shows the full catalog');
+  assert.strictEqual(browse.length, 0, 'nothing left to browse');
 });
 
 test('access: standalone-only grants exactly that Program', () => {
   const { mine, browse } = split([buy('glute_builder', 'active')]);
   assert.deepStrictEqual(mine.map((m) => m.slug), ['glute_builder']);
   assert.strictEqual(mine[0].source, 'standalone');
-  assert.strictEqual(browse.length, 3, 'the other two remain browsable');
+  assert.deepStrictEqual(browse, ['fat_loss_blueprint', 'muscle_gain'],
+    'Browse excludes the accessible one');
 });
 
 test('access: both → accessible, reported as the stronger standalone claim', () => {
@@ -151,6 +152,51 @@ test('access: both → accessible, reported as the stronger standalone claim', (
   assert.strictEqual(mine.length, 3);
   assert.strictEqual(mine.find((m) => m.slug === 'muscle_gain').source, 'standalone');
   assert.strictEqual(mine.find((m) => m.slug === 'glute_builder').source, 'membership');
+});
+
+/* ── partition — a Program is never listed twice ────────────────────────── */
+
+test('partition: 0 accessible → Browse shows the full catalog', () => {
+  const { mine, browse } = split([]);
+  assert.strictEqual(mine.length, 0);
+  assert.deepStrictEqual(browse,
+    ['fat_loss_blueprint', 'muscle_gain', 'glute_builder']);
+});
+
+test('partition: 1 accessible → Browse excludes exactly that one', () => {
+  const { mine, browse } = split([buy('muscle_gain', 'active')]);
+  assert.deepStrictEqual(mine.map((m) => m.slug), ['muscle_gain']);
+  assert.deepStrictEqual(browse, ['fat_loss_blueprint', 'glute_builder']);
+});
+
+test('partition: 2 accessible → Browse shows the remaining one', () => {
+  const { mine, browse } = split([buy('muscle_gain', 'active'),
+    buy('fat_loss_blueprint', 'active')]);
+  assert.strictEqual(mine.length, 2);
+  assert.deepStrictEqual(browse, ['glute_builder']);
+});
+
+test('partition: all 3 accessible → Browse is empty, no duplicate cards', () => {
+  const { mine, browse } = split([buy('ai_membership', 'active'),
+    buy('fat_loss_blueprint', 'active'), buy('muscle_gain', 'active'),
+    buy('glute_builder', 'active')]);
+  assert.strictEqual(mine.length, 3);
+  assert.strictEqual(browse.length, 0, 'no Program appears in both lists');
+});
+
+test('partition: no slug can ever appear in both lists', () => {
+  const scenarios = [[], [buy('ai_membership', 'active')],
+    [buy('glute_builder', 'active')],
+    [buy('muscle_gain', 'active'), buy('glute_builder', 'active')],
+    [buy('ai_membership', 'past_due'), buy('muscle_gain', 'active')],
+    [buy('ai_membership', 'canceled'), buy('muscle_gain', 'refunded')]];
+  for (const rows of scenarios) {
+    const { mine, browse } = split(rows);
+    const overlap = mine.map((m) => m.slug).filter((s) => browse.includes(s));
+    assert.deepStrictEqual(overlap, [], 'overlap for ' + JSON.stringify(rows));
+    assert.strictEqual(mine.length + browse.length, CATALOG.length,
+      'every published Program is listed exactly once');
+  }
 });
 
 test('access: past_due keeps access, matching CP2b and the RLS', () => {
@@ -174,13 +220,20 @@ test('states: no access → empty My Programs but Browse still full', () => {
   assert.match(TRAIN_CODE, /No Programs yet/, 'honest empty state exists');
 });
 
-test('states: all accessible → Browse is NOT emptied', () => {
+test('states: all accessible → a completion state, not duplicate cards', () => {
   const { mine, browse } = split([buy('ai_membership', 'active'),
     buy('fat_loss_blueprint', 'active'), buy('muscle_gain', 'active'),
     buy('glute_builder', 'active')]);
   assert.strictEqual(mine.length, 3);
-  assert.strictEqual(browse.length, 3,
-    'hiding owned Programs would make the catalog look broken');
+  assert.strictEqual(browse.length, 0);
+  assert.match(TRAIN_CODE, /You have access to all available Programs\./);
+});
+
+test('states: an empty Browse distinguishes "you have everything" from "nothing exists"', () => {
+  // mine.length decides which message renders, so a user with nothing is never
+  // told they have access to everything.
+  assert.match(TRAIN_CODE,
+    /mine\.length[\s\S]{0,120}You have access to all available Programs[\s\S]{0,120}No Programs are available right now/);
 });
 
 test('states: badge wording never calls membership access "ownership"', () => {
