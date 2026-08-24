@@ -581,3 +581,70 @@ measurement surface is otherwise as recorded for CP2b.
 
 **Unchanged:** all RLS · `purchases` and its CHECK · Stripe · progression, `user_programs`,
 optional/progression mode, workout history, template execution · entitlement. **CP4 has not started.**
+
+---
+
+## 2026-08-23 — Phase 4.3.6 CP4 — `workout_templates` becomes the canonical Routine
+
+**Additive schema + a security-safe RLS split. This checkpoint adds CAPABILITY, not behaviour: no
+platform Routine exists, nothing is published, and READ exposure is unchanged for every user.**
+Migration `routine_model_additive_columns_and_rls_split`.
+
+**Columns added** (six): `description`, `goal`, `difficulty` — all nullable, existing rows stay null
+rather than guessed · `tags text[] not null default '{}'` — metadata only, never entitlement or execution
+input · `is_platform boolean not null default false` · `visibility text not null default 'private'`.
+No column was dropped, renamed or retyped; **no row was rewritten**.
+
+**Constraints:** `visibility in ('private','published')` · `goal in ('fatloss','recomp','muscle')` —
+reusing the live `profiles.goal` vocabulary, no new taxonomy · and the structural one that matters,
+`visibility = 'private' OR is_platform = true` — **a user-owned Routine can never be published**,
+enforced by CHECK rather than by application code.
+
+**Two fields were deliberately NOT added, with reasons:**
+
+- **`status`** — it would duplicate `visibility` (both carrying `'published'`) and allow contradictory
+  rows such as `status='draft'` + `visibility='published'`. Lifecycle belongs to the CP6 publishing
+  workflow as **one** state machine, not two. `visibility` alone covers the security-relevant axis.
+- **`source_workout_id`** — no consumer until CP7, and at 38 rows the later migration is trivial. Its
+  semantics (snapshot, `ON DELETE SET NULL`, independence from live history) are best reviewed alongside
+  the conversion code that writes it.
+
+`tags` is the weakest-justified column added — it has no consumer before CP6 either — and is recorded as
+such rather than presented as load-bearing.
+
+**RLS split — the single `ALL` policy became four.** `workout_templates_own` (`ALL`, `auth.uid() =
+user_id`) was replaced by explicit SELECT / INSERT / UPDATE / DELETE policies. **SELECT was NOT widened:**
+it remains owner-only, so no user's read exposure changed. Platform-read arrives deliberately in CP6/CP8 —
+schema capability and live publication are separate concerns.
+
+- **SELECT** `auth.uid() = user_id`
+- **INSERT** `WITH CHECK (auth.uid() = user_id AND is_platform = false AND visibility = 'private')`
+- **UPDATE** `USING (auth.uid() = user_id AND is_platform = false)` + the same `WITH CHECK` — the USING
+  clause stops a client touching platform rows, the WITH CHECK stops it promoting a row it owns
+- **DELETE** `USING (auth.uid() = user_id AND is_platform = false)`
+
+**Hard gate — 17/17 against real RLS**, using two real owners (8 and 7 private Routines) and rolled-back
+transactions. Cross-user isolation: each owner sees exactly their own rows and zero of the other's;
+anonymous sees none. Write protection, all correctly refused: insert for another user · insert with
+`is_platform=true` · insert with `visibility='published'` · promote own row to platform · publish own row ·
+both at once · update another user's row (0 rows affected) · delete another user's row (0 rows affected).
+Permitted and confirmed: insert/update/delete of one's own private Routine. Every synthetic row was rolled
+back and verified gone — still 38 rows, still 38 private and non-platform, owners still hold 8 and 7, 83
+history links intact.
+
+**Application compatibility: no code change was required.** All seven statements `workout.html` issues
+today — saveTemplate insert and update, duplicate, loadTemplates, launch-by-id, `times_used` bump, delete —
+were replayed under the new policies as the real owner and all succeeded unchanged. The new columns default
+in a way that makes old queries valid.
+
+**Rollback** (tested in a transaction; restores the prior policy exactly): drop the four policies and
+recreate `workout_templates_own` as `FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() =
+user_id)`. **The added columns should simply be left in place** — they are nullable or defaulted, no code
+reads them, and dropping them is riskier than ignoring them.
+
+**4.3.5F: no impact.** Schema and policy only; no application file changed, so no payload, request,
+navigation, prefetch or app-shell change. Phase 4.3.5 remains **OPEN — VALIDATION DEBT**.
+
+**Unchanged:** `program_workouts` (shape, RLS, data, launch reads — convergence is CP8) · `purchases`,
+entitlement-core, CP2-RLS, Stripe · progression, `user_programs`, workout history. **CP5, CP6, CP7 and CP8
+have not started.**
