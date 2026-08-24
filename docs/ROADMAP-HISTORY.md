@@ -705,3 +705,70 @@ not claimed here.
 the Program catalog, not Routine metadata · `program_workouts` shape, RLS, data and its two execution reads
 · entitlement-core, CP2-RLS, `purchases`, Stripe · progression and workout history. **CP6, CP7 and CP8 have
 not started.**
+
+---
+
+## 2026-08-24 — Phase 4.3.6 CP6 — controlled Routine publishing
+
+**The first platform authoring capability. Publishing is a privileged, server-authorized action; normal
+users remain private-only and cannot promote or publish anything.**
+
+**No new lifecycle column.** CP4's decision holds — `is_platform` + `visibility` express every state:
+`user_private` (false/private) · `platform_draft` (true/private) · `platform_published` (true/published) ·
+unpublish returns published → private. The fourth combination is impossible by database CHECK, which makes
+"a user can never publish their own Routine" **structural** rather than a policy detail.
+
+**Privileged identity — config, not schema.** `/api/routine-admin` verifies the caller's Supabase bearer
+token server-side (the same `getUserFromToken` pattern as `/api/ai-food-parse` — a client-supplied user id
+is never trusted), then requires that id to appear in **`ROUTINE_ADMIN_USER_IDS`**, a server-only
+environment variable. No roles table, no grants table, no RBAC. **It fails closed: unset ⇒ nobody is
+authorized.**
+
+> ⚠️ **Deployment step owed by Effi.** `ROUTINE_ADMIN_USER_IDS` is not yet set in Vercel, so the endpoint
+> currently refuses every caller. That is the intended safe default, but authoring stays inert until the
+> variable is configured with the owner's Supabase auth user id.
+
+**Six privileged actions**, one endpoint: `list` · `get` · `create` · `update` · `publish` · `unpublish`.
+`buildPatch` deliberately cannot accept `is_platform` or `visibility`, so **a save can never publish** —
+publication is only ever its own explicit action, re-validated server-side at the moment it happens.
+
+**Publish eligibility** is centralized in `routine-lifecycle.js` (pure, shared by server and tests):
+platform-owned · not already published · non-empty name · description present · goal in
+`fatloss|recomp|muscle` · at least one exercise · no malformed prescription · **every exercise carries a
+canonical `exercise_id`**. Reasons accumulate as stable codes so the author is told everything to fix.
+
+**Identity safety.** Name-only entries are rejected as `legacy_identity`. A user custom exercise is blocked
+**by the shape of the CP3 contract** — it carries only `exercise_id`, so a custom-derived entry arrives
+null and fails the same check. Nothing is resolved, guessed or backfilled; a test asserts the lifecycle
+core references no lookup of any kind.
+
+**RLS: SELECT was NOT widened.** No consumer needs published Routine reads — CP5's Programs UI is built on
+the Program catalog and CP8 owns Program→Routine — so the CP4 owner-only policy is untouched. Platform
+rows are managed entirely through the service-role path. Verified **9/9 against real RLS** in a rolled-back
+transaction: a normal user cannot set `is_platform`, cannot publish, cannot promote an existing own row,
+cannot edit or delete a platform row (0 rows affected), and **cannot see platform drafts or published rows
+at all**; anonymous sees nothing; own-Routine access is unaffected. Every synthetic row rolled back — still
+38 routines, 0 platform, 0 published.
+
+**Secret containment (hard gate):** no `SERVICE_ROLE`, `ROUTINE_ADMIN_USER_IDS` or `process.env` appears in
+any browser-delivered file. The allowlist is referenced only by the server route and its test. The studio
+page holds no user id, no email allowlist and no client-side role check — it calls the API and renders
+whatever the server permits, treating a 403 as "not an author".
+
+**Authoring surface:** `routine-studio.html`, an internal page that is **unlinked from all navigation** and
+`noindex`. It reuses `routine-core.js` for the prescription contract and shows a real preview — name,
+description, goal, difficulty, tags and the ordered prescription — **without ever changing visibility**.
+Publish requires an explicit confirmation dialog showing name, exercise count, goal and the eligibility
+verdict. It conforms to the repo-wide error-reporter and PWA-metadata invariants rather than exempting
+itself.
+
+**4.3.5F: no impact.** Home, Train, Nutrition and Progress load none of the authoring code — asserted by
+test. No payload, request, navigation or app-shell change. Phase 4.3.5 remains **OPEN — VALIDATION DEBT**.
+
+**Rollback:** remove the endpoint and the studio page, or simply unset `ROUTINE_ADMIN_USER_IDS` — which
+alone disables all authoring. Any platform rows can be unpublished (`visibility` → `private`); nothing
+needs deleting, and no user data is involved.
+
+**Unchanged:** `program_workouts` shape, RLS, data and both execution reads · CP5 Programs UI · entitlement,
+`purchases`, Stripe · all 38 user Routines, still private and non-platform with zero automatic changes.
+**CP7 and CP8 have not started.**

@@ -172,13 +172,20 @@ test('scope: program_workouts was not touched', () => {
   assert.ok(!/program_workouts[\s\S]{0,80}(is_platform|visibility)/.test(src));
 });
 
-test('scope: CP6+ has not started', () => {
-  // This asserted "CP5+ has not started" until CP5 shipped the Train Programs
-  // surface. The boundary moves to CP6: authoring, publishing and lifecycle.
-  assert.ok(!fs.existsSync(path.join(__dirname, 'routine-lifecycle.js')));
-  assert.ok(!fs.existsSync(path.join(__dirname, 'routine-history.js')));
+test('scope: CP7+ has not started', () => {
+  // The boundary has moved twice as checkpoints shipped: CP5 → CP6 → now CP7.
+  // What stays constant is that the NORMAL app never reads Routine lifecycle
+  // fields — authoring lives on its own surface.
+  assert.ok(!fs.existsSync(path.join(__dirname, 'routine-history.js')),
+    'CP7 history conversion has not started');
   const src = readCode('workout.html');
-  for (const cp6 of ['publishRoutine', 'unpublish', 'is_platform', 'visibility']) {
-    assert.ok(!src.includes(cp6), `${cp6} belongs to CP6, not CP5`);
+  for (const notInTrain of ['publishRoutine', 'is_platform', 'visibility']) {
+    assert.ok(!src.includes(notInTrain), `${notInTrain} must not reach Train`);
+  }
+  // CP7 provenance would attach source_workout_id to a ROUTINE write. The
+  // pre-existing personal_records.source_workout_id (Phase 4.2.1K PR
+  // detection) is a different column and must not trip this guard.
+  for (const w of src.match(/from\('workout_templates'\)[\s\S]{0,400}?\)/g) || []) {
+    assert.ok(!w.includes('source_workout_id'), 'Routine provenance is CP7');
   }
 });

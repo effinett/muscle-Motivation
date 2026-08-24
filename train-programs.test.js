@@ -383,8 +383,10 @@ test('scope: CP5 did not surface CP4 Routine metadata', () => {
   }
 });
 
-test('scope: CP6/CP7/CP8 have not started', () => {
-  assert.ok(!fs.existsSync(path.join(__dirname, 'routine-lifecycle.js')));
+test('scope: CP7/CP8 have not started, and CP6 stays off Train', () => {
+  // CP6 shipped routine-lifecycle.js on its own internal surface. Train must
+  // remain free of it — that is the durable invariant.
+  assert.ok(!TRAIN_CODE.includes('routine-lifecycle'), 'Train loads no authoring code');
   assert.ok(!fs.existsSync(path.join(__dirname, 'routine-history.js')));
   assert.ok(!/publishRoutine|program_routines/.test(TRAIN_CODE));
   // CP7 provenance would attach source_workout_id to a ROUTINE. The existing
