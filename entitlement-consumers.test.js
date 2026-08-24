@@ -252,11 +252,14 @@ test('scope: entitlement stayed out of progression and history', () => {
     'entitlement and progression stay separate concerns');
 });
 
-test('scope: CP3 has not started', () => {
-  assert.ok(!fs.existsSync(path.join(__dirname, 'routine-core.js')));
-  for (const f of ALL_SURFACES) {
-    assert.ok(!/routine-core/.test(read(f)), `${f} must not reference CP3 work`);
-  }
+test('scope: entitlement and the Routine contract stay separate concerns', () => {
+  // This guard asserted "CP3 has not started" until CP3 shipped routine-core.js.
+  // The durable invariant is that the two cores do not reach into each other.
+  const rc = readCode('routine-core.js');
+  assert.ok(!/resolveProgramAccess|entHasQualifyingMembership|purchases/.test(rc),
+    'the Routine contract must not make entitlement decisions');
+  assert.ok(!/rtNormalizeExercise|routine-core/.test(readCode('entitlement-core.js')),
+    'the resolver must not depend on the Routine contract');
 });
 
 test('scope: no client write path to purchases was introduced', () => {
