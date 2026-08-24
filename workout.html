@@ -70,6 +70,68 @@
     .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border-1); }
     .section-label:first-child { margin-top: 0; }
 
+    /* ── Train local navigation (Phase 4.3.6 CP5) ──────────────────────────
+       Today · Workouts · Programs. Train's start view had grown to five
+       stacked sections in one scroll; grouping them into three panes keeps
+       Programs one tap away instead of buried, WITHOUT a fifth bottom-nav
+       destination (owner decision O5). No section's internals changed. */
+    .tseg {
+      display: flex; gap: 4px; padding: 4px; margin-bottom: 24px;
+      background: var(--surface-1); border: 1px solid var(--border-2);
+      border-radius: 10px;
+    }
+    .tseg-btn {
+      flex: 1; min-width: 0; min-height: 44px; padding: 10px 6px;
+      border: none; border-radius: 7px;
+      background: transparent; color: var(--text-muted);
+      font-family: 'Bebas Neue', sans-serif; font-size: 16px; letter-spacing: 1.5px;
+      cursor: pointer; transition: background 0.15s, color 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .tseg-btn[aria-selected="true"] { background: var(--red); color: #fff; }
+    /* Hover only where a real pointer exists — a touch device otherwise keeps
+       the hover state stuck after a tap (the 4.3.5 iOS finding). */
+    @media (hover: hover) {
+      .tseg-btn:not([aria-selected="true"]):hover { color: var(--text-1); }
+    }
+    .tseg-btn:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+
+    /* ── Program cards ──────────────────────────────────────────────────── */
+    .pg-card {
+      background: var(--surface-1); border: 1px solid var(--border-2);
+      border-radius: 10px; padding: 16px 18px; margin-bottom: 10px;
+    }
+    .pg-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 6px; }
+    .pg-name {
+      flex: 1; min-width: 0; font-size: 16px; font-weight: 600; line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+    .pg-badge {
+      flex-shrink: 0; padding: 4px 8px; border-radius: 5px;
+      font-family: 'Barlow', sans-serif; font-size: 10px; font-weight: 700;
+      letter-spacing: 1px; text-transform: uppercase; white-space: nowrap;
+    }
+    .pg-badge-owned { background: rgba(177,18,27,0.14); color: var(--red); }
+    .pg-badge-member { background: var(--surface-2); color: var(--text-secondary); }
+    .pg-desc { font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 10px; }
+    .pg-meta {
+      display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 14px;
+      font-size: 12px; color: var(--text-muted);
+    }
+    .pg-meta span { white-space: nowrap; }
+    .pg-cta {
+      display: flex; align-items: center; justify-content: center;
+      width: 100%; box-sizing: border-box; text-align: center;
+      min-height: 44px; padding: 12px 16px; border-radius: 7px; border: none; cursor: pointer;
+      font-family: 'Bebas Neue', sans-serif; font-size: 16px; letter-spacing: 1.5px;
+      text-decoration: none; transition: opacity 0.2s;
+    }
+    .pg-cta-primary { background: var(--red); color: #fff; }
+    .pg-cta-secondary {
+      background: transparent; color: var(--text-1); border: 1px solid var(--border-2);
+    }
+    .pg-cta:hover { opacity: 0.85; }
+
     .card {
       background: var(--surface-1); border: 1px solid var(--border-2);
       border-radius: 10px; padding: 20px 22px; margin-bottom: 12px;
@@ -789,21 +851,26 @@
     <!-- Start screen -->
     <div id="startView">
 
-      <!-- 1 · Recommended (today's owned program workout, if any) -->
+      <!-- Train local navigation — Today · Workouts · Programs (CP5).
+           Programs lives INSIDE Train; the bottom navigation stays at four
+           destinations (Home · Train · Nutrition · Progress) per O5. -->
+      <div class="tseg" role="tablist" aria-label="Train sections">
+        <button class="tseg-btn" role="tab" id="tabToday" aria-controls="paneToday"
+                aria-selected="true" onclick="showTrainPane('today')">Today</button>
+        <button class="tseg-btn" role="tab" id="tabWorkouts" aria-controls="paneWorkouts"
+                aria-selected="false" onclick="showTrainPane('workouts')">Workouts</button>
+        <button class="tseg-btn" role="tab" id="tabPrograms" aria-controls="panePrograms"
+                aria-selected="false" onclick="showTrainPane('programs')">Programs</button>
+      </div>
+
+      <!-- ── TODAY — what should I do right now? ───────────────────────── -->
+      <div id="paneToday" role="tabpanel" aria-labelledby="tabToday">
+
+      <!-- 1 · Recommended (today's accessible program workout, if any) -->
       <div id="recommendedSection" style="display:none;">
         <div class="section-label">Recommended</div>
         <div id="recommendedWrap"></div>
       </div>
-
-      <!-- 2 · My Workouts (saved templates) -->
-      <div class="section-label">My Workouts</div>
-      <div id="templateList">
-        <div class="empty-state">No saved workouts yet — build one to start training in one tap.</div>
-      </div>
-      <button class="btn-add-exercise" onclick="newTemplate()" style="margin-top:4px;">
-        <i data-lucide="plus"></i>
-        New Template
-      </button>
 
       <!-- 3 · One-Off Workout (build/log without saving a template) -->
       <div class="section-label">One-Off Workout</div>
@@ -817,6 +884,20 @@
         </div>
         <button class="btn-primary" onclick="startWorkout()">Start Workout</button>
       </div>
+      </div><!-- /paneToday -->
+
+      <!-- ── WORKOUTS — my saved workouts, history and exercises ───────── -->
+      <div id="paneWorkouts" role="tabpanel" aria-labelledby="tabWorkouts" hidden>
+
+      <!-- 2 · My Workouts (saved templates) -->
+      <div class="section-label">My Workouts</div>
+      <div id="templateList">
+        <div class="empty-state">No saved workouts yet — build one to start training in one tap.</div>
+      </div>
+      <button class="btn-add-exercise" onclick="newTemplate()" style="margin-top:4px;">
+        <i data-lucide="plus"></i>
+        New Template
+      </button>
 
       <!-- 4 · History -->
       <div class="section-label">History</div>
@@ -841,6 +922,23 @@
         <i data-lucide="archive"></i>
         <span id="customArchivedToggleLabel">Show archived</span>
       </a>
+      </div><!-- /paneWorkouts -->
+
+      <!-- ── PROGRAMS — what training Programs do I have, and what else? ──
+           Catalog metadata only. Protected session prescriptions stay behind
+           the program_workouts entitlement policy and are never rendered
+           here (owner decision O2). -->
+      <div id="panePrograms" role="tabpanel" aria-labelledby="tabPrograms" hidden>
+        <div class="section-label">My Programs</div>
+        <div id="myProgramsList">
+          <div class="empty-state">Loading…</div>
+        </div>
+
+        <div class="section-label">Browse Programs</div>
+        <div id="browseProgramsList">
+          <div class="empty-state">Loading…</div>
+        </div>
+      </div><!-- /panePrograms -->
     </div>
 
     <!-- Active workout view -->
@@ -2778,6 +2876,139 @@
   // (user_programs.current_index / schedule_keys), with schedules.js as the
   // fallback. Starting it re-uses the existing program launch (mode=progression)
   // so progression advances exactly as it does from the dashboard.
+  // ── Train local navigation (CP5) ─────────────────────────────────────
+  // Today · Workouts · Programs. Pane state is view-local and deliberately
+  // not a route: no router, no history entry, no app-shell change.
+  var trainPane = 'today';
+  var TRAIN_PANES = { today: 'tabToday', workouts: 'tabWorkouts', programs: 'tabPrograms' };
+
+  function showTrainPane(pane) {
+    if (!TRAIN_PANES[pane]) pane = 'today';
+    trainPane = pane;
+    Object.keys(TRAIN_PANES).forEach(function (key) {
+      var panel = document.getElementById('pane' + key.charAt(0).toUpperCase() + key.slice(1));
+      var tab = document.getElementById(TRAIN_PANES[key]);
+      if (panel) panel.hidden = (key !== pane);
+      if (tab) tab.setAttribute('aria-selected', key === pane ? 'true' : 'false');
+    });
+    // Programs data loads on first open, so Train startup never pays for it.
+    if (pane === 'programs') loadPrograms();
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+
+  // ── Purchases, fetched once per page load ────────────────────────────
+  // Both the recommended card and the Programs pane need the user's purchase
+  // rows. One request serves both; before CP5 the recommended card fetched its
+  // own. Rows are UNFILTERED by status — entitlement-core is the only policy.
+  var trainPurchaseRows = null;
+  var trainPurchasesInflight = null;
+
+  async function loadPurchaseRowsOnce() {
+    if (trainPurchaseRows) return trainPurchaseRows;
+    if (trainPurchasesInflight) return trainPurchasesInflight;
+    trainPurchasesInflight = (async function () {
+      try {
+        var res = await supabaseClient.from('purchases')
+          .select('product, status').eq('user_id', currentUser.id);
+        trainPurchaseRows = res.error ? [] : (res.data || []);
+      } catch (e) {
+        console.error('loadPurchaseRowsOnce:', e);
+        trainPurchaseRows = [];
+      } finally {
+        trainPurchasesInflight = null;
+      }
+      return trainPurchaseRows;
+    })();
+    return trainPurchasesInflight;
+  }
+
+  // ── Programs pane ────────────────────────────────────────────────────
+  var programsLoaded = false;
+
+  async function loadPrograms() {
+    if (programsLoaded) return;
+    programsLoaded = true;
+    try {
+      var both = await Promise.all([pcLoadCatalog(), loadPurchaseRowsOnce()]);
+      renderPrograms(both[0] || [], both[1] || []);
+    } catch (e) {
+      console.error('loadPrograms:', e);
+      programsLoaded = false;
+      document.getElementById('myProgramsList').innerHTML =
+        '<div class="empty-state">Could not load Programs — check your connection.</div>';
+      document.getElementById('browseProgramsList').innerHTML = '';
+    }
+  }
+
+  // Product-facing wording for an access verdict. The resolver's `source` and
+  // `via` decide it; no page-local entitlement logic.
+  function programAccessBadge(verdict) {
+    if (!verdict.allowed) return null;
+    // A standalone purchase is the stronger claim and survives any membership
+    // change, so it is what the badge reports when both are true. "Owned" is
+    // never shown for membership-only access — that would misdescribe it.
+    return verdict.source === 'standalone'
+      ? { text: 'Owned', cls: 'pg-badge-owned' }
+      : { text: 'With membership', cls: 'pg-badge-member' };
+  }
+
+  function programMetaBits(p) {
+    var bits = [];
+    if (p.durationWeeks) bits.push(p.durationWeeks + ' weeks');
+    if (p.recommendedDaysPerWeek) bits.push(p.recommendedDaysPerWeek + '×/week');
+    if (p.difficulty) bits.push(p.difficulty);
+    if (p.equipmentSummary) bits.push(p.equipmentSummary);
+    return bits;
+  }
+
+  function programCard(p, verdict) {
+    var badge = programAccessBadge(verdict);
+    var meta = programMetaBits(p).map(function (b) {
+      return '<span>' + esc(b) + '</span>';
+    }).join('');
+    // Accessible → open the Program. Not accessible → the same page, which
+    // already owns the locked state and the acquisition path. CP5 introduces
+    // no new checkout surface.
+    var href = p.pagePath || '#';
+    var ctaLabel = verdict.allowed ? 'View Program'
+      : (p.includedWithMembership ? 'Included with membership' : 'Learn More');
+    var ctaCls = verdict.allowed ? 'pg-cta-primary' : 'pg-cta-secondary';
+
+    return '<div class="pg-card">' +
+      '<div class="pg-head">' +
+        '<div class="pg-name">' + esc(p.name) + '</div>' +
+        (badge ? '<span class="pg-badge ' + badge.cls + '">' + esc(badge.text) + '</span>' : '') +
+      '</div>' +
+      (p.description ? '<div class="pg-desc">' + esc(p.description) + '</div>' : '') +
+      (meta ? '<div class="pg-meta">' + meta + '</div>' : '') +
+      '<a class="pg-cta ' + ctaCls + '" href="' + esc(href) + '">' + esc(ctaLabel) + '</a>' +
+    '</div>';
+  }
+
+  function renderPrograms(catalog, purchaseRows) {
+    var mine = [];
+    var browse = [];
+    catalog.forEach(function (p) {
+      var verdict = resolveProgramAccess(p, purchaseRows);
+      var card = programCard(p, verdict);
+      if (verdict.allowed) mine.push(card);
+      browse.push(card);
+    });
+
+    document.getElementById('myProgramsList').innerHTML = mine.length
+      ? mine.join('')
+      : '<div class="empty-state">No Programs yet — browse below to find one that fits your goal.</div>';
+
+    // Browse always shows the full published catalog, including Programs the
+    // user already has. Hiding them would make the catalog look broken once a
+    // user has everything.
+    document.getElementById('browseProgramsList').innerHTML = browse.length
+      ? browse.join('')
+      : '<div class="empty-state">No Programs are available right now.</div>';
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+
   async function loadRecommended(profile) {
     try {
       var slug = profile && profile.active_program;
@@ -2785,17 +3016,11 @@
       // Access guard — active_program could be stale after a refund, and a
       // membership may grant this Program without a standalone purchase.
       // Decided by the shared resolver (entitlement-core.js), never by a
-      // page-local status predicate. Purchases are fetched UNFILTERED so the
-      // resolver remains the only policy. The catalog load is parallel and a
-      // cache hit after the first page of the session.
-      var both = await Promise.all([
-        pcLoadCatalog(),
-        supabaseClient.from('purchases').select('product, status')
-          .eq('user_id', currentUser.id),
-      ]);
-      var purRes = both[1];
-      if (!resolveProgramAccess(pcBySlug(both[0], slug),
-                                purRes.error ? null : purRes.data).allowed) return;
+      // page-local status predicate. The purchases read is shared with the
+      // Programs pane (one request per page load) and the catalog load runs in
+      // parallel, a cache hit after the first page of the session.
+      var both = await Promise.all([pcLoadCatalog(), loadPurchaseRowsOnce()]);
+      if (!resolveProgramAccess(pcBySlug(both[0], slug), both[1]).allowed) return;
       var { data: up } = await supabaseClient.from('user_programs')
         .select('schedule_keys, current_index')
         .eq('user_id', currentUser.id).eq('program_slug', slug).maybeSingle();
