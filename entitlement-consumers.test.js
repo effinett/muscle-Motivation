@@ -81,10 +81,23 @@ test('no surface re-implements the membership or OR logic', () => {
     const src = readCode(f);
     assert.ok(!/['"]ai_membership['"]/.test(src),
       `${f} must not name the membership product — that lives in the resolver`);
-    assert.ok(!/included_with_membership|includedWithMembership/.test(src),
-      `${f} must not read the inclusion flag directly`);
     assert.ok(!/['"]past_due['"]/.test(src),
       `${f} must not handle past_due itself`);
+  }
+});
+
+test('the inclusion flag is display metadata, never an access decision', () => {
+  // O2 lists "whether included with membership" as permitted Browse metadata,
+  // so CP5's Programs catalog may DISPLAY it. What no surface may do is decide
+  // access from it — that is the resolver's job, and these surfaces prove they
+  // delegate by calling it.
+  for (const f of ACCESS_SURFACES) {
+    const src = readCode(f);
+    if (!/includedWithMembership|included_with_membership/.test(src)) continue;
+    assert.match(src, /resolveProgramAccess\s*\(/,
+      `${f} reads the inclusion flag, so it must delegate the decision`);
+    assert.ok(!/includedWithMembership[\s\S]{0,60}(\|\||&&)[\s\S]{0,60}(status|purchase)/.test(src),
+      `${f} must not combine the inclusion flag with purchase state itself`);
   }
 });
 
@@ -246,10 +259,16 @@ test('perf: the catalog load stays parallel to the purchases query', () => {
 /* ── 7 · scope guards ───────────────────────────────────────────────────── */
 
 test('scope: entitlement stayed out of progression and history', () => {
+  // The durable invariant is that progression state never feeds an access
+  // decision: resolveProgramAccess is called with a Program and purchase rows
+  // and nothing else. (The earlier proximity heuristic was replaced — it broke
+  // on harmless code movement rather than on a real coupling.)
   const src = readCode('workout.html');
   assert.match(src, /user_programs/, 'progression cursor still read');
-  assert.ok(!/resolveProgramAccess[\s\S]{0,200}current_index/.test(src),
-    'entitlement and progression stay separate concerns');
+  for (const call of src.match(/resolveProgramAccess\([\s\S]{0,120}?\)/g) || []) {
+    assert.ok(!/current_index|schedule_keys|user_programs/.test(call),
+      'progression state must never be an entitlement input: ' + call);
+  }
 });
 
 test('scope: entitlement and the Routine contract stay separate concerns', () => {

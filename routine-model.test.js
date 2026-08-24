@@ -172,9 +172,13 @@ test('scope: program_workouts was not touched', () => {
   assert.ok(!/program_workouts[\s\S]{0,80}(is_platform|visibility)/.test(src));
 });
 
-test('scope: CP5+ has not started', () => {
+test('scope: CP6+ has not started', () => {
+  // This asserted "CP5+ has not started" until CP5 shipped the Train Programs
+  // surface. The boundary moves to CP6: authoring, publishing and lifecycle.
   assert.ok(!fs.existsSync(path.join(__dirname, 'routine-lifecycle.js')));
   assert.ok(!fs.existsSync(path.join(__dirname, 'routine-history.js')));
-  const src = read('workout.html');
-  assert.ok(!/Browse Programs|My Programs/.test(src), 'CP5 Train UI not started');
+  const src = readCode('workout.html');
+  for (const cp6 of ['publishRoutine', 'unpublish', 'is_platform', 'visibility']) {
+    assert.ok(!src.includes(cp6), `${cp6} belongs to CP6, not CP5`);
+  }
 });

@@ -648,3 +648,60 @@ navigation, prefetch or app-shell change. Phase 4.3.5 remains **OPEN — VALIDAT
 **Unchanged:** `program_workouts` (shape, RLS, data, launch reads — convergence is CP8) · `purchases`,
 entitlement-core, CP2-RLS, Stripe · progression, `user_programs`, workout history. **CP5, CP6, CP7 and CP8
 have not started.**
+
+---
+
+## 2026-08-23 — Phase 4.3.6 CP5 — Train Programs experience
+
+**Programs now has a permanent home inside Train.** Train's start view had grown to five stacked sections
+in one scroll (Recommended · My Workouts · One-Off Workout · History · My Exercises); adding Programs as a
+sixth would have buried it. The five sections were regrouped into three panes behind a segmented control —
+**Today · Workouts · Programs** — with **no section's internals changed**.
+
+**Bottom navigation is untouched at four destinations** (Home · Train · Nutrition · Progress) per owner
+decision O5. Pane state is view-local: no router, no history entry, no app-shell change.
+
+- **Today** — Recommended + One-Off Workout (start something now)
+- **Workouts** — My Workouts + History + My Exercises (the library)
+- **Programs** — My Programs + Browse Programs
+
+**My Programs / Browse.** Every card is classified by `resolveProgramAccess`; the page contains no
+entitlement logic of its own. My Programs is the accessible subset; **Browse always shows the full
+published catalog, including Programs the user already has** — hiding them would make the catalog look
+broken once a user has everything. Badges are `Owned` (standalone) and `With membership`; membership
+access is never described as ownership.
+
+**Browse security boundary held.** The Programs pane reads `programs` only and **never**
+`program_workouts`. Session count would have required querying protected prescription rows, so it was
+**omitted rather than obtained by weakening RLS** — asserted by test. No prescription field appears on a
+card, and all catalog strings are escaped.
+
+**Progression honesty.** No progress is displayed on Program cards. There is exactly **one**
+program-launched workout in production, and inventing completion states from that would be fabrication.
+CTAs are `View Program` (accessible) or `Included with membership` / `Learn More` (not), all linking to the
+canonical catalog `page_path` — no page path is hard-coded and **no new checkout surface was introduced**.
+
+**4.3.5F measurement surface — changed, recorded as required.** The Android measurement is still
+outstanding.
+
+- **Train `purchases` requests: 1 → 1.** The recommended card and the Programs pane now share a single
+  deduped fetch (`loadPurchaseRowsOnce`); before CP5 the recommended card fetched its own. Net requests are
+  unchanged, and a second consumer was added for free.
+- **Programs data loads only when the pane is opened** — Train startup pays nothing for it.
+- **Catalog:** still the session-cached `pcLoadCatalog`, still parallel with the purchases read.
+- **`user_programs`:** unchanged, still read only by the recommended card.
+- **Payload:** Train only, roughly +3.5 KB CSS and +4 KB JS inline. Home, Nutrition and Progress untouched.
+- No route, prefetch, bottom-nav or app-shell change. **No 4.3.5F target altered.**
+
+The eventual Android p75 therefore measures the **post-CP5** state.
+
+**Responsive validation — desktop browser simulation, NOT real-device.** The shipped CSS and card-rendering
+code were rendered in fixed-width iframes at **320 / 390 / 430 px**: zero horizontal overflow at every
+width, zero Program-name clipping, cards scaling 296 / 366 / 406 px. Two tap targets measured **38 px and
+40 px** and were raised to a **44 px minimum** as a result. Real-device confirmation is still owed and is
+not claimed here.
+
+**Unchanged:** CP4 Routine metadata (`is_platform`, `visibility`, `tags`, …) stays unread — CP5 is built on
+the Program catalog, not Routine metadata · `program_workouts` shape, RLS, data and its two execution reads
+· entitlement-core, CP2-RLS, `purchases`, Stripe · progression and workout history. **CP6, CP7 and CP8 have
+not started.**
