@@ -1062,6 +1062,7 @@
      session selection, and set-value sanitization. Loads after exercise-core
      (reuses its normalizer) and before the inline consumer below. -->
 <script src="exercise-log.js"></script>
+<script src="routine-core.js"></script>
 <script>
   var currentUser     = null;
   var currentWorkout  = null;
@@ -2902,7 +2903,10 @@
     var t = templates.find(function(x) { return x.id === id; });
     if (!t) return;
     // Deep copy so edits aren't applied to the cached list until Save.
-    editingTemplate = { id: t.id, name: t.name, exercises: JSON.parse(JSON.stringify(t.exercises || [])) };
+    // Normalizing on load also deep-copies, so edits never mutate the cached
+    // row — the same guarantee the JSON clone gave. Nothing is written to the
+    // database here; the stored row only changes if the user saves.
+    editingTemplate = { id: t.id, name: t.name, exercises: rtNormalizeExercises(t.exercises || []) };
     showBuilderView();
   }
 
@@ -2951,14 +2955,14 @@
   function openTemplatePicker() { openPickerFor('template'); }
 
   function addTemplateExercise(name, pickedId) {
-    editingTemplate.exercises.push({
-      name: name, sets: TEMPLATE_DEFAULT_SETS,
-      reps_low: 8, reps_high: 12, notes: '', rest_sec: 90,
-      // Stable library id so the template still resolves if the exercise is
-      // renamed later. Prefers the canonical id the picker resolved; null for
-      // free-typed names / user customs.
-      exercise_id: (pickedId != null ? pickedId : libraryExerciseId(name))
-    });
+    // Defaults come from the shared Routine contract, so a new row and a saved
+    // row are shaped by the same rules. Stable library id so the template still
+    // resolves if the exercise is renamed later; prefers the canonical id the
+    // picker resolved, null for free-typed names / user customs.
+    editingTemplate.exercises.push(rtNormalizeExercise({
+      name: name,
+      exercise_id: (pickedId != null ? pickedId : libraryExerciseId(name)),
+    }));
     renderBuilderExercises();
     // Same contract as the live builder: the newly added exercise and the Add
     // Exercise action stay reachable however long the template gets.
@@ -2998,18 +3002,18 @@
     var list = editingTemplate.exercises || [];
     if (!list.length) { showToast('Add at least one exercise.'); return; }
     if (!currentUser) { showToast('Session expired — please refresh.'); return; }
-    // Normalise each exercise so stored shape matches program_workouts exactly.
-    var clean = list.map(function(ex) {
-      var lo = parseInt(ex.reps_low, 10);  if (isNaN(lo)) lo = 8;
-      var hi = parseInt(ex.reps_high, 10); if (isNaN(hi)) hi = 12;
-      if (hi < lo) hi = lo;
-      var sets = parseInt(ex.sets, 10);    if (isNaN(sets) || sets < 1) sets = TEMPLATE_DEFAULT_SETS;
-      return { name: ex.name, sets: sets, reps_low: lo, reps_high: hi,
-               notes: (ex.notes || '').trim(), rest_sec: ex.rest_sec || 90,
-               // Preserve a captured id; otherwise resolve once on save so
-               // templates built before this change get upgraded (exact match).
-               exercise_id: ex.exercise_id != null ? ex.exercise_id : libraryExerciseId(ex.name) };
-    });
+    // The stored shape is the shared Routine contract (routine-core.js), which
+    // program_workouts uses too — one definition instead of two hand-synced
+    // copies. Identity RESOLUTION stays here because the core never guesses:
+    // a captured id is preferred, otherwise resolve once on save so templates
+    // built before that field existed get upgraded (exact match only).
+    var clean = rtNormalizeExercises(list.map(function(ex) {
+      return {
+        name: ex.name, sets: ex.sets, reps_low: ex.reps_low, reps_high: ex.reps_high,
+        notes: ex.notes, rest_sec: ex.rest_sec,
+        exercise_id: ex.exercise_id != null ? ex.exercise_id : libraryExerciseId(ex.name),
+      };
+    }));
     try {
       var query;
       if (editingTemplate.id) {
@@ -3045,7 +3049,9 @@
     var { error } = await supabaseClient.from('workout_templates').insert({
       user_id: currentUser.id,
       name: (t.name + ' (Copy)').slice(0, 60),
-      exercises: JSON.parse(JSON.stringify(t.exercises || [])),
+      // Normalizing on copy also deep-copies, so the clone shares no reference
+      // with the source — same guarantee the JSON round-trip gave before.
+      exercises: rtNormalizeExercises(t.exercises || []),
       source_program_slug: t.source_program_slug || null
     });
     if (error) { showToast('Error duplicating workout.'); return; }

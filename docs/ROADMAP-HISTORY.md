@@ -532,3 +532,52 @@ the resolver is publication-agnostic, because the catalog loader and the `progra
 **Unchanged:** `program_workouts` / `workout_templates` / `purchases` / `programs` RLS · the
 `purchases.product` CHECK · Stripe and the webhook as sole writer · progression, `user_programs`,
 optional/progression mode, workout history and template execution · the public store page. No CP3 work.
+
+---
+
+## 2026-08-23 — Phase 4.3.6 CP3 — shared Routine contract extracted
+
+**What.** `routine-core.js` now owns the Routine exercise PRESCRIPTION shape shared by
+`workout_templates.exercises` and `program_workouts.exercises` — `name · exercise_id · sets · reps_low ·
+reps_high · notes · rest_sec`. The two arrays have always had to match, and the code said so in comments,
+but nothing enforced it. **No schema change, no migration, no RLS change, no database write.**
+
+**Defaults are carried over verbatim, none invented:** `sets 3` (`TEMPLATE_DEFAULT_SETS`), `reps_low 8`,
+`reps_high 12`, `rest_sec 90` — all previously inline in `saveTemplate` and `addTemplateExercise`. Read
+paths never applied defaults and still do not.
+
+**Identity is preserved, never repaired.** The core performs no lookup at all (asserted by test). A
+canonical `exercise_id` is carried through; a name-only entry stays name-only. All 325 `program_workouts`
+entries are name-keyed, and inventing ids for them would silently "fix" the protected identity debt in
+roadmap §10.1. Resolution stays with the caller via `libraryExerciseId`, exactly as `saveTemplate` always
+did it.
+
+**Round-trip gate — measured against real data before merge.** All **512** live prescription entries (187
+templates + 325 program) were verified read-only to already satisfy every normalizer invariant: names
+trimmed and non-empty, integer sets ≥ 1, integer reps with `reps_high ≥ reps_low`, trimmed notes, non-zero
+integer rest, and `exercise_id` string/null/absent. Normalization therefore **cannot alter any value**.
+The 512 entries reduce to **40 distinct shapes**, and all 40 were round-tripped through the real module:
+
+- **Semantic equality: 40/40 — zero semantic drift.**
+- **Value drift: 0.** No stored value is changed by normalization.
+- **Literal equality: 4/40.** The other 36 differ *only* by materializing `exercise_id: null` where the
+  key was absent. That is the omitted-vs-null case, it is semantically identical to every consumer
+  (`ex.exercise_id != null`), and it matches what the write path has always emitted. **No stored row was
+  rewritten** — reads normalize in memory only.
+- Idempotent, order-preserving, inputs never mutated.
+
+**Consumers migrated** (all in `workout.html`): `saveTemplate`, `addTemplateExercise`,
+`duplicateTemplate`, and `editTemplate`. The last two previously deep-cloned with
+`JSON.parse(JSON.stringify(...))`; normalizing also deep-copies, so the no-shared-reference guarantee is
+unchanged.
+
+**Validation is deliberately narrow** — `valid` / `legacy_identity` / `invalid` only. Publish eligibility
+is CP6 and history candidacy is CP7; a test asserts the CP3 module contains no publish/draft/candidate
+vocabulary. A test also asserts CP3 added none of the CP4+ Routine metadata fields.
+
+**4.3.5F:** `routine-core.js` (~6 KB unminified) is added to **Train only**; Home, Nutrition and Progress
+do not load it, and no new network request, route, prefetch or navigation change was introduced. The
+measurement surface is otherwise as recorded for CP2b.
+
+**Unchanged:** all RLS · `purchases` and its CHECK · Stripe · progression, `user_programs`,
+optional/progression mode, workout history, template execution · entitlement. **CP4 has not started.**
