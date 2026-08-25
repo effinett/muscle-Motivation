@@ -348,6 +348,28 @@ test('regression: every normal-client template READ excludes platform rows', () 
   }
 });
 
+/* Regression: production validation found the studio's confirmation dialog
+ * opened correctly but the confirmed action never ran — closing a <dialog>
+ * via a method="dialog" form submission did not fire its `close` event, so
+ * publish and unpublish were silently swallowed. */
+
+test('regression: the confirm action does not depend on the dialog close event', () => {
+  const src = readCode('routine-studio.html');
+  assert.ok(!/\.onclose\s*=/.test(src), 'must not hang the action off onclose');
+  assert.match(src, /fresh\.addEventListener\('click'/,
+    'the action runs from the confirm button\'s own click');
+  assert.match(src, /id="cGo"[^>]*type="button"/,
+    'the confirm button must not auto-submit the dialog form');
+});
+
+test('regression: each confirmation binds exactly one action', () => {
+  // Cloning the button drops the previous handler, so publishing after
+  // cancelling an unpublish can never fire the wrong action, or fire twice.
+  const src = readCode('routine-studio.html');
+  assert.match(src, /cloneNode\(true\)[\s\S]{0,120}replaceChild/,
+    'a stale handler must not survive into the next confirmation');
+});
+
 test('scope: CP5 Programs UI is untouched by CP6', () => {
   const src = readCode('workout.html');
   assert.match(src, /resolveProgramAccess\(p,\s*purchaseRows\)/, 'still catalog+entitlement based');
