@@ -3069,6 +3069,11 @@
         .from('workout_templates')
         .select('id, name, exercises, times_used, last_used_at, sort_order, created_at')
         .eq('user_id', currentUser.id)
+        // Platform Routines live in the same table but are NOT the user's own
+        // workouts. A platform author owns their drafts, so owner-only RLS
+        // legitimately returns them here — this list must exclude them itself
+        // (Phase 4.3.6 CP6). CP8 owns how platform Routines reach users.
+        .eq('is_platform', false)
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: true });
       if (error) { console.error('loadTemplates error:', error); }
@@ -3324,7 +3329,10 @@
     }
 
     var { data: tpl } = await supabaseClient
-      .from('workout_templates').select('*').eq('id', templateId).maybeSingle();
+      // `is_platform=false` here too: a platform Routine must not be launchable
+      // from the normal logger even by direct id.
+      .from('workout_templates').select('*')
+      .eq('id', templateId).eq('is_platform', false).maybeSingle();
     if (!tpl) { showToast('Workout not found.'); showStartView(); return; }
 
     var day = new Date().toLocaleDateString('en-US', { weekday: 'short' });

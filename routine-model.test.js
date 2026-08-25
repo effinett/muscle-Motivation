@@ -144,11 +144,13 @@ test('security: CP4 did NOT widen read exposure', () => {
 
 test('scope: CP4 created no platform rows and no publish UI', () => {
   const src = readCode('workout.html');
-  for (const banned of ['is_platform', 'visibility']) {
-    assert.ok(!src.includes(banned),
-      `workout.html must not read or write ${banned} in CP4`);
+  assert.ok(!src.includes('visibility'), 'Train must not read publication state');
+  // CP6 gave Train one legitimate use of is_platform: excluding platform
+  // Routines from the user's own lists. Nothing else is permitted.
+  for (const use of src.match(/.{0,14}is_platform[^\n]*/g) || []) {
+    assert.match(use, /\.eq\('is_platform',\s*false\)/, 'exclusion filter only');
   }
-  assert.ok(!/Publish|publishRoutine/.test(src), 'no publish control in CP4');
+  assert.ok(!/publishRoutine/.test(src), 'no publish control in Train');
 });
 
 test('scope: the Routine contract module is untouched by CP4', () => {
@@ -179,8 +181,11 @@ test('scope: CP7+ has not started', () => {
   assert.ok(!fs.existsSync(path.join(__dirname, 'routine-history.js')),
     'CP7 history conversion has not started');
   const src = readCode('workout.html');
-  for (const notInTrain of ['publishRoutine', 'is_platform', 'visibility']) {
+  for (const notInTrain of ['publishRoutine', 'visibility']) {
     assert.ok(!src.includes(notInTrain), `${notInTrain} must not reach Train`);
+  }
+  for (const use of src.match(/.{0,14}is_platform[^\n]*/g) || []) {
+    assert.match(use, /\.eq\('is_platform',\s*false\)/, 'exclusion filter only');
   }
   // CP7 provenance would attach source_workout_id to a ROUTINE write. The
   // pre-existing personal_records.source_workout_id (Phase 4.2.1K PR

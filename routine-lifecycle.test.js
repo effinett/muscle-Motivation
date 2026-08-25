@@ -315,10 +315,50 @@ test('scope: the studio is not reachable from navigation', () => {
   assert.match(read('routine-studio.html'), /noindex/, 'not indexable');
 });
 
+/* Regression: production validation found platform Routines listed in the
+ * author's own Train → Workouts. Platform rows are owned by the authoring
+ * admin, so owner-only RLS legitimately returns them — the normal template
+ * reads must therefore exclude them explicitly. */
+
+test('regression: Train excludes platform Routines from the user template list', () => {
+  const src = readCode('workout.html');
+  const list = src.slice(src.indexOf("from('workout_templates')"));
+  const listBlock = list.slice(0, list.indexOf('.order('));
+  assert.match(listBlock, /\.eq\('is_platform',\s*false\)/,
+    'loadTemplates must filter out platform Routines');
+});
+
+test('regression: a platform Routine is not launchable from the normal logger', () => {
+  const src = readCode('workout.html');
+  const launch = src.slice(src.indexOf('.eq(\'id\', templateId)') - 200,
+    src.indexOf('.eq(\'id\', templateId)') + 120);
+  assert.match(launch, /\.eq\('is_platform',\s*false\)/,
+    'launch-by-id must refuse platform Routines');
+});
+
+test('regression: every normal-client template READ excludes platform rows', () => {
+  // Writes are already blocked by RLS (is_platform=false in the policies);
+  // it is the READS that needed the explicit filter.
+  const src = readCode('workout.html');
+  const reads = src.match(/from\('workout_templates'\)\s*\n?\s*\.select\([\s\S]{0,400}?(?=;)/g) || [];
+  assert.ok(reads.length >= 2, 'found the template reads');
+  for (const r of reads) {
+    assert.match(r, /\.eq\('is_platform',\s*false\)/,
+      'a normal-client read leaked platform rows: ' + r.slice(0, 90));
+  }
+});
+
 test('scope: CP5 Programs UI is untouched by CP6', () => {
   const src = readCode('workout.html');
   assert.match(src, /resolveProgramAccess\(p,\s*purchaseRows\)/, 'still catalog+entitlement based');
-  assert.ok(!/is_platform|visibility/.test(src), 'Train does not read Routine lifecycle fields');
+  // Train references is_platform ONLY to exclude platform Routines from the
+  // user's own lists. It must never read `visibility` — that is publication
+  // state, and Train has no business consuming platform content until CP8.
+  assert.ok(!/visibility/.test(src), 'Train must not read publication state');
+  for (const use of src.match(/.{0,14}is_platform[^\n]*/g) || []) {
+    assert.match(use, /\.eq\('is_platform',\s*false\)/,
+      'is_platform may only be used to filter platform rows out: ' + use.trim());
+  }
 });
 
 test('scope: CP7 has not started', () => {

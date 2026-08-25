@@ -377,9 +377,14 @@ test('perf: no new bottom-nav, prefetch or app-shell change', () => {
 
 /* ── 9 · scope guards ───────────────────────────────────────────────────── */
 
-test('scope: CP5 did not surface CP4 Routine metadata', () => {
-  for (const col of ['is_platform', 'visibility', 'tags']) {
-    assert.ok(!TRAIN_CODE.includes(col), `${col} belongs to CP6, not CP5`);
+test('scope: Train surfaces no CP4 Routine metadata', () => {
+  for (const col of ['visibility', 'tags']) {
+    assert.ok(!TRAIN_CODE.includes(col), `${col} must not reach Train`);
+  }
+  // CP6 added exactly one permitted use: excluding platform Routines from the
+  // user's own template lists.
+  for (const use of TRAIN_CODE.match(/.{0,14}is_platform[^\n]*/g) || []) {
+    assert.match(use, /\.eq\('is_platform',\s*false\)/, 'exclusion filter only');
   }
 });
 
