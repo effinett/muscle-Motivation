@@ -174,12 +174,10 @@ test('scope: program_workouts was not touched', () => {
   assert.ok(!/program_workouts[\s\S]{0,80}(is_platform|visibility)/.test(src));
 });
 
-test('scope: CP7+ has not started', () => {
-  // The boundary has moved twice as checkpoints shipped: CP5 → CP6 → now CP7.
+test('scope: CP8 has not started, and lifecycle fields stay off Train', () => {
+  // The boundary has moved as checkpoints shipped: CP5 → CP6 → CP7 → now CP8.
   // What stays constant is that the NORMAL app never reads Routine lifecycle
-  // fields — authoring lives on its own surface.
-  assert.ok(!fs.existsSync(path.join(__dirname, 'routine-history.js')),
-    'CP7 history conversion has not started');
+  // fields — platform authoring lives on its own surface.
   const src = readCode('workout.html');
   for (const notInTrain of ['publishRoutine', 'visibility']) {
     assert.ok(!src.includes(notInTrain), `${notInTrain} must not reach Train`);

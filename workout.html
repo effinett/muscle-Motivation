@@ -417,6 +417,20 @@
     .btn-tpl-start:hover { opacity: 0.85; }
     .btn-icon[disabled] { opacity: 0.3; pointer-events: none; }
 
+    /* Save-as-Routine review (CP7) */
+    .review-flag {
+      font-family: 'Barlow', sans-serif; font-size: 10px; font-weight: 700;
+      letter-spacing: 1px; text-transform: uppercase; color: var(--amber);
+      background: rgba(224,168,0,.10); padding: 3px 7px; border-radius: 5px;
+      white-space: nowrap;
+    }
+    .review-issue {
+      font-size: 13px; color: var(--amber); line-height: 1.5; margin-top: 6px;
+      overflow-wrap: anywhere;
+    }
+    .review-ok { font-size: 13px; color: var(--green); margin-top: 12px; }
+    #reviewCreateBtn[disabled] { pointer-events: none; }
+
     .builder-header { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
     .builder-title { font-family: 'Bebas Neue', sans-serif; font-size: 24px; letter-spacing: 1.5px; }
     .tpl-ex-card {
@@ -946,6 +960,37 @@
       </div><!-- /panePrograms -->
     </div>
 
+    <!-- ── Save-as-Routine review (Phase 4.3.6 CP7) ──────────────────────
+         A full view rather than a sheet: no scroll lock, no focus trap, and
+         no dialog close-event semantics to get wrong (the CP6 lesson). -->
+    <div id="reviewView" style="display:none;">
+      <div class="builder-header">
+        <button class="btn-icon" onclick="cancelRoutineReview()" aria-label="Back">
+          <i data-lucide="arrow-left"></i>
+        </button>
+        <div class="builder-title">Save as Routine</div>
+      </div>
+
+      <div class="card">
+        <div class="start-sub" id="reviewSource"></div>
+        <div class="field-group">
+          <label class="field-label" for="reviewName">Routine name</label>
+          <input class="field-input" type="text" id="reviewName" maxlength="60"
+                 oninput="onReviewNameInput()">
+        </div>
+      </div>
+
+      <div class="section-label">Exercises</div>
+      <div id="reviewExercises"></div>
+
+      <div id="reviewIssues" aria-live="polite"></div>
+
+      <button class="btn-primary" id="reviewCreateBtn" style="margin-top:14px;"
+              onclick="createRoutineFromHistory()">Create Routine</button>
+      <button class="btn-add-exercise" style="margin-top:8px;"
+              onclick="cancelRoutineReview()">Cancel</button>
+    </div>
+
     <!-- Active workout view -->
     <div id="activeView" style="display:none;">
       <div class="workout-header">
@@ -1166,6 +1211,7 @@
      (reuses its normalizer) and before the inline consumer below. -->
 <script src="exercise-log.js"></script>
 <script src="routine-core.js"></script>
+<script src="routine-history.js"></script>
 <script>
   var currentUser     = null;
   var currentWorkout  = null;
@@ -2279,6 +2325,9 @@
       // Template builder reuses this same picker — route the pick into the draft
       // instead of the live workout.
       if (pickerMode === 'template') { addTemplateExercise(name, canonicalId); return; }
+      // CP7: resolving an unresolved history exercise. Routes the user's
+      // explicit pick into the review — it must never touch the live workout.
+      if (pickerMode === 'resolve') { applyReviewResolution(name, canonicalId); return; }
       // Stable identity (Phase 4.2.1K): saveUserExercise above already created/
       // restored/reused the custom row, so it is now resolvable by name. Persist
       // exactly one of exercise_id (canonical) / user_exercise_id (custom).
@@ -2881,6 +2930,157 @@
   // (user_programs.current_index / schedule_keys), with schedules.js as the
   // fallback. Starting it re-uses the existing program launch (mode=progression)
   // so progression advances exactly as it does from the dashboard.
+  /* ── Save as Routine — history → private draft (CP7) ───────────────────
+     Conversion is a COPY. Nothing here writes to the workout, its exercises
+     or its sets: the analyzer is pure and the only write is the INSERT of a
+     brand-new private Routine, through the ordinary user write path. */
+
+  var reviewState = null;   // { workout, entries, name }
+
+  function openRoutineReview(idx) {
+    var w = workoutHistory[idx];
+    if (!w) return;
+    var setsFor = function (exerciseId) {
+      var row = (w.workout_exercises || []).filter(function (e) { return e.id === exerciseId; })[0];
+      return row ? (row.workout_sets || []) : [];
+    };
+    var ordered = (w.workout_exercises || []).slice().sort(function (a, b) {
+      return (a.order_index || 0) - (b.order_index || 0);
+    });
+    var result = rhAnalyzeWorkout(w, ordered, setsFor, currentUser.id);
+
+    if (result.status === RH_BLOCKED) {
+      showToast(reviewBlockedMessage(result.issues));
+      return;
+    }
+    reviewState = { workout: w, entries: result.entries,
+                    name: (result.candidate && result.candidate.name) || '' };
+    document.getElementById('startView').style.display = 'none';
+    document.getElementById('reviewView').style.display = 'block';
+    document.getElementById('reviewName').value = reviewState.name;
+    document.getElementById('reviewSource').textContent =
+      'From your logged workout on ' +
+      new Date(w.created_at).toLocaleDateString('en-US',
+        { weekday: 'short', month: 'short', day: 'numeric' }) +
+      '. Your workout history is not changed.';
+    renderReview();
+    // No AppNav.setView here: only the 'active' view suppresses the nav, so the
+    // review correctly inherits the browse view state it was opened from.
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+
+  function cancelRoutineReview() {
+    reviewState = null;                       // cancelling creates nothing
+    document.getElementById('reviewView').style.display = 'none';
+    showStartView();
+  }
+
+  function onReviewNameInput() {
+    if (!reviewState) return;
+    reviewState.name = document.getElementById('reviewName').value;
+    renderReview();
+  }
+
+  var REVIEW_ISSUE_COPY = {};
+  REVIEW_ISSUE_COPY[RH_MISSING_EXERCISE_IDENTITY] =
+    'Choose a library exercise for this one.';
+  REVIEW_ISSUE_COPY[RH_CUSTOM_IDENTITY_UNSUPPORTED] =
+    'Custom exercises can’t be saved into a Routine yet — pick a library exercise.';
+  REVIEW_ISSUE_COPY[RH_NO_COMPLETED_SETS] = 'No completed sets to copy.';
+  REVIEW_ISSUE_COPY[RH_MISSING_NAME] = 'Give the Routine a name.';
+
+  function reviewBlockedMessage(issues) {
+    if (issues.indexOf(RH_WORKOUT_IN_PROGRESS) >= 0) return 'Finish this workout first.';
+    if (issues.indexOf(RH_NOT_OWNED) >= 0) return 'That workout isn’t yours.';
+    if (issues.indexOf(RH_NO_COMPLETED_SETS) >= 0) return 'No completed sets to copy.';
+    return 'This workout can’t become a Routine.';
+  }
+
+  function renderReview() {
+    if (!reviewState) return;
+    var html = reviewState.entries.map(function (e, i) {
+      var p = e.prescription;
+      var problems = (e.issues || []).map(function (c) {
+        return '<div class="review-issue">' + esc(REVIEW_ISSUE_COPY[c] || c) + '</div>';
+      }).join('');
+      var fixBtn = (!e.resolved && p)
+        ? '<button class="btn-add-exercise" style="margin:8px 0 0;"' +
+          ' onclick="resolveReviewExercise(' + i + ')">Choose exercise</button>'
+        : '';
+      return '<div class="tpl-ex-card">' +
+        '<div class="tpl-ex-head"><div class="tpl-ex-name">' +
+          esc(p ? p.name : 'Unnamed exercise') +
+          (e.resolved ? '' : ' <span class="review-flag">Needs attention</span>') +
+        '</div></div>' +
+        (p ? '<div class="tpl-sub">' + p.sets + ' × ' + p.reps_low +
+             (p.reps_high !== p.reps_low ? '–' + p.reps_high : '') +
+             ' reps · rest ' + p.rest_sec + 's (default, editable later)</div>' : '') +
+        problems + fixBtn +
+      '</div>';
+    }).join('');
+    document.getElementById('reviewExercises').innerHTML =
+      html || '<div class="empty-state">Nothing to copy.</div>';
+
+    var check = rhRecheck(reviewState.name, reviewState.entries);
+    var btn = document.getElementById('reviewCreateBtn');
+    btn.disabled = !check.eligible;
+    btn.style.opacity = check.eligible ? '1' : '0.4';
+    document.getElementById('reviewIssues').innerHTML = check.eligible
+      ? '<div class="review-ok">Ready to create.</div>'
+      : '<div class="review-issue" style="margin-top:12px;">' +
+        'Resolve the items above before creating this Routine.</div>';
+  }
+
+  // Manual resolution routes through the NORMAL exercise picker. The user's
+  // explicit choice is the only thing that grants identity — nothing is matched.
+  var resolvingIndex = -1;
+  function resolveReviewExercise(i) {
+    resolvingIndex = i;
+    openPickerFor('resolve');
+  }
+
+  function applyReviewResolution(name, pickedId) {
+    var canonicalId = resolvePickedId(name, pickedId);
+    if (!canonicalId) {
+      showToast('Pick a library exercise — custom ones can’t be saved into a Routine yet.');
+      return;
+    }
+    reviewState.entries[resolvingIndex] =
+      rhResolveEntry(reviewState.entries[resolvingIndex], canonicalId, name);
+    resolvingIndex = -1;
+    renderReview();
+  }
+
+  async function createRoutineFromHistory() {
+    if (!reviewState) return;
+    var check = rhRecheck(reviewState.name, reviewState.entries);
+    if (!check.eligible) { showToast('Resolve the flagged exercises first.'); return; }
+    if (!beginAction('createRoutine')) return;   // idempotent under double-tap
+    try {
+      // The ordinary user write path: RLS requires user_id = auth.uid(), and
+      // the CP4 policies force is_platform=false / visibility='private'.
+      var { data, error } = await supabaseClient.from('workout_templates').insert({
+        user_id: currentUser.id,
+        name: reviewState.name.trim().slice(0, 60),
+        exercises: rhCandidateExercises(check.candidate),
+        source_workout_id: reviewState.workout.id,
+      }).select().single();
+      if (error || !data) {
+        console.error('createRoutineFromHistory:', error);
+        showToast('Could not create the Routine.');
+        return;
+      }
+      showToast('Routine created — find it under Workouts.');
+      reviewState = null;
+      document.getElementById('reviewView').style.display = 'none';
+      showStartView();
+      showTrainPane('workouts');
+      await loadTemplates();
+    } finally {
+      endAction('createRoutine');
+    }
+  }
+
   // ── Train local navigation (CP5) ─────────────────────────────────────
   // Today · Workouts · Programs. Pane state is view-local and deliberately
   // not a route: no router, no history entry, no app-shell change.
@@ -3116,8 +3316,10 @@
   // ── Builder view ──────────────────────────────────────────────────
   function showStartView() {
     document.getElementById('builderView').style.display = 'none';
+    document.getElementById('reviewView').style.display  = 'none';
     document.getElementById('startView').style.display   = 'block';
     editingTemplate = null;
+    reviewState = null;
     // Browse surface — the primary nav belongs here (Phase 4.3.4 CP2).
     if (typeof AppNav !== 'undefined') AppNav.setView('start');
   }

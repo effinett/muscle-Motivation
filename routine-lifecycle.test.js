@@ -383,12 +383,16 @@ test('scope: CP5 Programs UI is untouched by CP6', () => {
   }
 });
 
-test('scope: CP7 has not started', () => {
-  assert.ok(!fs.existsSync(path.join(__dirname, 'routine-history.js')));
+test('scope: platform authoring stays independent of history conversion', () => {
+  // CP7 shipped routine-history.js. The durable invariant is that the platform
+  // authoring path never reaches into history conversion, and vice versa.
   const src = readCode('api/routine-admin.js') + readCode('routine-lifecycle.js');
-  for (const cp7 of ['source_workout_id', 'candidacy', 'from_history', 'workout_sets']) {
-    assert.ok(!src.includes(cp7), `${cp7} belongs to CP7`);
+  for (const cp7 of ['rhAnalyzeWorkout', 'routine-history', 'workout_sets', 'candidacy']) {
+    assert.ok(!src.includes(cp7), `platform authoring must not depend on ${cp7}`);
   }
+  const hist = readCode('routine-history.js');
+  assert.ok(!/is_platform|routine-admin|rlPublish/.test(hist),
+    'history conversion must not reach into platform authoring');
 });
 
 test('scope: CP8 has not started — program_workouts untouched', () => {
