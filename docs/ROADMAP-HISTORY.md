@@ -818,3 +818,48 @@ workouts, 39 Routines, 0 test rows left.
 **Unchanged:** `program_workouts` shape, RLS, data and both execution reads · CP6 platform authoring and its
 validation row · entitlement, `purchases`, Stripe · CP5 Programs UI. `routine-history.js` loads on **Train
 only**. **CP8 has not started.**
+
+---
+
+## 2026-08-25 — Phase 4.3.6 CP8a — Program sessions migrated onto canonical Routines
+
+**Schema and data only. No RLS change, no runtime cutover** — Programs still execute from
+`program_workouts`. CP8b owns the entitlement-scoped read policy and the execution switch; splitting them
+keeps the riskiest change (widening Routine SELECT) in its own reviewed step.
+
+**The identity gate passed cleanly.** All **40** distinct Program exercise names matched a canonical
+`exercises` row by **exact equality** — 0 alias, 0 fuzzy, 0 unmatched, 0 ambiguous. **No migration map was
+needed and nothing was guessed.** A dry run over all 325 entries before any write confirmed they already
+satisfied the CP3 contract, so the only change to any prescription is **adding `exercise_id`**.
+
+**Relationship model — `program_routines`.** Placement lives on the relationship, never on the Routine, so
+a Routine can be reused across Programs: `program_id` → `programs`, `routine_id` → `workout_templates`
+**ON DELETE RESTRICT** (a live Program must not lose its structure silently), `session_key`, `sort_order`,
+and `legacy_program_workout_id` **UNIQUE** — provenance and idempotency in one field. `unique(program_id,
+session_key)` mirrors the legacy `unique(program_slug, session_key)`.
+
+**`session_key` is the linkage, not `sort_order`.** Session keys are unique per Program (16/15/16) and are
+what `startProgramSession()` and the `schedules.js` training-days mapping key on; `sort_order` is a
+non-unique display hint (only 10/4/10 distinct values) carried across verbatim. No periodization concept
+was invented — no phases, blocks, cycles or day-of-week.
+
+**Migration result — 47 sessions, 325 entries, ZERO semantic drift** on name, sets, reps_low, reps_high,
+notes, rest_sec, session name, sort order and array length. All 325 carry a canonical `exercise_id`; all 47
+Routines are `is_platform=true, visibility='published'`, owned by the platform account and with `goal`
+inherited from the parent Program. Per Program: fat_loss 16/16, muscle_gain 16/16, glute_builder 15/15.
+**Idempotent** — 0 sessions remain unmigrated, so a re-run is a no-op.
+
+**Nothing else moved:** 38 user private Routines unchanged · 121 workouts and 1899 sets unchanged · 1
+progression row and 5 purchases unchanged · all 47 legacy `program_workouts` rows **retained intact** for
+rollback. The CP6 validation draft is still `platform / private` and has **0 relationships** — a draft can
+never be a Program session.
+
+**Rollback (CP8a):** drop `program_routines` and delete the 47 migrated platform Routines. Nothing reads
+them, no user data is involved, and `program_workouts` is untouched and still the runtime source.
+
+**Known follow-up:** the migrated Routines have no `description`, so they would not pass the CP6 publish
+eligibility rule if an author later unpublished and republished one through Routine Studio. That rule was a
+CP6 design choice for standalone platform Routines and is arguably too strict for a Program session, whose
+description lives on the Program. Recorded rather than silently relaxed.
+
+**Phase 4.3.5 remains OPEN — VALIDATION DEBT.** CP8b and CP8c have not started.
