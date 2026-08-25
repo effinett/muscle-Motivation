@@ -772,3 +772,49 @@ needs deleting, and no user data is involved.
 **Unchanged:** `program_workouts` shape, RLS, data and both execution reads · CP5 Programs UI · entitlement,
 `purchases`, Stripe · all 38 user Routines, still private and non-platform with zero automatic changes.
 **CP7 and CP8 have not started.**
+
+---
+
+## 2026-08-25 — Phase 4.3.6 CP7 — workout history → private Routine drafts
+
+**Conversion is copy-only and user-confirmed.** It creates private user Routines, never mutates history,
+never guesses exercise identity, and does not begin Program→Routine convergence.
+
+**The audit changed the design.** Of **121** completed workouts only **13 (11%)** are fully canonical; **106
+(88%)** contain a custom or name-only exercise (645 entries: 53% canonical, 11% custom, 36% legacy). Manual
+identity resolution is therefore the *dominant* path, not an edge case, so the review screen is built around
+resolving exercises rather than confirming a name.
+
+**Deterministic derivation**, grounded in that data (1838 of 1899 sets qualify; `is_warmup` unused; all notes
+fields empty): a set counts only if completed, not a warm-up, and carrying positive whole reps. `sets` is
+their count, `reps_low`/`reps_high` their observed min and max. Rest has no source in history so it takes the
+CP3 default, **flagged as defaulted and disclosed in the UI**. Notes are empty — performance logs are not
+coaching notes. **Historical load is never carried**: the contract has no load field and CP7 invents none.
+
+**Identity is preserved, never repaired.** Canonical carries through; custom and name-only entries are
+surfaced for the user to replace through the normal exercise picker. An explicit pick is the only thing that
+grants identity, and a non-canonical pick is refused rather than stored. **The CP3 contract was not widened**
+to hold custom identity.
+
+**Provenance:** `workout_templates.source_workout_id uuid NULL` → `workouts(id)` **ON DELETE SET NULL**,
+never CASCADE — a Routine is a snapshot, so deleting history costs it a breadcrumb and nothing else. No
+unique constraint: converting the same workout twice is allowed. No index (39 rows, owner-scoped). Existing
+rows unaffected.
+
+**Review UX:** Train → Workouts → History → *Save as Routine* → review → *Create Routine*. A **full view,
+not a sheet** — no scroll lock, no focus trap, no dialog close-event semantics, applying the CP6 lesson
+directly. Create is disabled until every flagged item is resolved, eligibility is re-checked at submit, and
+cancelling or leaving by any path discards the draft. The button renders only where conversion can be
+completed, so `workout-history.html` gets no dead-end control.
+
+**Live production validation** (browser, authenticated): all 10 loaded workouts analysed as `needs_review` —
+matching the 88% audit figure. A 9-exercise workout with 6 flagged entries was resolved through the real
+picker and created as a private Routine. **History immutability was proven sharply**: after conversion the
+source workout still held **6 custom + 3 canonical** exercises while the Routine held **9/9 canonical**, and
+the workout's `updated_at` still equals its `created_at` — it has never been written. The Routine was then
+deleted through the ordinary user path and history remained complete (9 exercises, 27 sets). Final state: 121
+workouts, 39 Routines, 0 test rows left.
+
+**Unchanged:** `program_workouts` shape, RLS, data and both execution reads · CP6 platform authoring and its
+validation row · entitlement, `purchases`, Stripe · CP5 Programs UI. `routine-history.js` loads on **Train
+only**. **CP8 has not started.**
