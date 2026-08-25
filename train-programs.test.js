@@ -388,11 +388,11 @@ test('scope: Train surfaces no CP4 Routine metadata', () => {
   }
 });
 
-test('scope: CP7/CP8 have not started, and CP6 stays off Train', () => {
+test('scope: CP8 has not started, and CP6 authoring stays off Train', () => {
   // CP6 shipped routine-lifecycle.js on its own internal surface. Train must
-  // remain free of it — that is the durable invariant.
+  // remain free of it. CP7's routine-history.js DOES belong on Train — it is
+  // the user's own history-conversion feature, not platform authoring.
   assert.ok(!TRAIN_CODE.includes('routine-lifecycle'), 'Train loads no authoring code');
-  assert.ok(!fs.existsSync(path.join(__dirname, 'routine-history.js')));
   assert.ok(!/publishRoutine|program_routines/.test(TRAIN_CODE));
   // CP7 provenance would attach source_workout_id to a ROUTINE. The existing
   // personal_records.source_workout_id (Phase 4.2.1K PR detection) is a

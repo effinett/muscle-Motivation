@@ -63,7 +63,12 @@ async function loadHistory(opts) {
 
   var query = supabaseClient
     .from('workouts')
-    .select('id, name, notes, created_at, duration_minutes, program_slug, session_key, mode, workout_exercises(id, exercise_name, exercise_id, user_exercise_id, order_index, workout_sets(id, set_number, weight_lbs, reps, completed))')
+    // `completed` and `user_id` are selected (not just filtered on) so the CP7
+    // candidacy analyzer can re-verify both from the row itself rather than
+    // trusting that the caller filtered correctly. `is_warmup` is selected so a
+    // warm-up set is excluded from a derived prescription — unused in the data
+    // today, but the analyzer must not silently count one if it appears.
+    .select('id, name, notes, created_at, duration_minutes, completed, user_id, program_slug, session_key, mode, workout_exercises(id, exercise_name, exercise_id, user_exercise_id, order_index, workout_sets(id, set_number, weight_lbs, reps, completed, is_warmup))')
     .eq('user_id', currentUser.id).eq('completed', true)
     .order('created_at', { ascending: false });
   if (opts.limit) query = query.limit(opts.limit);
@@ -146,6 +151,14 @@ function renderHistory() {
       exListInner =
         (exRows || '<div style="font-size:13px;color:var(--text-muted);padding:4px 0;">No exercises logged.</div>') +
         '<div class="history-delete">' +
+          // "Save as Routine" only where the conversion surface actually
+          // exists (Train). workout-history.html has no exercise picker, so an
+          // unresolved identity could not be fixed there — the button would be
+          // a dead end rather than a feature.
+          (typeof openRoutineReview === 'function'
+            ? '<button class="btn-edit-history" onclick="event.stopPropagation();' +
+              'openRoutineReview(' + idx + ')">Save as Routine</button>'
+            : '') +
           '<button class="btn-edit-history" onclick="event.stopPropagation();enterEditMode(' + idx + ')">Edit</button>' +
           '<button class="btn-del-history" onclick="event.stopPropagation();deleteHistoryWorkout(\'' + w.id + '\',\'' + esc(w.name || 'Workout') + '\')">Delete</button>' +
         '</div>';
