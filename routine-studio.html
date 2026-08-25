@@ -158,7 +158,11 @@
       <h2 id="cTitle">Publish Routine</h2>
       <div id="cBody" style="font-size:14px;color:var(--text-secondary)"></div>
       <div class="btns">
-        <button class="btn-go" id="cGo" value="go">Confirm</button>
+        <!-- type="button": the confirm action is driven by its own click
+             handler, NOT by the dialog's close event. Closing a <dialog> via
+             a method="dialog" form submission did not reliably fire `close`,
+             which silently swallowed publish and unpublish. -->
+        <button class="btn-go" id="cGo" type="button">Confirm</button>
         <button class="btn-ghost" value="cancel">Cancel</button>
       </div>
     </form>
@@ -315,7 +319,19 @@ function confirmThen(title, bodyHtml, run) {
   var dlg = document.getElementById('confirmDlg');
   document.getElementById('cTitle').textContent = title;
   document.getElementById('cBody').innerHTML = bodyHtml;
-  dlg.onclose = function () { if (dlg.returnValue === 'go') run(); };
+
+  // The action hangs off the confirm button's OWN click, so it cannot be lost
+  // to dialog close-event semantics. Cloning the node first drops any handler
+  // from a previous confirmation, so an action can never fire twice or fire
+  // the wrong one.
+  var go = document.getElementById('cGo');
+  var fresh = go.cloneNode(true);
+  go.parentNode.replaceChild(fresh, go);
+  fresh.addEventListener('click', function () {
+    dlg.close('go');
+    run();
+  });
+
   dlg.showModal();
 }
 
