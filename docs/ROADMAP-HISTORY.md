@@ -990,3 +990,80 @@ satisfying **4.3.6A, B, C, D, E, F, G and L**. Three lettered scope items remain
 edges as a foundation, but there is no Swap engine API or surface; the roadmap requires this **before**
 Coach can swap exercises at 4.7.5), and **4.3.6J** (exercise favorites & recents — absent entirely).
 **4.3.6K** remains protected planned content. The phase exit criterion is therefore not yet met.
+
+---
+
+## 2026-08-26 — Phase 4.3.6H — reusable exercise detail surface
+
+**Scope: read-only display architecture. No schema change, no migration, no content edit, no user-data
+mutation.** One shared surface now exposes the curated catalog metadata that had been carried on
+`public.exercises` since Phase 4.2.1E and read by no UI.
+
+**Correction to the CP8c record.** That entry described 4.3.6H as surfacing
+`instructions`/`coaching_cues`/`common_mistakes`. The production table has **`instructions` and `tips`**;
+there is **no `coaching_cues` column and no `common_mistakes` column**, and none was added here. The
+roadmap's "common mistakes **where represented**" is satisfied vacuously — it is not represented. Adding
+that content is content work, not display work, and stays out of scope.
+
+**Production data audit (141 canonical rows, all `is_active`).** `instructions` 141/141 (100%), `tips`
+141/141 (100%), `equipment` 141/141, `primary_muscle` 141/141, `movement_pattern` 141/141, `category`
+141/141, `difficulty` 141/141, `force_type` 141/141; `secondary_muscles` 90/141 (**63.8%** — the only
+partial field, and the one section that legitimately disappears). Every row has usable detail content, and
+the prose is real curated copy, not placeholder. **No content-hardening debt for canonical exercises.**
+
+**The degraded paths are the common case, not an edge case.** All **142** `user_exercises` rows (141
+active) carry **zero** metadata — `category` is populated on **0** of them — so a custom has nothing but a
+name. Of 645 `workout_exercises`, **230 (35.7%)** are legacy name-only. Both are handled explicitly rather
+than as an afterthought.
+
+**`exercise-detail.js` — pure, DOM-free, fetch-free, DB-free.** Reuses `ExerciseLog.identityType`, so
+display identity can never drift from logged identity. Its binding rule: canonical guidance is shown
+**only** when the reference carries an `exerciseId` **and** the supplied catalog row's `id` equals it.
+There is **no name matching, no normalization fallback and no fuzzy resolution anywhere in the module** —
+a same-named custom, a legacy row, an invalid dual-id reference, and a mismatched/stale fetch each yield an
+honest note instead of another exercise's instructions. Absent fields are **omitted**, never rendered as
+"N/A" and never replaced with generated advice; `instructions` and `tips` stay **distinct sections**
+because the data model separates them. `force_type`, `tracking_type`, `default_unit`, the boolean flags and
+the raw `exercises.id` are deliberately not surfaced, and `category` is omitted as a near-duplicate of
+`movement_pattern` that is already the picker subtitle.
+
+**Surface.** A read-only bottom sheet on `workout.html` opened through `mm-sheet.js`, inheriting scroll
+locking, focus capture/restore, Escape, backdrop dismissal and stacking rather than reimplementing them.
+It stacks above the picker, so opening details from a result row preserves the search text and filters.
+**Three entry points, one implementation:** the active-workout exercise card, the picker result row, and
+the Routine/template editor row.
+
+**Workout safety is structural, not promised.** The sheet holds no editable control and its only action is
+Close; no detail code path calls `insert`/`update`/`delete`/`upsert`, the rest timer, or any set mutation.
+Both properties are pinned by tests. Detail and select are **separate sibling buttons** in a picker row —
+the details button does not carry the select handler, so reading about an exercise cannot add it.
+
+**Performance.** The Train bootstrap is **unchanged** — prose was deliberately kept out of
+`loadExerciseLibrary()` (~27KB across 141 rows for data only the tapped exercise needs). The sheet renders
+instantly from the classification metadata already in memory, then lazily fetches one exercise's prose by
+id and caches it; a reopened exercise issues **no request**, and a custom or legacy reference issues **none
+ever**. Transient failures are not cached, so a reopen retries.
+
+**Security.** Reads `public.exercises` only, under the user's own token, scoped `.eq('id', …)`. That table
+is authenticated-readable by design (canonical content is not user data); `user_exercises` stays
+owner-scoped and is never read by this path. No new access path, no service-role use, no RLS change.
+
+**Tests.** `exercise-detail.test.js` (22) covers the data matrix — full/partial/absent metadata, malformed
+and null input, and the anti-fabrication cases (custom named exactly like a canonical, legacy handed a
+canonical row, mismatched row, dual-id reference). `exercise-detail-ui.test.js` (23) pins the structural
+contracts: read-only sheet, distinct select/detail actions, id-only identity, 44px targets, wrapping, ARIA
+labelling, lazy+cached fetch, and bootstrap purity. Two pre-existing tests were updated rather than
+weakened: the picker identity assertion now also pins that a custom id rides only in the custom slot, and
+the mm-sheet consumer contract was rewritten from a magic count to the invariant it always meant —
+**browsing surfaces may be swipe-dismissible; destructive confirmations may not** — plus a new assertion
+that a swipeable sheet holds no input.
+
+**`npm run verify` green:** 2089 pass / 0 fail (2103 total), nutrition evaluation 100% (286/286),
+false-confidence 0%, both strict benchmarks pass.
+
+**Phase 4.3.5 remains OPEN — VALIDATION DEBT.**
+
+**Phase 4.3.6 remains OPEN.** 4.3.6H is complete; **4.3.6I** (deterministic substitution engine) and
+**4.3.6J** (favorites & recents) are still unbuilt, and **4.3.6K** remains protected planned content. No
+substitution, swap, favorite, recent or AI-generated coaching behavior ships here. Exercise media remains
+at **5.1.6** — the table has no media column and none was added.

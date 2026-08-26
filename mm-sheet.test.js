@@ -400,21 +400,43 @@ test('consumers: no overlay keeps its own inline backdrop-dismiss handler', () =
   }
 });
 
-test('consumers: the picker is the one bottom SHEET; confirmations are dialogs', () => {
+test('consumers: browsing surfaces are SHEETS; confirmations are dialogs', () => {
   const wk = read('workout.html');
-  // A destructive confirm must be dismissed deliberately — never by a stray
-  // downward swipe — so it is opened as a dialog with no gesture handling.
-  assert.match(wk, /MMSheet\.open\(document\.getElementById\('pickerModal'\), \{\s*\n\s*variant: 'sheet'/);
+  // The invariant is about CONSEQUENCE, not count. A surface may be swipe-
+  // dismissible only when dismissing it costs the user nothing: the picker
+  // (Phase 4.3.5C) selects nothing until a row is tapped, and the exercise
+  // detail sheet (Phase 4.3.6H) is read-only and holds no input at all. A
+  // destructive confirm must be dismissed deliberately — never by a stray
+  // downward swipe — so it stays a dialog with no gesture handling.
+  const SWIPEABLE = ['pickerModal', 'exerciseDetailModal'];
+  const DELIBERATE = ['finishModal', 'discardModal', 'customEditModal', 'customConfirmModal'];
+
   // Comments mention the option; only real call sites count.
   const wkCode = wk.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/[^\n]*$/gm, '');
   const sheetVariants = (wkCode.match(/variant: 'sheet'/g) || []).length;
-  assert.strictEqual(sheetVariants, 1, 'exactly one sheet-variant consumer on workout.html');
-  for (const id of ['finishModal', 'discardModal', 'customEditModal', 'customConfirmModal']) {
+  assert.strictEqual(sheetVariants, SWIPEABLE.length,
+    'every sheet-variant consumer on workout.html is accounted for below');
+
+  for (const id of SWIPEABLE) {
+    // Anchored on the options-object head rather than the closing paren: these
+    // calls carry callbacks whose own `);` would end a lazy match early.
+    const call = new RegExp("MMSheet\\.open\\(document\\.getElementById\\('" + id +
+      "'\\),\\s*\\{[\\s\\S]{0,120}?variant:\\s*'sheet'");
+    assert.match(wkCode, call, `${id} is a swipe-dismissible browsing sheet`);
+  }
+  for (const id of DELIBERATE) {
     const call = new RegExp("MMSheet\\.open\\(document\\.getElementById\\('" + id + "'\\)([\\s\\S]{0,160}?)\\);");
     const m = wk.match(call);
     assert.ok(m, `${id} opens through the primitive`);
     assert.ok(!/variant:\s*'sheet'/.test(m[1]), `${id} is a dialog, not a swipeable sheet`);
   }
+
+  // A swipeable surface must not be able to lose typed input. The detail sheet
+  // earns its gesture by holding no editable control whatsoever.
+  const detail = wk.match(/<div class="overlay" id="exerciseDetailModal">([\s\S]*?)\n<\/div>\n/);
+  assert.ok(detail, 'detail modal markup located');
+  assert.ok(!/<input|<textarea|<form|contenteditable/i.test(detail[1]),
+    'the detail sheet holds no input, so a swipe dismissal can never discard user data');
 });
 
 test('consumers: the picker list and filter panel carry the scroll contract', () => {
