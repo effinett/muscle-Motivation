@@ -413,6 +413,16 @@ areas · reduced motion · keyboard navigation and focus · the shipped shell co
 **Goal:** make Programs first-class, create one coherent reusable training-content architecture, and
 complete the Train surface capabilities that earlier exercise phases left unbuilt.
 
+**Status — 2026-08-26: OPEN.** The training-content architecture track (CP0–CP8c) is **complete and
+production-validated** — Program execution runs on canonical Routines with **0 runtime reads of
+`program_workouts`**, entitlement-scoped RLS, and 47/47 prescription parity (record:
+`docs/ROADMAP-HISTORY.md`). That satisfies **4.3.6A, B, C, D, E, F, G and L**.
+
+**The phase is not closed.** Three lettered scope items remain unbuilt — **4.3.6H** (exercise detail
+surface), **4.3.6I** (deterministic substitution engine, required *before* Coach swaps exercises at
+4.7.5), and **4.3.6J** (exercise favorites & recents). **4.3.6K** remains protected planned content. The
+exit criterion below is not yet met.
+
 ### Owner decisions — locked 2026-08-21
 
 Approved by Effi following the pre-implementation reconciliation audit. These constrain 4.3.6A–L; they do

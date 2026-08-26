@@ -918,3 +918,75 @@ history, progression or purchase data is involved.
 **4.3.5F surface note:** Program session loading changed from one legacy query to one embedded canonical
 query — same request count, no Train bootstrap change, and Today/Programs do not eagerly fetch
 prescriptions. **Phase 4.3.5 remains OPEN — VALIDATION DEBT.** CP8c production validation has not started.
+
+---
+
+## 2026-08-26 — Phase 4.3.6 CP8c — production validation of Program → canonical Routine convergence
+
+**Verdict: CP8c — PRODUCTION VALIDATED. No defects. No code changed.** Validated against production
+`e9277e2` on `musclemotivation.fit`, confirmed by fetching the live `workout.html`,
+`workout-complete.html` and `routine-lifecycle.js` and diffing them byte-for-byte against local `e9277e2`.
+
+**Canonical execution proven at the network layer**, not inferred from a working page. Starting a Program
+session issued exactly one prescription request —
+`GET /rest/v1/program_routines?select=session_key,sort_order,programs!inner(slug),workout_templates!inner(id,name,exercises)&session_key=eq.glute_b&programs.slug=eq.glute_builder` → 200.
+Across every observed request in the whole pass: **0 runtime reads of `program_workouts`.** All 47 legacy
+rows remain present, intact and unused.
+
+**Prescription parity was measured across all 47 sessions, not a sample.** Every canonical Routine is
+byte-identical to its legacy row on name, order, sets, reps_low/high, rest_sec and notes — **47/47
+identical, 0 drift, 0 session-name drift** — with the single intended CP8a enrichment that **325/325
+exercises now carry a canonical `exercise_id`** where legacy carried none.
+
+**Live run:** Train bootstrap issued 8 requests and **eagerly loaded no protected Program prescriptions**;
+the Programs pane added **zero** requests (catalog from the CP1b sessionStorage cache, purchases fetched
+once). Started an **optional** Glute B session — correct identity (`glute_builder`/`glute_b`/`optional`),
+7 exercises, 22 sets matching 4+3+3+3+3+3+3. Reloading the start URL in a **fresh second tab** resumed the
+same workout id and created **no duplicate**; plain `workout.html` resumed it with the timer continuing.
+The snapshot wrote all 7 exercises with canonical `exercise_id` and `user_exercise_id` NULL, so the session
+does not depend on future live Routine reads. **Progression was not mutated** — one `user_programs` row,
+`updated_at` unchanged, no new row, no advancement. Every request returned 200; no console errors.
+
+**Security, verified live rather than only in tests.** Unauthenticated PostgREST returned **0 rows** for
+`workout_templates`, `program_routines`, `programs` and `program_workouts`, including **by exact Routine
+id** and through the embedded join — knowing an id grants nothing. Authenticated, the owner saw **exactly
+their own 7** of 38 private Routines. The privileged endpoint refused an unauthenticated call and a garbage
+bearer with **401**. **`routine_in_use` confirmed in production:** unpublishing the assigned `Glute B`
+returned **409** naming the blocking assignment, and the Routine stayed published with its relationship
+intact. Assigning the CP6 draft was refused **422 `platform_draft`**; assigning a user's private Routine
+was refused **422 `user_private`**. Every refused write left **zero residue**.
+
+**Isolation held.** The CP6 draft remains private, unassigned, absent from Train and from Program session
+lists, and visible only in the Studio (which showed exactly 47 PUBLISHED + 1 DRAFT). No user Routine has an
+assignment; all 47 assignments map 1:1 to distinct published platform Routines. CP7's review flow still
+opens with its "Your workout history is not changed" promise, deterministic derivation and custom-exercise
+identity gating.
+
+**Data integrity: zero drift.** Every pre-validation count was restored exactly — 3 published Programs, 47
+relationships, 47 published platform Routines, 1 draft, 38 private Routines, 47 legacy rows, 5 purchases,
+1 `user_programs`, 121 workouts, 0 incomplete, 645 `workout_exercises`, 265 PRs. The validation workout was
+removed through the normal Discard flow; **no direct-SQL deletion of user data.**
+
+**Observation, not a regression — dormant legacy sessions.** 10 of the 47 migrated sessions are unreachable
+through `schedules.js` (`push`/`pull`/`legs` in both fat-loss and muscle-gain; `session_a`/`session_b`/
+`session_c`/`upper` in glute-builder). The identical 10 were equally unreachable in `program_workouts`
+**before** CP8 — the migration faithfully preserved them rather than silently dropping content. Reachable
+counts render exactly (glute_builder shows 11 of 15).
+
+**Observation, not a regression — previous-performance chattiness.** Loading 7 exercises issues ~48
+`workout_exercises`/`workouts`/`workout_sets` requests via the Phase 4.2.1J ID-first history matching.
+This is pre-existing and unrelated to CP8, which added exactly **one** request. Recorded, not fixed.
+
+**Not validated, and not claimed.** Narrow-viewport probes at 320/390/430 could not be performed — window
+resizes reported success but the page viewport stayed at 1440. CP8b's diff contains **zero** CSS, style or
+class changes, so no layout surface exists for a mobile regression, but no mobile rendering was observed.
+No authenticated-but-unentitled identity exists on this account, so that path remains covered by the CP8b
+17/17 RLS matrix, not by live observation. **Phase 4.3.5 remains OPEN — VALIDATION DEBT.**
+
+**Phase 4.3.6 is NOT closed.** The CP0–CP8c training-content track is complete and production-validated,
+satisfying **4.3.6A, B, C, D, E, F, G and L**. Three lettered scope items remain unbuilt: **4.3.6H**
+(exercise detail surface — no UI reads `instructions`/`coaching_cues`/`common_mistakes`), **4.3.6I**
+(deterministic substitution engine — `exercise-core.js` carries `equipment_substitution` relationship
+edges as a foundation, but there is no Swap engine API or surface; the roadmap requires this **before**
+Coach can swap exercises at 4.7.5), and **4.3.6J** (exercise favorites & recents — absent entirely).
+**4.3.6K** remains protected planned content. The phase exit criterion is therefore not yet met.
