@@ -454,6 +454,9 @@ test('scope: CP7 did not touch program_workouts or platform authoring', () => {
   for (const banned of ['program_workouts', 'routine-admin', 'is_platform', 'visibility']) {
     assert.ok(!block.includes(banned), `${banned} is out of CP7 scope`);
   }
-  assert.strictEqual((src.match(/from\('program_workouts'\)/g) || []).length, 2,
-    'the two pre-existing Program reads are unchanged');
+  // CP8b cut Program execution over to canonical Routines, so Train no longer
+  // reads legacy prescriptions at all. History conversion is unaffected either
+  // way — it never touched Program data.
+  assert.ok(!src.includes("from('program_workouts')"),
+    'legacy prescription reads are gone after CP8b');
 });

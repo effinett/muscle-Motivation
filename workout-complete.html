@@ -357,15 +357,31 @@
     // (Phase 4.2.1K): a canonical exercise and a same-name custom never share a
     // trend; two same-name customs stay separate; legacy name-only rows fold in
     // only when the current exercise has no stable id.
+    /* CP8b: Program prescriptions come from the canonical Routine via
+       program_routines. program_workouts is frozen rollback data and is no
+       longer read at runtime. RLS gates both tables, so an unentitled caller
+       simply gets nothing. Read-only display, so the stored canonical shape is
+       used as-is. */
+    async function programSessionExercises(slug, key){
+      if(!slug || !key) return [];
+      try {
+        var res = await supabaseClient
+          .from('program_routines')
+          .select('programs!inner(slug), workout_templates!inner(exercises)')
+          .eq('session_key', key).eq('programs.slug', slug).maybeSingle();
+        if(res.error || !res.data || !res.data.workout_templates) return [];
+        return res.data.workout_templates.exercises || [];
+      } catch(e){ return []; }
+    }
+
     if(exs.length) await loadHistory(exs, workoutId);
 
     // Optional: programmed rep ranges for the session (for progression text).
     var ranges = {};
     if(w.program_slug && w.session_key){
       try {
-        var { data: tmpl } = await supabaseClient.from('program_workouts')
-          .select('exercises').eq('program_slug', w.program_slug).eq('session_key', w.session_key).maybeSingle();
-        if(tmpl && tmpl.exercises) tmpl.exercises.forEach(function(t){ ranges[(t.name||'').toLowerCase()] = t; });
+        var tmplEx = await programSessionExercises(w.program_slug, w.session_key);
+        tmplEx.forEach(function(t){ ranges[(t.name||'').toLowerCase()] = t; });
       } catch(e){}
     }
     return { w:w, exs:exs, ranges:ranges };
@@ -583,10 +599,9 @@
       var focus = '';
       if(nextKey){
         try {
-          var { data: t } = await supabaseClient.from('program_workouts')
-            .select('exercises').eq('program_slug', w.program_slug).eq('session_key', nextKey).maybeSingle();
-          if(t && t.exercises && t.exercises.length){
-            focus = t.exercises.slice(0,3).map(function(x){ return x.name; }).join(' · ');
+          var nextEx = await programSessionExercises(w.program_slug, nextKey);
+          if(nextEx.length){
+            focus = nextEx.slice(0,3).map(function(x){ return x.name; }).join(' · ');
           }
         } catch(e){}
       }

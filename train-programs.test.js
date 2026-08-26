@@ -388,12 +388,14 @@ test('scope: Train surfaces no CP4 Routine metadata', () => {
   }
 });
 
-test('scope: CP8 has not started, and CP6 authoring stays off Train', () => {
+test('scope: CP6 authoring stays off Train', () => {
   // CP6 shipped routine-lifecycle.js on its own internal surface. Train must
   // remain free of it. CP7's routine-history.js DOES belong on Train — it is
   // the user's own history-conversion feature, not platform authoring.
   assert.ok(!TRAIN_CODE.includes('routine-lifecycle'), 'Train loads no authoring code');
-  assert.ok(!/publishRoutine|program_routines/.test(TRAIN_CODE));
+  // program_routines IS expected on Train after CP8b — it is the Program
+  // execution source. Publishing controls must still never appear there.
+  assert.ok(!/publishRoutine/.test(TRAIN_CODE), 'no publish control on Train');
   // CP7 provenance would attach source_workout_id to a ROUTINE. The existing
   // personal_records.source_workout_id (Phase 4.2.1K PR detection) is a
   // different column entirely and must not trip this guard.
@@ -405,10 +407,10 @@ test('scope: CP8 has not started, and CP6 authoring stays off Train', () => {
   }
 });
 
-test('scope: program_workouts execution reads are unchanged', () => {
-  // CP8 owns convergence; the launch paths must still read it exactly as before.
-  assert.strictEqual((TRAIN_CODE.match(/from\('program_workouts'\)/g) || []).length, 2,
-    'applyTemplateRanges + startProgramSession, as before CP5');
+test('scope: Program execution reads canonical Routines (CP8b)', () => {
+  assert.ok(!TRAIN_CODE.includes("from('program_workouts')"),
+    'legacy prescription reads retired at CP8b');
+  assert.match(TRAIN_CODE, /from\('program_routines'\)/);
 });
 
 test('scope: only the three live Programs can appear — no invented content', () => {

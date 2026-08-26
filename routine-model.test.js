@@ -167,11 +167,10 @@ test('scope: entitlement stayed out of Routine privacy', () => {
     'Routine privacy and Program entitlement are separate concerns');
 });
 
-test('scope: program_workouts was not touched', () => {
-  // Its convergence is CP8.
+test('scope: Program prescriptions come from canonical Routines (CP8b)', () => {
   const src = readCode('workout.html');
-  assert.match(src, /from\('program_workouts'\)/, 'still read as before');
-  assert.ok(!/program_workouts[\s\S]{0,80}(is_platform|visibility)/.test(src));
+  assert.ok(!src.includes("from('program_workouts')"), 'legacy is no longer read');
+  assert.match(src, /from\('program_routines'\)/, 'the relationship is the source');
 });
 
 test('scope: CP8 has not started, and lifecycle fields stay off Train', () => {

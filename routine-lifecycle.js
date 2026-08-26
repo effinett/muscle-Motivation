@@ -77,9 +77,10 @@ function rlPublishEligibility(row) {
   var name = typeof row.name === 'string' ? row.name.trim() : '';
   if (!name) reasons.push('missing_name');
 
-  // Metadata an author must supply before platform content goes out.
-  var description = typeof row.description === 'string' ? row.description.trim() : '';
-  if (!description) reasons.push('missing_description');
+  // DESCRIPTION IS OPTIONAL (owner decision, CP8b). It was briefly required,
+  // which would have made the 47 migrated Program sessions unpublishable —
+  // their description belongs to the parent Program, not to each session.
+  // Routine Studio may still suggest one; it must never block publishing.
   if (!row.goal) reasons.push('missing_goal');
   else if (RL_GOALS.indexOf(row.goal) < 0) reasons.push('invalid_goal');
 
