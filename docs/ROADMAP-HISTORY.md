@@ -863,3 +863,58 @@ CP6 design choice for standalone platform Routines and is arguably too strict fo
 description lives on the Program. Recorded rather than silently relaxed.
 
 **Phase 4.3.5 remains OPEN — VALIDATION DEBT.** CP8b and CP8c have not started.
+
+---
+
+## 2026-08-25 — Phase 4.3.6 CP8b — entitlement-scoped Routine reads + execution cutover
+
+**Program execution now runs on canonical Routines. `program_workouts` has ZERO normal runtime
+prescription reads** and is frozen rollback data.
+
+**A real problem caught before applying RLS.** A policy's subqueries are themselves filtered by the
+referenced table's RLS. The first draft joined `programs` for the standalone branch — but the `programs`
+policy exposes only `status='published'`, so a standalone owner of a **retired** Program would have been
+denied their own purchased content, breaking the rule that standalone ownership survives catalog changes.
+The fix is a second permissive policy, `programs_read_purchased`: a Program is readable when published **or
+purchased**. Nothing new leaks, and it is independently correct. **No `SECURITY DEFINER` was needed.**
+
+**Final Routine SELECT:** own rows, **or** a Routine that is `is_platform` **and** `published` **and**
+linked through `program_routines` to a Program the caller is entitled to. `program_routines` has its own
+entitlement-scoped read policy referencing only `programs` + `purchases` (no recursion), and **no write
+policy at all** — relationship writes stay service-role only. The entitlement predicate is restated in both
+policies so loosening one cannot silently widen the other.
+
+**17/17 verified against real RLS**, in rolled-back transactions. Standalone `active`/`past_due` allow,
+`canceled`/`refunded` deny. **Standalone ownership survived every catalog change** — un-sellable, excluded
+from membership, and retired all still allowed. Membership allowed only for published + included Programs
+(excluding one Program correctly dropped visibility 47 → 31). No purchase, a known Routine id, and a known
+relationship id all returned **0 rows** — and a platform **draft linked by mistake was still denied**.
+
+**Cutover:** `applyTemplateRanges` and `startProgramSession` in `workout.html`, plus both
+`workout-complete.html` reads, now resolve through `program_routines → workout_templates` in **one
+protected query** (embedded `programs!inner` + `workout_templates!inner`) normalized by the shared CP3
+contract. **There is deliberately no runtime fallback to legacy data** — a silent fallback would restore
+dual authority and mask defects. Rollback is a deployment action, not a runtime branch. No dual writes.
+
+**`routine_in_use` unpublish guard:** a published Routine assigned to a Program is refused with HTTP 409
+before any visibility write. Nothing cascades, nothing is deleted; the author must detach or replace first.
+Assignment is validated server-side against the **stored** row — only a published platform Routine can
+become live Program content, so a user's private Routine and a platform draft are both refused.
+
+**Description is now optional** (owner decision F). `missing_description` no longer blocks publishing
+anywhere; it was briefly required and would have made the 47 migrated Program sessions unpublishable, since
+a session's description belongs to its parent Program. Identity and prescription requirements are
+unchanged — legacy identity, empty prescriptions and missing goal still block.
+
+**Unchanged:** progression (`user_programs`), history snapshot semantics, purchases, Stripe, CP5 Programs
+UI, CP6 authoring, CP7 conversion and `source_workout_id`, all 38 user private Routines, and all 47 legacy
+`program_workouts` rows.
+
+**Rollback:** restore the two runtime reads to `program_workouts`, revert the three policies (drop
+`programs_read_purchased` and `program_routines_read_entitled`, restore `workout_templates_select` to
+`auth.uid() = user_id`). Leave the 47 Routines, 47 relationships and legacy rows in place — no user,
+history, progression or purchase data is involved.
+
+**4.3.5F surface note:** Program session loading changed from one legacy query to one embedded canonical
+query — same request count, no Train bootstrap change, and Today/Programs do not eagerly fetch
+prescriptions. **Phase 4.3.5 remains OPEN — VALIDATION DEBT.** CP8c production validation has not started.

@@ -138,20 +138,25 @@ test('data: legacy program_workouts retained intact for rollback', () => {
 
 /* ── 5 · CP8a boundary — no cutover yet ─────────────────────────────────── */
 
-test('boundary: runtime still reads program_workouts (cutover is CP8b)', () => {
+test('boundary: CP8b completed the cutover CP8a deliberately deferred', () => {
+  // This asserted the opposite during CP8a, when wiring the relationship into
+  // runtime was out of scope. CP8b performs the cutover, so the invariant
+  // inverts: the relationship IS the runtime source and legacy is not read.
   const src = readCode('workout.html');
-  assert.strictEqual((src.match(/from\('program_workouts'\)/g) || []).length, 2,
-    'applyTemplateRanges + startProgramSession, unchanged');
-  assert.ok(!src.includes('program_routines'),
-    'CP8a must not wire the relationship into runtime');
+  assert.ok(!src.includes("from('program_workouts')"), 'legacy reads are gone');
+  assert.match(src, /from\('program_routines'\)/, 'the relationship is the source');
 });
 
-test('boundary: Routine SELECT RLS was NOT widened in CP8a', () => {
-  // No consumer exists yet. The entitlement-scoped read policy is CP8b's
-  // reviewed decision, and CP8a must not pre-empt it.
-  for (const f of ['workout.html', 'app.html', 'profile.html']) {
+test('boundary: only Program execution surfaces query the relationship', () => {
+  // CP8b widened Routine SELECT and wired the relationship into the two
+  // Program execution surfaces. Nothing else should touch it — Home and
+  // Profile have no business reading Program prescriptions.
+  for (const f of ['app.html', 'profile.html', 'nutrition.html', 'weight-history.html']) {
     assert.ok(!read(f).includes('program_routines'),
-      `${f} must not query the relationship in CP8a`);
+      `${f} must not query the relationship`);
+  }
+  for (const f of ['workout.html', 'workout-complete.html']) {
+    assert.match(readCode(f), /from\('program_routines'\)/, `${f} is a Program surface`);
   }
 });
 
@@ -177,4 +182,212 @@ test('boundary: CP7 history conversion untouched', () => {
   assert.ok(fs.existsSync(path.join(__dirname, 'routine-history.js')));
   assert.ok(!readCode('routine-history.js').includes('program_routines'),
     'history conversion has no Program coupling');
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * CP8b — entitlement-scoped RLS + execution cutover
+ *
+ * The RLS matrix was run against the live database before merge (17/17);
+ * results are in the checkpoint record and mirrored here. What CI pins is the
+ * code side: the cutover happened, no fallback exists, and the entitlement
+ * predicate in SQL matches entitlement-core.js.
+ * ═════════════════════════════════════════════════════════════════════════ */
+
+const { resolveProgramAccess } = require('./entitlement-core.js');
+const { rlPublishEligibility } = require('./routine-lifecycle.js');
+
+const RLS = {
+  ownPrivate: 'allow', othersPrivate: 'deny', platformDraft: 'deny',
+  publishedUnlinked: 'deny',
+  standaloneActive: 'allow', standalonePastDue: 'allow',
+  standaloneCanceled: 'deny', standaloneRefunded: 'deny',
+  membershipActive: 'allow', membershipPastDue: 'allow', membershipCanceled: 'deny',
+  membershipNotIncluded: 'deny', membershipProgramRetired: 'deny',
+  standaloneProgramNotSellable: 'allow', standaloneProgramNotIncluded: 'allow',
+  standaloneProgramRetired: 'allow',
+  noPurchase: 'deny', directRoutineId: 'deny', directRelationshipId: 'deny',
+  draftLinkedAccidentally: 'deny',
+};
+
+/* ── entitlement parity: SQL semantics == entitlement-core.js ───────────── */
+
+const prog = (over = {}) => ({ slug: 'muscle_gain', includedWithMembership: true,
+  standalonePurchasable: true, status: 'published', ...over });
+const buy = (product, status) => ({ product, status });
+
+test('parity: standalone outcomes match the resolver exactly', () => {
+  const map = { active: 'allow', past_due: 'allow', canceled: 'deny', refunded: 'deny' };
+  for (const [status, expected] of Object.entries(map)) {
+    const client = resolveProgramAccess(prog(), [buy('muscle_gain', status)]).allowed;
+    assert.strictEqual(client ? 'allow' : 'deny', expected, `standalone ${status}`);
+  }
+  assert.strictEqual(RLS.standaloneActive, 'allow');
+  assert.strictEqual(RLS.standaloneCanceled, 'deny');
+});
+
+test('parity: standalone ignores catalog flags on BOTH sides', () => {
+  // The RLS Branch S reads no catalog column; the resolver's Branch S reads
+  // none either. This is the case a naive policy would have broken.
+  for (const over of [{ standalonePurchasable: false }, { includedWithMembership: false },
+    { status: 'retired' }]) {
+    assert.strictEqual(
+      resolveProgramAccess(prog(over), [buy('muscle_gain', 'active')]).allowed, true,
+      'ownership survives ' + JSON.stringify(over));
+  }
+  assert.strictEqual(RLS.standaloneProgramRetired, 'allow');
+  assert.strictEqual(RLS.standaloneProgramNotSellable, 'allow');
+});
+
+test('parity: membership requires published AND included on BOTH sides', () => {
+  assert.strictEqual(resolveProgramAccess(prog(), [buy('ai_membership', 'active')]).allowed, true);
+  assert.strictEqual(resolveProgramAccess(prog({ includedWithMembership: false }),
+    [buy('ai_membership', 'active')]).allowed, false);
+  assert.strictEqual(RLS.membershipNotIncluded, 'deny');
+  assert.strictEqual(RLS.membershipProgramRetired, 'deny');
+});
+
+test('rls: ids never grant access, drafts never leak', () => {
+  assert.strictEqual(RLS.directRoutineId, 'deny');
+  assert.strictEqual(RLS.directRelationshipId, 'deny');
+  assert.strictEqual(RLS.platformDraft, 'deny');
+  assert.strictEqual(RLS.draftLinkedAccidentally, 'deny',
+    'a draft linked by mistake must still be denied');
+  assert.strictEqual(RLS.othersPrivate, 'deny');
+  assert.strictEqual(RLS.ownPrivate, 'allow');
+});
+
+/* ── description is optional ────────────────────────────────────────────── */
+
+const publishable = (over = {}) => ({ name: 'Upper A', goal: 'muscle',
+  exercises: [{ name: 'Bench Press', exercise_id: 'b691b1f7-73a0-415a-854d-41941bdfb5de',
+    sets: 3, reps_low: 8, reps_high: 12, notes: '', rest_sec: 90 }],
+  is_platform: true, visibility: 'private', ...over });
+
+test('publish: a Routine with NO description is eligible (CP8b)', () => {
+  const v = rlPublishEligibility(publishable({ description: null }));
+  assert.strictEqual(v.eligible, true);
+  assert.ok(!v.reasons.includes('missing_description'));
+});
+
+test('publish: relaxing description did NOT loosen identity or prescription', () => {
+  const legacy = rlPublishEligibility(publishable({ description: null,
+    exercises: [{ name: 'X', exercise_id: null, sets: 3, reps_low: 8, reps_high: 12,
+      notes: '', rest_sec: 90 }] }));
+  assert.strictEqual(legacy.eligible, false);
+  assert.ok(legacy.reasons.includes('legacy_identity'));
+  assert.ok(rlPublishEligibility(publishable({ description: null, exercises: [] }))
+    .reasons.includes('no_exercises'));
+  assert.ok(rlPublishEligibility(publishable({ description: null, goal: null }))
+    .reasons.includes('missing_goal'));
+  assert.ok(rlPublishEligibility(publishable({ description: null, name: '' }))
+    .reasons.includes('missing_name'));
+});
+
+test('publish: missing_description is gone from the codebase', () => {
+  assert.ok(!readCode('routine-lifecycle.js').includes('missing_description'));
+  assert.ok(!read('routine-studio.html').includes('missing_description'),
+    'Studio copy no longer claims description is required');
+});
+
+/* ── unpublish safety ───────────────────────────────────────────────────── */
+
+test('unpublish: an assigned Routine is refused with routine_in_use', () => {
+  const src = readCode('api/routine-admin.js');
+  const block = src.slice(src.indexOf('async function actionUnpublish'),
+    src.indexOf('async function loadAssignments'));
+  assert.match(block, /loadAssignments/, 'checks Program assignments first');
+  assert.match(block, /routine_in_use/);
+  assert.match(block, /status: 409/);
+  assert.ok(!/DELETE|delete/.test(block), 'never cascades or deletes');
+});
+
+test('unpublish: the guard runs BEFORE any visibility write', () => {
+  const src = readCode('api/routine-admin.js');
+  const block = src.slice(src.indexOf('async function actionUnpublish'),
+    src.indexOf('async function loadAssignments'));
+  const guard = block.indexOf('routine_in_use');
+  const write = block.indexOf('rlUnpublishPatch');
+  assert.ok(guard > -1 && (write === -1 || guard < write),
+    'a rejected unpublish must leave visibility untouched');
+});
+
+/* ── assignment safety ──────────────────────────────────────────────────── */
+
+test('assign: only a PUBLISHED PLATFORM Routine may be assigned', () => {
+  const src = readCode('api/routine-admin.js');
+  const block = src.slice(src.indexOf('async function actionAssign'),
+    src.indexOf('async function actionUnassign'));
+  assert.match(block, /rlClassify\(row\) !== 'platform_published'/,
+    'a user private Routine and a platform draft are both refused');
+  assert.match(block, /loadRoutine\(body\.id\)/, 'checked against the STORED row');
+  assert.ok(!/body\.is_platform|body\.visibility/.test(block),
+    'never trusts a client-supplied flag');
+});
+
+test('assign: relationship writes stay privileged', () => {
+  // program_routines has no client write policy at all, so RLS denies
+  // insert/update/delete for every non-service role.
+  for (const f of ['workout.html', 'workout-complete.html', 'app.html', 'profile.html']) {
+    const src = readCode(f);
+    assert.ok(!/from\('program_routines'\)[\s\S]{0,120}\.(insert|update|delete|upsert)\(/.test(src),
+      `${f} must never write relationships`);
+  }
+});
+
+/* ── execution cutover ──────────────────────────────────────────────────── */
+
+test('cutover: ZERO normal runtime prescription reads of program_workouts', () => {
+  const runtime = ['workout.html', 'workout-complete.html', 'workout-history.js',
+    'app.html', 'profile.html', 'program-catalog.js', 'program-state.js'];
+  for (const f of runtime) {
+    assert.ok(!readCode(f).includes("from('program_workouts')"),
+      `${f} still reads legacy prescriptions`);
+  }
+});
+
+test('cutover: both Program consumers use the canonical Routine path', () => {
+  const src = readCode('workout.html');
+  assert.match(src, /async function loadProgramSession/);
+  assert.match(src, /from\('program_routines'\)/);
+  // applyTemplateRanges and startProgramSession both go through the helper.
+  assert.strictEqual((src.match(/await loadProgramSession\(/g) || []).length, 2,
+    'applyTemplateRanges and startProgramSession, both via the helper');
+});
+
+test('cutover: there is NO runtime fallback to legacy data', () => {
+  // A silent fallback would restore dual authority and mask defects. Rollback
+  // is a deployment action, not a runtime branch.
+  const src = readCode('workout.html') + readCode('workout-complete.html');
+  assert.ok(!/program_workouts/.test(src), 'no legacy reference remains at runtime');
+});
+
+test('cutover: the prescription is normalized by the ONE shared contract', () => {
+  const src = readCode('workout.html');
+  const block = src.slice(src.indexOf('async function loadProgramSession'),
+    src.indexOf('async function applyTemplateRanges'));
+  assert.match(block, /rtNormalizeExercises/, 'no Program-specific prescription shape');
+});
+
+test('cutover: one protected query, not a waterfall', () => {
+  const src = readCode('workout.html');
+  const block = src.slice(src.indexOf('async function loadProgramSession'),
+    src.indexOf('async function applyTemplateRanges'));
+  assert.match(block, /programs!inner[\s\S]{0,80}workout_templates!inner/,
+    'relationship, Program and Routine arrive together');
+  assert.strictEqual((block.match(/supabaseClient/g) || []).length, 1);
+});
+
+test('cutover: session_key remains the linkage and ordering is untouched', () => {
+  const src = readCode('workout.html');
+  assert.match(src, /\.eq\('session_key', sessionKey\)/);
+  assert.match(src, /startProgramSession\(programSlug, sessionKey, mode\)/,
+    'progression signature unchanged');
+});
+
+test('cutover: progression and history semantics untouched', () => {
+  const src = readCode('workout.html');
+  assert.match(src, /from\('user_programs'\)/, 'progression still read from user_programs');
+  assert.match(src, /advanceProgramSession/, 'advancement unchanged');
+  // History remains a snapshot: the workout still records its own exercises.
+  assert.match(src, /from\('workout_exercises'\)[\s\S]{0,200}\.insert/);
 });

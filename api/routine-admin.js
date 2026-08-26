@@ -235,6 +235,21 @@ async function actionUnpublish(user, body) {
   if (!eligibility.eligible) {
     return { status: 422, payload: { error: 'Not published.', eligibility } };
   }
+  // CP8b: a Routine that is live inside a Program cannot be unpublished —
+  // that would silently break the Program for entitled customers. The author
+  // must detach or replace the assignment first. Never cascade-remove it.
+  const assignments = await loadAssignments(body.id);
+  if (assignments.length) {
+    return {
+      status: 409,
+      payload: {
+        error: 'Routine is in use.',
+        eligibility: { eligible: false, reasons: ['routine_in_use'] },
+        assignments: assignments.map((a) => ({ program_id: a.program_id,
+                                               session_key: a.session_key })),
+      },
+    };
+  }
   // Returns the row to draft. The record, its metadata and its prescription
   // are preserved — unpublish is never a delete.
   const res = await svc(`${TABLE}?id=eq.${encodeURIComponent(body.id)}`, {
@@ -247,8 +262,76 @@ async function actionUnpublish(user, body) {
   return { status: 200, payload: { routine: updated, state: rlClassify(updated) } };
 }
 
+/* ── Program assignment (CP8b) ────────────────────────────────────────────
+ * Narrow platform operations on program_routines. Client writes are refused by
+ * RLS (the table has no write policy at all), so these run service-side after
+ * the same allowlist check as every other action. */
+
+async function loadAssignments(routineId) {
+  const res = await svc(`program_routines?routine_id=eq.${encodeURIComponent(routineId)}` +
+    `&select=id,program_id,routine_id,session_key,sort_order`);
+  return res.ok && Array.isArray(res.body) ? res.body : [];
+}
+
+async function actionAssignments(user, body) {
+  const res = await svc('program_routines?select=id,program_id,routine_id,session_key,sort_order' +
+    '&order=program_id,sort_order');
+  if (!res.ok) return { status: 502, payload: { error: 'Could not load assignments.' } };
+  return { status: 200, payload: { assignments: res.body } };
+}
+
+// Only a PUBLISHED PLATFORM Routine may become live Program content. A user's
+// private Routine and a platform draft are both refused, and the check is
+// server-side against the stored row — never against a client-supplied flag.
+async function actionAssign(user, body) {
+  const row = await loadRoutine(body.id);
+  if (!row) return { status: 404, payload: { error: 'Routine not found.' } };
+  if (rlClassify(row) !== 'platform_published') {
+    return { status: 422, payload: {
+      error: 'Only a published platform Routine can be assigned to a Program.',
+      state: rlClassify(row) } };
+  }
+  if (typeof body.program_id !== 'string' || typeof body.session_key !== 'string'
+      || !body.session_key.trim()) {
+    return { status: 400, payload: { error: 'program_id and session_key are required.' } };
+  }
+  const prog = await svc(`programs?id=eq.${encodeURIComponent(body.program_id)}&select=id`);
+  if (!prog.ok || !Array.isArray(prog.body) || !prog.body.length) {
+    return { status: 404, payload: { error: 'Program not found.' } };
+  }
+  const res = await svc('program_routines', {
+    method: 'POST',
+    body: JSON.stringify({
+      program_id: body.program_id,
+      routine_id: body.id,
+      session_key: body.session_key.trim(),
+      sort_order: Number.isFinite(body.sort_order) ? body.sort_order : 0,
+    }),
+  });
+  if (!res.ok) {
+    return { status: 409, payload: { error: 'Could not assign — that Program session may already be taken.' } };
+  }
+  console.log(`routine-admin: assign routine=${body.id} program=${body.program_id} by=${user.id}`);
+  return { status: 200, payload: { assignment: res.body[0] } };
+}
+
+async function actionUnassign(user, body) {
+  if (typeof body.assignment_id !== 'string') {
+    return { status: 400, payload: { error: 'assignment_id is required.' } };
+  }
+  // Detaching never deletes the Routine — only the placement.
+  const res = await svc(`program_routines?id=eq.${encodeURIComponent(body.assignment_id)}`,
+    { method: 'DELETE' });
+  if (!res.ok) return { status: 502, payload: { error: 'Could not remove the assignment.' } };
+  console.log(`routine-admin: unassign ${body.assignment_id} by=${user.id}`);
+  return { status: 200, payload: { removed: true } };
+}
+
 const ACTIONS = {
   list: actionList,
+  assignments: actionAssignments,
+  assign: actionAssign,
+  unassign: actionUnassign,
   get: actionGet,
   create: actionCreate,
   update: actionUpdate,
@@ -286,7 +369,8 @@ module.exports = async function handler(req, res) {
     const run = Object.prototype.hasOwnProperty.call(ACTIONS, action) ? ACTIONS[action] : null;
     if (!run) return res.status(400).json({ error: 'Unknown action' });
 
-    if (action !== 'list' && action !== 'create' && typeof body.id !== 'string') {
+    const NO_ROUTINE_ID = ['list', 'create', 'assignments', 'unassign'];
+    if (!NO_ROUTINE_ID.includes(action) && typeof body.id !== 'string') {
       return res.status(400).json({ error: 'Missing Routine id' });
     }
 

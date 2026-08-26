@@ -1892,18 +1892,51 @@
     showToast('Deload applied — weights set to ' + weight + ' lb.');
   }
 
+  /* ── Program session source (CP8b) ──────────────────────────────────────
+     Program prescriptions now come from the canonical Routine reached through
+     program_routines — program_workouts is frozen rollback data and is no
+     longer read at runtime.
+
+     One protected query, not a waterfall: the relationship, its Program and
+     the Routine prescription arrive together. Both RLS policies apply, so an
+     unentitled caller simply gets no row and never sees a prescription. There
+     is deliberately NO fallback to program_workouts — a silent fallback would
+     restore dual authority and hide exactly the defects this convergence
+     exists to remove. Rollback is a deployment action, not a runtime branch. */
+  async function loadProgramSession(programSlug, sessionKey) {
+    if (!programSlug || !sessionKey) return null;
+    try {
+      var res = await supabaseClient
+        .from('program_routines')
+        .select('session_key, sort_order, programs!inner(slug), workout_templates!inner(id, name, exercises)')
+        .eq('session_key', sessionKey)
+        .eq('programs.slug', programSlug)
+        .maybeSingle();
+      if (res.error || !res.data || !res.data.workout_templates) return null;
+      var routine = res.data.workout_templates;
+      return {
+        routineId: routine.id,
+        session_name: routine.name,
+        // Normalized through the ONE shared contract — no Program-specific
+        // prescription shape exists any more.
+        exercises: rtNormalizeExercises(routine.exercises || []),
+      };
+    } catch (e) {
+      console.error('loadProgramSession:', e);
+      return null;
+    }
+  }
+
   // Pull programmed rep ranges (reps_low/high/sets) from a program template so a
   // RESUMED program workout still shows the right goal range. Manual workouts
   // have no template — the engine defaults to 8–12. Non-fatal.
   async function applyTemplateRanges(programSlug, sessionKey) {
     if (!programSlug || !sessionKey) return;
     try {
-      var { data } = await supabaseClient
-        .from('program_workouts').select('exercises')
-        .eq('program_slug', programSlug).eq('session_key', sessionKey).maybeSingle();
-      if (!data || !data.exercises) return;
+      var sess = await loadProgramSession(programSlug, sessionKey);
+      if (!sess || !sess.exercises.length) return;
       var byName = {};
-      data.exercises.forEach(function(t) { byName[(t.name || '').toLowerCase()] = t; });
+      sess.exercises.forEach(function(t) { byName[(t.name || '').toLowerCase()] = t; });
       exercises.forEach(function(ex) {
         var t = byName[(ex.name || '').toLowerCase()];
         if (t) { ex.reps_low = t.reps_low; ex.reps_high = t.reps_high; ex.target_sets = t.sets; }
@@ -2853,9 +2886,7 @@
       return;
     }
 
-    var { data: sessData } = await supabaseClient
-      .from('program_workouts').select('*')
-      .eq('program_slug', programSlug).eq('session_key', sessionKey).maybeSingle();
+    var sessData = await loadProgramSession(programSlug, sessionKey);
 
     var day = new Date().toLocaleDateString('en-US', { weekday: 'short' });
     // Use template session_name if available, else derive a clean label from the key

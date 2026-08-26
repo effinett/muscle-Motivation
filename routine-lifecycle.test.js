@@ -94,7 +94,6 @@ test('publish: an already-published Routine is not re-publishable', () => {
 
 test('publish: required metadata', () => {
   assert.ok(rlPublishEligibility(publishable({ name: '  ' })).reasons.includes('missing_name'));
-  assert.ok(rlPublishEligibility(publishable({ description: '' })).reasons.includes('missing_description'));
   assert.ok(rlPublishEligibility(publishable({ goal: null })).reasons.includes('missing_goal'));
   assert.ok(rlPublishEligibility(publishable({ goal: 'glutes' })).reasons.includes('invalid_goal'));
 });
@@ -115,7 +114,7 @@ test('publish: malformed prescriptions block publish', () => {
 test('publish: reasons accumulate rather than short-circuit', () => {
   const v = rlPublishEligibility({ is_platform: true, visibility: 'private',
     name: '', description: '', goal: null, exercises: [] });
-  for (const r of ['missing_name', 'missing_description', 'missing_goal', 'no_exercises']) {
+  for (const r of ['missing_name', 'missing_goal', 'no_exercises']) {
     assert.ok(v.reasons.includes(r), 'expected ' + r);
   }
 });
@@ -172,7 +171,10 @@ test('unpublish: only a published platform Routine can be unpublished', () => {
 test('unpublish: returns to draft and deletes nothing', () => {
   assert.deepStrictEqual(rlUnpublishPatch(), { visibility: 'private' });
   const src = readCode('api/routine-admin.js');
-  const block = src.slice(src.indexOf('actionUnpublish'), src.indexOf('const ACTIONS'));
+  // Scoped to actionUnpublish itself: actionUnassign legitimately DELETEs an
+  // assignment row, which is not the Routine.
+  const block = src.slice(src.indexOf('async function actionUnpublish'),
+    src.indexOf('async function loadAssignments'));
   assert.ok(!/DELETE|method: 'DELETE'/.test(block), 'unpublish must never delete');
 });
 
@@ -253,10 +255,15 @@ test('contract: the endpoint normalizes through routine-core, not its own copy',
   assert.ok(!/reps_low\s*=\s*8|isNaN\(lo\)/.test(src), 'no re-implemented normalization');
 });
 
-test('contract: the endpoint adds no CP8 Program relationship fields', () => {
+test('contract: Routine metadata carries no Program fields (CP8b)', () => {
+  // CP8b gave the endpoint Program ASSIGNMENT actions, which necessarily name
+  // program_id and session_key. The durable invariant is that a Routine ROW
+  // never carries Program placement — that lives on program_routines.
   const src = readCode('api/routine-admin.js');
+  const patch = src.slice(src.indexOf('function buildPatch'),
+    src.indexOf('async function actionList'));
   for (const cp8 of ['program_slug', 'program_id', 'session_key', 'program_workouts']) {
-    assert.ok(!src.includes(cp8), `${cp8} belongs to CP8`);
+    assert.ok(!patch.includes(cp8), `a Routine row must not carry ${cp8}`);
   }
 });
 
@@ -395,13 +402,13 @@ test('scope: platform authoring stays independent of history conversion', () => 
     'history conversion must not reach into platform authoring');
 });
 
-test('scope: CP8 has not started — program_workouts untouched', () => {
-  const src = readCode('api/routine-admin.js') + readCode('routine-lifecycle.js') +
-    readCode('routine-studio.html');
-  assert.ok(!src.includes('program_workouts'), 'CP8 owns Program convergence');
-  // Train still performs exactly its two pre-existing program_workouts reads.
-  assert.strictEqual(
-    (readCode('workout.html').match(/from\('program_workouts'\)/g) || []).length, 2);
+test('scope: legacy prescriptions are frozen, not read at runtime', () => {
+  // Authoring never touched legacy prescriptions, and after CP8b nothing at
+  // runtime reads them either — program_workouts is frozen rollback data.
+  const src = readCode('routine-lifecycle.js') + readCode('routine-studio.html');
+  assert.ok(!src.includes('program_workouts'), 'authoring never touches legacy');
+  assert.ok(!readCode('workout.html').includes("from('program_workouts')"),
+    'runtime reads canonical Routines after CP8b');
 });
 
 test('scope: purity of the lifecycle core', () => {
