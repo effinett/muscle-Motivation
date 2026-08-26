@@ -286,6 +286,17 @@
       gap: 10px; margin-bottom: 14px;
     }
     .exercise-card-name { font-size: 16px; font-weight: 700; }
+    /* Icon actions on a card header (Phase 4.3.6H). The negative margin lets the
+       44px targets overlap the card's own padding, so the controls are properly
+       tappable without visually enlarging the header. */
+    .exercise-card-actions { display: flex; align-items: center; flex-shrink: 0; margin: -8px -6px 0 0; }
+    .btn-detail, .exercise-card-actions .btn-icon {
+      min-width: 44px; min-height: 44px;
+      display: inline-flex; align-items: center; justify-content: center; padding: 0;
+    }
+    .exercise-card-actions .btn-icon:focus-visible {
+      outline: 2px solid var(--red); outline-offset: -2px; border-radius: 8px;
+    }
     .exercise-last { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
 
     /* Progressive-overload recommendation block */
@@ -500,6 +511,76 @@
     }
     .overlay.open { display: flex; }
 
+    /* ── Exercise detail sheet (Phase 4.3.6H) ─────────────────────────────
+       Same bottom-sheet geometry as the picker so the two read as one family;
+       only the content differs. It sits in the same z-index-200 overlay layer
+       and, when opened from a picker row, simply stacks on top of it. */
+    #exerciseDetailModal { align-items: flex-end; justify-content: center; }
+    .detail-sheet {
+      background: var(--surface-1); border: 1px solid var(--border-2);
+      border-radius: 16px 16px 0 0;
+      /* safe-area padding keeps the last section clear of the home indicator */
+      padding: 24px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+      width: 100%; max-width: 680px;
+      display: flex; flex-direction: column;
+      max-height: 80vh;
+      max-height: min(80vh, 100%);
+    }
+    .detail-head {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 12px; margin-bottom: 14px;
+    }
+    /* overflow-wrap is what keeps a long canonical name ("Single-Arm Half-
+       Kneeling Cable Lat Pulldown") from pushing Close off a 320px screen. */
+    .detail-title {
+      font-family: 'Bebas Neue', sans-serif; font-size: 24px; letter-spacing: 0.5px;
+      line-height: 1.15; margin: 0; min-width: 0; flex: 1;
+      overflow-wrap: anywhere; word-break: break-word;
+    }
+    /* 44px touch target (the icon glyph alone is 16px). */
+    .detail-close {
+      min-width: 44px; min-height: 44px;
+      display: inline-flex; align-items: center; justify-content: center;
+      margin: -10px -8px 0 0; padding: 0;
+    }
+    .detail-close:focus-visible {
+      outline: 2px solid var(--red); outline-offset: -2px; border-radius: 8px;
+    }
+    .detail-body { min-height: 0; }
+    /* Classification — label/value pairs, not a table, so a long value wraps
+       under its own label instead of stretching the row. */
+    .detail-class { margin-bottom: 18px; }
+    .detail-class-row {
+      display: flex; gap: 10px; padding: 7px 0;
+      border-bottom: 1px solid var(--border-1); font-size: 13px;
+    }
+    .detail-class-row:last-child { border-bottom: none; }
+    .detail-class-label {
+      color: var(--text-muted); flex: 0 0 108px;
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.6px; padding-top: 2px;
+    }
+    .detail-class-value {
+      color: var(--text); font-weight: 600; min-width: 0; flex: 1;
+      overflow-wrap: anywhere;
+    }
+    .detail-section { margin-bottom: 18px; }
+    .detail-section:last-child { margin-bottom: 0; }
+    .detail-section h3 {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.8px; color: var(--red); margin: 0 0 6px;
+    }
+    .detail-section p {
+      margin: 0; font-size: 14px; line-height: 1.6; color: var(--text-2);
+      overflow-wrap: anywhere;
+    }
+    /* The honest empty state for customs, legacy entries and load failures. */
+    .detail-note {
+      font-size: 13px; line-height: 1.6; color: var(--text-muted);
+      background: var(--surface-2); border: 1px solid var(--border-1);
+      border-radius: 8px; padding: 12px 14px;
+    }
+
     /* Exercise picker — bottom sheet */
     #pickerModal { align-items: flex-end; justify-content: center; }
     .picker-sheet {
@@ -598,6 +679,29 @@
       overflow-wrap: anywhere;
     }
     .picker-item-plus { color: var(--red); flex-shrink: 0; }
+
+    /* ── Picker row = select + details (Phase 4.3.6H) ──────────────────────
+       The divider moves to the ROW so both buttons sit inside one visual
+       result. `align-items: stretch` gives the info button the row's full
+       height, which is what makes its 44px target real rather than nominal.
+       The bare .picker-item in the add-row zone is unwrapped and keeps its own
+       border, so that path is unchanged. */
+    .picker-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--border-1); }
+    .picker-row:last-child { border-bottom: none; }
+    .picker-row .picker-item { border-bottom: none; flex: 1; min-width: 0; }
+    .picker-item-info {
+      flex-shrink: 0; min-width: 44px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: none; border: none; border-left: 1px solid var(--border-1);
+      color: var(--text-muted); cursor: pointer; padding: 0;
+      transition: color 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    @media (hover: hover) { .picker-item-info:hover { color: var(--red); } }
+    .picker-item-info:active { background: var(--surface-2); }
+    .picker-item-info:focus-visible {
+      outline: 2px solid var(--red); outline-offset: -2px; border-radius: 6px;
+    }
 
     /* ── Filter UI (Phase 4.2.1I) ─────────────────────────────────────── */
     /* `align-items: center` (was stretch) so the input's height is its OWN
@@ -1105,6 +1209,31 @@
   </div>
 </div>
 
+<!-- Exercise Detail (Phase 4.3.6H) -->
+<!-- READ-ONLY. It carries no control that can mutate the workout, which is what
+     makes it safe to open mid-set: the only actions are Close and scrolling.
+     Opened through mm-sheet.js like every other overlay, so scroll locking,
+     focus capture/restore, Escape and backdrop dismissal are inherited rather
+     than reimplemented. It stacks ABOVE the picker (the Finish -> Discard
+     precedent), so opening details from a picker row leaves the picker — and
+     the user's search text and filters — exactly where they were. -->
+<div class="overlay" id="exerciseDetailModal">
+  <div class="detail-sheet" role="dialog" aria-modal="true" aria-labelledby="exerciseDetailTitle">
+    <div class="mm-sheet-handle" aria-hidden="true"></div>
+    <div class="detail-head">
+      <!-- Level 2: the page's single top-level heading is the visually-hidden
+           "Workout" landmark, so the sheet's heading sits one level beneath it
+           rather than competing with it. Section headings inside are level 3. -->
+      <h2 class="detail-title" id="exerciseDetailTitle"></h2>
+      <button type="button" class="btn-icon detail-close" onclick="closeExerciseDetail()"
+        aria-label="Close exercise details">
+        <i data-lucide="x" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div class="detail-body mm-sheet-scroll" id="exerciseDetailBody"></div>
+  </div>
+</div>
+
 <!-- Finish Workout Modal -->
 <div class="overlay" id="finishModal">
   <div class="modal-box">
@@ -1210,6 +1339,11 @@
      session selection, and set-value sanitization. Loads after exercise-core
      (reuses its normalizer) and before the inline consumer below. -->
 <script src="exercise-log.js"></script>
+<!-- Shared exercise-detail presentation core (Phase 4.3.6H) — decides what may
+     honestly be SHOWN for a canonical / custom / legacy exercise reference.
+     Loads after exercise-log (reuses its identityType, so display identity can
+     never drift from logged identity). -->
+<script src="exercise-detail.js"></script>
 <script src="routine-core.js"></script>
 <script src="routine-history.js"></script>
 <script>
@@ -2072,8 +2206,18 @@
         '<div>' +
           '<div class="exercise-card-name">' + esc(ex.name) + '</div>' +
         '</div>' +
-        '<button class="btn-icon" onclick="removeExercise(\'' + ex.id + '\',' + exIdx + ')" title="Remove exercise">' +
-          '<i data-lucide="x"></i></button>' +
+        // The info affordance is a separate control from Remove, and reads the
+        // exercise NAME in its label so it is distinguishable by screen reader
+        // when several cards are open. Icon-only visually, never icon-only to
+        // assistive tech.
+        '<div class="exercise-card-actions">' +
+          '<button class="btn-icon btn-detail" onclick="openDetailForWorkoutExercise(' + exIdx + ')"' +
+            ' aria-label="View exercise details for ' + esc(ex.name) + '">' +
+            '<i data-lucide="info" aria-hidden="true"></i></button>' +
+          '<button class="btn-icon" onclick="removeExercise(\'' + ex.id + '\',' + exIdx + ')"' +
+            ' aria-label="Remove ' + esc(ex.name) + '" title="Remove exercise">' +
+            '<i data-lucide="x" aria-hidden="true"></i></button>' +
+        '</div>' +
       '</div>' +
       buildRecBlock(ex, exIdx) +
       setsHtml +
@@ -2115,6 +2259,148 @@
   function openPicker() { openPickerFor('workout'); }
   function closePicker() { MMSheet.close(document.getElementById('pickerModal')); }
 
+  // ── Exercise detail (Phase 4.3.6H) ────────────────────────────────
+  // A READ-ONLY surface. Nothing in this block writes to the workout, the sets,
+  // the timer or the DB — opening details mid-set is therefore incapable of
+  // mutating anything, which is a property of the code rather than a promise.
+  //
+  // Prose (instructions/tips) is fetched LAZILY, one exercise at a time, and
+  // cached for the page's lifetime. The Train bootstrap deliberately does NOT
+  // load it: loadExerciseLibrary() pulls classification metadata for all 141
+  // canonical rows because search needs it, but the ~27KB of prose is only ever
+  // wanted for the one exercise a user actually taps. A cached exercise opens
+  // with no request at all.
+  var detailProseCache = {};   // exercises.id -> row (or null when unavailable)
+  var detailRequestSeq = 0;    // guards against a slow fetch resolving late
+
+  // Build the reference the shared core reasons over. Reads only the identity
+  // fields already carried in memory (Phase 4.2.1K) — it never resolves a name.
+  function detailRefFor(ex) {
+    if (!ex) return null;
+    return {
+      name: ex.name,
+      exerciseId: ex.exercise_id != null ? ex.exercise_id : null,
+      customId: ex.customId != null ? ex.customId : null
+    };
+  }
+
+  // The catalog metadata already in memory for a canonical id, if the picker
+  // library holds it. Avoids a request for the classification block; prose is
+  // still fetched (it is not in the bootstrap select list).
+  function cachedCatalogRow(exerciseId) {
+    if (exerciseId == null) return null;
+    return exerciseLibrary.find(function (e) {
+      return !e.user_created && e.id === exerciseId;
+    }) || null;
+  }
+
+  function openExerciseDetail(ref) {
+    if (!ref || typeof ExerciseDetail === 'undefined') return;
+    var seq = ++detailRequestSeq;
+
+    // Render immediately from what is already known, so the sheet never opens
+    // blank: customs and legacy entries are complete right here (they have no
+    // catalog data by definition), and a canonical exercise shows its
+    // classification instantly while its prose loads.
+    var cached = ExerciseDetail.needsCatalogFetch(ref)
+      ? (detailProseCache[ref.exerciseId] || cachedCatalogRow(ref.exerciseId))
+      : null;
+    renderExerciseDetail(ref, cached);
+
+    MMSheet.open(document.getElementById('exerciseDetailModal'), {
+      variant: 'sheet',
+      panel: '.detail-sheet',
+      initialFocus: '.detail-close'
+    });
+
+    // Nothing more to fetch for a custom/legacy reference, or once prose is cached.
+    if (!ExerciseDetail.needsCatalogFetch(ref)) return;
+    if (Object.prototype.hasOwnProperty.call(detailProseCache, ref.exerciseId)) return;
+    loadExerciseDetailProse(ref, seq);
+  }
+
+  // One narrow read of the canonical library under the user's own token. The
+  // `exercises` table is authenticated-readable by design (canonical content is
+  // not user data), so this adds no new access path and touches no private row.
+  async function loadExerciseDetailProse(ref, seq) {
+    var row = null, answered = false;
+    try {
+      var res = await supabaseClient.from('exercises')
+        .select('id, name, equipment, primary_muscle, secondary_muscles, movement_pattern, difficulty, instructions, tips')
+        .eq('id', ref.exerciseId).maybeSingle();
+      // A definitive answer includes "this id genuinely has no row" (data null,
+      // error null). Only that is worth caching.
+      answered = !!(res && !res.error);
+      row = res && res.data ? res.data : null;
+    } catch (e) { answered = false; row = null; }
+    // A transient failure is NOT cached, so reopening retries instead of being
+    // stuck on "couldn't load" for the rest of the session.
+    if (answered) detailProseCache[ref.exerciseId] = row;
+    // A stale response (user already opened a different exercise) is discarded.
+    if (seq !== detailRequestSeq) return;
+    if (!MMSheet.isOpen(document.getElementById('exerciseDetailModal'))) return;
+    // On failure keep whatever is already on screen (the in-memory
+    // classification) rather than replacing it with an error.
+    if (answered) renderExerciseDetail(ref, row);
+  }
+
+  // Pure model -> DOM. Every decision about WHAT may be shown was already made
+  // by exercise-detail.js; this only marks it up. A section is emitted only when
+  // the model produced one, so an empty heading is unreachable from here.
+  function renderExerciseDetail(ref, row) {
+    var d = ExerciseDetail.buildExerciseDetail(ref, row);
+    document.getElementById('exerciseDetailTitle').textContent = d.title || 'Exercise';
+
+    var html = '';
+    if (d.classification.length) {
+      html += '<div class="detail-class">' + d.classification.map(function (c) {
+        return '<div class="detail-class-row">' +
+          '<div class="detail-class-label">' + esc(c.label) + '</div>' +
+          '<div class="detail-class-value">' + esc(c.value) + '</div></div>';
+      }).join('') + '</div>';
+    }
+    html += d.sections.map(function (s) {
+      return '<div class="detail-section"><h3>' + esc(s.heading) + '</h3>' +
+        '<p>' + esc(s.body) + '</p></div>';
+    }).join('');
+    if (d.note) html += '<div class="detail-note">' + esc(d.note) + '</div>';
+
+    // No lucide call: the body is pure text, and the sheet's only icon (Close)
+    // lives in static markup already rendered at page load.
+    document.getElementById('exerciseDetailBody').innerHTML = html;
+  }
+
+  function closeExerciseDetail() {
+    MMSheet.close(document.getElementById('exerciseDetailModal'));
+  }
+
+  // Entry point: the active workout's exercise card.
+  function openDetailForWorkoutExercise(exIdx) {
+    openExerciseDetail(detailRefFor(exercises[exIdx]));
+  }
+
+  // Entry point: a picker result row. `id` is a canonical exercises.id or '' for
+  // a custom/free-typed row — the SAME value the row's select action carries, so
+  // the two actions describe the same exercise while doing different things.
+  function openDetailForPicker(name, id, customId) {
+    openExerciseDetail({
+      name: name,
+      exerciseId: id || null,
+      customId: (!id && customId) ? customId : null
+    });
+  }
+
+  // Entry point: a Routine/template editor row.
+  function openDetailForTemplateExercise(idx) {
+    var ex = editingTemplate && editingTemplate.exercises ? editingTemplate.exercises[idx] : null;
+    if (!ex) return;
+    openExerciseDetail({
+      name: ex.name,
+      exerciseId: ex.exercise_id != null ? ex.exercise_id : null,
+      customId: null
+    });
+  }
+
   // Reset the picker to a clean selection session: clear search, clear filters
   // (session-scoped — never persisted), collapse the filter panel, re-render.
   function resetPickerState() {
@@ -2129,15 +2415,26 @@
   // (stamped onto the logged set as canonical identity) or '' for a custom / free
   // add. The displayed + saved name is ALWAYS the canonical exercise name (never
   // the matched alias text), so search text never becomes stored identity.
-  function pickerRowHtml(name, id, category, equipment) {
-    // A native <button>: keyboard-reachable, Enter/Space activated, and it
-    // carries a real focus ring — none of which a <div onclick> had.
-    return '<button type="button" class="picker-item" data-name="' + esc(name) + '" data-id="' + esc(id || '') +
-      '" onclick="selectExercise(this.dataset.name, this.dataset.id)">' +
-      '<div class="picker-item-text"><div class="picker-item-name">' + esc(name) + '</div>' +
-      '<div class="picker-item-cat">' + esc(category || '') + (equipment ? ' · ' + esc(equipment) : '') + '</div></div>' +
-      '<span class="picker-item-plus"><i data-lucide="plus" style="width:16px;height:16px;"></i></span>' +
-      '</button>';
+  function pickerRowHtml(name, id, category, equipment, customId) {
+    // Two SEPARATE native buttons, never one ambiguous row (Phase 4.3.6H):
+    // "choose this" (the row body + the plus) and "learn about this" (the info
+    // button) are distinct controls with distinct hit areas, so tapping details
+    // can never add an exercise the user was only reading about. Both are
+    // keyboard-reachable with real focus rings.
+    return '<div class="picker-row">' +
+      '<button type="button" class="picker-item" data-name="' + esc(name) + '" data-id="' + esc(id || '') +
+        '" onclick="selectExercise(this.dataset.name, this.dataset.id)">' +
+        '<div class="picker-item-text"><div class="picker-item-name">' + esc(name) + '</div>' +
+        '<div class="picker-item-cat">' + esc(category || '') + (equipment ? ' · ' + esc(equipment) : '') + '</div></div>' +
+        '<span class="picker-item-plus"><i data-lucide="plus" style="width:16px;height:16px;" aria-hidden="true"></i></span>' +
+      '</button>' +
+      '<button type="button" class="picker-item-info" data-name="' + esc(name) + '" data-id="' + esc(id || '') +
+        '" data-custom="' + esc(customId || '') + '"' +
+        ' onclick="openDetailForPicker(this.dataset.name, this.dataset.id, this.dataset.custom)"' +
+        ' aria-label="View exercise details for ' + esc(name) + '">' +
+        '<i data-lucide="info" style="width:16px;height:16px;" aria-hidden="true"></i>' +
+      '</button>' +
+      '</div>';
   }
 
   function filterPicker(query) {
@@ -2162,7 +2459,9 @@
       disc.rows.forEach(function(r) {
         shownNames[r.name.toLowerCase()] = 1;
         var eq = r.exercise ? r.exercise.equipment : null;
-        rows.push(pickerRowHtml(r.name, r.isCustom ? '' : r.id, r.category, eq));
+        // A custom's id belongs to user_exercises, so it rides in the custom
+        // slot — never in the canonical slot, which would fake a library identity.
+        rows.push(pickerRowHtml(r.name, r.isCustom ? '' : r.id, r.category, eq, r.isCustom ? r.id : ''));
       });
       if (q) {
         // Honest framing when the exact thing isn't in the catalog — never
@@ -2179,7 +2478,8 @@
         return e.name.toLowerCase().includes(qKey) || (e.category || '').toLowerCase().includes(qKey);
       }).forEach(function(e) {
         shownNames[e.name.toLowerCase()] = 1;
-        rows.push(pickerRowHtml(e.name, e.user_created ? '' : e.id, e.category, e.equipment));
+        rows.push(pickerRowHtml(e.name, e.user_created ? '' : e.id, e.category, e.equipment,
+          e.user_created ? e.id : ''));
       });
     }
 
@@ -3402,6 +3702,11 @@
       '<div class="tpl-ex-head">' +
         '<div class="tpl-ex-name">' + esc(ex.name) + '</div>' +
         '<div class="tpl-ex-move">' +
+          // Reuses the SAME detail surface as the workout card and the picker —
+          // reordering and removal are untouched beside it.
+          '<button class="btn-icon" onclick="openDetailForTemplateExercise(' + idx + ')"' +
+            ' aria-label="View exercise details for ' + esc(ex.name) + '">' +
+            '<i data-lucide="info" aria-hidden="true"></i></button>' +
           '<button class="btn-icon" title="Move up"' + (idx === 0 ? ' disabled' : '') +
             ' onclick="moveTemplateExercise(' + idx + ',-1)"><i data-lucide="chevron-up"></i></button>' +
           '<button class="btn-icon" title="Move down"' + (idx === last ? ' disabled' : '') +

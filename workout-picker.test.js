@@ -239,7 +239,11 @@ test('selection: canonical vs custom identity is unchanged by the markup change'
   // Phase 4.2.1F/H/K contract: a global catalog hit stamps the real exercises.id,
   // a custom stamps '' — and the SAVED name is always the canonical name.
   assert.match(PAGE, /data-id="' \+ esc\(id \|\| ''\) \+\s*'" onclick="selectExercise\(this\.dataset\.name, this\.dataset\.id\)"/);
-  assert.match(PAGE, /rows\.push\(pickerRowHtml\(r\.name, r\.isCustom \? '' : r\.id, r\.category, eq\)\)/,
+  // Phase 4.3.6H added a details button beside the select button, so the row
+  // builder now also receives the custom id. The contract is unchanged and
+  // stronger: a custom's id may ride ONLY in the custom slot, never the
+  // canonical one, on either action.
+  assert.match(PAGE, /rows\.push\(pickerRowHtml\(r\.name, r\.isCustom \? '' : r\.id, r\.category, eq,\s*\n?\s*r\.isCustom \? r\.id : ''\)\)/,
     'custom rows still carry no canonical id');
 });
 
