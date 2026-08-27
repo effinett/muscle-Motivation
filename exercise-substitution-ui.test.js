@@ -314,6 +314,16 @@ test('the candidate list scrolls with containment', () => {
   assert.match(rule('.swap-body'), /min-height:\s*0/);
 });
 
+test('the candidate name and its reason stack on separate lines', () => {
+  // Regression: these are <span>s (a <div> is invalid inside a <button>), so
+  // without an explicit block display they render as inlines and the row reads
+  // "Dumbbell PressSame movement · Dumbbells" on one line. Observed in
+  // production during 4.3.6I validation.
+  assert.match(rule('.swap-item-name'), /display:\s*block/);
+  assert.match(rule('.swap-item-why'), /display:\s*block/);
+  assert.match(rule('.swap-item-text'), /display:\s*block/);
+});
+
 test('long names and reason labels wrap rather than overflow', () => {
   assert.match(rule('.swap-item-name'), /overflow-wrap:\s*anywhere/);
   assert.match(rule('.swap-item-why'), /overflow-wrap:\s*anywhere/);
