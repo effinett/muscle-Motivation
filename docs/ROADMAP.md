@@ -418,10 +418,21 @@ production-validated** — Program execution runs on canonical Routines with **0
 `program_workouts`**, entitlement-scoped RLS, and 47/47 prescription parity (record:
 `docs/ROADMAP-HISTORY.md`). That satisfies **4.3.6A, B, C, D, E, F, G and L**.
 
-**The phase is not closed.** Three lettered scope items remain unbuilt — **4.3.6H** (exercise detail
-surface), **4.3.6I** (deterministic substitution engine, required *before* Coach swaps exercises at
-4.7.5), and **4.3.6J** (exercise favorites & recents). **4.3.6K** remains protected planned content. The
-exit criterion below is not yet met.
+**Status — 2026-08-27: READY FOR FINAL CLOSURE REVIEW.** The three remaining lettered scope items have
+since shipped and been production-validated (records: `docs/ROADMAP-HISTORY.md`):
+
+- **4.3.6H — Exercise detail surface** (2026-08-26, `85a2b6d`). Read-only surface over the catalog
+  metadata carried since 4.2.1E; canonical / custom / legacy handled with **no identity guessing**.
+- **4.3.6I — Deterministic substitution engine** (2026-08-27, `0549202`). Muscle-group and
+  tracking-class hard gates, tiered and explainable; **this is the engine Coach must call at 4.7.5**.
+- **4.3.6J — Exercise favorites & recents** (2026-08-27, `36fdd99`). Explicit favorites keyed by stable
+  identity, history-derived recents, owner-scoped with a same-user ownership trigger.
+
+**4.3.6K remains protected planned content by design** — Home Strength Program and Full Gym Strength
+Program are retained concepts, not build items for this phase, so they do not block the exit criterion.
+
+**The phase is not marked closed here.** Closure is Effi's review step, not an implementer's; this entry
+records that every required item now passes.
 
 ### Owner decisions — locked 2026-08-21
 

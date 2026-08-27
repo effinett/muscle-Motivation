@@ -219,6 +219,19 @@ test('the insert is conflict-safe so a repeat favorite is a no-op', () => {
   assert.match(body, /onConflict:/);
 });
 
+test('onConflict names the exact column pairs the DB constraints must carry', () => {
+  // Regression, found in production validation: the migration first created
+  // PARTIAL unique indexes (WHERE ... is not null). Postgres only matches a
+  // partial index when the statement repeats its WHERE predicate, which
+  // PostgREST's onConflict does not emit — so every favorite insert failed with
+  // 42P10 and silently rolled back. Fixed by replacing them with plain uniques
+  // (NULLs are distinct, so many custom favorites still coexist), the same shape
+  // Phase 4.2.1K used on personal_records. This is the trap CLAUDE.md §9 records.
+  const body = fnBody('toggleFavorite');
+  assert.match(body, /onConflict: id \? 'user_id,exercise_id' : 'user_id,user_exercise_id'/,
+    'the client targets these constraints by name — they must exist as PLAIN uniques');
+});
+
 test('a failed write rolls the optimistic state back and tells the user', () => {
   const body = fnBody('toggleFavorite');
   assert.match(body, /catch \(e\)/);
