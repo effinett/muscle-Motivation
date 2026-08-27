@@ -1235,3 +1235,43 @@ AI ordering, exercise reordering. Favorites do **not** influence substitution or
 pinning the `onConflict` column pairs the DB constraints must carry).
 
 **Phase 4.3.5 remains OPEN — VALIDATION DEBT.**
+
+---
+
+## 2026-08-27 — Phase 4.3.6 CLOSED — Programs, Routines & Train Architecture
+
+**Documentation-only closure.** All implementation and production validation were completed before this
+record; nothing was built, migrated or changed to close the phase.
+
+**Delivered and production-validated:**
+
+- **Training-content architecture (A–G).** One canonical Routine entity evolved additively from
+  `workout_templates`, with the shared `routine-core.js` exercise contract. Program execution converged
+  onto canonical Routines through `program_routines` — **0 runtime reads of `program_workouts`**, which
+  remain intact as frozen rollback data. Train exposes Today · Workouts · Programs inside the existing
+  four-destination navigation (owner decision O5). History converts to **private draft** Routines only,
+  and Routine authoring runs Draft → Edit → Preview → Publish → Unpublish.
+- **Entitlement (L).** One access model over `purchases`, with `entitlement-core.js` as the client
+  resolver and matching RLS as defence in depth beneath it. No `subscriptions` table, no grants table.
+- **CP8c production validation.** 47/47 prescription parity, live `routine_in_use` refusal, unentitled
+  reads returning zero rows by exact id, and zero data drift.
+- **4.3.6H — Exercise detail surface** (`85a2b6d`). Read-only surface over catalog metadata carried
+  since 4.2.1E; canonical / custom / legacy with **no identity guessing**.
+- **4.3.6I — Deterministic substitution engine** (`0549202`). Muscle-group and tracking-class hard
+  gates, tiered and explainable, session-scoped swaps that never mutate a platform Routine. **This is
+  the engine Coach must call at 4.7.5** — that dependency is now satisfied.
+- **4.3.6J — Exercise favorites & recents** (`36fdd99`). Explicit favorites keyed by stable identity in
+  `user_exercise_favorites`; recents derived from workout history and stored nowhere.
+
+**No required 4.3.6 item remains open.** **4.3.6K** was never a build item: Home Strength Program and
+Full Gym Strength Program are protected planned *concepts* under §11 and are unaffected by closure.
+
+**Phase 4.3.5 remains OPEN — VALIDATION DEBT.** Closing 4.3.6 neither closes nor weakens it. The
+outstanding **4.3.5F instrumented Android navigation measurement** is an independent hardware-access
+dependency, and the measurement-integrity condition continues to bind later work.
+
+**Phase 4.3.7 has NOT started.**
+
+**One engineering rule was promoted out of this phase.** The 4.3.6J production failure — a partial
+unique index that PostgREST's `ON CONFLICT` could not resolve, returning `42P10` on every insert — is
+now a build rule in CLAUDE.md §9 rather than only a debugging symptom.
