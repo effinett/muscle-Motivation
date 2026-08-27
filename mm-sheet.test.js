@@ -408,7 +408,7 @@ test('consumers: browsing surfaces are SHEETS; confirmations are dialogs', () =>
   // detail sheet (Phase 4.3.6H) is read-only and holds no input at all. A
   // destructive confirm must be dismissed deliberately — never by a stray
   // downward swipe — so it stays a dialog with no gesture handling.
-  const SWIPEABLE = ['pickerModal', 'exerciseDetailModal'];
+  const SWIPEABLE = ['pickerModal', 'exerciseDetailModal', 'exerciseSwapModal'];
   const DELIBERATE = ['finishModal', 'discardModal', 'customEditModal', 'customConfirmModal'];
 
   // Comments mention the option; only real call sites count.
@@ -431,12 +431,15 @@ test('consumers: browsing surfaces are SHEETS; confirmations are dialogs', () =>
     assert.ok(!/variant:\s*'sheet'/.test(m[1]), `${id} is a dialog, not a swipeable sheet`);
   }
 
-  // A swipeable surface must not be able to lose typed input. The detail sheet
-  // earns its gesture by holding no editable control whatsoever.
-  const detail = wk.match(/<div class="overlay" id="exerciseDetailModal">([\s\S]*?)\n<\/div>\n/);
-  assert.ok(detail, 'detail modal markup located');
-  assert.ok(!/<input|<textarea|<form|contenteditable/i.test(detail[1]),
-    'the detail sheet holds no input, so a swipe dismissal can never discard user data');
+  // A swipeable surface must not be able to lose typed input. The detail and
+  // swap sheets earn their gesture by holding no editable control whatsoever —
+  // dismissing either discards nothing, because neither has committed anything.
+  [['exerciseDetailModal', 'detail'], ['exerciseSwapModal', 'swap']].forEach(([id, label]) => {
+    const m = wk.match(new RegExp('<div class="overlay" id="' + id + '">([\\s\\S]*?)\\n</div>\\n'));
+    assert.ok(m, label + ' modal markup located');
+    assert.ok(!/<input|<textarea|<form|contenteditable/i.test(m[1]),
+      'the ' + label + ' sheet holds no input, so a swipe dismissal can never discard user data');
+  });
 });
 
 test('consumers: the picker list and filter panel carry the scroll contract', () => {

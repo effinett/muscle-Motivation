@@ -94,9 +94,17 @@ test('the detail sheet markup contains no control that can mutate a workout', ()
   assert.ok(m, 'detail modal markup located');
   const markup = m[1];
   const handlers = markup.match(/onclick="([^"]+)"/g) || [];
-  assert.deepStrictEqual(handlers, ['onclick="closeExerciseDetail()"'],
-    'Close is the sheet\'s ONLY action');
+  // Phase 4.3.6I added a Swap action. The invariant is unchanged and is about
+  // DIRECT mutation: the sheet may navigate to a guarded flow, but nothing in it
+  // may alter the workout itself. Close dismisses; swapFromDetail() only re-opens
+  // through openSwapForWorkoutExercise/openSwapForTemplateExercise, which apply
+  // the completed-set guard and still require an explicit candidate tap.
+  const ALLOWED = ['onclick="closeExerciseDetail()"', 'onclick="swapFromDetail()"'];
+  handlers.forEach((h) => assert.ok(ALLOWED.includes(h),
+    'unexpected action in the detail sheet: ' + h));
   assert.ok(!/<input|<form|contenteditable/i.test(markup), 'no editable control in a read-only sheet');
+  // Whatever actions exist, none may write directly.
+  assert.ok(!/supabaseClient|\.update\(|\.insert\(|\.delete\(/.test(markup));
 });
 
 test('the only network read is a single canonical exercise by id', () => {

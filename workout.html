@@ -581,6 +581,70 @@
       border-radius: 8px; padding: 12px 14px;
     }
 
+    /* ── Exercise swap sheet (Phase 4.3.6I) ───────────────────────────────
+       Shares the detail sheet's geometry so the two read as one family; only
+       the content differs. */
+    #exerciseSwapModal { align-items: flex-end; justify-content: center; }
+    .swap-sheet {
+      background: var(--surface-1); border: 1px solid var(--border-2);
+      border-radius: 16px 16px 0 0;
+      padding: 24px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+      width: 100%; max-width: 680px;
+      display: flex; flex-direction: column;
+      max-height: 80vh;
+      max-height: min(80vh, 100%);
+    }
+    .swap-source {
+      font-size: 12px; color: var(--text-muted); margin-bottom: 14px;
+      padding-bottom: 12px; border-bottom: 1px solid var(--border-1);
+      overflow-wrap: anywhere;
+    }
+    .swap-source b { color: var(--text-2); font-weight: 600; }
+    .swap-body { min-height: 0; }
+    .swap-group-label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.8px; color: var(--red); margin: 0 0 8px;
+    }
+    .swap-group + .swap-group { margin-top: 18px; }
+    /* A candidate row is one native button: the whole row IS the choice, so
+       there is no ambiguity about what a tap does (unlike the picker, which
+       carries a second detail action). */
+    .swap-item {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      width: 100%; text-align: left; min-height: 44px;
+      padding: 10px 4px; border: none; border-bottom: 1px solid var(--border-1);
+      background: none; color: inherit;
+      font-family: 'Barlow', sans-serif; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .swap-item:last-child { border-bottom: none; }
+    @media (hover: hover) { .swap-item:hover .swap-item-name { color: var(--red); } }
+    .swap-item:active { background: var(--surface-2); }
+    .swap-item:focus-visible { outline: 2px solid var(--red); outline-offset: -2px; border-radius: 6px; }
+    .swap-item-text { min-width: 0; flex: 1; }
+    .swap-item-name {
+      font-size: 14px; font-weight: 600; overflow-wrap: anywhere; word-break: break-word;
+    }
+    /* The reason is TEXT, never a colour or icon alone. */
+    .swap-item-why {
+      font-size: 11px; color: var(--text-muted); margin-top: 2px; overflow-wrap: anywhere;
+    }
+    .swap-item-go { color: var(--red); flex-shrink: 0; }
+    .swap-note {
+      font-size: 13px; line-height: 1.6; color: var(--text-muted);
+      background: var(--surface-2); border: 1px solid var(--border-1);
+      border-radius: 8px; padding: 12px 14px;
+    }
+    .btn-swap-manual {
+      margin-top: 16px; width: 100%; min-height: 44px;
+      background: transparent; color: var(--text-2);
+      border: 1px solid var(--border-2); border-radius: 8px;
+      font-family: 'Bebas Neue', sans-serif; font-size: 16px; letter-spacing: 1.5px;
+      cursor: pointer; flex-shrink: 0;
+    }
+    .btn-swap-manual:hover { border-color: var(--border-3); color: var(--text); }
+    .btn-swap-manual:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+
     /* Exercise picker — bottom sheet */
     #pickerModal { align-items: flex-end; justify-content: center; }
     .picker-sheet {
@@ -1231,6 +1295,36 @@
       </button>
     </div>
     <div class="detail-body mm-sheet-scroll" id="exerciseDetailBody"></div>
+    <!-- 4.3.6I: shown only where the exercise is actually editable (an active
+         workout card or the Routine editor). The picker's detail view is
+         informational, so it stays hidden there rather than offering an action
+         that would be ambiguous next to "add this exercise". -->
+    <button type="button" class="btn-swap-manual" id="detailSwapBtn" hidden
+      onclick="swapFromDetail()">Swap exercise</button>
+  </div>
+</div>
+
+<!-- Exercise Swap (Phase 4.3.6I) -->
+<!-- The engine PROPOSES; this sheet lets the user CHOOSE. Nothing is swapped by
+     opening it, and no candidate is pre-selected — the replacement happens only
+     on an explicit tap. Like the detail sheet it is swipe-dismissible because
+     dismissing it costs nothing: it holds no input and commits no change. -->
+<div class="overlay" id="exerciseSwapModal">
+  <div class="swap-sheet" role="dialog" aria-modal="true" aria-labelledby="exerciseSwapTitle">
+    <div class="mm-sheet-handle" aria-hidden="true"></div>
+    <div class="detail-head">
+      <h2 class="detail-title" id="exerciseSwapTitle">Swap Exercise</h2>
+      <button type="button" class="btn-icon detail-close" onclick="closeExerciseSwap()"
+        aria-label="Close swap options">
+        <i data-lucide="x" aria-hidden="true"></i>
+      </button>
+    </div>
+    <!-- aria-live so a screen reader hears which exercise is being replaced. -->
+    <div class="swap-source" id="exerciseSwapSource" aria-live="polite"></div>
+    <div class="swap-body mm-sheet-scroll" id="exerciseSwapBody"></div>
+    <button type="button" class="btn-swap-manual" onclick="openSwapManualPicker()">
+      Choose another exercise
+    </button>
   </div>
 </div>
 
@@ -1344,6 +1438,12 @@
      Loads after exercise-log (reuses its identityType, so display identity can
      never drift from logged identity). -->
 <script src="exercise-detail.js"></script>
+<!-- Shared exercise-substitution engine (Phase 4.3.6I) — deterministic "what can
+     I do instead?" ranking over canonical metadata. Loads after exercise-core
+     (reuses its equipment/family vocab) and exercise-log (reuses identityType).
+     Pure: it proposes candidates, the USER chooses, and this page performs the
+     replacement. -->
+<script src="exercise-substitution.js"></script>
 <script src="routine-core.js"></script>
 <script src="routine-history.js"></script>
 <script>
@@ -2211,6 +2311,9 @@
         // when several cards are open. Icon-only visually, never icon-only to
         // assistive tech.
         '<div class="exercise-card-actions">' +
+          '<button class="btn-icon btn-detail" onclick="openSwapForWorkoutExercise(' + exIdx + ')"' +
+            ' aria-label="Swap ' + esc(ex.name) + ' for another exercise">' +
+            '<i data-lucide="repeat" aria-hidden="true"></i></button>' +
           '<button class="btn-icon btn-detail" onclick="openDetailForWorkoutExercise(' + exIdx + ')"' +
             ' aria-label="View exercise details for ' + esc(ex.name) + '">' +
             '<i data-lucide="info" aria-hidden="true"></i></button>' +
@@ -2253,7 +2356,12 @@
       // Runs however the sheet was dismissed — Cancel, Escape, backdrop or
       // swipe — so the filter panel can never be left open with its
       // outside-click listener still attached.
-      onClose: function () { toggleFilterPanel(false); },
+      onClose: function () {
+        toggleFilterPanel(false);
+        // A swap that reached the manual picker and was then abandoned must not
+        // leave a pending replacement armed for the next unrelated pick.
+        if (pickerMode === 'swap') swapCtx = null;
+      },
     });
   }
   function openPicker() { openPickerFor('workout'); }
@@ -2294,9 +2402,16 @@
     }) || null;
   }
 
-  function openExerciseDetail(ref) {
+  // `editCtx` (4.3.6I) is { mode, exIdx } when the caller's context allows the
+  // exercise to be replaced, and null for read-only contexts like the picker.
+  var detailEditCtx = null;
+
+  function openExerciseDetail(ref, editCtx) {
     if (!ref || typeof ExerciseDetail === 'undefined') return;
     var seq = ++detailRequestSeq;
+    detailEditCtx = editCtx || null;
+    var swapBtn = document.getElementById('detailSwapBtn');
+    if (swapBtn) swapBtn.hidden = !(detailEditCtx && typeof ExerciseSubstitution !== 'undefined');
 
     // Render immediately from what is already known, so the sheet never opens
     // blank: customs and legacy entries are complete right here (they have no
@@ -2376,7 +2491,18 @@
 
   // Entry point: the active workout's exercise card.
   function openDetailForWorkoutExercise(exIdx) {
-    openExerciseDetail(detailRefFor(exercises[exIdx]));
+    openExerciseDetail(detailRefFor(exercises[exIdx]), { mode: 'workout', exIdx: exIdx });
+  }
+
+  // Hand off from the detail sheet to the swap sheet, in whichever context the
+  // detail view was opened from. Routes through the SAME guarded entry points,
+  // so the completed-set rule applies identically however swap was reached.
+  function swapFromDetail() {
+    var ctx = detailEditCtx;
+    if (!ctx) return;
+    closeExerciseDetail();
+    if (ctx.mode === 'workout') openSwapForWorkoutExercise(ctx.exIdx);
+    else if (ctx.mode === 'template') openSwapForTemplateExercise(ctx.exIdx);
   }
 
   // Entry point: a picker result row. `id` is a canonical exercises.id or '' for
@@ -2390,6 +2516,194 @@
     });
   }
 
+  // ── Exercise swap (Phase 4.3.6I) ──────────────────────────────────
+  // The engine (exercise-substitution.js) PROPOSES candidates; this block
+  // performs the replacement the user explicitly chooses. Two contexts, one
+  // path, and a hard rule that separates them:
+  //
+  //   • 'workout'  — edits ONLY this session's workout_exercises snapshot.
+  //     A Program-backed session reads its prescription from the platform
+  //     Routine at start time and never writes back, so swapping here cannot
+  //     reach workout_templates, program_routines, programs or the frozen
+  //     program_workouts rows. That immutability is structural: no code path
+  //     below writes to any of those tables.
+  //   • 'template' — edits the user's OWN private Routine draft in memory,
+  //     saved through the existing template save path. Ownership is unchanged.
+  //
+  // Nothing here reprograms the workout: sets/reps/rest/notes are preserved and
+  // no progression logic runs. The movement changes; the prescription does not.
+  var swapCtx = null;   // { mode, exIdx, ref, replacing }
+
+  // A canonical catalog row for the engine to reason over, from the metadata
+  // already loaded for the picker — so opening Swap costs no network request.
+  function canonicalCatalog() {
+    return exerciseLibrary.filter(function (e) { return !e.user_created; });
+  }
+
+  // §16 — completed work is never silently reattributed to a different exercise.
+  function completedSetCount(ex) {
+    if (!ex || !ex.sets) return 0;
+    return ex.sets.filter(function (s) { return s.completed; }).length;
+  }
+
+  function openSwapForWorkoutExercise(exIdx) {
+    var ex = exercises[exIdx];
+    if (!ex) return;
+    // Blocked, not silently degraded: those sets were performed as THIS
+    // exercise, and the schema has no way to say "the first two sets were a
+    // different movement". Removing the exercise stays available and is the
+    // user's explicit, destructive choice — never an implicit side effect here.
+    if (completedSetCount(ex) > 0) {
+      showCustomConfirm(
+        'Can’t swap this one',
+        'You’ve already logged sets for <b>' + esc(ex.name) + '</b>, so they’d end up recorded ' +
+        'against a different exercise. Finish it, or remove it and add the other exercise instead.',
+        null, false, null
+      );
+      return;
+    }
+    openExerciseSwap({ mode: 'workout', exIdx: exIdx, ref: detailRefFor(ex) });
+  }
+
+  function openSwapForTemplateExercise(idx) {
+    var ex = editingTemplate && editingTemplate.exercises ? editingTemplate.exercises[idx] : null;
+    if (!ex) return;
+    openExerciseSwap({
+      mode: 'template', exIdx: idx,
+      ref: { name: ex.name, exerciseId: ex.exercise_id != null ? ex.exercise_id : null, customId: null }
+    });
+  }
+
+  function openExerciseSwap(ctx) {
+    if (!ctx || typeof ExerciseSubstitution === 'undefined') return;
+    swapCtx = ctx;
+    // Computed synchronously over the in-memory catalog — no request, no await.
+    var result = ExerciseSubstitution.findSubstitutions(ctx.ref, canonicalCatalog());
+    renderExerciseSwap(ctx, result);
+    MMSheet.open(document.getElementById('exerciseSwapModal'), {
+      variant: 'sheet',
+      panel: '.swap-sheet',
+      initialFocus: '.detail-close',
+      onClose: function () { if (!swapCtx || !swapCtx.replacing) swapCtx = null; }
+    });
+  }
+
+  function renderExerciseSwap(ctx, result) {
+    document.getElementById('exerciseSwapSource').innerHTML =
+      'Replacing <b>' + esc(result.sourceName || ctx.ref.name || 'this exercise') + '</b>';
+
+    var html = '';
+    function group(label, items) {
+      if (!items.length) return '';
+      return '<div class="swap-group"><h3 class="swap-group-label">' + esc(label) + '</h3>' +
+        items.map(function (c) {
+          return '<button type="button" class="swap-item" data-id="' + esc(c.id) + '"' +
+            ' data-name="' + esc(c.name) + '"' +
+            ' onclick="chooseSwapCandidate(this.dataset.name, this.dataset.id)">' +
+            '<span class="swap-item-text">' +
+              '<span class="swap-item-name">' + esc(c.name) + '</span>' +
+              '<span class="swap-item-why">' + esc(c.reason) + '</span>' +
+            '</span>' +
+            '<span class="swap-item-go"><i data-lucide="arrow-right" style="width:16px;height:16px;" aria-hidden="true"></i></span>' +
+          '</button>';
+        }).join('') + '</div>';
+    }
+    html += group('Best matches', result.best);
+    html += group('Other options', result.other);
+    // The note explains WHY there is nothing to show — custom/legacy sources and
+    // genuinely isolated exercises are all honest outcomes, not failures.
+    if (result.note) html += '<div class="swap-note">' + esc(result.note) + '</div>';
+
+    document.getElementById('exerciseSwapBody').innerHTML = html;
+    lucide.createIcons();
+  }
+
+  function closeExerciseSwap() { MMSheet.close(document.getElementById('exerciseSwapModal')); }
+
+  // A ranked candidate was tapped. The engine only ever proposes canonical ids.
+  function chooseSwapCandidate(name, id) {
+    if (!swapCtx || !id) return;
+    applySwap(name, id);
+  }
+
+  // §26 — the user's explicit pick always overrides the ranking. Reuses the ONE
+  // existing picker (no second search surface) via a dedicated picker mode.
+  function openSwapManualPicker() {
+    if (!swapCtx) return;
+    swapCtx.replacing = true;          // survive the swap sheet closing
+    closeExerciseSwap();
+    openPickerFor('swap');
+  }
+
+  // The single replacement path — every swap (ranked candidate or manual pick)
+  // funnels through here, so the semantics can never diverge between them.
+  // `ctxOverride` is supplied by the manual-picker path, which must capture the
+  // context before the picker closes (see selectExercise).
+  async function applySwap(name, canonicalId, ctxOverride) {
+    var ctx = ctxOverride || swapCtx;
+    if (!ctx) return;
+    swapCtx = null;
+    closeExerciseSwap();
+
+    if (ctx.mode === 'template') {
+      var t = editingTemplate && editingTemplate.exercises ? editingTemplate.exercises[ctx.exIdx] : null;
+      if (!t) return;
+      // Identity changes; the PRESCRIPTION does not. sets / reps_low / reps_high
+      // / rest_sec / notes are deliberately untouched.
+      t.name = name;
+      t.exercise_id = resolvePickedId(name, canonicalId);
+      renderBuilderExercises();
+      showToast('Swapped to ' + name + '.');
+      return;
+    }
+
+    var ex = exercises[ctx.exIdx];
+    if (!ex) return;
+    var lockKey = 'swap:' + ex.id;
+    if (!beginAction(lockKey)) return;      // idempotent under a double-tap
+    try {
+      // Re-check at the commit boundary: the sheet was open while the workout
+      // stayed live, so a set could have been completed in between.
+      if (completedSetCount(ex) > 0) { showToast('Sets were logged — swap cancelled.'); return; }
+
+      await saveUserExercise(name);
+      var ids = exerciseIdentityColumns(name, resolvePickedId(name, canonicalId));
+
+      // UPDATE in place, never delete+insert: the workout_exercises row id is
+      // what workout_sets hang off, so reusing it preserves the set rows, the
+      // order_index, and the workout itself. No second workout can appear.
+      var upd = await supabaseClient.from('workout_exercises')
+        .update({ exercise_name: name, exercise_id: ids.exercise_id, user_exercise_id: ids.user_exercise_id })
+        .eq('id', ex.id);
+      if (upd.error) { showToast('Error swapping exercise.'); return; }
+
+      ex.name = name;
+      ex.exercise_id = ids.exercise_id;
+      ex.customId = ids.user_exercise_id;
+      // Previous-performance and history belong to the OLD identity — drop them
+      // and reload ID-first (Phase 4.2.1J) for the new one.
+      ex.last_perf = null; ex.last_weight = null; ex.last_reps = null; ex.history = [];
+      await Promise.all([loadLastPerf(ex), loadExerciseHistory(ex)]);
+
+      // §14/§17 — the set COUNT is the prescription and is preserved, but the
+      // old exercise's loads are not equivalence-transferable (185 lb bench is
+      // not a dumbbell-press starting weight). Weights are re-seeded from the
+      // new exercise's own recommendation and any typed reps are cleared.
+      var rec = recForExercise(ex);
+      var seed = rec ? rec.recommendedWeight : null;
+      await Promise.all(ex.sets.map(function (s) {
+        s.weight_lbs = seed; s.reps = null;
+        return supabaseClient.from('workout_sets')
+          .update({ weight_lbs: seed, reps: null }).eq('id', s.id);
+      }));
+
+      renderExercises();
+      showToast('Swapped to ' + name + ' — target sets kept, weights reset.');
+    } finally {
+      endAction(lockKey);
+    }
+  }
+
   // Entry point: a Routine/template editor row.
   function openDetailForTemplateExercise(idx) {
     var ex = editingTemplate && editingTemplate.exercises ? editingTemplate.exercises[idx] : null;
@@ -2398,7 +2712,7 @@
       name: ex.name,
       exerciseId: ex.exercise_id != null ? ex.exercise_id : null,
       customId: null
-    });
+    }, { mode: 'template', exIdx: idx });
   }
 
   // Reset the picker to a clean selection session: clear search, clear filters
@@ -2650,6 +2964,10 @@
   async function selectExercise(name, pickedId) {
     if (!beginAction('select')) return;   // block a rapid double-pick
     try {
+      // Captured BEFORE closePicker(): closing fires the picker's onClose, which
+      // clears an abandoned swap context. Reading it afterwards would always see
+      // null and silently turn a manual swap into a no-op.
+      var pendingSwap = (pickerMode === 'swap') ? swapCtx : null;
       closePicker();
       var canonicalId = resolvePickedId(name, pickedId);
       // Save any brand-new (non-library) exercise to the user's library so it's
@@ -2661,6 +2979,10 @@
       // CP7: resolving an unresolved history exercise. Routes the user's
       // explicit pick into the review — it must never touch the live workout.
       if (pickerMode === 'resolve') { applyReviewResolution(name, canonicalId); return; }
+      // 4.3.6I: the manual "Choose another exercise" fallback. The user's pick
+      // replaces the pending exercise instead of adding a new one, through the
+      // SAME applySwap path a ranked candidate uses.
+      if (pickerMode === 'swap') { await applySwap(name, canonicalId, pendingSwap); return; }
       // Stable identity (Phase 4.2.1K): saveUserExercise above already created/
       // restored/reused the custom row, so it is now resolvable by name. Persist
       // exactly one of exercise_id (canonical) / user_exercise_id (custom).
@@ -3704,6 +4026,9 @@
         '<div class="tpl-ex-move">' +
           // Reuses the SAME detail surface as the workout card and the picker —
           // reordering and removal are untouched beside it.
+          // Swap is NOT a fifth icon here: five 36px controls would leave ~64px
+          // for the name at 320px. It lives in the detail sheet instead (§24),
+          // which this button opens.
           '<button class="btn-icon" onclick="openDetailForTemplateExercise(' + idx + ')"' +
             ' aria-label="View exercise details for ' + esc(ex.name) + '">' +
             '<i data-lucide="info" aria-hidden="true"></i></button>' +

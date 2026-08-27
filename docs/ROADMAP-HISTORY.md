@@ -1067,3 +1067,93 @@ false-confidence 0%, both strict benchmarks pass.
 **4.3.6J** (favorites & recents) are still unbuilt, and **4.3.6K** remains protected planned content. No
 substitution, swap, favorite, recent or AI-generated coaching behavior ships here. Exercise media remains
 at **5.1.6** — the table has no media column and none was added.
+
+---
+
+## 2026-08-27 — Phase 4.3.6I — deterministic exercise substitution engine
+
+**Scope: runtime/editor behaviour. No schema change, no migration, no content edit, no AI, no
+favorites/recents.** Swap lets a user replace one exercise with an appropriate alternative while the
+surrounding prescription and workout state survive intact.
+
+**The dormant foundation is now consumed.** `exercise-core.js` has carried `equipment_substitution`
+relationship edges since 4.2.1E with **zero consumers**. Rather than build on that graph alone — it is
+family-keyed, and deliberately gives isolation/core/rotation no cross-family net, so isolation work
+would have had almost no candidates — the engine ranks over structured metadata and reuses
+exercise-core's `normalizeEquipment` / `getExerciseFamily` and `exercise-log`'s `identityType`, so
+equipment vocabulary and identity never fork.
+
+**Taxonomy audit (141 canonical rows).** `primary_muscle` 19 values, `equipment` 8 (Bodyweight 34,
+Dumbbell 26, Barbell 23, Machine 23, Cable 21, Band 8, Smith 5, Kettlebell 1), `force_type` 3,
+`tracking_type` 6 (**weight_reps 104, bodyweight_reps 27, time 5, weighted_bodyweight 3, distance 1,
+time_distance 1**), `default_unit` 4 (lb 134, sec 5, m 1, mi 1), `movement_pattern` 12.
+
+**Two taxonomy gaps found and handled without editing the library.** (1) `primary_muscle` is
+fragmented — Chest/Upper Chest, Back/Lats, Shoulders/Front Delts, Biceps/Brachialis, Abs/Core are the
+same training target, and strict string equality would strand every singleton at zero candidates. A
+curated `MUSCLE_GROUP` equivalence table resolves this. It is deliberately **narrower** than
+exercise-core's `MUSCLE_REGION`, which folds biceps and triceps into one "arms" region — correct for
+gating relationship edges, far too coarse here, since it would let a curl stand in for a pushdown.
+**Rear Delts is deliberately NOT merged into Shoulders** (a pulling muscle must not enter the pressing
+group). (2) `tracking_type` mixes rep, time and distance semantics.
+
+**Two hard gates, then a tier, then a score.** A candidate is ineligible unless it shares the source's
+**muscle group** and its **tracking class** (rep-based types are mutually compatible; time, distance
+and time_distance are each their own class and **no conversion is invented**). Eligible candidates are
+tiered **Best matches** (same `movement_pattern`) vs **Other options**, then ordered by named
+`SUB_WEIGHTS` — family 40, force type 12, equipment 10, load style 4, laterality 6, secondary overlap
+≤6, difficulty 4/2, exact tracking 5 — with **score desc → name → id** tie-breaking, so the same
+inputs always yield the same order regardless of catalog order. Equipment is a ranking signal, never
+an eligibility gate: substitution is usually equipment-driven, so options must vary.
+
+**Coverage: 136/141 (96.5%) have ≥1 candidate; 132/141 have ≥1 best match; average 12.7 candidates.**
+The five with none — Farmer Carry, Hip Adduction, Incline Treadmill Walk, Treadmill Run, Wall Sit —
+are genuinely alone in their (muscle × tracking) cell. **Returning nothing is the correct answer**;
+the alternative is suggesting something wrong. Pinned in tests so a metadata regression surfaces.
+
+**Prescription is preserved; identity is what changes.** A Routine swap rewrites `name` +
+`exercise_id` and **writes none of** `sets` / `reps_low` / `reps_high` / `rest_sec` / `notes`. An
+active-workout swap **UPDATEs `workout_exercises` in place** — never delete+insert — so the row id,
+its `workout_sets`, `order_index` and the workout itself survive, and no second workout can appear.
+The set COUNT is kept, but loads are **re-seeded from the new exercise's own recommendation** and typed
+reps cleared: 185 lb of bench is not a dumbbell-press starting weight. Stale previous-performance and
+history are dropped and reloaded ID-first (4.2.1J). No progression or PR logic runs.
+
+**Completed work is never reattributed (§16 locked rule).** Swap is **blocked** once the exercise has
+any completed set, with an explanatory dialog — the schema cannot say "the first two sets were a
+different movement", so the only safe answer is to refuse. The guard is enforced **twice**: when the
+sheet opens and again at the commit boundary, since a set can be completed while the sheet is open.
+
+**The Program source is immutable by construction.** A Program session reads its prescription from the
+platform Routine at start time and never writes back. Tests assert that **no swap code path references
+`workout_templates`, `program_routines`, `programs` or `program_workouts`**, and that the only tables
+`applySwap` touches are `workout_exercises` and `workout_sets` — this session's own snapshot rows.
+
+**Custom and legacy sources fabricate nothing.** Neither carries usable metadata, so both return no
+algorithmic suggestions and an honest note, and route to **"Choose another exercise"** — the existing
+picker in a new `swap` mode (no second search engine). A manual pick funnels through the **same**
+`applySwap` path as a ranked candidate, so semantics can never diverge.
+
+**Entry points:** a Swap icon on the active-workout card, and the 4.3.6H detail sheet's Swap action in
+editable contexts. The picker's detail view stays informational — offering a swap beside "add this
+exercise" would be ambiguous. Swap is deliberately **not** a fifth icon in the Routine editor row:
+five 36px controls would leave ~64px for the name at 320px.
+
+**No AI and no network.** The engine is pure (DOM-free, fetch-free, Supabase-free) and computes
+synchronously over the catalog `loadExerciseLibrary()` already holds, so opening Swap costs **zero
+requests** and the Train bootstrap is unchanged.
+
+**Tests.** `exercise-substitution.test.js` (29, incl. the full real-catalog safety sweep) and
+`exercise-substitution-ui.test.js` (34). Three pre-existing tests were updated to the invariants they
+actually mean rather than weakened: the detail sheet's "no mutating control" now allows navigation to a
+guarded flow while still forbidding direct writes, and the mm-sheet consumer contract adds the swap
+sheet to the swipe-dismissible set plus a no-input assertion for it.
+
+**`npm run verify` green:** 2152 pass / 0 fail (2166 total), nutrition evaluation 100% (286/286),
+false-confidence 0%, both strict benchmarks pass.
+
+**Phase 4.3.5 remains OPEN — VALIDATION DEBT.**
+
+**Phase 4.3.6 remains OPEN.** 4.3.6H and 4.3.6I are complete; **4.3.6J** (favorites & recents) is still
+unbuilt and **4.3.6K** remains protected planned content. No favorite, recent, pinning or popularity
+signal ships here.
