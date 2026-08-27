@@ -621,12 +621,17 @@
     @media (hover: hover) { .swap-item:hover .swap-item-name { color: var(--red); } }
     .swap-item:active { background: var(--surface-2); }
     .swap-item:focus-visible { outline: 2px solid var(--red); outline-offset: -2px; border-radius: 6px; }
-    .swap-item-text { min-width: 0; flex: 1; }
+    /* These are <span>s inside a button (a <div> is not valid button content),
+       so they need an explicit block display — as inlines they ran the name and
+       its reason together on one line. */
+    .swap-item-text { min-width: 0; flex: 1; display: block; }
     .swap-item-name {
+      display: block;
       font-size: 14px; font-weight: 600; overflow-wrap: anywhere; word-break: break-word;
     }
     /* The reason is TEXT, never a colour or icon alone. */
     .swap-item-why {
+      display: block;
       font-size: 11px; color: var(--text-muted); margin-top: 2px; overflow-wrap: anywhere;
     }
     .swap-item-go { color: var(--red); flex-shrink: 0; }
