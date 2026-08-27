@@ -1157,3 +1157,81 @@ false-confidence 0%, both strict benchmarks pass.
 **Phase 4.3.6 remains OPEN.** 4.3.6H and 4.3.6I are complete; **4.3.6J** (favorites & recents) is still
 unbuilt and **4.3.6K** remains protected planned content. No favorite, recent, pinning or popularity
 signal ships here.
+
+---
+
+## 2026-08-27 — Phase 4.3.6J — exercise favorites & recents
+
+**Scope: one narrow additive table plus picker/detail UI.** No history mutation, no Program or Routine
+change, no exercise-library change, no AI, no reordering.
+
+**Favorites are explicit; Recents are derived.** A favorite exists only because the user tapped a star.
+A recent exists only because the user actually **trained** the exercise — opening a picker, viewing a
+detail sheet or seeing a substitution suggestion is deliberately **not** use, and tests assert the
+detail path never touches recents.
+
+**`public.user_exercise_favorites` (migration `create_user_exercise_favorites`).** Identity-only:
+`exercise_id` **XOR** `user_exercise_id` (CHECK), owner-scoped RLS (`auth.uid() = user_id`, using +
+with check), all three FKs **ON DELETE CASCADE**, and an index on `(user_id, created_at desc)`. The row
+stores **no name**, so a rename can never break or stale a favorite and there is no string that could
+be rendered after the exercise is gone. Unlike `user_food_favorites` — a denormalized snapshot, because
+USDA foods have no local id — exercises have stable ids, so nothing else needs storing.
+
+**RLS alone was insufficient, as in 4.2.1K.** The policy constrains `user_id` but not the *referenced*
+row, so a user could have stored a favorite pointing at another user's custom exercise. Trigger
+`enforce_fav_custom_owner` closes it, mirroring `enforce_pr_custom_owner`. Verified live: a real
+cross-user insert attempt was **blocked**, alongside XOR-rejects-both-null, XOR-rejects-both-set and
+duplicate-blocked — all five checks PASS with zero residue.
+
+**Defect found in production validation and fixed (`fix_user_exercise_favorites_plain_uniques`).** The
+first migration created **partial** unique indexes (`WHERE ... is not null`). Postgres only matches a
+partial index to `ON CONFLICT` when the statement repeats the same WHERE predicate, which PostgREST's
+`onConflict` does not emit — so **every favorite insert failed with 42P10** and silently rolled back.
+This is precisely the trap recorded in CLAUDE.md §9. Replaced with **plain** uniques, which are also
+semantically correct here and are the shape 4.2.1K used on `personal_records`: NULLs are distinct, so
+the many custom favorites (`exercise_id` NULL) never collide while duplicates of the same exercise
+still conflict. Re-verified live: duplicate canonical blocked, second canonical allowed, **multiple
+custom favorites coexist**, duplicate custom blocked. The optimistic-rollback path behaved correctly
+throughout the failure — no corrupt state, no phantom favorite.
+
+**Recents: derived, bounded, deduped.** The user's **15 most recent completed workouts** → their
+exercises → dedupe so the **newest occurrence wins** → cap at **8**. No recents table; recents are a
+view of history, and history is never written to maintain them. Two bounded owner-scoped reads, batched
+(`.in('workout_id', …)`), never N+1.
+
+**Identity, never names.** Canonical favorites key by `exercises.id`, custom by `user_exercises.id`.
+Legacy name-only history has **no** stable identity, so `identityKey()` returns null — it yields no
+favorite control and never becomes a canonical recent. That is a property of the model, not a UI rule.
+Inactive canonicals and archived/deleted customs are omitted from the shortcuts **while their
+preference rows survive** (§34). Verified live: the detail sheet rendered **no control at all** for a
+legacy reference, and a favorited custom stamped `user_exercise_id` with `exercise_id` NULL.
+
+**Action isolation.** The favorite control is a **third distinct sibling button** in the picker row. It
+stops the event, and no favorites path calls `selectExercise`, `applySwap`, `applyReviewResolution` or
+`addTemplateExercise`. Verified live: tapping it added **0** exercises and left the picker open.
+
+**One selection path across all four modes.** Shortcut rows are built by the same `pickerRowHtml`, so
+selecting one runs the same mode-specific action. Verified live: from the Favorites section, an **add**
+mode pick added the exercise with correct custom identity, and a **swap** mode pick *swapped* — count
+stayed 1 and the `workout_exercises` row id was preserved.
+
+**Information architecture.** Shortcuts render only while the query is empty; typing hands the list to
+search results. Verified live (13 result rows, no shortcut sections; restored on clearing).
+
+**Performance.** Train bootstrap issues **0** prefs requests and both caches start `null`. Shortcuts
+load once on first picker open; a **reopen costs 0 requests**. Optimistic toggle with rollback, a
+per-exercise in-flight lock, and a conflict-safe upsert.
+
+**Mobile.** At 320 / 390 / 430 the picker sheet showed **no overflow anywhere** (0 offending elements),
+favorite targets 44×54, rows 54px, both shortcut headings present. These are constrained-element
+measurements: **`resize_window` still reports success while `innerWidth` stays 1440**, so no true
+narrow-viewport or device validation was performed. No iPhone or Android validation.
+
+**Deliberately not built:** frequency ranking, "most used", popularity, trending, cross-user aggregate,
+AI ordering, exercise reordering. Favorites do **not** influence substitution or search ranking —
+`exercise-substitution.js` and `exercise-filters.js` contain no reference to preference at all.
+
+**Tests.** `exercise-prefs.test.js` (27) and `exercise-prefs-ui.test.js` (35, including a regression
+pinning the `onConflict` column pairs the DB constraints must carry).
+
+**Phase 4.3.5 remains OPEN — VALIDATION DEBT.**
