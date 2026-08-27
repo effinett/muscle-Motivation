@@ -408,31 +408,23 @@ areas · reduced motion · keyboard navigation and focus · the shipped shell co
 
 ---
 
-## PHASE 4.3.6 — PROGRAMS, ROUTINES & TRAIN ARCHITECTURE
+## PHASE 4.3.6 — PROGRAMS, ROUTINES & TRAIN ARCHITECTURE · **CLOSED**
 
 **Goal:** make Programs first-class, create one coherent reusable training-content architecture, and
 complete the Train surface capabilities that earlier exercise phases left unbuilt.
 
-**Status — 2026-08-26: OPEN.** The training-content architecture track (CP0–CP8c) is **complete and
-production-validated** — Program execution runs on canonical Routines with **0 runtime reads of
-`program_workouts`**, entitlement-scoped RLS, and 47/47 prescription parity (record:
-`docs/ROADMAP-HISTORY.md`). That satisfies **4.3.6A, B, C, D, E, F, G and L**.
+**Closed 2026-08-27.** Delivered: canonical Routine entity (`workout_templates`) · Program → Routine
+convergence with **0 runtime reads of `program_workouts`** · entitlement-scoped RLS as defence in depth ·
+Train Today / Workouts / Programs · history → private draft Routines · Routine authoring and publishing ·
+exercise detail surface · deterministic substitution engine · exercise favorites and recents. All
+production-validated (records: `docs/ROADMAP-HISTORY.md`).
 
-**Status — 2026-08-27: READY FOR FINAL CLOSURE REVIEW.** The three remaining lettered scope items have
-since shipped and been production-validated (records: `docs/ROADMAP-HISTORY.md`):
+**4.3.6A–L all pass.** **4.3.6K remains protected planned content by design** — Home Strength Program and
+Full Gym Strength Program are retained concepts, not build items for this phase, so they never blocked
+the exit criterion and stay protected under §11.
 
-- **4.3.6H — Exercise detail surface** (2026-08-26, `85a2b6d`). Read-only surface over the catalog
-  metadata carried since 4.2.1E; canonical / custom / legacy handled with **no identity guessing**.
-- **4.3.6I — Deterministic substitution engine** (2026-08-27, `0549202`). Muscle-group and
-  tracking-class hard gates, tiered and explainable; **this is the engine Coach must call at 4.7.5**.
-- **4.3.6J — Exercise favorites & recents** (2026-08-27, `36fdd99`). Explicit favorites keyed by stable
-  identity, history-derived recents, owner-scoped with a same-user ownership trigger.
-
-**4.3.6K remains protected planned content by design** — Home Strength Program and Full Gym Strength
-Program are retained concepts, not build items for this phase, so they do not block the exit criterion.
-
-**The phase is not marked closed here.** Closure is Effi's review step, not an implementer's; this entry
-records that every required item now passes.
+**Closing 4.3.6 changes nothing about 4.3.5**, which remains **OPEN — VALIDATION DEBT** on the 4.3.5F
+instrumented Android navigation measurement. The two are independent.
 
 ### Owner decisions — locked 2026-08-21
 
@@ -1337,6 +1329,7 @@ Do not delete useful architecture or design docs. Banner them:
 | 4.3.2 | Service Worker & Update Safety | COMPLETE |
 | 4.3.3 | Install Onboarding & Update UX | CLOSED |
 | 4.3.4 | Dashboard 2.0 & App Navigation | CLOSED |
+| 4.3.6 | Programs, Routines & Train Architecture | CLOSED |
 
 ## Next
 
@@ -1353,7 +1346,6 @@ with 4.3.5 remaining open. This starts no other phase early, closes nothing, and
 
 | # | Phase |
 |---|---|
-| 4.3.6 | Programs, Routines & Train Architecture |
 | 4.3.7 | Personalized Onboarding & Value Engine |
 | 4.3.8 | Interactive First-Run Experience |
 | 4.4 | Personal AI Coach v1 — Read-Only |

@@ -212,6 +212,7 @@ provider unless a new route is explicitly built on another.
 - DDL changes must go through `apply_migration` (tracked), not `execute_sql`.
 - Verify schema via `pg_proc` and `pg_indexes` directly — Supabase advisor may return stale results.
 - Before schema changes, run `list_tables`. When debugging, start with `get_logs` and `get_advisors`.
+- **A PostgREST `upsert` conflict target must be a PLAIN unique constraint or index — never a partial one.** PostgREST emits a bare `ON CONFLICT (cols)` with no `WHERE`, and Postgres only matches a partial index when the statement repeats its predicate, so a partial index fails every write with `42P10` ("no unique or exclusion constraint matching the ON CONFLICT specification"). For an XOR-identity table, plain uniques are also the correct semantics: NULLs are distinct, so rows whose column is NULL coexist while real duplicates still conflict (`personal_records`, `user_exercise_favorites`).
 
 **AI food-logging route (`/api/ai-food-parse`) — `Live` (Phase 4.2):**
 - The only server-side AI route. Parses meal text into food items — **search query + quantity/unit/brand ONLY, never nutrition values** (per §16; macros always come from USDA).
