@@ -1275,3 +1275,94 @@ dependency, and the measurement-integrity condition continues to bind later work
 **One engineering rule was promoted out of this phase.** The 4.3.6J production failure — a partial
 unique index that PostgREST's `ON CONFLICT` could not resolve, returning `42P10` on every insert — is
 now a build rule in CLAUDE.md §9 rather than only a debugging symptom.
+
+---
+
+## 2026-08-27 — Phase 4.3.7D/E/F (+ partial 4.3.7A) — deterministic personalized starting value
+
+**Phase 4.3.7 is NOT closed by this record.** It ships the value engine and its surfaces; **4.3.7B,
+4.3.7C and 4.3.7G remain NOT STARTED**, and 4.3.7A is only partially delivered. The canonical phase
+scope is materially larger than what was implemented here, and the gap is recorded in `docs/ROADMAP.md`
+rather than silently narrowed.
+
+**Onboarding data audit (production, 12 profiles).** 10 of 12 have `onboarding_complete = true` and a
+complete set of goal · training_days · activity_level · height · weight · age · gender · timeline ·
+targets · split; 8 of 10 also have body fat and goal weight; 2 rows are pre-onboarding legacy with no
+goal and no targets. Only 1 profile has an `active_program`. Goal distribution: recomp 5, fatloss 3,
+muscle 2. **No column existed for training experience or equipment access** — the two 4.3.7A inputs
+with a real recommendation use — so they were added rather than inferred.
+
+**Migration `phase_437a_profile_training_context`.** Two nullable `text` columns on `public.profiles`:
+`training_experience` (beginner|intermediate|advanced) and `gym_access`
+(full_gym|home_basic|bodyweight), each with a CHECK that **accepts NULL**. No default, no backfill, RLS
+untouched — all 12 existing rows stayed NULL, and NULL is read as *no signal*, never as a mismatch.
+Rollback is a plain `DROP COLUMN` and removes nothing that existed before the phase.
+
+**`personalization-core.js` — one pure engine, no AI.** DOM-free, fetch-free, Supabase-free,
+clock-free, randomness-free (asserted by test). `derivePersonalizedStart(profile, context)` returns
+status · goal · nutrition · training · focus · warnings · missing, with **stable reason codes**
+(`goal_match`, `goal_partial_match`, `training_days_match`, `training_days_close`, `experience_match`,
+`equipment_match`, `only_option`, `catalog_order`). Ranking logic never composes a sentence; one static
+copy table maps codes to words so onboarding, Home and Train cannot drift into three explanations of
+the same decision.
+
+**It computes no nutrition math — deliberately.** BMR/TDEE/macro math already exists in three places
+(`calculator.html`, `onboarding.html`, `profile.html`'s recalc) and the latter two have **already
+drifted** (carb derivation differs: `fatCals` vs `fatG * 9`). A fourth implementation would worsen
+that, so the engine **reads** `target_calories` · `protein_target` · `maintenance_calories` as
+persisted and reports them. Deficit/surplus restates the relationship between two stored numbers; it
+does not recompute one. **No user's targets changed in this phase**, and a test pins that the two new
+inputs never enter either calculation path.
+
+**Recommendation model — strictly lexicographic, not weighted.** goal rank → training-day delta (nulls
+last) → experience fit → equipment fit → `sort_order` → slug. Because each tier is compared only when
+every earlier tier ties, "a goal mismatch can never win on schedule alone" is *structural* rather than
+a matter of weight tuning. Tri-state fits mean an unreadable metadata value is neutral, never penalised.
+
+**Recomp policy (owner-approved).** No catalog Program declares `goal = 'recomp'`, yet 5 of 10
+onboarded users chose it. Recomp resolves to **muscle first, fat loss second**, emitting
+`goal_partial_match` — never `goal_match`.
+
+**No false precision.** A reason code is emitted only when its input exists **and actually separated
+the field**. Every published Program is `equipment_summary = 'Any Setup'`, so equipment discriminates
+nothing today and therefore never claims to — verified by a test that also proves the code *does*
+appear once the catalog makes equipment meaningful. `programs.difficulty` is free display text
+("Beginner – Intermediate", en dash included) and is resolved through an **exact** normalized lookup;
+an unrecognised string is no signal rather than a silent mismatch.
+
+**Recommendation is not access, and never enrolment.** Ranking never reads purchases or entitlement;
+`accessible` is stamped afterwards from a caller-supplied list, and omitting it yields `null`
+("not evaluated") rather than asserting no access. Home and Train deliberately pass **no**
+`accessibleSlugs` and fetch **no** purchases to recommend. Tests assert no recommendation renderer
+contains `user_programs` or any `.insert/.upsert/.update/.delete`.
+
+**4.3.7F delivered as a derived read model, not a store.** `buildPersonalContext` normalizes explicit
+user facts plus the derived plan into the shape Coach (4.4.3) will read. **No personalization table was
+created.** Goal, targets and training days keep exactly one source of truth, so a profile edit
+re-derives the plan on the next read and a stale recommendation is structurally impossible — pinned by
+a test that mutates a profile and re-derives.
+
+**Surfaces.** Onboarding step 3 became "Training & Activity" (still 5 steps, no added friction) and
+gained both optional inputs, where "Prefer not to say" persists as NULL. Step 5 became the 4.3.7E value
+reveal: recommended Program with reason chips and catalog facts, above the schedule and nutrition
+blocks. Home shows **one line** inside the existing Today card, in the `open` and `choose` states only —
+a user with a programmed session sees Home exactly as before, and Calories + Protein remains the
+default snapshot (test-pinned). Train's Today pane suggests only when the pre-existing active-program
+path found nothing; that path is unchanged and now merely *reports* whether it rendered.
+`profile.html` can edit both new fields, so no one redoes onboarding to get a fitting recommendation.
+
+**Failure and performance discipline.** The catalog warm in onboarding is fire-and-forget with a catch
+and is never awaited on the auth gate; the save path contains no reference to personalization, so a
+catalog failure cannot delay or block onboarding, and `onboarding_complete` semantics are unchanged.
+Home adds **zero** requests — it reads `pcCached()` synchronously, already warmed by
+`pgLoadAccessiblePrograms`. Train reads the session cache first and fetches the catalog only if absent,
+and deliberately skips the purchases request it would have needed to evaluate access.
+
+**Tests.** `personalization-core.test.js` (47) and `personalization-ui.test.js` (27).
+`npm run verify` exits 0: 2303 tests, 2289 pass, 0 fail, 14 skipped; nutrition evaluation
+100% (286/286) with false-confidence 0% (0/31); food 100% (116/116) and exercise 100% (188/188) strict
+benchmarks unchanged.
+
+**4.3.5 remains OPEN — VALIDATION DEBT** on the 4.3.5F instrumented Android navigation measurement.
+This phase added one hero line and one Train card and did not restructure the app shell or navigation.
+**4.3.8, 4.4 and 4.5 are NOT STARTED**; no paywall, tutorial, coachmark or LLM path was built.

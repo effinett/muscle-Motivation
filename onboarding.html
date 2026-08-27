@@ -287,6 +287,74 @@
     .stat-value { font-family: 'Bebas Neue', sans-serif; font-size: 26px; color: var(--text); margin-top: 4px; line-height: 1; letter-spacing: 0.5px; }
     .stat-sub { font-size: 12px; color: var(--light); margin-top: 3px; }
 
+    /* ── Phase 4.3.7E value reveal ──────────────────────────────────────
+       Section headings and the recommended-Program card. Deliberately built
+       from the tokens already defined above (--surface2, --border-2, --red)
+       so the reveal reads as the same product, not a new visual language. */
+    .reveal-label {
+      font-family: 'Barlow', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--light);
+      margin: 4px 0 10px;
+    }
+    .macro-grid + .reveal-label { margin-top: 18px; }
+
+    .reveal-program {
+      background: var(--surface2);
+      border: 1px solid var(--border-2);
+      border-left: 2px solid var(--red);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 12px;
+    }
+    .reveal-eyebrow {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .reveal-name {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 24px;
+      line-height: 1.1;
+      letter-spacing: 0.5px;
+      color: var(--text);
+      margin-top: 5px;
+    }
+    /* Reason chips wrap rather than truncate — an explanation the user cannot
+       finish reading is worse than no explanation. */
+    .reveal-reasons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .reveal-chip {
+      background: var(--red-muted);
+      border: 1px solid var(--red-border);
+      border-radius: 5px;
+      padding: 3px 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #e8a0a4;
+    }
+    .reveal-meta {
+      font-size: 12px;
+      color: var(--light);
+      margin-top: 10px;
+      line-height: 1.5;
+    }
+    .reveal-note {
+      font-size: 12px;
+      color: var(--muted);
+      margin: -4px 0 12px;
+      line-height: 1.5;
+    }
+
     .training-badge {
       display: inline-block;
       background: var(--red-muted);
@@ -436,12 +504,12 @@
     </div>
   </div>
 
-  <!-- ── STEP 3: Activity ── -->
+  <!-- ── STEP 3: Training & Activity ── -->
   <div class="step" id="step3">
-    <div class="section-label">Activity Level</div>
+    <div class="section-label">Training &amp; Activity</div>
     <div class="card">
-      <div class="step-title">How active are you?</div>
-      <div class="step-desc">Be honest — this directly affects your calorie target.</div>
+      <div class="step-title">How you train</div>
+      <div class="step-desc">Be honest — this directly affects your calorie target and the program we recommend.</div>
 
       <div class="field">
         <label>Average Daily Steps</label>
@@ -463,6 +531,30 @@
           <option value="4">4 days</option>
           <option value="5">5 days</option>
           <option value="6">6+ days</option>
+        </select>
+      </div>
+
+      <!-- Phase 4.3.7A. Both feed program recommendation only — neither takes
+           any part in the calorie/macro math above, which is unchanged. The
+           empty first option is a REAL choice: it stores NULL, which
+           personalization-core.js reads as "no signal" rather than guessing. -->
+      <div class="field">
+        <label>Training Experience <span class="optional-tag">optional</span></label>
+        <select id="ob-experience">
+          <option value="">Prefer not to say</option>
+          <option value="beginner">Beginner — new or returning</option>
+          <option value="intermediate">Intermediate — training consistently</option>
+          <option value="advanced">Advanced — years of steady training</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Gym Access <span class="optional-tag">optional</span></label>
+        <select id="ob-gym">
+          <option value="">Prefer not to say</option>
+          <option value="full_gym">Full gym</option>
+          <option value="home_basic">Home setup — some equipment</option>
+          <option value="bodyweight">Bodyweight only</option>
         </select>
       </div>
     </div>
@@ -508,13 +600,43 @@
     </div>
   </div>
 
-  <!-- ── STEP 5: Results ── -->
+  <!-- ── STEP 5: Results — the Phase 4.3.7E value reveal ── -->
   <div class="step" id="step5">
     <div class="section-label">Your Personalized Plan</div>
     <div class="card">
-      <div class="step-title">Here are your targets</div>
+      <div class="step-title">Here's what we built for you</div>
       <div class="step-desc">These are saved to your account and shown on your dashboard.</div>
 
+      <!-- TRAINING leads: it answers "what did you build for me?" before the
+           numbers do. Hidden entirely when the catalog is unavailable or no
+           Program fits — an empty block would be worse than none. -->
+      <div id="ob-trainingBlock" style="display:none;">
+        <div class="reveal-label">Training</div>
+        <div class="reveal-program">
+          <div class="reveal-eyebrow">Recommended Program</div>
+          <div class="reveal-name" id="ob-rProgramName">—</div>
+          <div class="reveal-reasons" id="ob-rProgramReasons"></div>
+          <div class="reveal-meta" id="ob-rProgramMeta"></div>
+        </div>
+      </div>
+
+      <!-- Training split moved out of the macro grid: it is a TRAINING fact and
+           sat under a Nutrition heading once the reveal gained sections. Same
+           value, same .training-badge styling, same id — only its home changed. -->
+      <div class="reveal-label" id="ob-scheduleLabel">Your Schedule</div>
+      <div class="macro-grid">
+        <div class="stat">
+          <div class="stat-label">Training Split</div>
+          <div class="training-badge" id="ob-rSplit">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Training Days</div>
+          <div class="stat-value" id="ob-rDays">—</div>
+          <div class="stat-sub">per week</div>
+        </div>
+      </div>
+
+      <div class="reveal-label" id="ob-nutritionLabel">Nutrition</div>
       <div class="macro-grid">
         <div class="stat stat-full">
           <div class="stat-label">Maintenance Calories</div>
@@ -541,10 +663,6 @@
           <div class="stat-value" id="ob-rFats">—</div>
           <div class="stat-sub">grams / day</div>
         </div>
-        <div class="stat">
-          <div class="stat-label">Training Split</div>
-          <div class="training-badge" id="ob-rSplit">—</div>
-        </div>
         <div class="stat stat-full" id="ob-rGoalWeightCard" style="display:none;">
           <div class="stat-label">Goal Weight</div>
           <div class="stat-value" id="ob-rGoalWeight">—</div>
@@ -565,10 +683,16 @@
 <!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.0/dist/umd/supabase.js" integrity="sha384-3wY11tldQ5+yWqAvmTN4XtQvnjoTva0cV15O/O/O5NTtp0ivVopSzLOzsVXWZse9" crossorigin="anonymous"></script>
 <script src="supabase.js"></script>
+<script src="program-catalog.js"></script>
+<script src="personalization-core.js"></script>
 <script>
 
   let currentUser = null;
   let generatedPlan = {};
+  // Phase 4.3.7E. Warmed during the auth gate, in parallel with the profile
+  // check, so the reveal costs no wait at step 5. [] means "unavailable" — the
+  // reveal hides its training block and onboarding proceeds untouched.
+  let programCatalog = [];
   const TOTAL_STEPS = 5;
 
   // ── Auth gate ──────────────────────────────────────────────
@@ -589,7 +713,14 @@ if (!profileError && profile && profile.onboarding_complete) {
   window.location.replace('app.html');
   return;
 }
-        
+
+        // Warm the Program catalog for the step-5 reveal. Deliberately NOT
+        // awaited on the gate's critical path and never allowed to reject:
+        // a catalog failure must not delay or block onboarding.
+        pcLoadCatalog()
+          .then(function (list) { programCatalog = list || []; })
+          .catch(function () { programCatalog = []; });
+
         document.getElementById('authGate').style.display = 'none';
         document.getElementById('onboardingContent').style.display = 'block';
       } catch (err) {
@@ -690,6 +821,10 @@ if (!profileError && profile && profile.onboarding_complete) {
     var timeline   = document.getElementById('ob-timeline').value;
     var goalWeight = parseFloat(document.getElementById('ob-goal-weight').value) || null;
     var name       = document.getElementById('ob-name').value.trim();
+    // Phase 4.3.7A. '' (Prefer not to say) persists as NULL, which the engine
+    // reads as "no signal" — never as a mismatch.
+    var experience = document.getElementById('ob-experience').value || null;
+    var gymAccess  = document.getElementById('ob-gym').value || null;
 
     // Users input height as feet/inches; convert to cm for internal storage and BMR calculations.
     var heightCm = ((feet * 12) + inchesVal) * 2.54;
@@ -731,6 +866,8 @@ if (!profileError && profile && profile.onboarding_complete) {
       goal:                 goal,
       activity_level:       stepMult,
       training_days:        training,
+      training_experience:  experience,
+      gym_access:           gymAccess,
       timeline:             timeline,
       maintenance_calories: tdee,
       target_calories:      targetCals,
@@ -759,7 +896,58 @@ if (!profileError && profile && profile.onboarding_complete) {
       document.getElementById('ob-rGoalWeightCard').style.display = 'none';
     }
 
+    renderTrainingReveal();
     goStep(5);
+  }
+
+  // ── Phase 4.3.7E · the training half of the value reveal ─────────────────
+  // `generatedPlan` already uses the exact public.profiles column names, so it
+  // IS the profile the engine reads — the reveal shows precisely what will be
+  // saved a moment later, with no second shape to keep in sync.
+  //
+  // Purely presentational: it renders a RECOMMENDATION and nothing more. No
+  // program is started, no user_programs row is written, and nothing here can
+  // affect whether the profile saves.
+  function renderTrainingReveal() {
+    var block = document.getElementById('ob-trainingBlock');
+    document.getElementById('ob-rDays').textContent =
+      generatedPlan.training_days > 0 ? generatedPlan.training_days : 'Starting out';
+
+    var plan;
+    try {
+      plan = Personalization.derivePersonalizedStart(
+        generatedPlan, { catalog: programCatalog });
+    } catch (e) {
+      // The reveal is a bonus, never a gate: if anything here fails the user
+      // still sees their targets and can still save.
+      console.error('renderTrainingReveal:', e);
+      block.style.display = 'none';
+      return;
+    }
+
+    var rec = plan.training.recommendedProgram;
+    if (!rec) { block.style.display = 'none'; return; }
+
+    document.getElementById('ob-rProgramName').textContent = rec.name;
+
+    var chips = Personalization.describeReasons(plan).map(function (text) {
+      var el = document.createElement('span');
+      el.className = 'reveal-chip';
+      el.textContent = text;
+      return el;
+    });
+    var reasons = document.getElementById('ob-rProgramReasons');
+    reasons.textContent = '';
+    chips.forEach(function (c) { reasons.appendChild(c); });
+
+    // Facts only, and only the ones the catalog actually declares.
+    var meta = [];
+    if (rec.durationWeeks) meta.push(rec.durationWeeks + ' weeks');
+    if (rec.recommendedDaysPerWeek) meta.push(rec.recommendedDaysPerWeek + ' days / week');
+    if (rec.difficulty) meta.push(rec.difficulty);
+    document.getElementById('ob-rProgramMeta').textContent = meta.join(' · ');
+
+    block.style.display = 'block';
   }
 
   // ── Save to Supabase and redirect ─────────────────────────

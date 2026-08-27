@@ -246,6 +246,36 @@
     }
     .mm-hero-cta:not([hidden]) + .home-action--hero::after { font-size: 14px; }
 
+    /* Phase 4.3.7 — the personalized recommendation line inside the hero.
+       A quiet footnote under the actions, separated by a hairline so it reads
+       as context rather than a third competing CTA. It wraps freely: at 320px
+       a program name plus its reason will not fit on one line, and clipping an
+       explanation is worse than letting it run to two. The `.home-action--hero`
+       negative bottom margin above has to be cleared when this line follows it,
+       or the rule would pull the divider up over the button. */
+    .mm-hero-rec {
+      margin: 0;
+      padding-top: 12px;
+      border-top: 1px solid var(--mm-line-subtle);
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--mm-text-secondary);
+    }
+    .home-action--hero:not([hidden]) + .mm-hero-rec { margin-top: 22px; }
+    .mm-hero-rec-label { margin-right: 4px; }
+    .mm-hero-rec-link {
+      color: var(--mm-text);
+      font-weight: 600;
+      text-decoration: none;
+      border-bottom: 1px solid var(--mm-accent);
+      /* A 13px inline link is below the 44px touch target on its own, so it
+         gets vertical padding to reach a comfortable tap area without
+         disturbing the line box. */
+      display: inline-block;
+      padding: 6px 0;
+    }
+    .mm-hero-rec-link:hover { color: var(--mm-accent); }
+
     /* Weight is a compact snapshot, still open on the background — never a
        card. Two columns: the reading on the left, the sparkline balancing the
        right, with the logging action beneath. Centred against each other so a
@@ -484,6 +514,14 @@
         <div class="mm-hero-meta" id="todayMeta" hidden></div>
         <a class="mm-hero-cta" id="todayCta" href="workout.html" hidden></a>
         <button class="home-action home-action--hero" id="todayAlt" hidden></button>
+        <!-- Phase 4.3.7. One personalized line, rendered ONLY when no program
+             is active (the 'open' and 'choose' states) — a user who already has
+             a programmed session sees Home exactly as before. It is a
+             suggestion with a link, never an enrolment. -->
+        <p class="mm-hero-rec" id="todayRec" hidden>
+          <span class="mm-hero-rec-label" id="todayRecLabel"></span>
+          <a class="mm-hero-rec-link" id="todayRecLink" href="#"></a>
+        </p>
       </div>
     </section>
 
@@ -594,6 +632,7 @@
 <script src="metrics.js"></script>
 <script src="snapshot.js"></script>
 <script src="dashboard-model.js"></script>
+<script src="personalization-core.js"></script>
 <script>
 
   // Home consumes SHARED state only: snapshot.js supplies training, nutrition,
@@ -689,6 +728,11 @@
     });
 
     renderToday(model.today);
+    // Phase 4.3.7. Derived from data Home has ALREADY fetched: currentProfile,
+    // plus the catalog that loadProgramState warmed a moment ago via
+    // pgLoadAccessiblePrograms. pcCached() is a synchronous read, so Home makes
+    // no additional request and its bootstrap waterfall is unchanged.
+    renderRecommendation(model.today);
     renderWeek(model.week);
     renderNutrition(model.nutrition);
     renderInsight(model.focus);
@@ -759,6 +803,49 @@
     } else {
       alt.hidden = true;
     }
+  }
+
+  // ── A2 · PERSONALIZED RECOMMENDATION (Phase 4.3.7) ───────────────────
+  // A single line under Today's actions, shown ONLY when the user has no
+  // programmed session to do — the 'open' and 'choose' states. In every other
+  // state Home already proposes a specific workout, and a second suggestion
+  // beside it would compete with the one action the hero exists to present.
+  //
+  // It recommends; it never enrols. The link opens the Program's page, where
+  // starting it remains an explicit choice the user makes.
+  var TODAY_REC_STATES = ['open', 'choose'];
+
+  function renderRecommendation(today) {
+    var row = document.getElementById('todayRec');
+    if (TODAY_REC_STATES.indexOf(today.state) < 0) { row.hidden = true; return; }
+
+    var plan;
+    try {
+      plan = Personalization.derivePersonalizedStart(currentProfile,
+        { catalog: pcCached() || [] });
+    } catch (e) {
+      console.error('renderRecommendation:', e);
+      row.hidden = true;
+      return;
+    }
+
+    var rec = plan.training.recommendedProgram;
+    // No catalog, or nothing that fits: say nothing. Home stays exactly as it
+    // was rather than showing an empty personalized slot.
+    if (!rec || !rec.pagePath) { row.hidden = true; return; }
+
+    // The label claims only what the engine's reason codes support. A profile
+    // with no goal on file gets a plain "Recommended:", never "for your goal".
+    var codes = plan.training.reasons;
+    var byGoal = codes.indexOf(Personalization.REASON.GOAL_MATCH) >= 0
+      || codes.indexOf(Personalization.REASON.GOAL_PARTIAL_MATCH) >= 0;
+    document.getElementById('todayRecLabel').textContent =
+      byGoal ? 'Recommended for your goal:' : 'Recommended:';
+
+    var link = document.getElementById('todayRecLink');
+    link.textContent = rec.name;
+    link.href = rec.pagePath;
+    row.hidden = false;
   }
 
   // ── B · THIS WEEK ────────────────────────────────────────────────────
