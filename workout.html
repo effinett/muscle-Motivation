@@ -758,6 +758,47 @@
     .picker-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--border-1); }
     .picker-row:last-child { border-bottom: none; }
     .picker-row .picker-item { border-bottom: none; flex: 1; min-width: 0; }
+    /* ── Favorites & Recents (Phase 4.3.6J) ───────────────────────────────
+       The favorite control is a PREFERENCE, not a success state and not a CTA:
+       it stays muted until set, then takes the brand accent. It never uses the
+       green success token, which in this app means "completed". */
+    .picker-item-fav {
+      flex-shrink: 0; min-width: 44px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: none; border: none; border-left: 1px solid var(--border-1);
+      color: var(--text-muted); cursor: pointer; padding: 0;
+      transition: color 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .picker-item-fav.is-on { color: var(--red); }
+    .picker-item-fav.is-on i { fill: currentColor; }
+    @media (hover: hover) { .picker-item-fav:hover { color: var(--red); } }
+    .picker-item-fav:active { background: var(--surface-2); }
+    .picker-item-fav:focus-visible {
+      outline: 2px solid var(--red); outline-offset: -2px; border-radius: 6px;
+    }
+    /* Shortcut sections above the browse list. */
+    .picker-shortcut { margin-bottom: 14px; }
+    .picker-shortcut-label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.8px; color: var(--red); margin: 0 0 4px; padding-top: 2px;
+    }
+    .picker-shortcut-empty {
+      font-size: 12px; color: var(--text-muted); padding: 6px 2px 10px;
+      overflow-wrap: anywhere;
+    }
+    /* Detail-sheet favorite toggle — sized with the Close control beside it. */
+    .detail-fav {
+      min-width: 44px; min-height: 44px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: none; border: none; color: var(--text-muted);
+      cursor: pointer; padding: 0; transition: color 0.15s;
+    }
+    .detail-fav.is-on { color: var(--red); }
+    .detail-fav.is-on i { fill: currentColor; }
+    @media (hover: hover) { .detail-fav:hover { color: var(--red); } }
+    .detail-fav:focus-visible { outline: 2px solid var(--red); outline-offset: -2px; border-radius: 8px; }
+
     .picker-item-info {
       flex-shrink: 0; min-width: 44px;
       display: inline-flex; align-items: center; justify-content: center;
@@ -1294,6 +1335,11 @@
            "Workout" landmark, so the sheet's heading sits one level beneath it
            rather than competing with it. Section headings inside are level 3. -->
       <h2 class="detail-title" id="exerciseDetailTitle"></h2>
+      <!-- 4.3.6J: favorite state/toggle. Rendered only when the reference has a
+           stable identity, so a legacy entry never shows a control that would
+           have nothing to key on. Viewing details is NOT "use" — this never
+           touches recents. -->
+      <span id="exerciseDetailFav"></span>
       <button type="button" class="btn-icon detail-close" onclick="closeExerciseDetail()"
         aria-label="Close exercise details">
         <i data-lucide="x" aria-hidden="true"></i>
@@ -1449,6 +1495,11 @@
      Pure: it proposes candidates, the USER chooses, and this page performs the
      replacement. -->
 <script src="exercise-substitution.js"></script>
+<!-- Shared favorites & recents core (Phase 4.3.6J) — explicit favorites and
+     history-derived recents, both keyed by stable identity. Loads after
+     exercise-log (reuses identityType), so a favorite can never be keyed by a
+     name and a legacy history row can never become one. -->
+<script src="exercise-prefs.js"></script>
 <script src="routine-core.js"></script>
 <script src="routine-history.js"></script>
 <script>
@@ -2347,6 +2398,19 @@
   function openPickerFor(mode) {
     pickerMode = mode;
     resetPickerState();
+    // Phase 4.3.6J — load the shortcuts on FIRST open only, then repaint. This
+    // is why Favorites/Recents cost the Train bootstrap nothing: a user who
+    // never opens the picker never pays for them. Cached opens re-render from
+    // memory and issue no request.
+    if (typeof ExercisePrefs !== 'undefined' && currentUser) {
+      if (favoriteRows === null || recentUsages === null) {
+        loadPickerPrefs().then(function () {
+          // Only repaint if the picker is still open and still unsearched.
+          if (!MMSheet.isOpen(document.getElementById('pickerModal'))) return;
+          filterPicker(document.getElementById('pickerSearch').value);
+        });
+      }
+    }
     MMSheet.open(document.getElementById('pickerModal'), {
       variant: 'sheet',
       panel: '.picker-sheet',
@@ -2471,6 +2535,14 @@
     var d = ExerciseDetail.buildExerciseDetail(ref, row);
     document.getElementById('exerciseDetailTitle').textContent = d.title || 'Exercise';
 
+    // 4.3.6J — favorite toggle, same control and same handler as the picker's,
+    // so one tap updates both surfaces' state through one code path.
+    var favHost = document.getElementById('exerciseDetailFav');
+    if (favHost) {
+      favHost.innerHTML = detailFavHtml(ref, d.title);
+      lucide.createIcons();
+    }
+
     var html = '';
     if (d.classification.length) {
       html += '<div class="detail-class">' + d.classification.map(function (c) {
@@ -2492,6 +2564,22 @@
 
   function closeExerciseDetail() {
     MMSheet.close(document.getElementById('exerciseDetailModal'));
+  }
+
+  // The detail sheet's favorite control. Same data attributes and same handler
+  // as the picker's, so `repaintFavoriteControls` updates whichever is on screen
+  // and the two can never disagree.
+  function detailFavHtml(ref, title) {
+    if (typeof ExercisePrefs === 'undefined' || !ExercisePrefs.canFavorite(ref)) return '';
+    var name = title || ref.name || 'this exercise';
+    var on = ExercisePrefs.isFavorited(favoriteIndex, ref);
+    return '<button type="button" class="detail-fav' + (on ? ' is-on' : '') + '"' +
+      ' data-name="' + esc(name) + '" data-id="' + esc(ref.exerciseId || '') + '"' +
+      ' data-custom="' + esc(ref.customId || '') + '"' +
+      ' aria-pressed="' + (on ? 'true' : 'false') + '"' +
+      ' aria-label="' + (on ? 'Remove ' + esc(name) + ' from favorites' : 'Favorite ' + esc(name)) + '"' +
+      ' onclick="toggleFavorite(event, this.dataset.name, this.dataset.id, this.dataset.custom)">' +
+      '<i data-lucide="star" aria-hidden="true"></i></button>';
   }
 
   // Entry point: the active workout's exercise card.
@@ -2730,6 +2818,204 @@
     filterPicker('');
   }
 
+  // ── Favorites & Recents (Phase 4.3.6J) ────────────────────────────
+  // Both are LAZY: nothing here runs during Train bootstrap. They load once on
+  // the first picker open of the page and are then served from memory, so
+  // reopening the picker — including the CP8I swap fallback — costs 0 requests.
+  //
+  // Favorites are explicit user preference (user_exercise_favorites, owner-scoped
+  // RLS + a same-user trigger on custom references). Recents are DERIVED from
+  // workout history and stored nowhere: recent means "you trained it", never
+  // "you looked at it".
+  var favoriteRows   = null;   // user_exercise_favorites rows, or null = not loaded
+  var favoriteIndex  = {};     // identity key -> 1, for cheap toggle state
+  var recentUsages   = null;   // newest-first history usages, or null = not loaded
+  var prefsLoading   = null;   // in-flight promise, so a double-open loads once
+
+  function prefsCatalogs() {
+    if (typeof ExercisePrefs === 'undefined') return { canonicalById: {}, customById: {} };
+    return ExercisePrefs.buildCatalogs(
+      exerciseLibrary.filter(function (e) { return !e.user_created; }),
+      customExercises || []
+    );
+  }
+
+  // One load, both shortcuts. Two owner-scoped reads: the user's favorites, and
+  // the exercises from their most recent completed workouts. Deliberately NOT a
+  // full history scan — a bounded window of recent sessions is all "recent" can
+  // possibly need, and it keeps the query cheap.
+  function loadPickerPrefs() {
+    if (prefsLoading) return prefsLoading;
+    if (favoriteRows !== null && recentUsages !== null) return Promise.resolve();
+    prefsLoading = (async function () {
+      try {
+        var favP = supabaseClient
+          .from('user_exercise_favorites')
+          .select('exercise_id, user_exercise_id, created_at')
+          .eq('user_id', currentUser.id)
+          .order('created_at', { ascending: false });
+
+        // Recent SESSIONS first, then their exercises. Two small bounded reads
+        // beat one join whose ordering would have to cross the embed.
+        var wkP = supabaseClient
+          .from('workouts')
+          .select('id, date, created_at')
+          .eq('user_id', currentUser.id)
+          .eq('completed', true)
+          .order('date', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(15);
+
+        var res = await Promise.all([favP, wkP]);
+        favoriteRows = (res[0] && res[0].data) || [];
+        favoriteIndex = ExercisePrefs.indexFavorites(favoriteRows);
+
+        var wks = (res[1] && res[1].data) || [];
+        if (!wks.length) { recentUsages = []; return; }
+        var order = {};
+        wks.forEach(function (w, i) { order[w.id] = i; });   // 0 = newest session
+        var exRes = await supabaseClient
+          .from('workout_exercises')
+          .select('workout_id, exercise_id, user_exercise_id, exercise_name, order_index')
+          .in('workout_id', wks.map(function (w) { return w.id; }));
+        var rows = (exRes && exRes.data) || [];
+        // Newest session first, then the order they were performed in.
+        rows.sort(function (a, b) {
+          var d = order[a.workout_id] - order[b.workout_id];
+          if (d !== 0) return d;
+          return (a.order_index || 0) - (b.order_index || 0);
+        });
+        recentUsages = rows.map(function (r) {
+          return {
+            exerciseId: r.exercise_id != null ? r.exercise_id : null,
+            customId: r.user_exercise_id != null ? r.user_exercise_id : null,
+            name: r.exercise_name
+          };
+        });
+      } catch (e) {
+        // Degrade to a picker with no shortcuts rather than a broken picker.
+        if (favoriteRows === null) { favoriteRows = []; favoriteIndex = {}; }
+        if (recentUsages === null) recentUsages = [];
+      } finally {
+        prefsLoading = null;
+      }
+    })();
+    return prefsLoading;
+  }
+
+  // The favorite control. A real <button> with aria-pressed, so its state is
+  // exposed to assistive tech rather than implied by colour alone.
+  function favBtnHtml(name, exerciseId, customId) {
+    if (typeof ExercisePrefs === 'undefined') return '';
+    var ref = { name: name, exerciseId: exerciseId || null, customId: customId || null };
+    // Legacy/free-typed rows have no stable identity, so there is nothing to
+    // favorite — no control is rendered at all rather than one that fails.
+    if (!ExercisePrefs.canFavorite(ref)) return '';
+    var on = ExercisePrefs.isFavorited(favoriteIndex, ref);
+    return '<button type="button" class="picker-item-fav' + (on ? ' is-on' : '') + '"' +
+      ' data-name="' + esc(name) + '" data-id="' + esc(exerciseId || '') + '"' +
+      ' data-custom="' + esc(customId || '') + '"' +
+      ' aria-pressed="' + (on ? 'true' : 'false') + '"' +
+      ' aria-label="' + (on ? 'Remove ' + esc(name) + ' from favorites' : 'Favorite ' + esc(name)) + '"' +
+      ' onclick="toggleFavorite(event, this.dataset.name, this.dataset.id, this.dataset.custom)">' +
+      '<i data-lucide="star" style="width:16px;height:16px;" aria-hidden="true"></i>' +
+      '</button>';
+  }
+
+  // Toggle only. It never selects, adds, resolves or swaps — the event is
+  // stopped so it cannot reach the row's select handler, which is the one way
+  // this control could have become dangerous.
+  async function toggleFavorite(ev, name, id, customId) {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    if (typeof ExercisePrefs === 'undefined' || !currentUser) return;
+    var ref = { name: name, exerciseId: id || null, customId: (!id && customId) ? customId : null };
+    var key = ExercisePrefs.identityKey(ref);
+    if (!key) return;
+    var lockKey = 'fav:' + key;
+    if (!beginAction(lockKey)) return;        // a double-tap cannot double-write
+    var wasOn = !!favoriteIndex[key];
+    try {
+      // Optimistic: flip local state and repaint immediately, roll back on error.
+      if (wasOn) delete favoriteIndex[key]; else favoriteIndex[key] = 1;
+      repaintFavoriteControls();
+
+      var q;
+      if (wasOn) {
+        var m = ExercisePrefs.favoriteMatch(ref);
+        q = await supabaseClient.from('user_exercise_favorites').delete()
+          .eq('user_id', currentUser.id).eq(m.column, m.value);
+      } else {
+        // The partial uniques make a repeat insert a no-op rather than a dup.
+        q = await supabaseClient.from('user_exercise_favorites')
+          .upsert(ExercisePrefs.favoriteRow(ref, currentUser.id),
+                  { onConflict: id ? 'user_id,exercise_id' : 'user_id,user_exercise_id' });
+      }
+      if (q && q.error) throw q.error;
+
+      // Keep the row cache in step so a re-render (and the Favorites section's
+      // ordering) reflects the change without refetching.
+      if (wasOn) {
+        favoriteRows = (favoriteRows || []).filter(function (r) {
+          return (r.exercise_id != null ? 'canon:' + r.exercise_id : 'custom:' + r.user_exercise_id) !== key;
+        });
+      } else {
+        var row = ExercisePrefs.favoriteRow(ref, currentUser.id);
+        row.created_at = new Date().toISOString();
+        favoriteRows = [row].concat(favoriteRows || []);
+      }
+    } catch (e) {
+      if (wasOn) favoriteIndex[key] = 1; else delete favoriteIndex[key];
+      repaintFavoriteControls();
+      showToast('Couldn’t update favorites.');
+    } finally {
+      endAction(lockKey);
+    }
+  }
+
+  // Repaint every favorite control in place. Deliberately NOT a full picker
+  // re-render: rebuilding the list would move rows under the user's finger and
+  // lose scroll position mid-tap.
+  function repaintFavoriteControls() {
+    var btns = document.querySelectorAll('.picker-item-fav, .detail-fav');
+    for (var i = 0; i < btns.length; i++) {
+      var b = btns[i];
+      var ref = { name: b.dataset.name, exerciseId: b.dataset.id || null,
+                  customId: (!b.dataset.id && b.dataset.custom) ? b.dataset.custom : null };
+      var on = ExercisePrefs.isFavorited(favoriteIndex, ref);
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      b.setAttribute('aria-label', on
+        ? 'Remove ' + b.dataset.name + ' from favorites'
+        : 'Favorite ' + b.dataset.name);
+    }
+  }
+
+  // A Favorites / Recent shortcut row. It reuses pickerRowHtml, so selecting one
+  // executes the SAME mode-specific action (add / template / resolve / swap) as
+  // selecting from search — there is exactly one selection path.
+  function shortcutSectionHtml(label, items, emptyCopy) {
+    var body = items.length
+      ? items.map(function (it) {
+          return pickerRowHtml(it.name, it.exerciseId || '', it.category, it.equipment, it.customId || '');
+        }).join('')
+      : '<div class="picker-shortcut-empty">' + esc(emptyCopy) + '</div>';
+    return '<div class="picker-shortcut"><h3 class="picker-shortcut-label">' + esc(label) + '</h3>' +
+      body + '</div>';
+  }
+
+  function shortcutsHtml() {
+    if (typeof ExercisePrefs === 'undefined') return '';
+    if (favoriteRows === null || recentUsages === null) return '';   // still loading
+    var cats = prefsCatalogs();
+    var favs = ExercisePrefs.buildFavorites(favoriteRows, cats);
+    var recents = ExercisePrefs.buildRecents(recentUsages, cats);
+    // Nothing to shortcut and nothing to explain — show the plain browse list
+    // rather than two empty boxes on a first-ever picker open.
+    if (!favs.length && !recents.length) return '';
+    return shortcutSectionHtml('Favorites', favs, ExercisePrefs.COPY.favoritesEmpty) +
+           shortcutSectionHtml('Recent', recents, ExercisePrefs.COPY.recentsEmpty);
+  }
+
   // Build one picker row. `id` is the real exercises.id for a global catalog hit
   // (stamped onto the logged set as canonical identity) or '' for a custom / free
   // add. The displayed + saved name is ALWAYS the canonical exercise name (never
@@ -2747,6 +3033,9 @@
         '<div class="picker-item-cat">' + esc(category || '') + (equipment ? ' · ' + esc(equipment) : '') + '</div></div>' +
         '<span class="picker-item-plus"><i data-lucide="plus" style="width:16px;height:16px;" aria-hidden="true"></i></span>' +
       '</button>' +
+      // Phase 4.3.6J: a THIRD distinct control. Favorite toggles preference and
+      // nothing else — it never selects, resolves or swaps.
+      favBtnHtml(name, id, customId) +
       '<button type="button" class="picker-item-info" data-name="' + esc(name) + '" data-id="' + esc(id || '') +
         '" data-custom="' + esc(customId || '') + '"' +
         ' onclick="openDetailForPicker(this.dataset.name, this.dataset.id, this.dataset.custom)"' +
@@ -2816,10 +3105,17 @@
         '</button>';
     }
     document.getElementById('pickerAddRow').innerHTML = addRow;
-    var listHtml = (hint ? '<div class="picker-hint">' + hint + '</div>' : '') + rows.join('');
+    // Phase 4.3.6J — shortcuts sit ABOVE the browse list only while the query is
+    // empty. The moment the user types, search results own the list: two
+    // standing sections pushing real matches below the fold would make the
+    // picker slower, which is the opposite of the point.
+    var shortcuts = (typeof ExercisePrefs !== 'undefined' && ExercisePrefs.shouldShowShortcuts(q))
+      ? shortcutsHtml() : '';
+    var listHtml = shortcuts +
+      (hint ? '<div class="picker-hint">' + hint + '</div>' : '') + rows.join('');
     document.getElementById('pickerList').innerHTML = rows.length
       ? listHtml
-      : (addRow ? '' : (emptyHtml || '<div class="empty-state">No exercises found.</div>'));
+      : (addRow ? shortcuts : (shortcuts || emptyHtml || '<div class="empty-state">No exercises found.</div>'));
     lucide.createIcons();
   }
 
