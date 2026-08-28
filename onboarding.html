@@ -685,53 +685,179 @@
 <script src="supabase.js"></script>
 <script src="program-catalog.js"></script>
 <script src="personalization-core.js"></script>
+<script src="onboarding-draft.js"></script>
 <script>
 
   let currentUser = null;
   let generatedPlan = {};
+  // Phase 4.3.7B. True when the wizard is running WITHOUT a session. Gates
+  // draft persistence and the account-creation copy; it never affects the
+  // calculator or the personalization engine, which behave identically in
+  // both modes.
+  let anonymousMode = false;
   // Phase 4.3.7E. Warmed during the auth gate, in parallel with the profile
   // check, so the reveal costs no wait at step 5. [] means "unavailable" — the
   // reveal hides its training block and onboarding proceeds untouched.
   let programCatalog = [];
   const TOTAL_STEPS = 5;
 
-  // ── Auth gate ──────────────────────────────────────────────
+  // ── Entry state resolution (Phase 4.3.7B) ──────────────────
+  // This page no longer REQUIRES a session. An anonymous visitor may complete
+  // the wizard before an account exists, so "no session" became a supported
+  // state rather than an error — `requireAuth()` (which redirects) is replaced
+  // by `getSession()` plus an explicit, total state resolution.
+  //
+  // Every other page keeps requireAuth() exactly as it was. Onboarding is the
+  // single deliberate exception, and it is the page auth-routing.test.js has
+  // always excluded from the onboarding gate anyway (it cannot gate itself).
   window.addEventListener('load', function() {
     (async () => {
+      let session = null;
       try {
-        const session = await requireAuth();
-        currentUser = session.user;
-
-        // Check if onboarding already completed
-const { data: profile, error: profileError } = await supabaseClient
-  .from('profiles')
-  .select('onboarding_complete')
-  .eq('id', currentUser.id)
-  .single();
-
-if (!profileError && profile && profile.onboarding_complete) {
-  window.location.replace('app.html');
-  return;
-}
-
-        // Warm the Program catalog for the step-5 reveal. Deliberately NOT
-        // awaited on the gate's critical path and never allowed to reject:
-        // a catalog failure must not delay or block onboarding.
-        pcLoadCatalog()
-          .then(function (list) { programCatalog = list || []; })
-          .catch(function () { programCatalog = []; });
-
-        document.getElementById('authGate').style.display = 'none';
-        document.getElementById('onboardingContent').style.display = 'block';
-      } catch (err) {
-        window.location.href = 'auth.html';
+        session = await getSession();
+      } catch (e) {
+        session = null;               // treat an unreadable session as absent
       }
+
+      let profile = null;
+      if (session) {
+        currentUser = session.user;
+        try {
+          const res = await supabaseClient
+            .from('profiles')
+            .select('onboarding_complete')
+            .eq('id', currentUser.id)
+            .single();
+          profile = res.error ? null : res.data;
+        } catch (e) {
+          profile = null;             // a failed read must not strand the user
+        }
+      }
+
+      const draft = OnboardingDraft.loadDraft(Date.now());
+      const state = OnboardingDraft.resolveOnboardingState({
+        hasSession: !!session,
+        onboardingComplete: !!(profile && profile.onboarding_complete),
+        hasDraft: !!draft
+      });
+
+      anonymousMode = !session;
+
+      // A user who has already completed onboarding never re-enters it. When
+      // they are also carrying an anonymous draft — the existing customer who
+      // wandered through the marketing funnel and answered again — the draft
+      // is discarded UNMERGED. Their canonical plan is never touched.
+      if (state === OnboardingDraft.STATE.DISCARD_EXIT) {
+        OnboardingDraft.clearDraft();
+        window.location.replace('app.html');
+        return;
+      }
+      if (state === OnboardingDraft.STATE.COMPLETE_EXIT) {
+        window.location.replace('app.html');
+        return;
+      }
+
+      // Warm the Program catalog for the step-5 reveal. Deliberately NOT
+      // awaited and never allowed to reject: a catalog failure must not delay
+      // or block onboarding. Anonymous reads are served by the Phase 4.3.7B
+      // `programs_read_published_anon` policy.
+      pcLoadCatalog()
+        .then(function (list) { programCatalog = list || []; })
+        .catch(function () { programCatalog = []; });
+
+      // Prefill from the draft where one exists. This is presentation only —
+      // it writes nothing, and it never claims. (Claiming is Phase 4.3.7B2.)
+      if (draft) restoreDraft(draft);
+
+      applyModeCopy();
+
+      document.getElementById('authGate').style.display = 'none';
+      document.getElementById('onboardingContent').style.display = 'block';
     })();
   });
+
+  // ── Anonymous draft persistence ────────────────────────────
+  // Written ONLY while anonymous. An authenticated user's answers go straight
+  // to their profile on save, so a draft for them would be a second copy with
+  // no purpose — exactly the duplicate state this design avoids.
+  function collectAnswers() {
+    var checked = document.querySelector('input[name="ob-gender"]:checked');
+    var feet   = parseFloat(document.getElementById('ob-feet').value);
+    var inches = parseFloat(document.getElementById('ob-inches').value) || 0;
+    var answers = {
+      full_name:           document.getElementById('ob-name').value.trim() || null,
+      gender:              checked ? checked.value : null,
+      age:                 parseFloat(document.getElementById('ob-age').value),
+      weight_lbs:          parseFloat(document.getElementById('ob-weight').value),
+      body_fat_pct:        parseFloat(document.getElementById('ob-bodyfat').value) || null,
+      goal:                document.getElementById('ob-goal').value,
+      timeline:            document.getElementById('ob-timeline').value,
+      goal_weight_lbs:     parseFloat(document.getElementById('ob-goal-weight').value) || null,
+      activity_level:      parseFloat(document.getElementById('ob-steps').value),
+      training_days:       parseFloat(document.getElementById('ob-training').value),
+      training_experience: document.getElementById('ob-experience').value || null,
+      gym_access:          document.getElementById('ob-gym').value || null
+    };
+    // Height is stored the way the profile stores it, so the draft needs no
+    // unit knowledge of its own at claim time.
+    if (isFinite(feet)) answers.height_cm = Math.round(((feet * 12) + inches) * 2.54 * 10) / 10;
+    return answers;
+  }
+
+  function persistDraft(step) {
+    if (!anonymousMode) return;
+    OnboardingDraft.saveDraft(collectAnswers(), step, Date.now());
+  }
+
+  // Restore a draft into the form. Only fields the draft actually carries are
+  // written back, so a partial draft leaves the rest at their defaults.
+  function restoreDraft(draft) {
+    var a = (draft && draft.answers) || {};
+    function setVal(id, v) {
+      if (v === null || v === undefined) return;
+      var el = document.getElementById(id);
+      if (el) el.value = v;
+    }
+    setVal('ob-name', a.full_name);
+    setVal('ob-age', a.age);
+    setVal('ob-weight', a.weight_lbs);
+    setVal('ob-bodyfat', a.body_fat_pct);
+    setVal('ob-goal', a.goal);
+    setVal('ob-timeline', a.timeline);
+    setVal('ob-goal-weight', a.goal_weight_lbs);
+    setVal('ob-steps', a.activity_level);
+    setVal('ob-training', a.training_days);
+    setVal('ob-experience', a.training_experience);
+    setVal('ob-gym', a.gym_access);
+
+    if (a.gender) {
+      var radio = document.getElementById(a.gender === 'female' ? 'obFemale' : 'obMale');
+      if (radio) radio.checked = true;
+    }
+    // Height is stored in cm and entered in ft/in — convert back for display.
+    if (a.height_cm) {
+      var totalIn = Math.round(a.height_cm / 2.54);
+      setVal('ob-feet', Math.floor(totalIn / 12));
+      setVal('ob-inches', totalIn % 12);
+    }
+    if (draft.step > 1) goStep(draft.step);
+  }
+
+  // Anonymous visitors are asked to create an account, not to "go to their
+  // dashboard" — they do not have one yet. Copy states what the button does
+  // and promises nothing about ownership or access.
+  function applyModeCopy() {
+    if (!anonymousMode) return;
+    var btn = document.getElementById('saveBtn');
+    if (btn) btn.textContent = 'Save My Plan →';
+  }
 
   // ── Step navigation ────────────────────────────────────────
   function goStep(n) {
     if (n > 1 && !validateStep(currentStep())) return;
+    // Persist after each accepted transition, so a refresh mid-wizard resumes
+    // where the user was rather than at step 1.
+    persistDraft(n);
     document.querySelectorAll('.step').forEach(function(s) { s.classList.remove('active'); });
     document.getElementById('step' + n).classList.add('active');
     var pct = Math.round((n / TOTAL_STEPS) * 100);
@@ -900,6 +1026,15 @@ if (!profileError && profile && profile.onboarding_complete) {
     goStep(5);
   }
 
+  // ── Anonymous "Save My Plan" ───────────────────────────────
+  // Sends the visitor to create an account. The draft is deliberately left in
+  // place: it is cleared only after a confirmed, persisted completion (4.3.7B2),
+  // so an abandoned or failed signup loses nothing.
+  function goCreateAccount() {
+    persistDraft(5);
+    window.location.href = 'auth.html';
+  }
+
   // ── Phase 4.3.7E · the training half of the value reveal ─────────────────
   // `generatedPlan` already uses the exact public.profiles column names, so it
   // IS the profile the engine reads — the reveal shows precisely what will be
@@ -952,6 +1087,10 @@ if (!profileError && profile && profile.onboarding_complete) {
 
   // ── Save to Supabase and redirect ─────────────────────────
   async function saveAndContinue() {
+    // Anonymous visitors have no profile to save into yet — they go and create
+    // an account first. The authenticated path below is unchanged.
+    if (anonymousMode) { goCreateAccount(); return; }
+
     var btn = document.getElementById('saveBtn');
     var msg = document.getElementById('saveMsg');
     btn.disabled = true;
