@@ -345,6 +345,28 @@
           <option value="6">6 days</option>
         </select>
       </div>
+      <!-- Phase 4.3.7A. Editable here so a user who skipped them at onboarding,
+           or whose situation changed, can still get a fitting recommendation
+           without redoing the wizard. Neither takes any part in the calorie or
+           macro math below — they only feed program recommendation. -->
+      <div class="field-group">
+        <label class="field-label" for="rc-experience">Training Experience <span class="field-optional">(optional)</span></label>
+        <select id="rc-experience">
+          <option value="">Prefer not to say</option>
+          <option value="beginner">Beginner — new or returning</option>
+          <option value="intermediate">Intermediate — training consistently</option>
+          <option value="advanced">Advanced — years of steady training</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="rc-gym">Gym Access <span class="field-optional">(optional)</span></label>
+        <select id="rc-gym">
+          <option value="">Prefer not to say</option>
+          <option value="full_gym">Full gym</option>
+          <option value="home_basic">Home setup — some equipment</option>
+          <option value="bodyweight">Bodyweight only</option>
+        </select>
+      </div>
       <button class="btn-primary" onclick="runRecalc()">Calculate New Targets</button>
     </div>
 
@@ -613,6 +635,10 @@
     document.getElementById('rc-goal').value     = currentProfile.goal || 'fatloss';
     document.getElementById('rc-steps').value    = currentProfile.activity_level || '1.35';
     document.getElementById('rc-training').value = currentProfile.training_days || '3';
+    // '' selects "Prefer not to say" for a NULL, which is the honest reading of
+    // a field the user has never answered.
+    document.getElementById('rc-experience').value = currentProfile.training_experience || '';
+    document.getElementById('rc-gym').value        = currentProfile.gym_access || '';
     backToRecalcForm();
     // Phase 4.3.5C — the shared overlay primitive now owns opening, background
     // scroll locking, Escape, backdrop dismissal, the focus trap AND restoring
@@ -693,6 +719,10 @@
       maintenance_calories: tdee, target_calories: targetCals,
       protein_target: proteinG, fat_target: fatG, carb_target: carbG,
       training_split: getSplitLabel(training),
+      // Phase 4.3.7A. '' clears back to NULL ("prefer not to say"), so a user
+      // can withdraw an answer as well as change it.
+      training_experience: document.getElementById('rc-experience').value || null,
+      gym_access: document.getElementById('rc-gym').value || null,
     };
 
     document.getElementById('recalcForm').style.display = 'none';

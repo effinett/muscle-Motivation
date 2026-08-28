@@ -552,9 +552,35 @@ states — it does not invent a second one.
 
 ---
 
-## PHASE 4.3.7 — PERSONALIZED ONBOARDING & VALUE ENGINE
+## PHASE 4.3.7 — PERSONALIZED ONBOARDING & VALUE ENGINE · **OPEN — PARTIALLY DELIVERED**
 
 **Goal:** understand the user and deliver meaningful personalized value *before* asking for money.
+
+**Status 2026-08-27.** The deterministic value layer shipped: **4.3.7D**, **4.3.7E** and **4.3.7F** are
+complete, and **4.3.7A** is partially delivered (training experience and gym access collected; the
+remaining preference/constraint inputs are not). **4.3.7B, 4.3.7C and 4.3.7G are NOT STARTED.**
+
+Delivered: `personalization-core.js` — one pure, deterministic, DOM-free and network-free engine that
+derives a starting plan from the profile onboarding already collects, with stable reason codes and no
+model call anywhere. It computes **no nutrition math**: calorie and protein targets are read from the
+values `profiles` already stores, so this phase changed no target for any user. Program recommendation
+ranks the canonical 4.3.6 catalog by a strictly lexicographic hierarchy (goal → training-day fit →
+experience → equipment → sort_order → slug), never consults entitlement, and never enrols anyone.
+Surfaced on the onboarding value reveal, Home's Today card (no-program states only) and the Train Today
+pane. `buildPersonalContext` delivers 4.3.7F as a **derived read model over `profiles`**, not a second
+store — no personalization table exists, so goal, targets and training days keep one source of truth and
+a recommendation can never go stale.
+
+**Owner decision (2026-08-27) — recomp policy.** No Program declares `goal = 'recomp'`, but half the
+onboarded users choose it. Recomp resolves deterministically to **muscle first, fat loss second**, and
+emits `goal_partial_match` — never `goal_match` — so no surface claims an exactness the mapping lacks.
+
+**Remaining before this phase can close:** 4.3.7B (onboarding before account creation, including the
+anonymous → authenticated state merge), 4.3.7C (auth/redirect hardening and the PWA `start_url`
+re-proof that 4.3.7B invalidates), 4.3.7G (funnel instrumentation — no analytics sink exists yet), and
+the rest of 4.3.7A's inputs.
+
+**Closing nothing about 4.3.5**, which remains **OPEN — VALIDATION DEBT** on 4.3.5F.
 
 ### 4.3.7A — Tell us about you
 Collect only what has a product use: height · weight · optional body-fat % · goal · activity level ·

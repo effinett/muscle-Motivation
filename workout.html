@@ -426,6 +426,14 @@
       letter-spacing: 1.5px; cursor: pointer; transition: opacity 0.2s;
     }
     .btn-tpl-start:hover { opacity: 0.85; }
+    /* Phase 4.3.7 — the suggestion's action is a LINK (it opens the Program
+       page) rather than a button that starts a session, so it needs the two
+       properties an anchor lacks to match a <button>. min-height brings it to
+       a 44px touch target, which the 16px/9px button shape falls just under. */
+    a.btn-tpl-start {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-height: 44px; text-decoration: none;
+    }
     .btn-icon[disabled] { opacity: 0.3; pointer-events: none; }
 
     /* Save-as-Routine review (CP7) */
@@ -1105,6 +1113,16 @@
         <div id="recommendedWrap"></div>
       </div>
 
+      <!-- 2 · Recommended for you (Phase 4.3.7) — the personalized Program
+           suggestion. Rendered ONLY when section 1 above found nothing to
+           recommend, i.e. the user has no accessible active program with a next
+           session. A suggestion, never an enrolment: its action opens the
+           Program page, where starting it stays the user's explicit choice. -->
+      <div id="suggestedSection" style="display:none;">
+        <div class="section-label">Recommended For You</div>
+        <div id="suggestedWrap"></div>
+      </div>
+
       <!-- 3 · One-Off Workout (build/log without saving a template) -->
       <div class="section-label">One-Off Workout</div>
       <div class="card">
@@ -1465,6 +1483,7 @@
 <script src="schedules.js"></script>
 <script src="program-catalog.js"></script>
 <script src="entitlement-core.js"></script>
+<script src="personalization-core.js"></script>
 <script src="workout-history.js"></script>
 <script src="progression.js"></script>
 <!-- Shared exercise-intelligence core (Phase 4.2.1E) — powers the picker's
@@ -4174,25 +4193,82 @@
   }
 
   async function loadRecommended(profile) {
+    var shown = false;
     try {
-      var slug = profile && profile.active_program;
-      if (!slug || typeof PROGRAM_SCHEDULES === 'undefined' || !PROGRAM_SCHEDULES[slug]) return;
-      // Access guard — active_program could be stale after a refund, and a
-      // membership may grant this Program without a standalone purchase.
-      // Decided by the shared resolver (entitlement-core.js), never by a
-      // page-local status predicate. The purchases read is shared with the
-      // Programs pane (one request per page load) and the catalog load runs in
-      // parallel, a cache hit after the first page of the session.
-      var both = await Promise.all([pcLoadCatalog(), loadPurchaseRowsOnce()]);
-      if (!resolveProgramAccess(pcBySlug(both[0], slug), both[1]).allowed) return;
-      var { data: up } = await supabaseClient.from('user_programs')
-        .select('schedule_keys, current_index')
-        .eq('user_id', currentUser.id).eq('program_slug', slug).maybeSingle();
-      var keys = (up && up.schedule_keys && up.schedule_keys.length)
-        ? up.schedule_keys : getScheduleForDays(slug, profile.training_days);
-      var idx = up ? (up.current_index || 0) : 0;
-      renderRecommended(slug, keys[idx % keys.length]);
+      shown = await renderActiveProgramSession(profile);
     } catch (e) { /* non-fatal — section stays hidden */ }
+
+    // Phase 4.3.7. Only when the user has NO next programmed session to do.
+    // A user mid-program already has a concrete recommendation above; adding a
+    // second one beside it would compete with the action they came here for.
+    if (!shown) await renderSuggestedProgram(profile);
+  }
+
+  // The pre-4.3.7 body, unchanged except that it now REPORTS whether it
+  // rendered instead of returning silently, so the caller can fall back.
+  async function renderActiveProgramSession(profile) {
+    var slug = profile && profile.active_program;
+    if (!slug || typeof PROGRAM_SCHEDULES === 'undefined' || !PROGRAM_SCHEDULES[slug]) return false;
+    // Access guard — active_program could be stale after a refund, and a
+    // membership may grant this Program without a standalone purchase.
+    // Decided by the shared resolver (entitlement-core.js), never by a
+    // page-local status predicate. The purchases read is shared with the
+    // Programs pane (one request per page load) and the catalog load runs in
+    // parallel, a cache hit after the first page of the session.
+    var both = await Promise.all([pcLoadCatalog(), loadPurchaseRowsOnce()]);
+    if (!resolveProgramAccess(pcBySlug(both[0], slug), both[1]).allowed) return false;
+    var { data: up } = await supabaseClient.from('user_programs')
+      .select('schedule_keys, current_index')
+      .eq('user_id', currentUser.id).eq('program_slug', slug).maybeSingle();
+    var keys = (up && up.schedule_keys && up.schedule_keys.length)
+      ? up.schedule_keys : getScheduleForDays(slug, profile.training_days);
+    var idx = up ? (up.current_index || 0) : 0;
+    renderRecommended(slug, keys[idx % keys.length]);
+    return true;
+  }
+
+  // ── Phase 4.3.7 · personalized Program suggestion ──────────────────
+  // Reads the catalog ONLY. It deliberately does not fetch purchases: the
+  // best-fit Program is the best fit whether or not the user owns it today
+  // (recommendation is not access), and skipping that request keeps this
+  // path to at most ONE call — usually zero, since program-catalog.js caches
+  // the catalog in sessionStorage for the whole browser session.
+  async function renderSuggestedProgram(profile) {
+    try {
+      var catalog = pcCached();
+      if (!catalog) catalog = await pcLoadCatalog();
+
+      var plan = Personalization.derivePersonalizedStart(profile, { catalog: catalog });
+      var rec = plan.training.recommendedProgram;
+      // Catalog unavailable, or nothing fits: render nothing at all. Train
+      // behaves exactly as it did before this phase.
+      if (!rec || !rec.pagePath) return;
+
+      // Reasons first (why THIS program), then catalog facts. Both come from
+      // the shared vocabulary, so Train words it exactly as Home and the
+      // onboarding reveal do.
+      var bits = Personalization.describeReasons(plan);
+      if (rec.durationWeeks) bits.push(rec.durationWeeks + ' weeks');
+      if (rec.recommendedDaysPerWeek) {
+        bits.push(rec.recommendedDaysPerWeek + ' days / week');
+      }
+
+      document.getElementById('suggestedWrap').innerHTML =
+        '<div class="tpl-card">' +
+          '<div class="tpl-info">' +
+            '<div class="tpl-name">' + esc(rec.name) + '</div>' +
+            '<div class="tpl-sub">' + esc(bits.join(' · ')) + '</div>' +
+          '</div>' +
+          '<div class="tpl-actions">' +
+            '<a class="btn-tpl-start" href="' + esc(rec.pagePath) + '">View</a>' +
+          '</div>' +
+        '</div>';
+      document.getElementById('suggestedSection').style.display = '';
+    } catch (e) {
+      // Never fatal: Train's own sections are unaffected by a suggestion that
+      // could not be built.
+      console.error('renderSuggestedProgram:', e);
+    }
   }
 
   function renderRecommended(slug, key) {

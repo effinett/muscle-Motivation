@@ -595,6 +595,48 @@ the report to run **before every nutrition release**. Full reference:
   case) and a display over-simplification cleanup (folds in the deferred
   `Cinnamon Cinnamon Granola` de-dup). No production logic changed.
 
+### Shared Personalization Core — `personalization-core.js` (`Live`, Phase 4.3.7 D/E/F)
+
+The deterministic value layer: ONE answer to "what did Muscle Motivation build for
+this person?". Pure — DOM-free, fetch-free, Supabase-free, clock-free,
+randomness-free. Browser global `Personalization` + guarded `module.exports`; load
+AFTER `program-catalog.js`. Consumed by `onboarding.html`, `app.html` (Home),
+`workout.html` (Train).
+
+- **Derived, not generated. No AI anywhere.** `derivePersonalizedStart(profile,
+  {catalog, accessibleSlugs})` → `status · goal · nutrition · training · focus ·
+  warnings · missing`. Every recommendation carries **stable reason codes**;
+  ranking logic never composes a sentence — one static `REASON_COPY` table maps
+  codes to words so every surface explains a decision identically.
+- **It computes NO nutrition math.** BMR/TDEE/macro math lives in
+  `calculator.html` (never modify), `onboarding.html` and `profile.html`'s recalc
+  — and the latter two have already drifted. The engine **reads** the persisted
+  `target_calories` / `protein_target` / `maintenance_calories` and reports them;
+  deficit/surplus restates two stored numbers. Never add a fourth calculator.
+- **Ranking is strictly lexicographic, not weighted:** goal rank → training-day
+  delta (nulls last) → experience fit → equipment fit → `sort_order` → slug. A
+  goal mismatch therefore can never win on schedule alone *structurally*, not by
+  weight tuning. Fits are tri-state (1 / 0 / −1) so unreadable metadata is
+  neutral, never penalised. **`recomp` → muscle, then fat loss**, emitting
+  `goal_partial_match` (owner-approved 2026-08-27; no Program declares `recomp`).
+- **No false precision.** A reason code appears only when its input exists AND
+  actually separated the field — every published Program is `Any Setup`, so
+  equipment claims nothing today. `programs.difficulty` is free display text and
+  is resolved by EXACT normalized lookup; unknown = no signal, never a mismatch.
+  A NULL profile field is always "no signal".
+- **Recommendation ≠ access ≠ enrolment.** Ranking never reads purchases or
+  entitlement; `accessible` is stamped afterwards and is `null` when not
+  evaluated. Nothing here writes, so no `user_programs` row can result from a
+  recommendation. Home/Train pass no `accessibleSlugs` and fetch no purchases.
+- **4.3.7F is a derived READ MODEL, not a store.** `buildPersonalContext` returns
+  the normalized personal-facts shape Coach (4.4.3) will read. **No
+  personalization table exists** — goal, targets and training days keep one
+  source of truth, so a profile edit re-derives the plan and cannot go stale.
+- DB: `profiles.training_experience` + `profiles.gym_access` (Phase 4.3.7A,
+  migration `phase_437a_profile_training_context`) — nullable, CHECKed, no
+  default, no backfill. Covered by `personalization-core.test.js` and
+  `personalization-ui.test.js`.
+
 ### Other shared modules (`Live`)
 
 - `metrics.js`, `snapshot.js` — dashboard snapshot/metrics.
@@ -664,8 +706,11 @@ Browser global `ExerciseIntelligence` + guarded `module.exports` (same pattern a
   dependency, correcting a factual shipped/not-shipped status, and marking an approved exit criterion
   complete are permitted (roadmap §12.3).
 
-**Current position:** phases 4.2, 4.3.1, 4.3.2, 4.3.3, and 4.3.4 are closed.
-**Next phase: 4.3.5 — Mobile UX & App-Shell Hardening.**
+**Current position (2026-08-27):** phases 4.2, 4.3.1–4.3.4 and **4.3.6** are closed.
+**4.3.5 is OPEN — VALIDATION DEBT**, blocked solely on the 4.3.5F instrumented Android
+navigation measurement (external hardware dependency; owner-approved parallel sequencing).
+**4.3.7 is OPEN — PARTIALLY DELIVERED**: 4.3.7D/E/F shipped and 4.3.7A partially; **4.3.7B,
+4.3.7C and 4.3.7G are NOT STARTED**. 4.3.8, 4.4 and 4.5 are NOT STARTED.
 
 Locked commercial critical path:
 `4.3.5 → 4.3.6 → 4.3.7 → 4.3.8 → 4.4 (Coach v1, read-only) → 4.5 (paid-only launch)`,
