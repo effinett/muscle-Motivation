@@ -423,6 +423,13 @@ production-validated (records: `docs/ROADMAP-HISTORY.md`).
 Full Gym Strength Program are retained concepts, not build items for this phase, so they never blocked
 the exit criterion and stay protected under §11.
 
+**Added to 4.3.6K on 2026-08-28, after closure:** **4.3.6K.1 Recommendation catalog coverage**
+(bodyweight / no-equipment · women's full body + glutes · optional women's bodyweight · Glute Builder
+repositioned as the specialization) and **4.3.6K.2 ranked shortlist recommendation UI**. Both were found
+during real use of the 4.3.7 anonymous onboarding flow. Recording protected content against a closed
+phase's protected scope does **not** reopen 4.3.6 — no exit criterion changed, and neither item is
+scheduled here.
+
 **Closing 4.3.6 changes nothing about 4.3.5**, which remains **OPEN — VALIDATION DEBT** on the 4.3.5F
 instrumented Android navigation measurement. The two are independent.
 
@@ -537,6 +544,54 @@ Built here rather than reopening the picker in a later phase.
 ### 4.3.6K — Planned strength programs
 Retain the planned content concepts: **Home Strength Program** and **Full Gym Strength Program**. Names and
 content may evolve; the concepts are protected.
+
+#### 4.3.6K.1 — Recommendation catalog coverage *(protected planned content — recorded 2026-08-28)*
+
+Found during real use of the Phase 4.3.7 anonymous onboarding flow. The recommendation engine is behaving
+correctly; the **catalog cannot express the answer**. These are content commitments, not engine work, and
+they are **protected** under §11.
+
+Planned Programs:
+
+- **Bodyweight / No-Equipment Program.** A user who answers `gym_access = bodyweight` has no true
+  bodyweight Program to receive.
+- **Women's Full Body + Glutes Program.** Balanced full-body training with glute emphasis — the option a
+  woman seeking that outcome should receive.
+- **Women's Bodyweight / No-Equipment Program** — included **only if** we retain the strategy of three
+  distinct women-focused purchasable options. Otherwise it folds into the general bodyweight Program.
+- **Glute Builder (existing)** is repositioned as the **specialization** option rather than the default a
+  broad request lands on.
+
+**Diagnosis, recorded so this is not misread as an engine defect.** The engine never sees gender:
+`personalization-core.js` reads `profiles.gender` only for the 4.3.7F personal-context layer and the
+calorie math, and it takes **no part in ranking** (verified 2026-08-28 — a male and a female profile with
+otherwise identical answers receive the identical recommendation). Two real catalog gaps produce the
+observed behaviour:
+
+1. Every published Program is `equipment_summary = 'Any Setup'`, so equipment discriminates nothing and a
+   bodyweight-only user is ranked exactly as a full-gym user is.
+2. Glute Builder is the only Program whose `difficulty` is `All Levels`, so it wins the experience
+   tie-break for **any** advanced muscle-goal user — regardless of gender.
+
+Both resolve through **content plus catalog metadata**, never through code that branches on gender.
+
+> **BINDING CONSTRAINT.** Ranking must remain driven by actual onboarding inputs and canonical Program
+> metadata. **Do not hard-code gender → Program mappings**, and do not add a gender signal to the ranking
+> tiers. If a Program suits a population, that must be expressed as catalog metadata the engine already
+> reads — not as a branch in the engine.
+
+#### 4.3.6K.2 — Ranked shortlist recommendation UI *(future requirement — recorded 2026-08-28)*
+
+Personalization should eventually present **one primary "Recommended for You" choice** plus a **"See other
+options"** action revealing the ranked remainder — rather than presenting every Program as an equal choice.
+The engine already returns exactly this shape (`training.recommendedProgram` plus a ranked
+`training.alternatives`), so this is a presentation requirement, not new intelligence.
+
+Same binding constraint: the ordering shown must be the engine's own ranking over real inputs and catalog
+metadata. A shortlist must never be curated by hand, by gender, or by commercial preference.
+
+**Not scheduled here.** 4.3.6 is closed; this is recorded against its protected content scope so it cannot
+be lost. Sequencing belongs to whichever phase takes the Program-content work.
 
 ### 4.3.6L — Unified entitlement & access model
 Define **one** access model here, capable of representing membership · standalone program ownership where
@@ -1259,6 +1314,12 @@ Removal requires an explicit line: **`CANCELLED — YYYY-MM-DD — reason`**. Ne
 - meal-context confidence gating
 - voice food logging
 - photo food logging
+- recommendation catalog coverage — bodyweight / no-equipment Program · women's full body + glutes
+  Program · optional women's bodyweight Program · Glute Builder repositioned as the specialization
+  (4.3.6K.1)
+- ranked shortlist recommendation UI — one primary "Recommended for You" plus "See other options",
+  ordered by the engine over real onboarding inputs and catalog metadata, never hand-curated and never
+  branched on gender (4.3.6K.2)
 - AI workout generation
 - AI Coach action tools
 - Coach cost governance
