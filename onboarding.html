@@ -719,19 +719,13 @@
         session = null;               // treat an unreadable session as absent
       }
 
+      // The FULL row, not just the completion flag: the claim's merge rules
+      // (Phase 4.3.7B2) compare against every stored value to guarantee they
+      // never overwrite one. Same single request either way.
       let profile = null;
       if (session) {
         currentUser = session.user;
-        try {
-          const res = await supabaseClient
-            .from('profiles')
-            .select('onboarding_complete')
-            .eq('id', currentUser.id)
-            .single();
-          profile = res.error ? null : res.data;
-        } catch (e) {
-          profile = null;             // a failed read must not strand the user
-        }
+        profile = await getProfile(currentUser.id);   // null on failure, never throws
       }
 
       const draft = OnboardingDraft.loadDraft(Date.now());
@@ -765,9 +759,28 @@
         .then(function (list) { programCatalog = list || []; })
         .catch(function () { programCatalog = []; });
 
-      // Prefill from the draft where one exists. This is presentation only —
-      // it writes nothing, and it never claims. (Claiming is Phase 4.3.7B2.)
+      // Prefill from the draft where one exists. Presentation only — it writes
+      // nothing and never claims by itself.
       if (draft) restoreDraft(draft);
+
+      // CLAIM (Phase 4.3.7B2): a freshly-created account carrying the answers
+      // the visitor gave before signing up. Only attempted when the draft
+      // actually holds every answer the plan needs — a partial draft falls
+      // through to the wizard, already prefilled, and the user finishes it
+      // normally rather than having a half-plan written for them.
+      if (state === OnboardingDraft.STATE.CLAIM && OnboardingDraft.isComplete(draft)) {
+        setGateMessage('Saving your plan...');
+        var claimed = await claimDraft(draft, profile);
+        if (claimed) {
+          window.location.replace('app.html');
+          return;
+        }
+        // Every failure path lands here: the draft is still present, the
+        // profile is not marked complete, and the wizard is shown with the
+        // answers restored so the user can simply press save.
+        setGateMessage('Checking your session...');
+        showSaveMessage('We could not finish saving automatically — press save to try again.');
+      }
 
       applyModeCopy();
 
@@ -840,7 +853,15 @@
       setVal('ob-feet', Math.floor(totalIn / 12));
       setVal('ob-inches', totalIn % 12);
     }
-    if (draft.step > 1) goStep(draft.step);
+    // Resuming AT the results step means re-deriving them: the draft stores
+    // answers only, so the plan must be recomputed before it can be shown —
+    // and `generatedPlan` must be populated, or a later save would submit
+    // nothing. calculateAndShow() does both and lands on step 5 itself.
+    if (draft.step >= TOTAL_STEPS && OnboardingDraft.isComplete(draft)) {
+      calculateAndShow();
+    } else if (draft.step > 1) {
+      goStep(draft.step);
+    }
   }
 
   // Anonymous visitors are asked to create an account, not to "go to their
@@ -850,6 +871,18 @@
     if (!anonymousMode) return;
     var btn = document.getElementById('saveBtn');
     if (btn) btn.textContent = 'Save My Plan →';
+  }
+
+  // The gate's own status line. Reused during a claim so the user sees what is
+  // happening rather than a flash of an already-answered wizard.
+  function setGateMessage(text) {
+    var p = document.querySelector('#authGate p');
+    if (p) p.textContent = text;
+  }
+
+  function showSaveMessage(text) {
+    var msg = document.getElementById('saveMsg');
+    if (msg) msg.textContent = text;
   }
 
   // ── Step navigation ────────────────────────────────────────
@@ -932,9 +965,11 @@
   }
 
   // ── Generate plan from inputs ──────────────────────────────
-  function calculateAndShow() {
-    if (!validateStep(4)) return;
-
+  // Phase 4.3.7B2 extracted the COMPUTATION out of calculateAndShow so the
+  // claim step and the wizard share one implementation. This is a pure move:
+  // every line below is the pre-4.3.7B2 body verbatim, only the rendering was
+  // separated out. No calculation changed.
+  function computePlan() {
     var gender    = document.querySelector('input[name="ob-gender"]:checked').value;
     var age       = parseFloat(document.getElementById('ob-age').value);
     var feet      = parseFloat(document.getElementById('ob-feet').value);
@@ -981,8 +1016,14 @@
         ? diff + ' calorie surplus above maintenance'
         : 'At maintenance';
 
-    // Store for saving
-    generatedPlan = {
+    return {
+      subLabel: subLabel,
+      macros: macros,
+      tdee: tdee,
+      targetCals: targetCals,
+      split: split,
+      goalWeight: goalWeight,
+      plan: {
       full_name:            name || null,
       gender:               gender,
       age:                  age,
@@ -1004,7 +1045,21 @@
       goal_weight_lbs:      goalWeight,
       goal_summary:         getGoalSummary(goal, timeline),
       onboarding_complete:  true
+      }
     };
+  }
+
+  function calculateAndShow() {
+    if (!validateStep(4)) return;
+
+    var computed = computePlan();
+    var tdee       = computed.tdee;
+    var targetCals = computed.targetCals;
+    var macros     = computed.macros;
+    var split      = computed.split;
+    var subLabel   = computed.subLabel;
+    var goalWeight = computed.goalWeight;
+    generatedPlan  = computed.plan;
 
     // Populate results
     document.getElementById('ob-rMaintenance').textContent = tdee.toLocaleString() + ' kcal';
@@ -1024,6 +1079,66 @@
 
     renderTrainingReveal();
     goStep(5);
+  }
+
+  // ── Phase 4.3.7B2 · claiming an anonymous draft ────────────
+  // Folds the answers a visitor gave BEFORE signing up into the profile the
+  // signup trigger has already created. Strictly ordered, and it stops at the
+  // first failure — every abort leaves the draft in place and
+  // `onboarding_complete` false, which the existing route guards turn into
+  // "come back to onboarding", where the retained draft re-claims. Failing
+  // that direction is recoverable; the other direction is not.
+  //
+  // Returns true only when the claim is confirmed persisted.
+  async function claimDraft(draft, existingProfile) {
+    // The plan is RECOMPUTED from the draft's answers by this page's own
+    // calculator — never read from the draft, which stores answers only. The
+    // form was already populated by restoreDraft().
+    var computed;
+    try {
+      computed = computePlan();
+    } catch (e) {
+      console.error('claim: could not compute a plan from the draft', e);
+      return false;
+    }
+
+    // The whitelist + empty-guard live in the shared pure module. `plan`
+    // carries onboarding_complete: true, which mergeIntoProfile drops — the
+    // flag is ordered separately below, never smuggled in with the fields.
+    var patch = OnboardingDraft.mergeIntoProfile(existingProfile, computed.plan);
+
+    // An empty patch means the merge refused (a completed profile) or the
+    // draft carried nothing valid. Either way there is nothing to claim, and
+    // we must NOT then mark onboarding complete.
+    if (!Object.keys(patch).length) {
+      console.warn('claim: nothing claimable; falling back to the wizard');
+      return false;
+    }
+
+    // 1 · fields first.
+    var fields = await upsertProfile(currentUser.id, patch);
+    if (!fields.ok) {
+      console.error('claim: field write failed', fields.error);
+      return false;
+    }
+
+    // 2 · the completion flag only after the data it describes is stored.
+    var flag = await upsertProfile(currentUser.id, { onboarding_complete: true });
+    if (!flag.ok) {
+      console.error('claim: completion flag failed', flag.error);
+      return false;   // fields are saved; the guards will route back to finish
+    }
+
+    // 3 · confirm it actually persisted before anything is discarded.
+    var confirmed = await getProfile(currentUser.id);
+    if (!confirmed || confirmed.onboarding_complete !== true) {
+      console.error('claim: completion could not be confirmed');
+      return false;
+    }
+
+    // 4 · and only now is the draft safe to destroy.
+    OnboardingDraft.clearDraft();
+    return true;
   }
 
   // ── Anonymous "Save My Plan" ───────────────────────────────

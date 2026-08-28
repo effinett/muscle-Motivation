@@ -142,11 +142,24 @@ test('an anonymous user never reaches the authenticated save path', () => {
     /async function saveAndContinue\(\)[\s\S]{0,200}?if \(anonymousMode\) \{ goCreateAccount\(\); return; \}/);
 });
 
-test('the draft is not cleared anywhere in B1', () => {
-  // The ONLY clear in B1 is the completed-user discard. Clearing on a
-  // successful claim arrives with B2, deliberately.
+test('the draft is cleared in exactly two places, both legitimate', () => {
+  // 1 · the completed-user discard (never merged)
+  // 2 · a claim CONFIRMED persisted
+  // Any third clear would risk destroying recoverable answers.
   const clears = OB_CODE.match(/OnboardingDraft\.clearDraft\(\)/g) || [];
-  assert.strictEqual(clears.length, 1, 'exactly one clearDraft — the discard branch');
+  assert.strictEqual(clears.length, 2, 'exactly two clearDraft call sites');
+});
+
+test('the claim clears the draft ONLY after confirming persistence', () => {
+  const claim = OB_CODE.slice(OB_CODE.indexOf('async function claimDraft'),
+    OB_CODE.indexOf('function goCreateAccount'));
+  assert.ok(claim.length > 0, 'claimDraft not found');
+
+  // The read-back must precede the clear, and the clear must be last.
+  const confirmAt = claim.indexOf('confirmed.onboarding_complete !== true');
+  const clearAt = claim.indexOf('OnboardingDraft.clearDraft()');
+  assert.ok(confirmAt > 0, 'the claim must re-read and confirm the flag');
+  assert.ok(clearAt > confirmAt, 'the draft must not be cleared before confirmation');
 });
 
 /* ══ the calculator is untouched ════════════════════════════════════════ */
