@@ -280,6 +280,15 @@ test('the Home recommendation link is keyboard reachable and not a whole-card cl
   assert.ok(!/<section class="mm-hero"[^>]*onclick/.test(HOME));
 });
 
+test('BOTH recommendation links meet the 44px touch target', () => {
+  // Production measurement caught the Home link at 32.5px: padding on an
+  // inline element does not make a touch target, so the height is asserted.
+  assert.ok(/\.mm-hero-rec-link \{[\s\S]*?min-height: 44px/.test(HOME),
+    'the Home recommendation link must declare a 44px min-height');
+  assert.ok(/a\.btn-tpl-start \{[\s\S]*?min-height: 44px/.test(TRAIN),
+    'the Train suggestion link must declare a 44px min-height');
+});
+
 test('the recommendation is not communicated by colour alone', () => {
   // The label carries the meaning in words; the accent is decoration.
   assert.ok(/'Recommended for your goal:'/.test(HOME_CODE));
