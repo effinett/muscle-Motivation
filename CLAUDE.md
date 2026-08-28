@@ -709,8 +709,13 @@ Browser global `ExerciseIntelligence` + guarded `module.exports` (same pattern a
 **Current position (2026-08-27):** phases 4.2, 4.3.1–4.3.4 and **4.3.6** are closed.
 **4.3.5 is OPEN — VALIDATION DEBT**, blocked solely on the 4.3.5F instrumented Android
 navigation measurement (external hardware dependency; owner-approved parallel sequencing).
-**4.3.7 is OPEN — PARTIALLY DELIVERED**: 4.3.7D/E/F shipped and 4.3.7A partially; **4.3.7B,
-4.3.7C and 4.3.7G are NOT STARTED**. 4.3.8, 4.4 and 4.5 are NOT STARTED.
+**4.3.7 is OPEN — PARTIALLY DELIVERED**: 4.3.7B/C/D/E/F shipped and 4.3.7A partially;
+**4.3.7G is NOT STARTED** (no analytics sink exists). Onboarding now runs before account
+creation: an anonymous `sessionStorage` draft (`onboarding-draft.js`, raw answers only, never a
+second source of truth) is claimed into the profile by a strictly ordered, fail-stop sequence —
+fields, then the completion flag, then a read-back, and only then is the draft cleared. A
+completed profile is never merged into, enforced in two independent places. 4.3.8, 4.4 and 4.5
+are NOT STARTED.
 
 Locked commercial critical path:
 `4.3.5 → 4.3.6 → 4.3.7 → 4.3.8 → 4.4 (Coach v1, read-only) → 4.5 (paid-only launch)`,
