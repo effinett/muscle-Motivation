@@ -268,11 +268,14 @@
       font-weight: 600;
       text-decoration: none;
       border-bottom: 1px solid var(--mm-accent);
-      /* A 13px inline link is below the 44px touch target on its own, so it
-         gets vertical padding to reach a comfortable tap area without
-         disturbing the line box. */
-      display: inline-block;
-      padding: 6px 0;
+      /* A 13px inline link is far below a 44px touch target. Measured in
+         production at 32.5px with padding alone, so the height is asserted
+         directly rather than approximated: inline-flex gives the anchor a real
+         box, min-height sets the target, and align-items keeps the text
+         optically centred in it. Verified at 320/390/430px content widths. */
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
     }
     .mm-hero-rec-link:hover { color: var(--mm-accent); }
 
