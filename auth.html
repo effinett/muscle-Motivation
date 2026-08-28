@@ -381,14 +381,37 @@
 <!-- Load CDN first, then supabase.js -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.0/dist/umd/supabase.js" integrity="sha384-3wY11tldQ5+yWqAvmTN4XtQvnjoTva0cV15O/O/O5NTtp0ivVopSzLOzsVXWZse9" crossorigin="anonymous"></script>
 <script src="supabase.js"></script>
+<script src="onboarding-draft.js"></script>
 <script>
+
+  // Phase 4.3.7B2. An existing, already-onboarded user who happened to answer
+  // the anonymous wizard has their draft DISCARDED here, unmerged, before they
+  // reach the dashboard — the same existing-customer rule onboarding.html
+  // applies. Their canonical plan is never touched.
+  //
+  // Only ever called on the completed branch: an INCOMPLETE user is routed to
+  // onboarding.html, where the draft is still needed to claim.
+  function discardStaleDraft() {
+    try {
+      if (typeof OnboardingDraft !== 'undefined') OnboardingDraft.clearDraft();
+    } catch (e) { /* never block a redirect on housekeeping */ }
+  }
+
+  function routeAfterAuth(profile) {
+    if (profile && profile.onboarding_complete) {
+      discardStaleDraft();
+      window.location.href = 'app.html';
+      return;
+    }
+    window.location.href = 'onboarding.html';
+  }
 
   // Redirect if already logged in — runs after all scripts are guaranteed loaded
   window.addEventListener('load', function() {
     getSession().then(async function(session) {
       if (!session) return;
       var profile = await getProfile(session.user.id);
-      window.location.href = (profile && profile.onboarding_complete) ? 'app.html' : 'onboarding.html';
+      routeAfterAuth(profile);
     });
   });
 
@@ -428,7 +451,7 @@
       if (error) throw error;
       var session = await getSession();
       var profile = await getProfile(session.user.id);
-      window.location.href = (profile && profile.onboarding_complete) ? 'app.html' : 'onboarding.html';
+      routeAfterAuth(profile);
     } catch (e) {
       showMsg(e.message || 'Login failed. Please try again.');
     }
