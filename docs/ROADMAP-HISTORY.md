@@ -1366,3 +1366,105 @@ benchmarks unchanged.
 **4.3.5 remains OPEN — VALIDATION DEBT** on the 4.3.5F instrumented Android navigation measurement.
 This phase added one hero line and one Train card and did not restructure the app shell or navigation.
 **4.3.8, 4.4 and 4.5 are NOT STARTED**; no paywall, tutorial, coachmark or LLM path was built.
+
+---
+
+## 2026-08-28 — Phase 4.3.7B/C — onboarding before account creation
+
+**Phase 4.3.7 is NOT closed by this record.** B and C are delivered; **4.3.7G remains NOT STARTED** and
+4.3.7A remains partial by owner deferral. Remaining canonical scope is stated at the end.
+
+**Owner decisions (2026-08-27/28).** `sessionStorage` for the anonymous draft; a narrowly scoped
+anonymous read of published Program metadata; both new-prospect landing CTAs rerouted; the full value
+reveal shown before signup; email confirmation stays OFF; the 4.3.7A remainder deferred.
+
+**Two stop conditions were tested against production rather than reasoned about.**
+`sessionStorage` survival across the real OAuth navigation was measured — a marker written on
+`musclemotivation.fit`, the same tab navigated to `accounts.google.com` and back, value intact after 45s
+across two cross-origin hops and a `location.replace` redirect; probe removed. And the calculator did not
+need duplicating: anonymous mode runs **on `onboarding.html` itself**, calling the same
+`calcBMR`/`calcTDEE`/`calcMacros`/`getSplit`, so nothing was extracted or re-implemented and **no user's
+target math changed** — pinned by verbatim assertions on all thirteen computational expressions.
+
+**B1 (`fd40506`) — draft module, anon policy, anonymous mode with no entry point.** Shipped deliberately
+unreachable so it was production-testable without exposing anyone. `onboarding-draft.js` is pure:
+DOM-free, network-free, clock-free (time injected, never read). It holds **raw answers only** — targets,
+macros, splits and the recommendation are recomputed every time, so a stale derivation cannot exist and
+`profiles` stays the single durable store. `0` and `false` are answers, not emptiness, so
+`training_days = 0` is written rather than swallowed by a falsy check.
+
+Migration `phase_437b_programs_anon_published_read`: a `to anon` SELECT policy on published `programs`.
+The two `authenticated` policies are untouched. **Recorded honestly:** RLS is row-level, so all 16 columns
+of a published row are exposed — all audited as catalog metadata, and `store.html` already publishes the
+names, descriptions and prices. The unpublished exclusion could **not** be empirically proven: no draft
+Program exists to test against, and no production test data was created. Re-verify when publishing
+creates one.
+
+**B2 (`1a0bb8f`) — the claim.** Strictly ordered and fail-stop: fields → completion flag → read-back →
+clear draft. Every abort leaves the draft intact and `onboarding_complete` false, a direction the existing
+guards make recoverable. An empty patch aborts rather than marking complete, so a refused merge can never
+flip the flag on a plan that was never written. `computePlan()` was extracted from `calculateAndShow` as a
+pure move so the wizard and the claim share one derivation.
+
+**Existing users are protected by two independent gates**, both tested in isolation: the resolver routes a
+completed user to `DISCARD_EXIT` and never into a claim, and `mergeIntoProfile` returns an empty patch for
+a completed profile even when called directly.
+
+**Proven live, not argued.** A complete, valid draft was planted on a **completed** production account
+with answers deliberately conflicting on **all eleven fields** (goal `muscle` vs real `recomp`, 6 days vs
+3, age 21 vs 24, female vs male, 120lb vs 211lb, a sentinel name). Navigating to `/onboarding.html`
+redirected to the dashboard, cleared the draft, and **did not write the profile at all** — `updated_at`
+remained `2026-08-12`, predating the entire phase. The same discard via `auth.html` behaved identically.
+Anon REST reads with no session returned 3 published programs and **zero** rows from `program_workouts`,
+`program_routines`, `workout_templates`, `purchases`, `user_programs` and `profiles`.
+
+**B3 (`3d58389`) — entry point.** Hero "Build My Free Fitness Plan" and "Create Free Account" now enter
+anonymous onboarding. All four sign-in CTAs unchanged; `calculator.html` **not modified** and still
+reachable from its own section and the footer. Anonymous onboarding was owner-validated as passing before
+this merged.
+
+**C (`2730808`) — redirect and PWA re-proof.** A redirect model — world = `{session, complete, draft}` —
+walks seven worlds × seven entry points to termination. No cycles; no walk exceeds three redirects; all
+twelve states of the 4.3.7C matrix covered. The model proves the **rules** are loop-free and explicitly
+does not claim to prove the pages implement them.
+
+**No service-worker change was needed and none was made.** `manifest.webmanifest`, `sw.js`,
+`sw-policy.js`, `sw-register.js` and `sw-runtime.js` are byte-identical to `50c83ca` across B1–B3;
+`start_url` stays `/app.html`, `scope` `/`, `CACHE_VERSION` 5. Confirmed live: the only cache is
+`mm-static-v5`, unchanged, and **zero HTML pages are cached anywhere** — the invariant that makes
+`start_url` resolve against a live session rather than a cached shell, and the reason this checkpoint was
+re-assertion rather than redesign.
+
+`onboarding.html` is now the **one** page that does not call `requireAuth()`, because "no session" became
+a supported state; it compensates with an explicit, total state resolution. All seven other protected
+pages still call it and every onboarding guard is still negative.
+
+**Two hollow assertions were found and fixed during the phase**, both of the same class as the 4.3.7
+32.5px tap-target defect — green suite, empty guarantee. A B1 test asserting "exactly one `clearDraft`"
+was updated to the B2 contract rather than weakened, and a static-allowlist test that defaulted to `[]`
+on a missing export (and so would have passed vacuously on a rename) now asserts the list is real first.
+
+**Tests.** `onboarding-draft.test.js` (35), `anonymous-onboarding.test.js` (27),
+`onboarding-claim.test.js` (23), `auth-redirect-hardening.test.js` (21). `npm run verify` exits 0 —
+2412 tests, 2398 pass, 0 fail, 14 skipped.
+
+**No schema beyond the one policy.** No table, no column, no second source of truth. Rollback is
+revert-the-commits plus an optional `drop policy`, and deletes no user data.
+
+**Remaining canonical 4.3.7 scope — the phase stays OPEN:**
+- **4.3.7G — funnel instrumentation. NOT STARTED.** No analytics sink exists anywhere in the repo; it
+  needs its own design and was explicitly excluded from this checkpoint.
+- **4.3.7A — partial.** `profiles.timeline` satisfies rate-of-progress. Preferences, lifestyle
+  constraints and nutrition preferences remain deferred by owner decision until a consumer exists (4.4),
+  and are to be served through the 4.3.7F context layer rather than speculative columns.
+- **iOS standalone-PWA OAuth — unmeasured.** No iOS device in the working environment. It degrades to
+  re-answering rather than data loss, and PWA users already hold accounts, but the state is unobserved
+  and is not claimed.
+- **Mobile viewport validation — tooling-blocked.** `resize_window` is pinned at 1440px, so wrapping and
+  geometry were measured by constraining containers; media queries were not exercised.
+
+**4.3.5 remains OPEN — VALIDATION DEBT** on the instrumented Android navigation measurement. This phase
+added no app-shell or navigation restructuring. **4.3.8, 4.4 and 4.5 are NOT STARTED.**
+
+Also recorded this day against 4.3.6's protected content scope (which does not reopen 4.3.6):
+**4.3.6K.1** recommendation catalog coverage and **4.3.6K.2** ranked shortlist recommendation UI.

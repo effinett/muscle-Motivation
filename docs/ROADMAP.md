@@ -611,9 +611,16 @@ states — it does not invent a second one.
 
 **Goal:** understand the user and deliver meaningful personalized value *before* asking for money.
 
-**Status 2026-08-27.** The deterministic value layer shipped: **4.3.7D**, **4.3.7E** and **4.3.7F** are
-complete, and **4.3.7A** is partially delivered (training experience and gym access collected; the
-remaining preference/constraint inputs are not). **4.3.7B, 4.3.7C and 4.3.7G are NOT STARTED.**
+**Status 2026-08-28.** **4.3.7B, 4.3.7C, 4.3.7D, 4.3.7E and 4.3.7F are complete.** **4.3.7A** is
+partially delivered (training experience and gym access collected; the remaining preference/constraint
+inputs deferred by owner decision — see below). **4.3.7G is NOT STARTED**, so the phase stays OPEN.
+
+Onboarding now runs **before** account creation (`fd40506` → `2730808`, PRs #44–#47). An anonymous
+visitor completes the wizard, sees the full deterministic value reveal, and creates an account to save
+it; the answers are folded into the profile the signup trigger already created, by a strictly ordered,
+fail-stop claim. Existing users are protected by two independent gates and were proven untouched against
+a hostile draft on a real production account. No service-worker or manifest change was required, and the
+`start_url` chain was re-proven loop-free for all twelve states. Full record: `docs/ROADMAP-HISTORY.md`.
 
 Delivered: `personalization-core.js` — one pure, deterministic, DOM-free and network-free engine that
 derives a starting plan from the profile onboarding already collects, with stable reason codes and no
@@ -630,10 +637,19 @@ a recommendation can never go stale.
 onboarded users choose it. Recomp resolves deterministically to **muscle first, fat loss second**, and
 emits `goal_partial_match` — never `goal_match` — so no surface claims an exactness the mapping lacks.
 
-**Remaining before this phase can close:** 4.3.7B (onboarding before account creation, including the
-anonymous → authenticated state merge), 4.3.7C (auth/redirect hardening and the PWA `start_url`
-re-proof that 4.3.7B invalidates), 4.3.7G (funnel instrumentation — no analytics sink exists yet), and
-the rest of 4.3.7A's inputs.
+**Remaining before this phase can close:**
+
+- **4.3.7G — funnel instrumentation. NOT STARTED.** No analytics sink exists anywhere in the repository;
+  it needs its own design and was explicitly held out of the B/C checkpoints.
+- **4.3.7A — remaining inputs, deferred by owner decision (2026-08-27).** `profiles.timeline` already
+  satisfies the roadmap's rate-of-progress concept. Preferences, lifestyle constraints and nutrition
+  preferences stay deferred until a real consumer exists (4.4 Coach is the first), and are to reach that
+  consumer through the 4.3.7F context layer rather than speculative columns.
+- **iOS standalone-PWA OAuth — unmeasured.** No iOS device in the working environment. It degrades to
+  re-answering rather than data loss, and PWA users already hold accounts, but the state is unobserved
+  and must not be claimed.
+- **Mobile viewport validation — tooling-blocked.** `resize_window` is pinned at 1440px, so wrapping and
+  geometry were measured by constraining containers; media queries were not exercised.
 
 **Closing nothing about 4.3.5**, which remains **OPEN — VALIDATION DEBT** on 4.3.5F.
 
