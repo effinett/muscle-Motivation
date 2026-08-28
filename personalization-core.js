@@ -332,6 +332,17 @@
     return false;
   }
 
+  // Is the pick the closest of all candidates to the user's training days?
+  // A null delta is "unknown", which is never better than a known one.
+  function bestOnDayDelta(scored, pick) {
+    if (pick.dayDelta == null) return false;
+    for (var i = 0; i < scored.length; i++) {
+      var d = scored[i].dayDelta;
+      if (d != null && d < pick.dayDelta) return false;
+    }
+    return true;
+  }
+
   function rankPrograms(catalog, ctx) {
     var list = Array.isArray(catalog) ? catalog : [];
     var scored = [];
@@ -357,8 +368,16 @@
     }
 
     if (pick.dayDelta === 0) {
+      // An exact fit is worth stating on its own terms, however the rest of
+      // the field looks.
       reasons.push(REASON.TRAINING_DAYS_MATCH);
-    } else if (pick.dayDelta === 1 && discriminated(scored, pick, 'dayDelta')) {
+    } else if (pick.dayDelta === 1 && discriminated(scored, pick, 'dayDelta')
+               && bestOnDayDelta(scored, pick)) {
+      // "Close to your schedule" may only be claimed when nothing else fits
+      // the schedule BETTER. A goal-matched Program that won despite being
+      // off-by-one, while two alternatives fit exactly, is not a schedule
+      // argument — saying so would credit a signal that actually counted
+      // against it.
       reasons.push(REASON.TRAINING_DAYS_CLOSE);
     }
 

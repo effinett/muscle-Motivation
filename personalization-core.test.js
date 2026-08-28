@@ -99,6 +99,24 @@ test('a mismatched goal never outranks a matched goal on schedule alone', () => 
   assert.ok(!plan.training.reasons.includes(P.REASON.TRAINING_DAYS_MATCH));
 });
 
+test('"close to your schedule" is never claimed when something fits better', () => {
+  // Found replaying real production profiles: a 3-day fat-loss user gets the
+  // 4-day fat-loss Program on GOAL, while both muscle Programs fit 3 days
+  // exactly. Off-by-one is not a schedule argument here — the signal actually
+  // counted AGAINST the winner, so crediting it would be false precision.
+  const plan = derive(completeProfile({ goal: 'fatloss', training_days: 3 }));
+  assert.strictEqual(plan.training.recommendedProgram.recommendedDaysPerWeek, 4);
+  assert.ok(!plan.training.reasons.includes(P.REASON.TRAINING_DAYS_CLOSE));
+});
+
+test('"close to your schedule" IS claimed when nothing fits better', () => {
+  // 5 training days: fat loss is off by one, both muscle Programs by two, so
+  // off-by-one genuinely is the best schedule fit available.
+  const plan = derive(completeProfile({ goal: 'fatloss', training_days: 5 }));
+  assert.strictEqual(slug(plan), 'fat_loss_blueprint');
+  assert.ok(plan.training.reasons.includes(P.REASON.TRAINING_DAYS_CLOSE));
+});
+
 test('recomp resolves to muscle first, and never claims an exact goal match', () => {
   const plan = derive(completeProfile({ goal: 'recomp', training_days: 3 }));
   assert.strictEqual(plan.training.recommendedProgram.goal, 'muscle');
