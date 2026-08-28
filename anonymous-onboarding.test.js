@@ -243,6 +243,33 @@ test('the two new inputs stayed labelled after the mode change', () => {
   assert.match(OB, /<label>Gym Access[\s\S]{0,140}id="ob-gym"/);
 });
 
+/* ══ B3 — the landing entry point ════════════════════════════════════════ */
+
+test('new-prospect CTAs enter anonymous onboarding', () => {
+  const INDEX = read('index.html');
+  // The hero promise — "Build My Free Fitness Plan" — is literally what
+  // anonymous onboarding now delivers, and it ends in a saved plan.
+  assert.match(INDEX, /<a class="btn btn-hero" href="onboarding\.html">Build My Free Fitness Plan<\/a>/);
+  // Unambiguous account-creation intent.
+  assert.match(INDEX, /href="onboarding\.html"[^>]*>Create Free Account<\/a>/);
+});
+
+test('every sign-in path still goes to auth, not onboarding', () => {
+  // Returning users are untouched by the reversal — only new-prospect intent
+  // was rerouted.
+  const anchors = read('index.html')
+    .match(/<a[^>]*>\s*(Login|Member Login|Sign In)\s*<\/a>/g) || [];
+  assert.ok(anchors.length >= 4, 'expected at least the four sign-in CTAs');
+  anchors.forEach((a) => assert.ok(a.includes('auth.html'), 'sign-in CTA rerouted: ' + a));
+});
+
+test('the calculator stays reachable as lead-gen', () => {
+  // It is no longer the new-prospect entry, but it remains live and linked —
+  // from its own "Not Sure Where to Start?" section and the footer.
+  assert.ok((read('index.html').match(/href="calculator\.html"/g) || []).length >= 2,
+    'calculator.html must stay reachable');
+});
+
 test('no emoji entered the onboarding surface', () => {
   const emoji = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
   assert.ok(!emoji.test(OB));
