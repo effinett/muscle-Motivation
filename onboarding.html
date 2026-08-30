@@ -686,6 +686,7 @@
 <script src="program-catalog.js"></script>
 <script src="personalization-core.js"></script>
 <script src="onboarding-draft.js"></script>
+<script src="analytics-core.js"></script>
 <script>
 
   let currentUser = null;
@@ -741,8 +742,15 @@
       // they are also carrying an anonymous draft — the existing customer who
       // wandered through the marketing funnel and answered again — the draft
       // is discarded UNMERGED. Their canonical plan is never touched.
+      //
+      // Phase 4.3.7G: BOTH exits emit NOTHING, deliberately. An already-
+      // onboarded user reaching this page is not an acquisition — counting
+      // them would inflate the top of the funnel with people who were never
+      // in it. The funnel id is cleared alongside the draft so their visit
+      // leaves no trace in the funnel at all.
       if (state === OnboardingDraft.STATE.DISCARD_EXIT) {
         OnboardingDraft.clearDraft();
+        mmFunnelClear();
         window.location.replace('app.html');
         return;
       }
@@ -761,6 +769,16 @@
 
       // Prefill from the draft where one exists. Presentation only — it writes
       // nothing and never claims by itself.
+      // Only a genuine start counts. ANON_RESUME is the same funnel continuing
+      // after a refresh or the OAuth round trip, and the dedupe set would
+      // suppress a second emit anyway — this makes the intent explicit rather
+      // than leaning on that.
+      if (state === OnboardingDraft.STATE.ANON_NEW) {
+        mmFunnel('onboarding_started', 'anonymous');
+      } else if (state === OnboardingDraft.STATE.AUTH_WIZARD) {
+        mmFunnel('onboarding_started', 'authenticated');
+      }
+
       if (draft) restoreDraft(draft);
 
       // CLAIM (Phase 4.3.7B2): a freshly-created account carrying the answers
@@ -769,9 +787,27 @@
       // through to the wizard, already prefilled, and the user finishes it
       // normally rather than having a half-plan written for them.
       if (state === OnboardingDraft.STATE.CLAIM && OnboardingDraft.isComplete(draft)) {
+        // Google signup can only be observed HERE. signInWithOAuth navigates
+        // away from auth.html, so that page never sees the completion, and
+        // threading a marker through `redirectTo` would mean changing a URL
+        // that must stay in Supabase's allow-list — too much risk for a
+        // telemetry nicety.
+        //
+        // So it is attributed by elimination: the email path already emitted
+        // signup_completed:email on auth.html against this same funnel id, and
+        // the dedupe set suppresses a second one. KNOWN IMPRECISION, recorded
+        // rather than hidden — this over-attributes to 'google' in the rare
+        // case of an EXISTING incomplete account signing in with a draft
+        // present. It cannot under-count, and it never mislabels email.
+        mmFunnel('signup_completed', 'google');
+
         setGateMessage('Saving your plan...');
         var claimed = await claimDraft(draft, profile);
         if (claimed) {
+          // Emitted BEFORE the funnel id is cleared, or the event would mint a
+          // fresh id and detach itself from the funnel it completes.
+          mmFunnel('onboarding_completed', 'anonymous_claim');
+          mmFunnelClear();
           window.location.replace('app.html');
           return;
         }
@@ -880,6 +916,23 @@
     if (p) p.textContent = text;
   }
 
+  // ── Phase 4.3.7G · funnel emit, guarded ────────────────────
+  // Every call site goes through these two, so a missing or failed
+  // analytics-core.js can never reach onboarding logic. Neither is ever
+  // awaited: nothing here returns a promise.
+  function mmFunnel(event, detail) {
+    try {
+      if (typeof MMAnalytics !== 'undefined') MMAnalytics.emit(event, detail);
+    } catch (e) { /* onboarding must never fail because telemetry did */ }
+  }
+
+  // The funnel id shares the draft's lifetime and is cleared with it.
+  function mmFunnelClear() {
+    try {
+      if (typeof MMAnalytics !== 'undefined') MMAnalytics.clearFunnel();
+    } catch (e) { /* best-effort */ }
+  }
+
   function showSaveMessage(text) {
     var msg = document.getElementById('saveMsg');
     if (msg) msg.textContent = text;
@@ -891,6 +944,9 @@
     // Persist after each accepted transition, so a refresh mid-wizard resumes
     // where the user was rather than at step 1.
     persistDraft(n);
+    // The step just COMPLETED is the one being left, not the one arrived at.
+    // Steps 1-4 only: reaching step 5 is the reveal, which has its own event.
+    if (n > 1 && n <= TOTAL_STEPS) mmFunnel('onboarding_step_completed', String(n - 1));
     document.querySelectorAll('.step').forEach(function(s) { s.classList.remove('active'); });
     document.getElementById('step' + n).classList.add('active');
     var pct = Math.round((n / TOTAL_STEPS) * 100);
@@ -1099,6 +1155,7 @@
       computed = computePlan();
     } catch (e) {
       console.error('claim: could not compute a plan from the draft', e);
+      mmFunnel('onboarding_claim_failed', 'compute');
       return false;
     }
 
@@ -1112,6 +1169,7 @@
     // we must NOT then mark onboarding complete.
     if (!Object.keys(patch).length) {
       console.warn('claim: nothing claimable; falling back to the wizard');
+      mmFunnel('onboarding_claim_failed', 'merge_empty');
       return false;
     }
 
@@ -1119,6 +1177,7 @@
     var fields = await upsertProfile(currentUser.id, patch);
     if (!fields.ok) {
       console.error('claim: field write failed', fields.error);
+      mmFunnel('onboarding_claim_failed', 'field_write');
       return false;
     }
 
@@ -1126,6 +1185,7 @@
     var flag = await upsertProfile(currentUser.id, { onboarding_complete: true });
     if (!flag.ok) {
       console.error('claim: completion flag failed', flag.error);
+      mmFunnel('onboarding_claim_failed', 'flag_write');
       return false;   // fields are saved; the guards will route back to finish
     }
 
@@ -1133,6 +1193,7 @@
     var confirmed = await getProfile(currentUser.id);
     if (!confirmed || confirmed.onboarding_complete !== true) {
       console.error('claim: completion could not be confirmed');
+      mmFunnel('onboarding_claim_failed', 'confirm');
       return false;
     }
 
@@ -1147,6 +1208,7 @@
   // so an abandoned or failed signup loses nothing.
   function goCreateAccount() {
     persistDraft(5);
+    mmFunnel('save_plan_clicked', null);
     window.location.href = 'auth.html';
   }
 
@@ -1174,6 +1236,11 @@
       block.style.display = 'none';
       return;
     }
+
+    // The reveal was reached. `status` distinguishes a complete plan from one
+    // shown with gaps — the difference between "the funnel works" and "the
+    // funnel completes but delivers less than it should".
+    mmFunnel('personalized_plan_viewed', plan.status);
 
     var rec = plan.training.recommendedProgram;
     if (!rec) { block.style.display = 'none'; return; }
@@ -1215,6 +1282,8 @@
     try {
       var res = await upsertProfile(currentUser.id, generatedPlan);
       if (!res.ok) throw (res.error || new Error('Save failed'));
+      mmFunnel('onboarding_completed', 'authenticated_wizard');
+      mmFunnelClear();
       msg.textContent = 'Saved! Redirecting to your dashboard...';
       // Use replace() so onboarding is removed from history — prevents Back button re-submission.
       setTimeout(function() { window.location.replace('app.html'); }, 1000);

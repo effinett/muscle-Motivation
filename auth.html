@@ -382,6 +382,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.0/dist/umd/supabase.js" integrity="sha384-3wY11tldQ5+yWqAvmTN4XtQvnjoTva0cV15O/O/O5NTtp0ivVopSzLOzsVXWZse9" crossorigin="anonymous"></script>
 <script src="supabase.js"></script>
 <script src="onboarding-draft.js"></script>
+<script src="analytics-core.js"></script>
 <script>
 
   // Phase 4.3.7B2. An existing, already-onboarded user who happened to answer
@@ -395,6 +396,19 @@
     try {
       if (typeof OnboardingDraft !== 'undefined') OnboardingDraft.clearDraft();
     } catch (e) { /* never block a redirect on housekeeping */ }
+    // Phase 4.3.7G: the funnel id goes with the draft. A completed user
+    // arriving here was never in the acquisition funnel, so nothing is
+    // emitted — the visit leaves no trace in it at all.
+    try {
+      if (typeof MMAnalytics !== 'undefined') MMAnalytics.clearFunnel();
+    } catch (e) { /* best-effort */ }
+  }
+
+  // Phase 4.3.7G. Guarded so a failed analytics-core.js can never break auth.
+  function mmFunnel(event, detail) {
+    try {
+      if (typeof MMAnalytics !== 'undefined') MMAnalytics.emit(event, detail);
+    } catch (e) { /* auth must never fail because telemetry did */ }
   }
 
   function routeAfterAuth(profile) {
@@ -549,6 +563,7 @@
       // user is already authenticated. Send them straight into onboarding instead of
       // telling them to check an email that is never sent.
       if (data && data.session) {
+        mmFunnel('signup_completed', 'email');
         window.location.href = 'onboarding.html';
         return;
       }

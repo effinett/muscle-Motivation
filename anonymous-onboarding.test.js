@@ -247,11 +247,15 @@ test('the two new inputs stayed labelled after the mode change', () => {
 
 test('new-prospect CTAs enter anonymous onboarding', () => {
   const INDEX = read('index.html');
-  // The hero promise — "Build My Free Fitness Plan" — is literally what
-  // anonymous onboarding now delivers, and it ends in a saved plan.
-  assert.match(INDEX, /<a class="btn btn-hero" href="onboarding\.html">Build My Free Fitness Plan<\/a>/);
+  // Matched on href + label rather than the whole tag, so adding an attribute
+  // (4.3.7G added an onclick) does not break a routing assertion.
+  const hero = INDEX.match(/<a[^>]*class="btn btn-hero"[^>]*>[\s\S]*?<\/a>/);
+  assert.ok(hero && hero[0].includes('href="onboarding.html"'), 'hero CTA must enter onboarding');
+  assert.ok(hero[0].includes('Build My Free Fitness Plan'));
   // Unambiguous account-creation intent.
-  assert.match(INDEX, /href="onboarding\.html"[^>]*>Create Free Account<\/a>/);
+  const create = INDEX.match(/<a[^>]*>\s*Create Free Account\s*<\/a>/);
+  assert.ok(create && create[0].includes('href="onboarding.html"'),
+    'Create Free Account must enter onboarding');
 });
 
 test('every sign-in path still goes to auth, not onboarding', () => {
