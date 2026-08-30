@@ -613,6 +613,10 @@
   <link rel="stylesheet" href="mm-menu.css">
   <link rel="stylesheet" href="safe-area.css">
   <script src="mm-errors.js" defer></script>
+  <!-- Phase 4.3.7G. Not deferred: the landing CTAs are the first thing a
+       visitor can click, and a deferred script may not have parsed by then. It
+       loads no SDK and adds no request of its own. -->
+  <script src="analytics-core.js"></script>
 </head>
 
 <body>
@@ -664,7 +668,8 @@
            delivers what this CTA already promised — and ends in a plan they
            can save. calculator.html is untouched and stays reachable from the
            "Not Sure Where to Start?" section and the footer. -->
-      <a class="btn btn-hero" href="onboarding.html">Build My Free Fitness Plan</a>
+      <a class="btn btn-hero" href="onboarding.html"
+         onclick="mmFunnel('landing_cta_clicked','hero')">Build My Free Fitness Plan</a>
       <a class="btn btn-outline btn-hero" href="auth.html">Member Login</a>
     </div>
 
@@ -727,7 +732,8 @@
     <a class="btn" href="auth.html" style="width:100%;display:block;text-align:center;margin-bottom:12px;">Sign In</a>
     <!-- Phase 4.3.7B3. Unambiguous new-prospect intent: build the plan first,
          create the account to save it. Sign In above is unchanged. -->
-    <a class="btn btn-outline" href="onboarding.html" style="width:100%;display:block;text-align:center;">Create Free Account</a>
+    <a class="btn btn-outline" href="onboarding.html" style="width:100%;display:block;text-align:center;"
+       onclick="mmFunnel('landing_cta_clicked','create_account')">Create Free Account</a>
   </div>
 </section>
 
@@ -790,6 +796,15 @@
 
 <!-- ══ JS ══ -->
 <script>
+  // Phase 4.3.7G. The single funnel call site on this page. Guarded so a
+  // failed or blocked analytics-core.js cannot break a navigation: the CTA is
+  // a plain link and follows its href regardless of what happens here.
+  function mmFunnel(event, detail) {
+    try {
+      if (typeof MMAnalytics !== 'undefined') MMAnalytics.emit(event, detail);
+    } catch (e) { /* a CTA must never fail because telemetry did */ }
+  }
+
   // Mobile menu — owned by mm-menu.js (Phase 4.3.5I). It self-attaches to
   // #menuToggle / #mobileNav and adds viewport-anchored placement, no document
   // jump on open, correct layering above the sticky header, Escape, outside-tap

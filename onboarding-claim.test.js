@@ -48,9 +48,12 @@ test('the claim exists and is ordered: fields → flag → confirm → clear', (
 
 test('every step fails stop — no step proceeds past an error', () => {
   // Three guarded writes/reads, each returning false rather than continuing.
-  assert.match(CLAIM, /if \(!fields\.ok\)[\s\S]{0,120}?return false;/);
-  assert.match(CLAIM, /if \(!flag\.ok\)[\s\S]{0,120}?return false;/);
-  assert.match(CLAIM, /confirmed\.onboarding_complete !== true[\s\S]{0,120}?return false;/);
+  // The window allows a log line and a telemetry emit (4.3.7G) between the
+  // guard and the return — what matters is that the return is inside the
+  // branch, not how many statements precede it.
+  assert.match(CLAIM, /if \(!fields\.ok\) \{[^}]*return false;[^}]*\}/);
+  assert.match(CLAIM, /if \(!flag\.ok\) \{[^}]*return false;[^}]*\}/);
+  assert.match(CLAIM, /confirmed\.onboarding_complete !== true\) \{[^}]*return false;[^}]*\}/);
 });
 
 test('a failed claim never marks onboarding complete', () => {
