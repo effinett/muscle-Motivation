@@ -607,16 +607,29 @@ states — it does not invent a second one.
 
 ---
 
-## PHASE 4.3.7 — PERSONALIZED ONBOARDING & VALUE ENGINE · **READY FOR FINAL CLOSURE REVIEW**
+## PHASE 4.3.7 — PERSONALIZED ONBOARDING & VALUE ENGINE · **CLOSED**
 
 **Goal:** understand the user and deliver meaningful personalized value *before* asking for money.
 
-**Status 2026-08-30.** **All of 4.3.7A–G are delivered or explicitly, owner-ratifiably deferred.**
-B · C · D · E · F · G are complete; **4.3.7A carries a recorded deferral** of three inputs that have no
-consumer (see 4.3.7A below), which does not block the exit criterion.
+**Closed 2026-08-31.** Delivered: onboarding before account creation with a temporary anonymous draft ·
+a strictly ordered, fail-stop claim into the canonical profile · auth/redirect hardening with the PWA
+`start_url` chain re-proven loop-free · a deterministic personalization engine with no model call ·
+the pre-signup value reveal · the 4.3.7F personal-context read model · funnel instrumentation. All
+production-validated (records: `docs/ROADMAP-HISTORY.md`).
 
-**The phase is NOT self-closed.** It is marked READY FOR FINAL CLOSURE REVIEW pending Effi's sign-off
-and the outstanding validation debt below.
+**4.3.7A–G all pass**, with **4.3.7A carrying an owner-ratified deferral** of three enumerated inputs
+that have no consumer (see 4.3.7A below). That deferral is recorded explicitly rather than inferred, and
+does not affect the exit criterion, which speaks of *relevant* questions and a *coherent* plan.
+
+> **EXIT CRITERION MET:** a new person can enter Muscle Motivation, answer relevant questions, create an
+> account, and receive a coherent personalized starting plan.
+
+**Closing 4.3.7 changes nothing about 4.3.5**, which remains **OPEN — VALIDATION DEBT** on the 4.3.5F
+instrumented Android navigation measurement. The two are independent.
+
+**Two validation-debt items are carried forward past closure** (§10.11). Neither is unbuilt scope; both
+are environment-dependent checks that could not be performed here, and both are recorded rather than
+waived.
 
 Onboarding now runs **before** account creation (`fd40506` → `2730808`, PRs #44–#47). An anonymous
 visitor completes the wizard, sees the full deterministic value reveal, and creates an account to save
@@ -640,16 +653,18 @@ a recommendation can never go stale.
 onboarded users choose it. Recomp resolves deterministically to **muscle first, fat loss second**, and
 emits `goal_partial_match` — never `goal_match` — so no surface claims an exactness the mapping lacks.
 
-**Outstanding before closure can be signed off — validation debt, not unbuilt scope:**
+**Carried past closure — validation debt, tracked in §10.11:**
 
-- **iOS standalone-PWA OAuth — UNVERIFIED.** Carried as explicit validation debt by owner decision
-  (2026-08-28), not as a blocker. No iOS device in the working environment. On iOS a standalone PWA can
-  hand OAuth to a separate browser context and return to a different `sessionStorage` area, which would
-  lose the anonymous draft. It degrades to **re-answering, never data loss**, and a PWA user already
-  holds an account so does not enter the anonymous funnel. **One physical-iPhone check closes it.**
-- **Mobile viewport validation — tooling-blocked.** `resize_window` is pinned at 1440px, so wrapping,
-  overflow and tap-target geometry were measured by constraining containers; **media queries were not
-  exercised**. Needs a real device.
+- **iOS standalone-PWA OAuth — UNVERIFIED.** On iOS a standalone PWA can hand OAuth to a separate
+  browser context and return to a different `sessionStorage` area, which would lose the anonymous
+  draft. Degrades to **re-answering, never data loss**, and a PWA user already holds an account so does
+  not enter the anonymous funnel. One physical-iPhone check closes it.
+- **Real responsive media-query validation at 320 / 390 / 430** — UNVERIFIED. Wrapping, overflow and
+  tap-target geometry were measured by constraining containers; the **media queries themselves were
+  never exercised**, because the viewport tool is pinned at 1440px.
+
+**Analytics precision debt (not a closure blocker):** Google signup attribution in 4.3.7G is
+by-elimination and can over-attribute in one rare case. See §10.11.
 
 **Closing nothing about 4.3.5**, which remains **OPEN — VALIDATION DEBT** on 4.3.5F.
 
@@ -1327,6 +1342,46 @@ INSERT/UPDATE/DELETE on `programs`; `TRUNCATE` was deliberately left alone there
 repo-wide privilege change.
 
 ---
+
+## 10.11 Phase 4.3.7 validation debt carried past closure
+
+Phase 4.3.7 closed 2026-08-31 with three items outstanding. **None is unbuilt scope** — the phase's
+exit criterion is met and every checkpoint shipped. Two are environment-dependent checks that could not
+be performed in the working environment; the third is a measurement precision limit. All are recorded
+here rather than waived, on the same principle as §10.8.
+
+**A · iOS standalone-PWA OAuth — UNVERIFIED (validation debt).**
+On iOS a standalone PWA can hand OAuth to a separate browser context and return via the system browser,
+which would be a *different* `sessionStorage` area and would lose the anonymous onboarding draft.
+`sessionStorage` survival across the OAuth round trip **was** measured on desktop Chrome (marker written,
+tab navigated cross-origin to `accounts.google.com` and back, value intact) — the iOS standalone case
+specifically was not, because no iOS device was available.
+
+*Impact if it fails:* the user re-answers the wizard. **Never data loss** — a missing draft falls through
+to the authenticated wizard by design. A PWA user also already holds an account, so does not enter the
+anonymous funnel at all. **One physical-iPhone pass closes this.**
+
+**B · Real responsive media-query validation at 320 / 390 / 430 — UNVERIFIED (validation debt).**
+`resize_window` reports success but the viewport stays pinned at 1440px (`window.outerWidth: 0`), so
+wrapping, horizontal overflow and tap-target geometry were measured by **constraining containers**
+instead. That exercises layout; it does **not** exercise the media queries. Every responsive claim made
+during 4.3.7 is bounded by this and was stated as such at the time.
+
+*Closes with:* a real-device pass at all three widths across the new surfaces — the onboarding wizard and
+step 5 reveal, the Home recommendation line, and the Train suggestion card.
+
+**C · Google signup attribution — analytics precision debt, NOT a closure blocker.**
+4.3.7G attributes `signup_completed:google` **by elimination**: `signInWithOAuth` navigates away before
+`auth.html` can observe completion, and threading a marker through `redirectTo` would mean changing a URL
+that must stay in Supabase's allow-list. It relies on the dedupe set to suppress the event when the email
+path already fired.
+
+*Known error mode:* over-attributes to `google` when an **existing incomplete** account signs in with a
+draft present. It **cannot under-count**, and **never mislabels email**. This affects a funnel dimension,
+not product behaviour, correctness or user data.
+
+*Closes with:* a `redirectTo` change plus the matching Supabase allow-list update — deliberately not done
+inside 4.3.7, because changing an auth redirect for a telemetry nicety is a poor risk trade.
 
 # 11. PROTECTED FUTURE COMMITMENTS
 

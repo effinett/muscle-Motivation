@@ -1558,3 +1558,93 @@ is pinned at 1440px.
 **4.3.5 remains OPEN — VALIDATION DEBT.** **4.3.8, 4.4 and 4.5 are NOT STARTED** — no Coach, paywall,
 Stripe or subscription analytics were added. **4.3.6K.1/K.2 remain recorded, unscheduled Program
 content.**
+
+---
+
+## 2026-08-31 — Phase 4.3.7 CLOSED — Personalized Onboarding & Value Engine
+
+**Documentation-only closure.** All implementation and production validation were completed before this
+record; nothing was built, migrated or changed to close the phase.
+
+| Field | Value |
+|---|---|
+| **Closed** | 2026-08-31 |
+| **Status** | COMPLETE — with validation debt carried forward (§10.11) |
+| **Closing SHA** | `f564795` — *docs(roadmap): record Phase 4.3.7G and ratify the 4.3.7A deferral* (PR #51) |
+| **Span** | 2026-08-27 (`989ab89`, 4.3.7D/E/F) → 2026-08-31 |
+| **PRs** | #42, #43, #44, #45, #46, #47, #48, #49, #50, #51 |
+
+**Major shipped scope**
+
+- **4.3.7D/E/F — deterministic value engine** (`989ab89`, `50c83ca`). `personalization-core.js`: pure,
+  DOM-free, network-free, clock-free, **no model call anywhere**. It computes **no nutrition math** —
+  targets are read from what `profiles` already stores, so no user's targets changed. Ranking is
+  strictly lexicographic (goal → training-day fit → experience → equipment → sort_order → slug), so "a
+  goal mismatch cannot win on schedule alone" is structural rather than weight-tuned. Reason codes fire
+  only when the input exists **and discriminated**. 4.3.7F shipped as a **derived read model over
+  `profiles`**, not a second store.
+- **4.3.7B — onboarding before account creation** (`fd40506`, `1a0bb8f`, `3d58389`). A temporary,
+  versioned, TTL'd `sessionStorage` draft holding **raw answers only**, claimed into the profile the
+  signup trigger already created by a strictly ordered, fail-stop sequence: fields → completion flag →
+  read-back → clear draft. Every abort leaves the draft intact and `onboarding_complete` false, a
+  direction the existing route guards make recoverable.
+- **4.3.7C — auth/redirect hardening** (`2730808`). Seven worlds × seven entry points walked to
+  termination; all twelve states of the proof matrix covered; no cycles; no walk over three redirects.
+  **No service-worker or manifest change was required or made.**
+- **4.3.7G — funnel instrumentation** (`342ae70`, `9ae1144`). Eight events through `analytics-core.js`
+  into an append-only, **write-only** `funnel_events` table carrying **no user id and no profile data**.
+- **4.3.7A — partial, owner-ratified.** Height · weight · body-fat % · goal · activity level · training
+  days · **experience** · **gym access** collected; *rate of progress* already satisfied by
+  `profiles.timeline`.
+
+**Deferred-out scope**
+
+- **4.3.7A: training preferences · lifestyle constraints · nutrition preferences.** Owner-ratified
+  2026-08-30. They have **no current consumer**, and collecting them would violate 4.3.7A's own
+  governing clause — *"Collect only what has a product use"*. **Not cancelled:** when 4.4 Coach needs
+  them, the minimum model is one nullable `jsonb` column surfaced through the 4.3.7F context layer, not
+  three speculative typed columns. Recorded explicitly in `docs/ROADMAP.md` so a later reader cannot
+  mistake PARTIAL for COMPLETE.
+
+**Exit-criterion result**
+
+> *A new person can enter Muscle Motivation, answer relevant questions, create an account, and receive a
+> coherent personalized starting plan.* — **MET.** Owner-validated in production: anonymous onboarding
+> passes end to end, and the personalized reveal precedes account creation.
+
+**Evidence that closure rests on**
+
+- A hostile draft conflicting on **all eleven fields** was planted on a **completed** production account;
+  the profile was **not written at all** (`updated_at` unchanged, predating the phase) and the draft was
+  discarded unmerged. The same via `auth.html`.
+- The engine replayed over **all 12 real production profiles**: zero crashes, **zero target drift** —
+  every calorie and protein value byte-identical to what is stored.
+- Anon reads return the 3 published Programs and **zero rows** from every protected table.
+- `funnel_events` proven **write-only from a real browser**: `SELECT` returns 0 rows even for its own
+  just-written row; `PATCH`/`DELETE` return 204 having affected nothing, confirmed by re-reading the row.
+- A completed user reaching onboarding writes **zero funnel rows**.
+
+**Carried past closure — see §10.11**
+
+- **iOS standalone-PWA OAuth — UNVERIFIED.** Degrades to re-answering, never data loss. One
+  physical-iPhone pass closes it.
+- **Real responsive media-query validation at 320 / 390 / 430 — UNVERIFIED.** Viewport tooling pinned at
+  1440px; layout was measured by constraining containers, which does not exercise media queries.
+- **Google signup attribution — analytics precision debt, not a closure blocker.** By-elimination
+  attribution can over-attribute in one rare case; it cannot under-count and never mislabels email.
+
+**Phase 4.3.5 remains OPEN — VALIDATION DEBT.** Closing 4.3.7 neither closes nor weakens it. The
+outstanding **4.3.5F instrumented Android navigation measurement** is an independent hardware-access
+dependency (§10.8), and the measurement-integrity condition continues to bind later work. 4.3.7 added
+one hero line, one Train card and one onboarding mode; it did not restructure the app shell or
+navigation.
+
+**Phase 4.3.8 has NOT started.** **4.4 and 4.5 have NOT started** — no tour, coachmarks, Coach, paywall,
+Stripe or subscription analytics were added. **4.3.6K.1/K.2** remain recorded, unscheduled, protected
+Program content.
+
+**One engineering observation promoted out of this phase.** Four brittle assertions were found and
+repaired across 4.3.7 — tests matching *formatting* rather than the *property*, staying green while
+guaranteeing nothing. They are the same class as the 32.5px Home tap-target defect that shipped in #42
+under a green suite. The recurrence is a pattern in this codebase, not bad luck, and is worth a
+dedicated review pass over older suites.

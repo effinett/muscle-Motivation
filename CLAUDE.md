@@ -735,13 +735,16 @@ Browser global `ExerciseIntelligence` + guarded `module.exports` (same pattern a
   dependency, correcting a factual shipped/not-shipped status, and marking an approved exit criterion
   complete are permitted (roadmap §12.3).
 
-**Current position (2026-08-27):** phases 4.2, 4.3.1–4.3.4 and **4.3.6** are closed.
+**Current position (2026-08-31):** phases 4.2, 4.3.1–4.3.4, **4.3.6** and **4.3.7** are closed.
+**Next phase: 4.3.8 — Interactive First-Run Experience (NOT STARTED).**
 **4.3.5 is OPEN — VALIDATION DEBT**, blocked solely on the 4.3.5F instrumented Android
 navigation measurement (external hardware dependency; owner-approved parallel sequencing).
-**4.3.7 is READY FOR FINAL CLOSURE REVIEW** — A–G all delivered or explicitly deferred, but
-**not self-closed**: it awaits Effi's sign-off plus two validation-debt items (iOS
-standalone-PWA OAuth unverified; mobile media queries unexercised, viewport tool pinned at
-1440px). Onboarding now runs before account creation: an anonymous `sessionStorage` draft
+**4.3.7 is CLOSED (2026-08-31)** — A–G all delivered, with 4.3.7A carrying an owner-ratified
+deferral of three inputs that have no consumer. Three items are carried past closure as debt,
+tracked in `docs/ROADMAP.md` §10.11: iOS standalone-PWA OAuth unverified, real media-query
+validation at 320/390/430 unverified (viewport tool pinned at 1440px), and Google signup
+attribution imprecision (analytics precision debt only). Onboarding now runs before account
+creation: an anonymous `sessionStorage` draft
 (`onboarding-draft.js`, raw answers only, never a second source of truth) is claimed into the
 profile by a strictly ordered, fail-stop sequence — fields, then the completion flag, then a
 read-back, and only then is the draft cleared. A completed profile is never merged into,
