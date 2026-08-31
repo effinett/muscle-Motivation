@@ -607,13 +607,16 @@ states — it does not invent a second one.
 
 ---
 
-## PHASE 4.3.7 — PERSONALIZED ONBOARDING & VALUE ENGINE · **OPEN — PARTIALLY DELIVERED**
+## PHASE 4.3.7 — PERSONALIZED ONBOARDING & VALUE ENGINE · **READY FOR FINAL CLOSURE REVIEW**
 
 **Goal:** understand the user and deliver meaningful personalized value *before* asking for money.
 
-**Status 2026-08-28.** **4.3.7B, 4.3.7C, 4.3.7D, 4.3.7E and 4.3.7F are complete.** **4.3.7A** is
-partially delivered (training experience and gym access collected; the remaining preference/constraint
-inputs deferred by owner decision — see below). **4.3.7G is NOT STARTED**, so the phase stays OPEN.
+**Status 2026-08-30.** **All of 4.3.7A–G are delivered or explicitly, owner-ratifiably deferred.**
+B · C · D · E · F · G are complete; **4.3.7A carries a recorded deferral** of three inputs that have no
+consumer (see 4.3.7A below), which does not block the exit criterion.
+
+**The phase is NOT self-closed.** It is marked READY FOR FINAL CLOSURE REVIEW pending Effi's sign-off
+and the outstanding validation debt below.
 
 Onboarding now runs **before** account creation (`fd40506` → `2730808`, PRs #44–#47). An anonymous
 visitor completes the wizard, sees the full deterministic value reveal, and creates an account to save
@@ -637,19 +640,16 @@ a recommendation can never go stale.
 onboarded users choose it. Recomp resolves deterministically to **muscle first, fat loss second**, and
 emits `goal_partial_match` — never `goal_match` — so no surface claims an exactness the mapping lacks.
 
-**Remaining before this phase can close:**
+**Outstanding before closure can be signed off — validation debt, not unbuilt scope:**
 
-- **4.3.7G — funnel instrumentation. NOT STARTED.** No analytics sink exists anywhere in the repository;
-  it needs its own design and was explicitly held out of the B/C checkpoints.
-- **4.3.7A — remaining inputs, deferred by owner decision (2026-08-27).** `profiles.timeline` already
-  satisfies the roadmap's rate-of-progress concept. Preferences, lifestyle constraints and nutrition
-  preferences stay deferred until a real consumer exists (4.4 Coach is the first), and are to reach that
-  consumer through the 4.3.7F context layer rather than speculative columns.
-- **iOS standalone-PWA OAuth — unmeasured.** No iOS device in the working environment. It degrades to
-  re-answering rather than data loss, and PWA users already hold accounts, but the state is unobserved
-  and must not be claimed.
-- **Mobile viewport validation — tooling-blocked.** `resize_window` is pinned at 1440px, so wrapping and
-  geometry were measured by constraining containers; media queries were not exercised.
+- **iOS standalone-PWA OAuth — UNVERIFIED.** Carried as explicit validation debt by owner decision
+  (2026-08-28), not as a blocker. No iOS device in the working environment. On iOS a standalone PWA can
+  hand OAuth to a separate browser context and return to a different `sessionStorage` area, which would
+  lose the anonymous draft. It degrades to **re-answering, never data loss**, and a PWA user already
+  holds an account so does not enter the anonymous funnel. **One physical-iPhone check closes it.**
+- **Mobile viewport validation — tooling-blocked.** `resize_window` is pinned at 1440px, so wrapping,
+  overflow and tap-target geometry were measured by constraining containers; **media queries were not
+  exercised**. Needs a real device.
 
 **Closing nothing about 4.3.5**, which remains **OPEN — VALIDATION DEBT** on 4.3.5F.
 
@@ -657,6 +657,25 @@ emits `goal_partial_match` — never `goal_match` — so no surface claims an ex
 Collect only what has a product use: height · weight · optional body-fat % · goal · activity level ·
 training days · experience · training preferences · lifestyle constraints · nutrition preferences ·
 intended rate of progress · gym access.
+
+**DEFERRED — 2026-08-30 — owner-ratified.** Three of the enumerated inputs are **not** collected and
+**do not block 4.3.7 closure**: *training preferences*, *lifestyle constraints* and *nutrition
+preferences*.
+
+- **Built:** height · weight · optional body-fat % · goal · activity level · training days ·
+  **experience** · **gym access**.
+- **Already satisfied:** *intended rate of progress* is `profiles.timeline`
+  (`aggressive|steady|relaxed`), collected since before this phase and consumed by the calorie math.
+- **Deferred:** the remaining three have **no current consumer**. Collecting them would violate this
+  section's own governing clause — *"Collect only what has a product use"* — and would lengthen the
+  funnel at precisely the moment 4.3.7B exists to shorten it. They are **not cancelled**: when a
+  consumer exists (**4.4 Coach** is the first), the minimum model is one nullable `jsonb` column
+  shaped by that consumer, surfaced through the **4.3.7F** context layer — not three speculative
+  typed columns.
+
+This deferral is recorded explicitly rather than inferred from silence, so a later reader cannot
+mistake PARTIAL for COMPLETE. The exit criterion below speaks of *relevant* questions and a *coherent*
+plan; both are delivered.
 
 ### 4.3.7B — Onboarding before account creation
 Preferred flow: **Tell us about you → Create account.**
@@ -689,6 +708,34 @@ foundation for — but not identical to — the Personal Knowledge Graph (5.5.9)
 ### 4.3.7G — Funnel event instrumentation
 Emit funnel events **while building the funnel**: onboarding started · step completion · onboarding
 complete · account creation · value reveal viewed. Do not defer instrumentation to 4.5.
+
+**DELIVERED — 2026-08-30** (`342ae70`, `9ae1144`; PRs #49–#50). `analytics-core.js` plus
+`public.funnel_events`. Eight events: the five named above, plus `landing_cta_clicked` (a **4.5.8
+dependency** — that phase reports over "events already instrumented in 4.3.7G / 4.3.8H" and names
+*landing*, which 4.3.8H does not provide), `save_plan_clicked`, and `onboarding_claim_failed` with a
+reason code per fail-stop in the claim.
+
+**A table rather than logs, on evidence.** `api/client-error.js` (4.3.5J) needs no storage, but Vercel
+runtime logs are a ~24-hour window **scoped per deployment** and every push resets the view — verified
+by querying the live production deployment. A funnel is an aggregate over days and across deployments.
+
+**No user id and no profile data, by construction** — the funnel measures counts, not people. Security
+follows `public.leads`: INSERT only to `anon`/`authenticated`, **no SELECT/UPDATE/DELETE policy**, so
+the table is write-only from any browser. The `detail` allowlist is **per event and enforced twice** —
+client for correctness, `WITH CHECK` as the boundary.
+
+**Already-onboarded users are excluded from the funnel entirely**: both onboarding exit paths emit
+nothing and clear the funnel id, so a returning customer cannot inflate acquisition metrics.
+
+**Known imprecision, recorded not hidden:** Google signup is attributed by elimination, because
+`signInWithOAuth` navigates away before `auth.html` can observe completion. It over-attributes to
+`google` when an existing incomplete account signs in with a draft present; it cannot under-count and
+never mislabels email. Precision would require changing `redirectTo` and the Supabase allow-list.
+
+**Not exactly-once.** Dedupe is per funnel id in `sessionStorage`; multiple tabs are separate funnels;
+there are no retries, so a dropped event undercounts.
+
+Retention intent **180 days**, no purge machinery (owner decision 2026-08-28).
 
 > **EXIT CRITERION:** a new person can enter Muscle Motivation, answer relevant questions, create an
 > account, and receive a coherent personalized starting plan.

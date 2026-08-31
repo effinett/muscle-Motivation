@@ -1468,3 +1468,93 @@ added no app-shell or navigation restructuring. **4.3.8, 4.4 and 4.5 are NOT STA
 
 Also recorded this day against 4.3.6's protected content scope (which does not reopen 4.3.6):
 **4.3.6K.1** recommendation catalog coverage and **4.3.6K.2** ranked shortlist recommendation UI.
+
+---
+
+## 2026-08-30 — Phase 4.3.7G — funnel event instrumentation
+
+**Phase 4.3.7 is NOT closed by this record.** All of A–G are now delivered or explicitly deferred, and
+the phase is marked **READY FOR FINAL CLOSURE REVIEW** pending Effi's sign-off and the validation debt
+recorded below. Nothing here self-closes it.
+
+**Owner decisions (2026-08-29).** The eight-event set; an append-only `funnel_events` table; explicit
+ratification of the 4.3.7A deferral; iOS standalone OAuth carried as validation debt; 180-day retention
+intent without purge machinery; `detail` allowlisted **per event** in both client validation and RLS.
+
+**A table rather than logs — decided on evidence.** The obvious move was to copy `api/client-error.js`
+(4.3.5J), which writes one line to stdout and needs no storage at all. It cannot work here: Vercel
+runtime logs are a ~24-hour window **scoped per deployment**, and every push mints a new deployment and
+resets the view — verified by querying the live production deployment, which returned no logs. Grepping
+logs is right for errors, where you look within hours of a break. A funnel is an aggregate over days and
+across deployments. The precedent's privacy discipline still transferred wholesale.
+
+**G1 (`342ae70`) — vocabulary and sink, loaded by nothing.** `analytics-core.js` is pure apart from a
+thin storage/send layer: randomness injected, no clock, no timers, no batching. Migration
+`phase_437g_funnel_events` creates an append-only table carrying an enum event, an opaque ephemeral
+funnel id, a coarse route, ONE categorical detail and a schema version. **There is no `user_id` and no
+profile data by construction** — the funnel measures counts, not people, so identity is unnecessary
+rather than merely scrubbed.
+
+Security follows `public.leads`, this repo's established shape for "anyone may write a narrow validated
+row and nobody may read it back": INSERT only to `anon`/`authenticated`, and **no SELECT, UPDATE or
+DELETE policy**. The `detail` allowlist is **per event and enforced twice** — the client copy for
+correctness, the `WITH CHECK` as the boundary that holds when the client is wrong or bypassed.
+
+**G2 (`9ae1144`) — eight call sites.** `index.html`, `onboarding.html`, `auth.html` only; no protected
+page instrumented, `calculator.html` untouched. Every call site goes through a guarded `mmFunnel()`,
+nothing is awaited, `emit` returns a boolean rather than a promise a caller could await, and **no emit
+is spliced between the claim's field write and its confirmation** — the B2 ordering is the safety
+property and telemetry stays out of it. Completion is emitted BEFORE the funnel id is cleared, or the
+event would mint a fresh id and detach from the funnel it completes.
+
+**Already-onboarded users are excluded from the funnel entirely.** Both onboarding exit paths emit
+nothing and clear the funnel id, so a returning customer cannot inflate acquisition metrics. Sign-in is
+never counted as signup, and a resume is not a start.
+
+**G3 — production validation.** Exercised against the live table, then cleaned up:
+
+- one real event through the shipped path landed correctly (`route=landing`, `detail=hero`,
+  `schema_version=1`); three invalid emits were refused **client-side** and never became requests
+- from a **real browser** with the publishable key: `SELECT` returned **0 rows** (including for its own
+  just-written row), `INSERT` of an invented event was rejected `401` with the RLS message, and `PATCH`
+  and `DELETE` returned 204 having affected nothing — confirmed by re-reading the row, whose `detail`
+  was still `hero` and not `tampered`, and which still existed
+- dedupe verified live: a repeat was suppressed, a different detail on the same event was allowed, and
+  step events deduped per step
+- **a completed user carrying a draft and a funnel id wrote ZERO rows** and had draft, funnel id and
+  dedupe set all cleared
+- the four synthetic probe rows were deleted afterwards, leaving the table empty so real funnel data is
+  not polluted from day one
+
+**Known imprecision, recorded rather than hidden.** Google signup is attributed by elimination:
+`signInWithOAuth` navigates away before `auth.html` can observe completion, and threading a marker
+through `redirectTo` would mean changing a URL that must stay in Supabase's allow-list. It
+over-attributes to `google` when an existing incomplete account signs in with a draft present; it cannot
+under-count and never mislabels email. **This is not exactly-once analytics** — dedupe is per funnel id
+in `sessionStorage`, multiple tabs are separate funnels, and there are no retries, so a dropped event
+undercounts.
+
+**4.3.7A deferral ratified.** Three enumerated inputs — training preferences, lifestyle constraints,
+nutrition preferences — are not collected and do not block closure. *Intended rate of progress* was
+already satisfied by `profiles.timeline`. The three deferred have no consumer, and collecting them would
+violate 4.3.7A's own governing clause, "Collect only what has a product use". Recorded explicitly in
+`docs/ROADMAP.md` so a later reader cannot mistake PARTIAL for COMPLETE; when 4.4 Coach needs them the
+minimum model is one nullable `jsonb` column surfaced through the 4.3.7F context layer.
+
+**Tests.** `analytics-core.test.js` (24), `funnel-wiring.test.js` (21). `npm run verify` exits 0 —
+2457 tests, 2443 pass, 0 fail, 14 skipped.
+
+**Four brittle assertions were repaired across this phase family**, all the same class as the earlier
+32.5px tap-target defect — a green suite guaranteeing nothing. Two in B/C, and two more here: a
+landing-CTA test that matched a whole anchor tag and broke when an attribute was added, and a claim
+fail-stop test whose 120-character window a new log line overflowed. Each was fixed to assert the
+property rather than the formatting. The recurrence is worth noting as a pattern in this codebase, not
+as bad luck.
+
+**Outstanding validation debt (not unbuilt scope):** iOS standalone-PWA OAuth is unverified — one
+physical-iPhone check closes it; and mobile media queries were not exercised because the viewport tool
+is pinned at 1440px.
+
+**4.3.5 remains OPEN — VALIDATION DEBT.** **4.3.8, 4.4 and 4.5 are NOT STARTED** — no Coach, paywall,
+Stripe or subscription analytics were added. **4.3.6K.1/K.2 remain recorded, unscheduled Program
+content.**
