@@ -637,6 +637,35 @@ AFTER `program-catalog.js`. Consumed by `onboarding.html`, `app.html` (Home),
   default, no backfill. Covered by `personalization-core.test.js` and
   `personalization-ui.test.js`.
 
+### Funnel Instrumentation — `analytics-core.js` (`Live`, Phase 4.3.7G)
+
+The **only** analytics in the product, and deliberately not a platform. It answers one
+question — of everyone who starts onboarding, how many finish — and must not grow into
+general product analytics. Browser global `MMAnalytics`; loaded by `index.html`,
+`onboarding.html` and `auth.html` ONLY.
+
+- **No user id, no profile data, by construction.** An event carries an enum name, an
+  opaque ephemeral `funnel_id`, a coarse route bucket, ONE categorical `detail` and a
+  schema version. `emit(event, detail)` takes no other parameter, so profile data cannot
+  be passed even by accident.
+- **`public.funnel_events` is append-only and WRITE-ONLY from any browser** — INSERT
+  policy only for `anon`/`authenticated`, and **no SELECT/UPDATE/DELETE policy at all**
+  (the `public.leads` pattern). Reads happen via the service role, never in-browser.
+- **The `detail` allowlist is per-event and enforced TWICE**: `FUNNEL_EVENTS` in the
+  client for correctness, and the policy's `WITH CHECK` as the boundary. **Adding an
+  event means changing both** — they must agree or rows are silently rejected.
+- **It can never break the product.** Nothing awaits `emit`, every path swallows its own
+  failure, and `emit` returns a boolean rather than a promise a caller could await.
+- **An already-onboarded user emits NOTHING** and has their funnel id cleared, so a
+  returning customer cannot inflate acquisition metrics. Sign-in is never a signup; a
+  resume is never a start.
+- **Not exactly-once, and does not pretend to be.** Dedupe is per funnel id in
+  `sessionStorage`; multiple tabs are separate funnels; no retries, so a dropped event
+  undercounts. Google signup is attributed by elimination (OAuth navigates away before
+  `auth.html` can observe it) and can over-attribute in one rare case.
+- Retention intent 180 days, no purge machinery. Covered by `analytics-core.test.js` and
+  `funnel-wiring.test.js`.
+
 ### Other shared modules (`Live`)
 
 - `metrics.js`, `snapshot.js` — dashboard snapshot/metrics.
@@ -709,13 +738,17 @@ Browser global `ExerciseIntelligence` + guarded `module.exports` (same pattern a
 **Current position (2026-08-27):** phases 4.2, 4.3.1–4.3.4 and **4.3.6** are closed.
 **4.3.5 is OPEN — VALIDATION DEBT**, blocked solely on the 4.3.5F instrumented Android
 navigation measurement (external hardware dependency; owner-approved parallel sequencing).
-**4.3.7 is OPEN — PARTIALLY DELIVERED**: 4.3.7B/C/D/E/F shipped and 4.3.7A partially;
-**4.3.7G is NOT STARTED** (no analytics sink exists). Onboarding now runs before account
-creation: an anonymous `sessionStorage` draft (`onboarding-draft.js`, raw answers only, never a
-second source of truth) is claimed into the profile by a strictly ordered, fail-stop sequence —
-fields, then the completion flag, then a read-back, and only then is the draft cleared. A
-completed profile is never merged into, enforced in two independent places. 4.3.8, 4.4 and 4.5
-are NOT STARTED.
+**4.3.7 is READY FOR FINAL CLOSURE REVIEW** — A–G all delivered or explicitly deferred, but
+**not self-closed**: it awaits Effi's sign-off plus two validation-debt items (iOS
+standalone-PWA OAuth unverified; mobile media queries unexercised, viewport tool pinned at
+1440px). Onboarding now runs before account creation: an anonymous `sessionStorage` draft
+(`onboarding-draft.js`, raw answers only, never a second source of truth) is claimed into the
+profile by a strictly ordered, fail-stop sequence — fields, then the completion flag, then a
+read-back, and only then is the draft cleared. A completed profile is never merged into,
+enforced in two independent places. Funnel telemetry (`analytics-core.js` +
+`public.funnel_events`, Phase 4.3.7G) is append-only, write-only from any browser, carries **no
+user id and no profile data**, and emits **nothing** for an already-onboarded user. 4.3.8, 4.4
+and 4.5 are NOT STARTED.
 
 Locked commercial critical path:
 `4.3.5 → 4.3.6 → 4.3.7 → 4.3.8 → 4.4 (Coach v1, read-only) → 4.5 (paid-only launch)`,
