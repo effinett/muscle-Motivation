@@ -589,11 +589,15 @@ the report to run **before every nutrition release**. Full reference:
   are authoritative in `nutrition-evaluation/README.md` — not restated here.
   Approved-milestone timeline: `nutrition-evaluation/HISTORY.md` (append-only,
   never written by CI).
-- **Phase 4.2.9 baseline (SHA 47b9736):** 237 cases, overall 99.6% (228/229),
-  false-confidence 5% (1/20). Documented open items → a confidence-hardening
-  phase (bare "coffee" auto-resolves to "Coffee cake" — the sole false-confidence
-  case) and a display over-simplification cleanup (folds in the deferred
-  `Cinnamon Cinnamon Granola` de-dup). No production logic changed.
+- **Current baseline (Phase 4.2.10b, SHA `c837e587`):** 288 cases, 286 scored,
+  overall **100%**, **false-confidence 0%** (0/31), clarification P/R 100%,
+  portion/meal/parsing/display 100%, 2 informational. Benchmarks: food 116/116
+  scored (5 live-tier skipped), exercise 188/188. The 4.2.9 figures (`47b9736` —
+  99.6%, false-confidence 5%, the bare "coffee" case) are **superseded**.
+- **A passing baseline proves correctness on the cases the corpus contains, not
+  breadth of real-world coverage** — and `/api/ai-food-parse` free-text → items
+  is **out of eval scope** entirely (non-deterministic model). Pre-launch breadth
+  is certified separately and blockingly by roadmap **4.5.17**.
 
 ### Shared Personalization Core — `personalization-core.js` (`Live`, Phase 4.3.7 D/E/F)
 
@@ -735,10 +739,13 @@ Browser global `ExerciseIntelligence` + guarded `module.exports` (same pattern a
   dependency, correcting a factual shipped/not-shipped status, and marking an approved exit criterion
   complete are permitted (roadmap §12.3).
 
-**Current position (2026-08-31):** phases 4.2, 4.3.1–4.3.4, **4.3.6** and **4.3.7** are closed.
-**Next phase: 4.3.8 — Interactive First-Run Experience (NOT STARTED).**
-**4.3.5 is OPEN — VALIDATION DEBT**, blocked solely on the 4.3.5F instrumented Android
-navigation measurement (external hardware dependency; owner-approved parallel sequencing).
+**Current position (2026-09-02):** phases 4.2, 4.3.1–4.3.4, **4.3.6** and **4.3.7** are closed.
+**Next phase: 4.4 — Personal AI Coach v1, Read-Only (NOT STARTED).**
+**4.3.5 is OPEN — VALIDATION DEBT**, including the 4.3.5F instrumented Android navigation
+measurement and any unresolved 4.3.5-owned acceptance criterion identified in `docs/ROADMAP.md`
+§10.13 — **including VD-C Android PWA install validation unless demonstrably satisfied**. Its
+validation debt may run in parallel with 4.4, 4.3.9-L, 4.5-I and 4.3.8 (owner-approved 2026-09-02);
+that parallelism neither closes nor weakens the phase.
 **4.3.7 is CLOSED (2026-08-31)** — A–G all delivered, with 4.3.7A carrying an owner-ratified
 deferral of three inputs that have no consumer. Three items are carried past closure as debt,
 tracked in `docs/ROADMAP.md` §10.11: iOS standalone-PWA OAuth unverified, real media-query
@@ -750,13 +757,19 @@ profile by a strictly ordered, fail-stop sequence — fields, then the completio
 read-back, and only then is the draft cleared. A completed profile is never merged into,
 enforced in two independent places. Funnel telemetry (`analytics-core.js` +
 `public.funnel_events`, Phase 4.3.7G) is append-only, write-only from any browser, carries **no
-user id and no profile data**, and emits **nothing** for an already-onboarded user. 4.3.8, 4.4
+user id and no profile data**, and emits **nothing** for an already-onboarded user. 4.3.8, 4.3.9, 4.4
 and 4.5 are NOT STARTED.
 
-Locked commercial critical path:
-`4.3.5 → 4.3.6 → 4.3.7 → 4.3.8 → 4.4 (Coach v1, read-only) → 4.5 (paid-only launch)`,
-then `4.6 Notifications → 4.7 Coach Action Tools → 4.8 Training Engine 2.0 → 4.9 Personalization →
-5.0 Mobile Interaction Polish → 5.1 Smart Training 2.0`.
+**Locked commercial critical path (reordered 2026-09-02, owner-approved):**
+`4.4 (Coach v1, read-only) → 4.5-I (pre-activation build & certification, flags OFF) →
+4.3.8 (first-run) → 4.5-A (paid-only activation)`,
+then `4.6 → 4.7 → 4.8 → 4.9 → 4.3.9-X → 5.0 → 5.1`.
+
+Running in **parallel and gated**: **4.3.9-L Recommendation Catalog Coverage** and **validation-debt
+closure VD-A…VD-F**. **Phase numbers are stable identities — execution order lives in roadmap §13**,
+so a number is a name, not a position. Binding gates G1–G6 are in roadmap §4, validation gates in
+§10.13, and the reasons 4.3.8 moved are in `docs/ROADMAP-HISTORY.md` (2026-09-02). **Read those
+before planning any phase; do not re-derive the order from this file.**
 
 The shared-intelligence sequencing principle still holds and is why the roadmap is ordered as it is:
 
@@ -1055,8 +1068,9 @@ Small calorie surplus · Progressive overload · High protein · Consistent trai
 - **Food-logging surfaces (`Live` and `Planned`):**
   - **Text (AI Quick Log)** — `Live`. Natural-language text → `/api/ai-food-parse` → shared core → USDA resolution → user confirmation.
   - **Manual search / barcode / saved meals / favorites / recents** — `Live`, all through `food-core.js`.
-  - **Voice** — `Planned` (roadmap 5.4.7). Speech → shared core; user confirms.
-  - **Photo** — `Planned` (Phase 4.9). AI estimates cal/protein/carb/fat; **all estimates labeled as estimates and confirmed before saving.**
+  - **Dictated text** — `Live`, with **no app-side voice code**: the OS keyboard microphone produces text that enters Quick Log like any typed description. **We own interpretation of the text; Apple and Android own transcription.** Do not build a microphone, audio recorder, browser Speech API integration, or server-side transcription pre-launch.
+  - **Voice (dedicated in-app surface)** — `Planned` (roadmap 5.4.7, post-launch). Speech → shared core; user confirms. Distinct from roadmap 7.0 voice Coach.
+  - **Photo** — `Planned` (roadmap 5.4.8). AI estimates cal/protein/carb/fat; **all estimates labeled as estimates and confirmed before saving.**
 
 ### USDA integration (`Live`)
 `/api/usda-search`, `/api/usda-food`, `/api/usda-barcode` proxy USDA with the key held server-side.
