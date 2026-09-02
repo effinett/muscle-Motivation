@@ -1648,3 +1648,114 @@ repaired across 4.3.7 — tests matching *formatting* rather than the *property*
 guaranteeing nothing. They are the same class as the 32.5px Home tap-target defect that shipped in #42
 under a green suite. The recurrence is a pattern in this codebase, not bad luck, and is worth a
 dedicated review pass over older suites.
+
+---
+
+## 2026-09-02 — Roadmap optimization — pre-launch critical path reordered
+
+**Decision record, not a phase closure.** No phase closed, opened, or changed status. No code, schema,
+migration, production data, or Program content changed. Documentation-only, from base SHA `95b6477`,
+approved by Effi on 2026-09-02.
+
+### What changed
+
+| Before | After |
+|---|---|
+| `4.3.5 → 4.3.6 → 4.3.7 → 4.3.8 → 4.4 → 4.5` | `4.4 → 4.5-I → 4.3.8 → 4.5-A` |
+
+1. **4.3.8 moved** from first to last-before-activation.
+2. **4.5 split** into **4.5-I** (builds and proves the whole monetization and customer-entry system with
+   flags off, including enforcement, routing, analytics, owner access, and a migration dry run) and
+   **4.5-A** (execute · enable · smoke · monitor · roll back). No construction occurs in 4.5-A.
+3. **Phase 4.3.9 created** to schedule protected Program content that had no owner — **4.3.9-L**
+   launch-blocking, **4.3.9-X** post-launch.
+4. **4.5.14–4.5.18 added:** legal and policy surfaces · commercial limits review · rollback and kill
+   switch · Food Intelligence launch certification · durable commercial product model.
+5. **Unowned debt assigned:** §10.9 → 4.5.18 · §10.10 → 4.5.12 · new §10.12 (`profiles.tier`) → 4.5.12 ·
+   the brittle-test review promoted out of 4.3.7 → 4.5.12.
+6. **§10.13 created** — validation debt VD-A…VD-F may run parallel to construction but each needs an
+   explicit disposition before 4.5-A can close.
+7. **Gesture dependency corrected** — 5.0.3 and 5.0.4 now open Phase 4.8, since 4.8.12 and 4.9.2 consume
+   them. Phase 5.0 does not move.
+8. **§12.7 added** — a phase preflight must prove a phase should be built now before planning how.
+9. **4.4 scope discipline and a real-user pilot** recorded; Coach stays launch-blocking.
+
+Phase numbers were **not** renumbered — they are stable identities, so every cross-reference in this
+append-only file remains valid.
+
+### Why
+
+4.3.8 was scheduled before the two phases that determine what it teaches. 4.4 adds a persistent Coach
+launcher and activates the reserved fifth `app-nav.js` destination (4.4.8) and makes Coach Insight real
+(4.4.10); 4.5-I creates the final entitlement, trial, paywall, routing and analytics model. First-run's
+anchors, eligibility, routing and copy all depend on both.
+
+### Rework prevented
+
+| Move | Prevented |
+|---|---|
+| 4.3.8 after 4.5-I | A second version of the first-run experience — nav anchors invalidated by 4.4.8, the Home step by 4.4.10, and eligibility, routing, copy and analytics by 4.5.3/4.5.5/4.5.7 |
+| 4.5 split | Legal and marketing content blocking engineering; enforcement unable to be proven without committing to a launch date |
+| 4.3.9 scheduled | Charging for a personalization product whose catalog cannot answer a question onboarding asks; two protected commitments expiring unowned |
+| §10.9 → 4.5.18 | Discovering mid-content-phase that a new Program cannot be sold without a schema migration |
+| 5.0.3/5.0.4 into 4.8 | A private gesture-conflict/accessibility implementation in 4.8.12 that 4.9.2 or the later shared interaction layer would otherwise duplicate or absorb. 4.8.12 still owns long-press reorder and 5.0.1 still owns swipe; only conflict arbitration and accessible alternatives are shared |
+| 4.5.17 added | Mistaking correctness on a known corpus for real-world coverage |
+
+### Evidence
+
+- All three published Programs are `equipment_summary = 'Any Setup'`, and Glute Builder is the only
+  `All Levels` Program — so equipment discriminates nothing and Glute Builder wins the experience
+  tie-break for any advanced muscle-goal user. The 4.3.6K.1 diagnosis is still live in production.
+- Three coupled hard-coded product lists exist: the `purchases.product` CHECK enum, the per-slug map in
+  `api/create-checkout-session.js`, and per-slug environment variables.
+- `purchases.status` admits `active`, `canceled`, `refunded`, `past_due` only — it **cannot represent
+  `trialing`**, so 4.5.5 needs a schema change.
+- `profiles.tier` has no access-control reader anywhere in the application.
+- `/api/ai-food-parse` free-text → items is out of evaluation scope (`nutrition-evaluation/README.md`), so
+  the headline nutrition feature carries no coverage measurement.
+- Terms of Service, Privacy Policy and a refund/cancellation policy appeared nowhere in the roadmap.
+- `npm run verify` green on `95b6477`: 2457 tests (2443 pass, 0 fail, 14 skipped) · evaluation 288 cases,
+  286 scored, 100%, false-confidence 0% · food benchmark 121 cases, 116 scored, 100% · exercise 188/188.
+
+### Voice
+
+Canonical **5.4.7 Voice Food Logging remains one post-launch capability** and was **not** split. An earlier
+proposal for a pre-launch stage was withdrawn as scope invention: launch-time speech-to-log is already
+served by OS keyboard dictation into the existing Quick Log input, editable before logging. No Muscle
+Motivation microphone, audio recorder, browser Speech API integration or server-side transcription is
+permitted pre-launch. We own interpretation of the text; Apple and Android own transcription. 4.5.17
+certifies dictation-style *text*.
+
+### Factual status corrections (§12.3)
+
+- **5.3.1 / 5.3.2 substantially shipped** — `metrics.js` over `body_fat_logs` and `measurement_logs`,
+  rendered on `weight-history.html`.
+- **5.4.1 / 5.4.2 shipped** — `public.user_food_favorites`; recents derived from logging history.
+- **`CLAUDE.md` §10 evaluation figures refreshed** from the superseded 4.2.9 baseline (`47b9736`) to the
+  committed 4.2.10b baseline (`c837e587`).
+- **`CLAUDE.md` photo-logging reference** corrected from "Phase 4.9" to roadmap **5.4.8**, matching the
+  retired-numbering table in the same document.
+
+### Protected-commitment preservation
+
+All 77 commitments in `docs/ROADMAP.md` §11 were individually audited: **77 of 77 accounted for · 0
+cancelled · 0 silently reassigned.** The unchanged 70 remain exactly where §11 already records them and
+are not restated here. **Seven changed placements:**
+
+| Commitment | From | To | Launch | Reason |
+|---|---|---|---|---|
+| accessible alternatives to every gesture | 5.0.4 | 5.0.4, delivered in the 4.8 opening checkpoint | Post | 4.8.12 and 4.9.2 consume it |
+| exercise reordering | 4.8.12 | 4.8.12, consuming that checkpoint | Post | Owner must precede consumers |
+| restaurant / composed-dish coverage | 5.4.11 | Split — common launch language to 4.5.17; comprehensive stays 5.4.11 | Pre / Post | Common cases cannot wait for the long tail |
+| recommendation catalog coverage (4.3.6K.1) | unscheduled | **4.3.9-L** | **Pre** | Protected but unowned; closes a live coverage failure |
+| ranked shortlist UI (4.3.6K.2) | unscheduled | **4.3.9F** | **Pre** | Needs the same catalog, and must precede 4.3.8 copy lock |
+| pre-launch security review | 4.5.12 | 4.5.12, now also owning §10.10, §10.12 and the brittle-test review | **Pre** | Three unscheduled items needed one dedicated checkpoint |
+| Home Strength / Full Gym Strength | 4.3.6K, unscheduled | **4.3.9X.1 / 4.3.9X.2** | Post | Catalog depth, not a coverage failure |
+
+### Unchanged
+
+**4.3.5 remains OPEN — VALIDATION DEBT**, including 4.3.5F and any unresolved 4.3.5-owned acceptance
+criterion tracked in §10.13 — including VD-C unless its canonical acceptance criteria are demonstrably
+satisfied. This decision neither closes nor weakens 4.3.5. 4.3.6 and 4.3.7 remain closed, and all 4.3.7
+functionality is untouched. **4.3.8, 4.3.9, 4.4 and 4.5 have NOT started** — no tour, Coach, paywall,
+Stripe, Program content or voice work was built.

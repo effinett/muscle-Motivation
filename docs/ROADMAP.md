@@ -31,8 +31,9 @@ The core product loop:
 
 The commercial critical path:
 
-> **Stability → Training/content architecture → Personalization → Product education →
-> Personal AI Coach → Paid launch → AI actions → Product expansion**
+> **Stability → Training/content architecture → Personalization → Personal AI Coach →
+> Monetization build & certification → Product education → Paid activation → AI actions →
+> Product expansion**
 
 Every major feature should do at least one of: help the user take a useful action, improve the system's
 understanding of the user, improve the accuracy of future guidance, or reduce friction toward sustainable
@@ -109,8 +110,14 @@ The nutrition evaluation suite (`nutrition-evaluation/`) is a **measurement inst
 Preserve: versioned evaluation cases · baseline governance · direction-aware metric comparison ·
 append-only history · no automatic baseline rewriting · **CI never runs `--update-baseline`**.
 
-Never change ranking, parsing, retrieval, or confidence logic merely to make a case pass. A lower honest
-baseline beats an artificially perfect one. The authoritative policy is `nutrition-evaluation/README.md`.
+**Never tune behaviour merely to memorize benchmark cases** — but the operative word is *merely*. When an
+evaluation exposes a real generalized defect, **fixing it is correct and expected**, subject to
+root-cause analysis, new regression coverage, and a rerun of both the frozen set and an untouched blind
+holdout. Reject changes that improve named cases while degrading holdout or aggregate behaviour. Always
+report the real score.
+
+Where a phase defines numeric thresholds (**4.5.17**), failing them blocks rather than informs. The
+authoritative policy remains `nutrition-evaluation/README.md`.
 
 ## 2.4 Nutrition data integrity
 
@@ -193,13 +200,45 @@ later phases must not break them.
 
 **The macro-order below is locked and must not be changed without Effi's explicit approval:**
 
-> **4.3.5 → 4.3.6 → 4.3.7 → 4.3.8 → 4.4 → 4.5**
+> **4.4 → 4.5-I → 4.3.8 → 4.5-A**
 
-**Sequencing exception in force (owner-approved 2026-08-20):** the order above is unchanged, but 4.3.5 and
-4.3.6 may currently **overlap** — 4.3.6 implementation may begin while 4.3.5 stays open on its outstanding
-4.3.5F Android measurement. This is a one-off exception for a single external hardware dependency; it is
-not a general licence to start phases early, and no other pair of phases may overlap without separate
-approval.
+**Phase numbers are stable identities; execution order lives in §13.** A number is never reused or
+reassigned, so cross-references stay valid when the order changes. Read a number as a name, not a
+position.
+
+**Parallel pre-launch tracks, gated and never optional:** **4.3.9-L** Recommendation Catalog Coverage
+(§4.3.9) · **validation-debt closure** VD-A through VD-F (§10.13).
+
+**Reordered 2026-09-02 (owner-approved).** 4.3.8 moved from first to last-before-activation because 4.4
+and 4.5-I both change what it must teach — 4.4 the navigation and Home surfaces, 4.5-I the entitlement,
+trial, routing and analytics model. **No product construction follows 4.3.8**; 4.5-A executes and
+observes an already-built system. Full rationale: `docs/ROADMAP-HISTORY.md`, 2026-09-02.
+
+### Binding gates
+
+| Gate | Condition | Must precede |
+|---|---|---|
+| **G1** | 4.3.9-L catalog metadata and launch content final | 4.4 Coach recommendation/explanation validation |
+| **G2** | 4.3.9-L complete, including 4.3.9F "See other options" | 4.3.8 copy and walkthrough lock |
+| **G3** | 4.3.9-L complete | 4.5-A activation |
+| **G4** | 4.5-I complete, every activation flag proven OFF→ON in a safe non-public environment | 4.3.8 begins |
+| **G5** | 4.5.17 Food Intelligence certification passed against its locked thresholds | 4.5-A activation |
+| **G6** | Every validation-debt item (§10.13) carries its required explicit disposition | 4.5-A activation |
+
+Because G1 gates Coach validation, **4.3.9-L is an early-4.4 dependency, not an independent track with
+slack to the end of the path.** It may start immediately and must not drift.
+
+**Sequencing exceptions in force.**
+
+- *(2026-08-20)* 4.3.5 and 4.3.6 may overlap — 4.3.6 began while 4.3.5 stayed open on its 4.3.5F Android
+  measurement. That exception covered 4.3.6 only.
+- *(2026-09-02)* **4.3.5 remains OPEN, and its unresolved validation debt may run in parallel with 4.4,
+  4.3.9-L, 4.5-I and 4.3.8.** This neither closes nor weakens 4.3.5: every requirement stands, and every
+  activation-relevant item receives its §10.13 disposition before 4.5-A. **This is a specific
+  validation-debt exception, not general permission to overlap unrelated phases.**
+- *(2026-09-02)* 4.3.9-L may overlap 4.4 and 4.5-I, bound by G1–G3.
+
+No other pair of phases may overlap without separate approval, and no exception waives a requirement.
 
 ---
 
@@ -773,7 +812,88 @@ possible, not a slideshow.
   overloading first run.
 - **4.3.8H — Funnel instrumentation.** Tour started · skipped · completed · major step viewed.
 
+**Input-surface constraint (binding).** First-run teaches **Quick Log** as the food-logging path and may
+say the user can type a meal description. It must **not** anchor to, depend on, or promise
+device-controlled interface — the OS keyboard microphone above all — whose availability the device
+decides, not us. It need not enumerate every input method.
+
 > **EXIT CRITERION:** a first-time user understands the core product without external help.
+
+---
+
+## PHASE 4.3.9 — PROGRAM CATALOG WORK
+
+One phase identity, two ordered stages. Schedules the protected 4.3.6K.1 and 4.3.6K.2 content.
+
+### 4.3.9-L — Recommendation Catalog Coverage
+
+**Classification: launch-blocking, parallel content track.** Gated by G1, G2, and G3 (§4).
+
+**Why launch-blocking.** Onboarding asks for `gym_access` and `training_experience`, and the engine cannot
+act on either: every published Program is `equipment_summary = 'Any Setup'`, and Glute Builder is the only
+`All Levels` Program, so it wins the experience tie-break for any advanced muscle-goal user. Asking a
+question and ignoring the answer is not acceptable in a paid personalization product.
+
+- **4.3.9A — Catalog metadata correction.** Correct inaccurate `equipment_summary` and `difficulty` on the
+  existing Programs. **Behaviour-changing, not bookkeeping** — it changes what real users are recommended.
+- **4.3.9B — Bodyweight / No-Equipment Program.**
+- **4.3.9C — Women's Full Body + Glutes Program.**
+- **4.3.9D — Women's Bodyweight / No-Equipment Program.**
+- **4.3.9E — Glute Builder repositioning.** Preserve it as the glute-**specialization**, not the broad
+  default it currently becomes by metadata accident.
+- **4.3.9F — Ranked shortlist / "See other options".** One primary recommendation plus alternatives.
+  Presentation over `personalization-core.js`, which already returns `training.recommendedProgram` plus a
+  ranked `training.alternatives`. **Do not create a second ranking engine.**
+
+**Binding constraints.**
+
+- **Ranking stays driven by real onboarding inputs and canonical Program metadata.** Never hard-code
+  gender → Program mappings; never add a gender-specific ranking branch to force a Program to appear. A
+  Program that suits a population expresses that through catalog metadata the engine already reads.
+- **Production safety.** Never deploy metadata corrections in isolation if that would leave a
+  bodyweight-only user — or any valid onboarding combination — with no appropriate result. Corrections
+  ship with either catalog coverage or a proven, truthful "no suitable Program yet" behaviour. **Never
+  silently fall back to an incompatible Program.**
+
+> **EXIT CRITERION — both halves required.**
+>
+> **A · Recommendation honesty.** Every valid combination of goal × gym access × experience that
+> onboarding can generate returns either a Program the engine can honestly justify, or an explicit
+> truthful no-fit result — proven across the complete deterministic input space, with no calorie or
+> protein target drift across real profiles.
+>
+> **B · Program-content integrity.** Every new 4.3.9-L Program proves: complete Program metadata ·
+> complete duration and weekly schedule · every required Routine exists · every Routine contains valid
+> canonical exercises · no missing or broken exercise references · valid prescribed sets, reps, rest and
+> notes · equipment requirements matching the Program promise · **Bodyweight / No-Equipment contains no
+> exercise requiring unavailable equipment without a valid substitution** · day counts matching the
+> advertised schedule · working Program open, back and start-session flows · a user can begin and
+> complete a representative workout · entitlement behaviour unchanged · **no automatic enrolment** · no
+> source Routine or Program silently mutated · `npm run verify` green.
+>
+> A recommendation the catalog can justify but cannot deliver is not a pass.
+
+### 4.3.9-X — Program Catalog Depth
+
+**Classification: post-launch — conditionally.**
+
+- **4.3.9X.1 — Home Strength Program.**
+- **4.3.9X.2 — Full Gym Strength Program.**
+
+These are intended to **deepen an already-served catalog**, in contrast to 4.3.9-L which closes coverage
+failures. **That premise is not yet proven.** Current Program equipment metadata is known to be inaccurate
+— every published Program claims `Any Setup` — so "a home-equipment or full-gym user is already served"
+cannot be treated as fact until 4.3.9A and the complete input-space replay demonstrate it.
+
+**Conditional deferral (binding).** These two stay at 4.3.9-X **only if** 4.3.9A and the input-space
+replay prove the existing launch Programs honestly serve those gym-access categories. **If either category
+lacks a suitable launch Program, the necessary coverage content is promoted into 4.3.9-L before
+activation.** An explicit no-fit result must never become the normal paid-launch outcome for a common
+supported gym-access category: **"no suitable Program yet" is a safety fallback, not a substitute for
+required launch catalog coverage.**
+
+**4.3.6K.1 and 4.3.6K.2 remain recorded under the closed Phase 4.3.6** (§4.3.6K); only their scheduled
+owner is new — K.1 → 4.3.9-L, K.2 → 4.3.9F. Neither historical record is altered.
 
 ---
 
@@ -790,6 +910,28 @@ plans, routines, or reminders; no scheduling; no silent mutation of any user sta
 
 Write-capable behavior begins in **Phase 4.7**, behind its own safety contract. Do not anticipate 4.7 by
 adding "just one" write tool to 4.4.
+
+### Scope discipline (binding, 2026-09-02)
+
+Coach stays launch-blocking, but **4.4 does not receive a blank cheque because eleven sub-items are
+listed below.** Its preflight (§12.7) must identify the **smallest trustworthy read-only Coach v1** that
+achieves the launch outcome — *a safe Coach that understands the user's real data and gives trustworthy
+next-step guidance without mutating user state* — and rule on: which sub-items are required for launch,
+which reduce, which move post-launch, what cost governance precedes any live AI usage, what evaluation
+makes guidance truthful and safe, and whether the 4.3.7A deferred inputs (training preferences ·
+lifestyle constraints · nutrition preferences) are actually needed, per the deferral ratified on the
+condition that Coach would decide. **If a sub-item moves it gets an exact destination and a reason**
+(§12.3); none is silently deleted.
+
+### Real-user pilot commitment
+
+After 4.3.9-L corrects catalog honesty and **before the Coach v1 UX contract is locked**, run a small
+invitation-only pilot with several real users. It tests onboarding completion · whether the
+recommendation feels appropriate and is understood · starting and completing a workout · Quick Log ·
+Progress · returning a later day · and where confusion, abandonment or loss of trust occur.
+
+**Not a public launch.** No paywall, no 4.3.8 dependency, no unsafe production experiments. **A
+commitment, not a research programme** — no new numbered phase, no research framework.
 
 ### 4.4.1 — Coach conversation foundation
 Authenticated conversations · persistent message history · a conversation storage model (a dedicated
@@ -843,14 +985,48 @@ interpretation · response consistency.
 
 ## PHASE 4.5 — PREMIUM MEMBERSHIP & PAID-ONLY LAUNCH
 
-**Goal:** commercialize only after the premium value is real. Infrastructure and offer surfaces may be
-built earlier behind flags; the consumer paywall activates here.
+**Goal:** commercialize only after the premium value is real.
+
+**One phase number, two ordered stages**, so the entire system can be built and proven without setting a
+launch date, and the activation stage stays narrow enough to reverse.
+
+### 4.5-I — Pre-Activation Build & Certification
+
+**All activation flags remain OFF publicly.** Builds and proves the complete monetization and
+customer-entry system plus every launch certification — security, legal, and Food Intelligence.
+
+Owns **4.5.1 · 4.5.2 · 4.5.3 (built, disabled) · 4.5.4 · 4.5.5 · 4.5.6 · 4.5.7 (design + production-data
+dry run) · 4.5.8 · 4.5.9 · 4.5.10 · 4.5.11 · 4.5.12 · 4.5.14 · 4.5.15 · 4.5.16 · 4.5.17 · 4.5.18.**
+
+> **EXIT CRITERION (4.5-I):** with flags forced ON outside public activation, a test account completes
+> trial → convert → fail → recover → cancel → restore → delete with the correct entitlement at every
+> stage; unentitled access is refused at the server and data boundaries, **not merely hidden by client
+> UI**; the migration dry run produces a reviewed expected result; rollback is rehearsed; legal surfaces
+> are published; and 4.5.17 has passed its locked thresholds.
+
+### 4.5-A — Paid-Only Activation
+
+**Execution only — no product construction.** Execute the approved production migration · enable
+enforcement · activate the paid-only journey (4.5.13) · live smoke validation · reconcile migrated
+accounts · monitor conversion and access · exercise rollback if needed.
+
+Owns **4.5.13** plus execution of the already-built 4.5.3, 4.5.7, 4.5.8, 4.5.9 and 4.5.16. Does not begin
+until 4.3.8 and 4.3.9-L have landed, and **cannot close while any §10.13 disposition is missing.**
+
+> **EXIT CRITERION (4.5-A):** the paid-only journey is live, no unentitled request reaches a protected
+> surface by any route, every pre-existing purchaser and the owner account retain access, the conversion
+> funnel reports end to end, and rollback remains available and rehearsed.
 
 ### 4.5.1 — Subscription-state extension
 Use the entitlement model defined in **4.3.6L**. Explicitly reconcile the existing purchase/subscription
 storage rather than creating a duplicate source of truth for money or access.
 
 Support: trialing · active · grace / past due · cancelled but active through period end · expired.
+
+**Schema change required (recorded 2026-09-02).** The `purchases.status` CHECK currently admits
+`active`, `canceled`, `refunded`, and `past_due` only — it **cannot represent `trialing`**, so 4.5.5 is
+impossible without altering it. `purchases` remains the single source of truth; **do not create a second
+store to hold trial state.** The exact schema is presented for approval at 4.5-I preflight, per 4.5.18.
 
 ### 4.5.2 — Stripe lifecycle + billing recovery
 Checkout · trial · activation · renewal · cancellation · failed payments · past-due handling ·
@@ -906,8 +1082,116 @@ control · admin permissions · AI data flow · PWA privacy contracts · sensiti
 public/private route separation. Prior hardening invariants (CSP/SRI, webhook-only `stripe_customer_id`,
 owner-gated program content) must survive the 4.3.7 auth changes and 4.5.3 enforcement.
 
+**Also owns three previously unscheduled items (2026-09-02):** **§10.10** `TRUNCATE` and default-privilege
+review, repo-wide in one reviewed change · **§10.12** the dead `profiles.tier` column — remove it or
+record why it stays · **the brittle-test review pass** promoted out of 4.3.7, over older suites whose
+assertions match formatting rather than the property under test.
+
 ### 4.5.13 — Paid-only production launch
-Activate mandatory subscription/trial access to the protected consumer application.
+Activate mandatory subscription/trial access to the protected consumer application. **Executed in stage
+4.5-A.**
+
+### 4.5.14 — Legal and policy surfaces
+
+Terms of Service · Privacy Policy · a published refund and cancellation policy — treated here as **product
+and commercial launch requirements** for a subscription product storing body-composition and
+health-related information.
+
+**Do not claim that a specific payment processor, law, regulation, or distribution channel automatically
+requires particular wording**; requirements depend on jurisdiction, customer location, business structure,
+processor, and distribution method. **This roadmap text is not legal advice, and roadmap-generated wording
+must never be published as final policy.** Drafts require qualified legal review before publication.
+
+### 4.5.15 — Commercial limits review
+
+Re-judge every cap designed for a free product against paid-member expectations, starting with
+`AI_FOOD_DAILY_LIMIT = 30` parses per user per day. Each cap needs an explicit commercial decision, clear
+behaviour when reached, and support handling. A paying user must not meet a free-tier assumption by
+accident.
+
+### 4.5.16 — Rollback and kill switch
+
+One **rehearsed** reversible switch that disables paid-only enforcement **without deleting** user data,
+purchases, onboarding data, personalization, Programs, Routines, Coach history, or analytics. Rehearsed
+before activation, not designed during an incident.
+
+### 4.5.17 — Food Intelligence launch certification
+
+**Launch-blocking and able to fail.** Failing a locked threshold blocks activation (G5). It certifies
+**breadth of real-world coverage** — a different question from correctness on the existing corpus, which
+already reports full marks on the cases it contains.
+
+**Method.** A versioned **frozen evaluation set** plus an **untouched blind holdout** never used to shape
+a fix. Root-cause classification before any change; principled generalized fixes expected; every fix adds
+regression coverage; rerun both sets; reject case-specific tuning; report real scores. Governance is §2.3
+and binds here.
+
+**Two distinct certification layers. Neither proves the other, and both are activation-blocking.**
+
+**Layer A — deterministic downstream certification.** Fixture the model output, then measure item
+resolution, portions, units, confidence, display, and logging behaviour. Runs in ordinary deterministic
+CI. This measures the pipeline **below** the model.
+
+**Layer B — controlled end-to-end AI-parse certification.** Runs the **actual production-intended model
+and configuration** over a frozen, stratified set of realistic user meal descriptions, and evaluates
+whether the returned structured items faithfully represent the input — **omissions · hallucinated foods ·
+duplicated foods · quantities · units · multi-item separation**. Non-determinism is handled explicitly by
+a **locked model version and settings** plus an approved repeated-run or adjudicated sampling method.
+Record model version, settings, cost, and observed variance. **May run outside ordinary deterministic CI**
+if required; its locked threshold is still activation-blocking.
+
+Without Layer B the segment *user meal description → model-produced structured items* is unmeasured, which
+is the largest untested surface in the nutrition product.
+
+**Required coverage:** common generic foods · branded foods · multi-item meals · ambiguous quantities ·
+common restaurant and composed-meal language · unit and serving edits · realistic dictation-style text
+(informal phrasing, run-on descriptions, number words, homophone and transcription-like errors, missing
+punctuation).
+
+**Metric definitions lock now; corpus size, repetition method, tolerances and numeric thresholds lock at
+4.5-I preflight.**
+
+| Metric | Layer | Definition | Direction |
+|---|---|---|---|
+| Resolution correctness | A | Top-1 acceptable-candidate rate on the frozen set | higher |
+| False-confidence rate | A | Share of confident auto-resolves whose top candidate is wrong | lower |
+| Clarification precision / recall | A | P: of cases asked about, how many needed it. R: of cases needing it, how many were asked | higher |
+| Portion / unit correctness | A | Gram weight within tolerance for the stated quantity and unit, including after a user edit | higher |
+| AI meal-description downstream resolution | A | With the model output **fixtured**, share of items resolving acceptably — measures the pipeline **below** the model | higher |
+| **AI meal-description parse fidelity** | **B** | **Actual model output faithfully represents the user's stated foods, quantities and units without omission or invention** | higher |
+| Dictated-text-to-log resolution | A | Realistic dictation-style text in Quick Log resolves safely through the existing pipeline | higher |
+| Catastrophic nutrition errors | A + B | A confidently logged result diverging beyond an agreed factor on calories or protein, or a confident wrong-species/family resolve | lower — **the safety metric** |
+| Crash / failure rate | A + B | Unhandled exception or unusable state per N cases | lower |
+
+The AI meal-description path is currently **out of eval scope** entirely because the model is
+non-deterministic (`nutrition-evaluation/README.md`). Layer A closes the downstream half by fixturing the
+model's *output*, as `benchmarks/fixtures.js` already does for USDA; **Layer B closes the model half, and
+one does not substitute for the other.** Dictated text is measured through Layer A — **we own
+interpretation of the text; Apple and Android own transcription.**
+
+**Composed dishes.** Comprehensive coverage stays at 5.4.11, but **common launch cases are not excluded
+because the broader phase is later**. When a common case cannot resolve safely the correct outcome is
+clarification or unresolved — never a confident invented match — so such cases score under
+false-confidence and catastrophic error rather than being exempted.
+
+### 4.5.18 — Durable commercial product model
+
+Adding one sellable Program today costs **three coupled edits**: the `purchases.product` CHECK enum, the
+per-slug map in `api/create-checkout-session.js`, and a new per-slug environment variable.
+
+**Locked requirements:** `purchases` stays the authoritative purchase source of truth, written only by the
+Stripe webhook through the service role · `entitlement-core.js` stays the single resolver · **no
+subscriptions table, no grants table** · membership inclusion supported · standalone purchases remain
+independent entitlements surviving a membership lapse (O1, R2) · **Program content can exist without
+becoming sellable** · adding future commercial Programs must not require repeated hard-coded slug edits
+across SQL, code and environment · test/live Stripe environments, price changes, billing intervals and
+future non-Program products all handled safely.
+
+**Implementation is deliberately not locked.** Do not adopt a validation trigger, a
+`programs.stripe_price_id` column, a new table, or any schema before technical preflight; at 4.5-I
+preflight compare the smallest durable alternatives and **present the exact schema for approval before
+any migration.** **§10.9 is reassigned here**, reclassified from "a migration per Program" to one
+structural change made once.
 
 > **EXIT CRITERION:** the full journey works — **Discover → Personalize → Understand → Subscribe → Use →
 > Receive ongoing Coach value.**
@@ -916,7 +1200,12 @@ Activate mandatory subscription/trial access to the protected consumer applicati
 
 # 5. POST-LAUNCH APPROVED ORDER
 
-> **4.6 → 4.7 → 4.8 → 4.9 → 5.0 → 5.1**
+> **4.6 → 4.7 → 4.8 → 4.9 → 4.3.9-X → 5.0 → 5.1**
+
+**Phase 5.0 does not move.** Only the shared gesture requirements currently numbered **5.0.3**
+(gesture-conflict prevention) and **5.0.4** (accessible alternatives) are delivered earlier, as the opening
+checkpoint of 4.8 — because 4.8.12 and 4.9.2 both consume them. 5.0.1, 5.0.2, and 5.0.5 stay at Phase 5.0.
+See §9.5.
 
 ---
 
@@ -935,7 +1224,8 @@ Action Tools (4.7.8), Adaptive AI (5.5) — invokes this system. **Never create 
 - **4.6.5 — Workout reminders.**
 - **4.6.6 — Nutrition / logging reminders.**
 - **4.6.7 — Weigh-in / progress reminders.**
-- **4.6.8 — Habit reminders** (coordinates with 5.2 when habits ship).
+- **4.6.8 — Habit reminders.** This phase delivers **reminder capability only**; habit-specific reminders
+  ship with Habits at **5.2**, because habits do not exist until then.
 - **4.6.9 — Quiet hours.**
 - **4.6.10 — Anti-spam / frequency discipline.** The right message, to the right person, at the right time.
 
@@ -984,6 +1274,14 @@ Undo applies wherever technically appropriate. **Material actions must never sil
 disconnected second workout system.
 
 This phase precedes advanced progression (5.1) because it changes what a set fundamentally *is*.
+
+### Opening checkpoint — shared gesture foundation (2026-09-02)
+
+**4.8 begins by delivering 5.0.3 (gesture-conflict prevention) and 5.0.4 (accessible alternatives)**
+before 4.8.12 reordering, by extending the shipped `mm-sheet.js` gesture classifier rather than building
+a second arbitration layer beside it. **Both 4.8.12 and 4.9.2 consume this foundation.** Swipe (5.0.1) and
+long-press reorder (4.8.12) stay distinct patterns with distinct owners; only conflict arbitration and the
+accessible alternative are shared. Same rule as 4.3.5C — build the primitive before its consumers.
 
 - **4.8.1 — Timed exercise model.** Reps · duration · distance where useful · rest · interval duration.
 - **4.8.2 — Work timer.** Countdown/count-up · pause · resume · skip · reset where appropriate.
@@ -1096,8 +1394,10 @@ exercise-metadata seam). Audit and extend; do not recreate.
 
 ## PHASE 5.3 — BODY COMPOSITION & VISUAL PROGRESS
 
-- **5.3.1 — Weight history expansion.**
-- **5.3.2 — Body-fat logging.**
+- **5.3.1 — Weight history expansion.** *(Status corrected 2026-09-02: substantially shipped. Extend, do
+  not rebuild.)*
+- **5.3.2 — Body-fat logging.** *(Status corrected 2026-09-02: shipped — `metrics.js` over
+  `body_fat_logs` and `measurement_logs`, rendered on `weight-history.html`.)*
 - **5.3.3 — Progress photos.** Secure user storage.
 - **5.3.4 — Comparison UX.** Meaningful comparison over time.
 - **5.3.5 — Coach context.** Coach may use trends but must **not** make unsupported visual
@@ -1105,14 +1405,19 @@ exercise-metadata seam). Audit and extend; do not recreate.
 
 ## PHASE 5.4 — NUTRITION 2.0
 
-- **5.4.1 — Favorites.** · **5.4.2 — Recent foods.**
+- **5.4.1 — Favorites.** · **5.4.2 — Recent foods.** *(Status corrected 2026-09-02: both shipped —
+  favorites in `public.user_food_favorites`, recents derived from logging history. Refinement only.)*
 - **5.4.3 — Saved Meals 2.0** *(full approved scope)*: rename saved meals · edit saved-meal contents · add
   foods · remove foods · change serving sizes · improved organization. Gesture polish arrives via 5.0.
 - **5.4.4 — Rich macro view.** Carbs, fat, and more detail where useful.
 - **5.4.5 — Micronutrient expansion.** Only where source data is reliable and the UX adds real value.
 - **5.4.6 — Meal templates / patterns.**
 - **5.4.7 — Voice food logging.** Speech → the existing shared food-resolution core; user confirms. A new
-  input surface, not new intelligence.
+  input surface, not new intelligence. **Post-launch, and not split into launch and post-launch versions**
+  (2026-09-02). Launch-time speech-to-log is already served by **OS keyboard dictation** into the existing
+  Quick Log input, editable before logging — so **no Muscle Motivation microphone, audio recorder, browser
+  Speech API integration, or server-side transcription may be built pre-launch.** We own interpretation of
+  the text; Apple and Android own transcription. Distinct from **7.0 Voice Coach**.
 - **5.4.8 — Photo food logging.** Photo → vision → food-resolution core → meal reasoning → portion
   intelligence → correction memory → confirmation → log. All estimates labeled as estimates.
 - **5.4.9 — Coach-nutrition integration.** Coach reasons over nutrition data without inventing intake or
@@ -1122,6 +1427,11 @@ exercise-metadata seam). Audit and extend; do not recreate.
 - **5.4.11 — Restaurant / composed-dish coverage.** Improve coverage where the current food database is
   structurally weak — USDA has no generic composed "salad" record, a limitation the evaluation suite
   already measures and records honestly.
+
+  **Boundary with 4.5.17.** *Common* restaurant and composed-meal language is a required 4.5.17 launch
+  coverage stratum and is therefore **pre-launch**; this phase owns the *comprehensive* long tail. Where
+  the database cannot serve a common composed dish, the required launch behaviour is honest clarification
+  or an unresolved result — never a confident invented match.
 - **5.4.12 — Nutrition ranking hardening.** Carry forward the evaluation-discovered low-priority defects:
   word-order ranking sensitivity, yogurt fat-basis presentation ordering, and similar.
 - **5.4.13 — Portion-correction persistence.** Persist useful user portion corrections (needs a migration);
@@ -1270,8 +1580,10 @@ selectors consume them.
 
 **4.8.12** owns the shared long-press **reorder** pattern, consumed by both workout/template builders and
 the active workout. It is a distinct interaction from 5.0.1 swipe actions, but it shares 5.0.3's
-gesture-conflict constraint and 5.0.4's accessible-alternative requirement — reconcile with those owners
-before implementing, so only one touch-gesture layer is built.
+gesture-conflict constraint and 5.0.4's accessible-alternative requirement.
+
+**Resolved 2026-09-02:** those two are delivered as the **opening checkpoint of 4.8** and consumed by both
+4.8.12 and 4.9.2. Phase 5.0 does not move; 5.0.1, 5.0.2 and 5.0.5 remain there. See Phase 4.8.
 
 ---
 
@@ -1323,6 +1635,10 @@ timing only, never the requirement.
 migration**. For 4.3.6 the Program catalog's sellable slugs must remain a subset of that enum; a catalog
 row is not a licence to sell. Altering the CHECK is a stop-condition action requiring explicit approval.
 
+**Reassigned to 4.5.18 on 2026-09-02** and solved once there, not by a migration per Program. **4.3.9
+needs no commercial schema change** — content is authored using the existing `programs.status` and
+`programs.standalone_purchasable` columns, becoming sellable only once 4.5.18 lands.
+
 ## 10.10 `TRUNCATE` granted to `anon` / `authenticated` — **LOW, latent**
 Discovered during Phase 4.3.6 CP1a and verified in CP1b. Every table in the `public` schema grants
 `TRUNCATE` to `anon` and `authenticated` (a Supabase project default — confirmed on `exercises`,
@@ -1340,6 +1656,9 @@ FROM anon, authenticated` and adjust the default privileges, repo-wide and in on
 **Not fixed piecemeal inside feature work.** CP1a set the precedent narrowly by revoking
 INSERT/UPDATE/DELETE on `programs`; `TRUNCATE` was deliberately left alone there to avoid a silent
 repo-wide privilege change.
+
+**Assigned to 4.5.12 on 2026-09-02.** That security/privacy launch review is the dedicated checkpoint this
+entry called for, and previously had no scheduled owner.
 
 ---
 
@@ -1383,6 +1702,36 @@ not product behaviour, correctness or user data.
 *Closes with:* a `redirectTo` change plus the matching Supabase allow-list update — deliberately not done
 inside 4.3.7, because changing an auth redirect for a telemetry nicety is a poor risk trade.
 
+## 10.12 Dead `profiles.tier` column — **LOW, latent**
+
+Recorded 2026-09-02. `profiles.tier` defaults to `'free'` and **no reader performs access control with
+it** — access is resolved solely by `entitlement-core.js` over `purchases`, with RLS beneath. Inert today;
+the risk is a dormant second access concept inviting a future change to consult the wrong source. **Owned
+by 4.5.12**, decided alongside 4.5.3 enforcement rather than in isolation.
+
+## 10.13 Validation debt and activation
+
+Open validation debt **may run parallel to construction and does not block starting 4.4. It does block
+activation.** **4.5-A cannot be recorded complete while any item below lacks an explicit recorded
+disposition** — measured, waived with a named accepted risk, or launch held. "Non-blocking" never means
+"unrecorded".
+
+**4.3.5 stays OPEN throughout.** The 2026-09-02 exception (§4) lets its debt run in parallel with 4.4,
+4.3.9-L, 4.5-I and 4.3.8; it closes nothing and weakens no requirement. **VD-C in particular remains open
+unless 4.3.5K's canonical acceptance criteria are demonstrably met and recorded — it is never closed by
+inference from qualitative observation.**
+
+| ID | Item | Blocks starting 4.4? | Blocks 4.5-A? | Required disposition |
+|---|---|---|---|---|
+| **VD-A** | iOS standalone-PWA OAuth (§10.11A) | No | **Yes** | Physically passed on a real iPhone, or explicitly waived with the named accepted risk (the user re-answers the wizard; never data loss) |
+| **VD-B** | Real responsive / media-query validation at 320 · 390 · 430 (§10.11B) | No | **Yes** | Validate onboarding, the value reveal, Home, Train, and the first-run surfaces on real representative viewports or devices |
+| **VD-C** | Android PWA install validation (§10.6) | No | **Yes unless proven** | Remains open unless 4.3.5K's canonical acceptance criteria are demonstrably met and recorded; otherwise blocks until explicitly ruled |
+| **VD-D** | 4.3.5F instrumented Android navigation performance (§10.8) | No | **Explicit ruling required** | Measured · waived with named risk · or launch held. **Silence is not an allowed outcome.** |
+| **VD-E** | Google signup attribution precision (§10.11C) | No | No | Remains recorded; does not block activation unless later evidence changes the risk |
+| **VD-F** | Existing keyboard-dictation input path | No | **Yes** | On a real iPhone, use Apple keyboard dictation inside Quick Log for representative single-food and multi-item meal phrases; confirm the resulting text enters the existing pipeline and remains editable before logging. **This validates an existing path; it is not a new product feature.** |
+
+VD-A, VD-B, and VD-F are all physical-iPhone checks and should be performed in one session.
+
 # 11. PROTECTED FUTURE COMMITMENTS
 
 These are explicitly retained. They may **move between phases with approval**. They may **not** silently
@@ -1390,13 +1739,17 @@ disappear.
 
 Removal requires an explicit line: **`CANCELLED — YYYY-MM-DD — reason`**. Never silent deletion.
 
+**Preservation audit, 2026-09-02.** All 77 commitments below were individually mapped during the roadmap
+optimization: **77 of 77 accounted for · 0 cancelled · 0 silently reassigned.** The seven that changed
+owner are annotated inline below; the decision record is `docs/ROADMAP-HISTORY.md`, 2026-09-02.
+
 - dashboard customization
 - optional Carbs/Fat on Home
 - Calories + Protein default
 - user accent colors
 - shared swipe actions
 - swipe-to-delete
-- accessible alternatives to every gesture
+- accessible alternatives to every gesture *(5.0.4 — delivered in the 4.8 opening checkpoint, 2026-09-02)*
 - exercise detail surfaces
 - exercise media, video, muscle diagrams
 - favorite and recent exercises
@@ -1413,7 +1766,8 @@ Removal requires an explicit line: **`CANCELLED — YYYY-MM-DD — reason`**. Ne
 - hybrid workouts
 - active-workout renaming (session name distinct from the source template/routine/program)
 - exercise reordering (shared long-press/drag pattern in builders and active workouts, with an
-  accessible Move Up / Move Down alternative)
+  accessible Move Up / Move Down alternative) *(4.8.12 — now consumes the 4.8 opening checkpoint,
+  2026-09-02)*
 - habits
 - steps
 - water
@@ -1426,18 +1780,20 @@ Removal requires an explicit line: **`CANCELLED — YYYY-MM-DD — reason`**. Ne
 - recent foods
 - richer nutrition (carbs/fat, micronutrients)
 - macro-aware meal recommendations
-- restaurant / composed-dish coverage
+- restaurant / composed-dish coverage *(split 2026-09-02 — common launch language is a 4.5.17 coverage
+  stratum and is pre-launch; comprehensive intelligence remains 5.4.11)*
 - nutrition hardening backlog
 - portion-correction persistence
 - meal-context confidence gating
 - voice food logging
 - photo food logging
 - recommendation catalog coverage — bodyweight / no-equipment Program · women's full body + glutes
-  Program · optional women's bodyweight Program · Glute Builder repositioned as the specialization
-  (4.3.6K.1)
+  Program · women's bodyweight Program · Glute Builder repositioned as the specialization
+  (4.3.6K.1) *(scheduled 2026-09-02 as **4.3.9-L**, launch-blocking; the women's bodyweight Program is a
+  required commitment, not optional)*
 - ranked shortlist recommendation UI — one primary "Recommended for You" plus "See other options",
   ordered by the engine over real onboarding inputs and catalog metadata, never hand-curated and never
-  branched on gender (4.3.6K.2)
+  branched on gender (4.3.6K.2) *(scheduled 2026-09-02 as **4.3.9F**, launch-blocking)*
 - AI workout generation
 - AI Coach action tools
 - Coach cost governance
@@ -1451,7 +1807,8 @@ Removal requires an explicit line: **`CANCELLED — YYYY-MM-DD — reason`**. Ne
 - account deletion and data export
 - client/API error monitoring
 - billing recovery / dunning
-- pre-launch security review
+- pre-launch security review *(4.5.12 — also owns §10.10, §10.12, and the brittle-test review pass,
+  2026-09-02)*
 - accessibility regression requirements
 - Apple Health
 - Android health integration
@@ -1466,9 +1823,11 @@ Removal requires an explicit line: **`CANCELLED — YYYY-MM-DD — reason`**. Ne
 - corporate wellness
 - business analytics
 - premium / high-touch coaching
-- planned Home Strength and Full Gym Strength programs
+- planned Home Strength and Full Gym Strength programs *(scheduled 2026-09-02 as **4.3.9X.1** and
+  **4.3.9X.2**, post-launch — they deepen an already-served catalog rather than closing a coverage
+  failure)*
 - public lead-generation surfaces (landing, store, calculator, free guide, About, Pricing, Contact)
-- voice Coach
+- voice Coach *(7.0 — distinct from 5.4.7 voice food logging; never conflate the two)*
 - computer vision
 - multimodal Coach
 - future native-mobile consideration
@@ -1521,6 +1880,23 @@ Do not delete useful architecture or design docs. Banner them:
 > The canonical roadmap is `docs/ROADMAP.md`. This document remains available for historical rationale and
 > implementation detail, but its phase numbering must not be used for planning.
 
+## 12.7 Phase preflight — "should we build this now?"
+
+Before planning **how** to build any future phase, its preflight must first prove:
+
+1. The phase should be built now.
+2. Its prerequisites exist.
+3. Its affected product surfaces are stable enough.
+4. A later phase is unlikely to force a substantial rebuild.
+5. A smaller scope cannot achieve the required user or launch outcome.
+6. Its expected value justifies its implementation and maintenance cost.
+7. Relevant real-user evidence has been considered.
+8. Deferring it would create more risk than building it now.
+
+Only once these pass may the work move from **"Should we build this now?"** to **"How should we build
+it?"** Added 2026-09-02, after a full implementation plan for 4.3.8 was produced before anyone asked
+whether 4.3.8 belonged next.
+
 ---
 
 # 13. EXECUTION ORDER
@@ -1535,31 +1911,46 @@ Do not delete useful architecture or design docs. Banner them:
 | 4.3.3 | Install Onboarding & Update UX | CLOSED |
 | 4.3.4 | Dashboard 2.0 & App Navigation | CLOSED |
 | 4.3.6 | Programs, Routines & Train Architecture | CLOSED |
+| 4.3.7 | Personalized Onboarding & Value Engine | CLOSED |
 
-## Next
+## Still open
 
 ### **4.3.5 — Mobile UX & App-Shell Hardening** · **OPEN, NOT CLOSED**
 
-Implementation is merged and accepted. The phase stays open on one requirement:
-**4.3.5F instrumented Android navigation-performance measurement**, deferred by an external
-hardware-access dependency. Targets unchanged and still binding — see the 4.3.5 status block and §10.8.
+Implementation is merged and accepted. The phase stays open on **4.3.5F instrumented Android
+navigation-performance measurement**, deferred by an external hardware-access dependency, **plus any
+unresolved 4.3.5-owned acceptance criterion tracked in §10.13 — including VD-C unless demonstrably
+satisfied.** Targets unchanged and still binding — see the 4.3.5 status block and §10.8.
 
-**Owner-approved sequencing exception (2026-08-20):** **4.3.6 implementation may begin now**, in parallel
-with 4.3.5 remaining open. This starts no other phase early, closes nothing, and waives nothing.
+**Owner-approved sequencing exceptions.** *(2026-08-20)* 4.3.6 could begin in parallel. *(2026-09-02)*
+4.3.5's validation debt may also run in parallel with **4.4, 4.3.9-L, 4.5-I and 4.3.8**, with every
+activation-relevant item receiving its §10.13 disposition before 4.5-A. Neither exception closes 4.3.5,
+weakens a requirement, or permits unrelated phases to overlap.
 
-## Then, in order
+## Next — pre-launch critical path
+
+Reordered 2026-09-02. Rationale and binding gates G1–G6 are in §4.
+
+| # | Phase | Classification |
+|---|---|---|
+| 1 | **4.4** — Personal AI Coach v1, Read-Only | LAUNCH-BLOCKING |
+| 2 | **4.5-I** — Pre-Activation Build & Certification (all activation flags OFF) | LAUNCH-BLOCKING |
+| 3 | **4.3.8** — Interactive First-Run Experience | LAUNCH-BLOCKING |
+| 4 | **4.5-A** — Paid-Only Activation | LAUNCH-BLOCKING |
+
+**Parallel, gated:** **4.3.9-L** Recommendation Catalog Coverage (§4.3.9; G1 makes it an early-4.4
+dependency, not an independent track with slack) · **validation-debt closure** VD-A through VD-F (§10.13).
+
+## Then, in order — post-launch
 
 | # | Phase |
 |---|---|
-| 4.3.7 | Personalized Onboarding & Value Engine |
-| 4.3.8 | Interactive First-Run Experience |
-| 4.4 | Personal AI Coach v1 — Read-Only |
-| 4.5 | Premium Membership & Paid-Only Launch |
 | 4.6 | Notifications & Accountability |
 | 4.7 | AI Coach Action Tools |
-| 4.8 | Training Engine 2.0 — Timed / HIIT / Circuit / Hybrid |
-| 4.9 | Personalization |
-| 5.0 | Advanced Mobile Interaction Polish |
+| 4.8 | Training Engine 2.0 — Timed / HIIT / Circuit / Hybrid — *opens by delivering 5.0.3 and 5.0.4* |
+| 4.9 | Personalization — *4.9.2 consumes the same shared gesture foundation* |
+| 4.3.9-X | Program Catalog Depth — Home Strength · Full Gym Strength |
+| 5.0 | Advanced Mobile Interaction Polish — *5.0.1, 5.0.2, 5.0.5* |
 | 5.1 | Smart Training 2.0 / Advanced Progression |
 | 5.2 | Habits & Daily Health |
 | 5.3 | Body Composition & Visual Progress |
@@ -1582,7 +1973,8 @@ with 4.3.5 remaining open. This starts no other phase early, closes nothing, and
 ## Priority rule
 
 - **P0** — blocking bugs, data integrity, auth, payments, security. Fix immediately.
-- **P1** — the commercial critical path: `4.3.5 → 4.3.6 → 4.3.7 → 4.3.8 → 4.4 → 4.5`.
+- **P1** — the commercial critical path: `4.4 → 4.5-I → 4.3.8 → 4.5-A`, plus the parallel gated
+  4.3.9-L and validation-debt tracks.
 - **P2** — improvements directly supporting activation or retention; pull forward only when they
   materially support the current phase.
 - **P3** — post-launch expansion, 4.6 onward.
@@ -1603,8 +1995,8 @@ recommend from.
 **Personalized onboarding before Coach.** Coach requires structured user context; the onboarding/value
 engine becomes part of the Coach's context foundation.
 
-**Product tour before paid launch.** Understand how to teach the product before asking every user to pay
-for it.
+**Product tour before paid launch, but after the product it teaches.** Revised 2026-09-02: 4.3.8 runs
+after 4.4 and 4.5-I, which change the navigation, Home, entitlement and routing surfaces it describes.
 
 **Coach before the hard paywall.** The paid offer launches when its strongest differentiator is real
 rather than "coming soon." Entitlement and payment infrastructure may be built earlier behind flags; the
