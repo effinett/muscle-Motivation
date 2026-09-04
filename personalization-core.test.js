@@ -196,7 +196,16 @@ test('equipment earns no reason code while every Program is "Any Setup"', () => 
   assert.ok(!plan.warnings.includes(P.WARNING.EQUIPMENT_MISMATCH));
 });
 
-test('equipment earns its reason code once it actually discriminates', () => {
+/* Revised in Phase 4.3.9-L. The PICK is unchanged — glute_builder is still
+ * what a bodyweight user gets. What changed is the REASON: muscle_gain is now
+ * excluded as ineligible rather than merely out-ranked, and every Program that
+ * remains supports the user, so equipment no longer separates the field.
+ * Claiming "works with your setup" when every remaining option does would be
+ * exactly the false precision the honesty rule forbids, so goal and schedule
+ * carry the explanation. Under positive-support eligibility the equipment
+ * reason code is unreachable by design; that invariant is asserted directly by
+ * "equipment never claims a reason code under positive-support eligibility". */
+test('an ineligible Program is excluded, and equipment claims nothing once every survivor fits', () => {
   const list = catalog();
   list[1].equipmentSummary = 'Full Gym';     // muscle_gain needs a gym
   list[2].equipmentSummary = 'Bodyweight';   // glute_builder does not
@@ -205,7 +214,32 @@ test('equipment earns its reason code once it actually discriminates', () => {
       training_experience: 'beginner' }),
     { catalog: list });
   assert.strictEqual(slug(plan), 'glute_builder');
-  assert.ok(plan.training.reasons.includes(P.REASON.EQUIPMENT_MATCH));
+  assert.ok(!plan.training.alternatives.some((a) => a.slug === 'muscle_gain'),
+    'a gym Program must not be offered to a bodyweight user, even as an alternative');
+  assert.ok(!plan.training.reasons.includes(P.REASON.EQUIPMENT_MATCH));
+  assert.ok(plan.training.reasons.includes(P.REASON.GOAL_MATCH));
+});
+
+/* Replaced in Phase 4.3.9-L. Under positive-support eligibility a Program with
+ * unknown metadata is EXCLUDED rather than kept at a neutral score, so every
+ * candidate that reaches ranking with a stated access is verified-supporting.
+ * Equipment therefore can no longer separate the eligible field, and the chip
+ * is correctly never claimed. The exclusion itself is what protects the user —
+ * that is asserted here in place of the old reason-code expectation. */
+test('an unknown-metadata Program is excluded, and equipment claims no reason code', () => {
+  const list = catalog();
+  list[1].equipmentSummary = null;            // unknown → must not be recommended
+  list[2].equipmentSummary = 'Bodyweight';    // verified to suit
+  list[1].goal = 'muscle';
+  list[2].goal = 'muscle';
+  const plan = P.derivePersonalizedStart(
+    completeProfile({ goal: 'muscle', training_days: 3, gym_access: 'bodyweight',
+      training_experience: 'beginner' }),
+    { catalog: list });
+  assert.strictEqual(slug(plan), 'glute_builder');
+  assert.ok(!plan.training.alternatives.some((a) => a.slug === 'muscle_gain'),
+    'a Program we cannot confirm suits the user must not be offered at all');
+  assert.ok(!plan.training.reasons.includes(P.REASON.EQUIPMENT_MATCH));
 });
 
 /* ── 7 · recommendation is independent of access ──────────────────────────── */
@@ -526,5 +560,346 @@ test('warning codes are drawn only from the published vocabulary', () => {
     derive(profile).warnings.forEach((w) => {
       assert.ok(known.includes(w), 'unknown warning code: ' + w);
     });
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Phase 4.3.9-L — equipment eligibility and the truthful no-fit path
+ *
+ * THE PRODUCT CONTRACT THESE PROTECT:
+ *
+ *   1. `gym_access` states the equipment a person HAS. Eligibility is a
+ *      CAPABILITY HIERARCHY — more equipment can perform a Program needing
+ *      less — never exact-category matching.
+ *   2. Eligibility answers "can they perform it?"; ranking answers "which
+ *      eligible Program fits best?". The two never merge.
+ *   3. An explicit access answer requires VERIFIED support. Missing or
+ *      unrecognized Program metadata fails closed.
+ *   4. No stated access is silence, not a gate — legacy profiles are untouched.
+ *   5. When nothing is eligible the engine withholds a recommendation and says
+ *      why, rather than returning the least-bad incompatible Program.
+ *
+ * `catalog()` mirrors production, where every Program declares "Any Setup".
+ * `gymCatalog()` is that same catalog with honest equipment — the state the
+ * metadata migration will create — because correcting metadata WITHOUT this
+ * gate is what would recommend a gym Program to someone with no gym.
+ * ═════════════════════════════════════════════════════════════════════════ */
+
+// The three production Programs with honest equipment. Nothing else changes.
+function gymCatalog() {
+  return catalog().map((p) => Object.assign({}, p, { equipmentSummary: 'Full Gym' }));
+}
+
+const GOALS = ['fatloss', 'muscle', 'recomp'];
+const EXPERIENCES = ['beginner', 'intermediate', 'advanced'];
+const ACCESS = ['full_gym', 'home_basic', 'bodyweight'];
+
+function deriveGym(profile) {
+  return P.derivePersonalizedStart(profile, { catalog: gymCatalog() });
+}
+
+// One Program with one metadata value — the smallest eligibility probe.
+function oneProgram(equipmentSummary) {
+  return [{ slug: 'solo', name: 'Solo', goal: 'fatloss', difficulty: 'Beginner',
+    durationWeeks: 8, recommendedDaysPerWeek: 4, equipmentSummary: equipmentSummary,
+    status: 'published', sortOrder: 1, pagePath: 'solo.html' }];
+}
+
+function planFor(access, equipmentSummary) {
+  return P.derivePersonalizedStart(
+    completeProfile({ goal: 'fatloss', training_days: 4, gym_access: access }),
+    { catalog: oneProgram(equipmentSummary) });
+}
+
+/* ── the capability hierarchy ─────────────────────────────────────────────── */
+
+// Every cell of the compatibility matrix. true = the user can perform it.
+const MATRIX = [
+  // requirement    full_gym  home_basic  bodyweight
+  ['Bodyweight',    true,     true,       true],
+  ['Home Basic',    true,     true,       false],
+  ['Full Gym',      true,     false,      false],
+  ['Any Setup',     true,     true,       true],
+];
+
+test('equipment eligibility follows the capability hierarchy in all 12 cells', () => {
+  MATRIX.forEach(([requirement, forGym, forHome, forBody]) => {
+    const expected = { full_gym: forGym, home_basic: forHome, bodyweight: forBody };
+    ACCESS.forEach((access) => {
+      const eligible = planFor(access, requirement).training.recommendedProgram !== null;
+      assert.strictEqual(eligible, expected[access],
+        requirement + ' for ' + access + ' should be ' +
+        (expected[access] ? 'eligible' : 'ineligible'));
+    });
+  });
+});
+
+test('a lower-requirement Program is never excluded from a better-equipped user', () => {
+  // The failure this guards against is reading gym_access as a preference:
+  // owning a barbell must not disqualify a bodyweight Program.
+  const prog = (e) => oneProgram(e)[0];
+  assert.strictEqual(P.isEligible(prog('Bodyweight'), { gymAccess: 'full_gym' }), true);
+  assert.strictEqual(P.isEligible(prog('Bodyweight'), { gymAccess: 'home_basic' }), true);
+  assert.strictEqual(P.isEligible(prog('Home Basic'), { gymAccess: 'full_gym' }), true);
+});
+
+test('a higher-requirement Program stays ineligible for a less-equipped user', () => {
+  const prog = (e) => oneProgram(e)[0];
+  assert.strictEqual(P.isEligible(prog('Full Gym'), { gymAccess: 'bodyweight' }), false);
+  assert.strictEqual(P.isEligible(prog('Full Gym'), { gymAccess: 'home_basic' }), false);
+  assert.strictEqual(P.isEligible(prog('Home Basic'), { gymAccess: 'bodyweight' }), false);
+});
+
+test('every recognized home-equipment synonym carries the same capability', () => {
+  ['Home Basic', 'Home Setup', 'Home Gym'].forEach((label) => {
+    assert.ok(planFor('home_basic', label).training.recommendedProgram, label + '/home_basic');
+    assert.ok(planFor('full_gym', label).training.recommendedProgram, label + '/full_gym');
+    assert.strictEqual(planFor('bodyweight', label).training.recommendedProgram, null,
+      label + ' must stay out of reach for bodyweight-only');
+  });
+});
+
+/* ── eligibility is a requirement; ranking is unchanged ───────────────────── */
+
+test('the complete input space never yields an incompatible recommendation', () => {
+  let served = 0, withheld = 0;
+  ACCESS.forEach((access) => GOALS.forEach((goal) => EXPERIENCES.forEach((exp) => {
+    const plan = deriveGym(completeProfile({
+      goal, training_experience: exp, gym_access: access }));
+    const rec = plan.training.recommendedProgram;
+    if (rec) {
+      const supported = P.EQUIPMENT_ACCESS[String(rec.equipmentSummary).toLowerCase()];
+      assert.ok(supported && supported.includes(access),
+        access + '/' + goal + '/' + exp + ' received ' + rec.slug + ', which it cannot perform');
+      served++;
+    } else {
+      assert.strictEqual(plan.training.noFitReason, 'equipment');
+      assert.ok(plan.warnings.includes(P.WARNING.NO_MATCH));
+      assert.ok(plan.warnings.includes(P.WARNING.NO_EQUIPMENT_MATCH));
+      withheld++;
+    }
+  })));
+  assert.strictEqual(served + withheld, 27, 'the 27-combination space must be covered');
+  assert.strictEqual(served, 9, 'only full_gym is served by a gym-only catalog');
+  assert.strictEqual(withheld, 18, 'bodyweight and home_basic are withheld, not misled');
+});
+
+test('an ineligible Program never appears as an alternative', () => {
+  assert.deepStrictEqual(
+    deriveGym(completeProfile({ gym_access: 'bodyweight' })).training.alternatives, []);
+  // ...and it is still absent when something else IS eligible.
+  const mixed = gymCatalog();
+  mixed[0].equipmentSummary = 'Bodyweight';
+  const plan = P.derivePersonalizedStart(
+    completeProfile({ goal: 'fatloss', gym_access: 'bodyweight' }), { catalog: mixed });
+  assert.strictEqual(slug(plan), 'fat_loss_blueprint');
+  assert.deepStrictEqual(plan.training.alternatives, []);
+});
+
+test('ranking, tie-breaking and recomp are unchanged among eligible Programs', () => {
+  const gym = completeProfile({ goal: 'muscle', training_days: 3, gym_access: 'full_gym' });
+  assert.strictEqual(deriveGym(gym).training.recommendedProgram.slug,
+    P.derivePersonalizedStart(gym, { catalog: catalog() }).training.recommendedProgram.slug,
+    'correcting equipment must not reorder an all-eligible field');
+
+  [2, 3, 4, 5, 6].forEach((days) => {
+    assert.ok(deriveGym(completeProfile({
+      goal: 'muscle', training_days: days, gym_access: 'full_gym' })).training.recommendedProgram,
+      days + ' training days must still resolve');
+  });
+  assert.strictEqual(deriveGym(completeProfile({
+    goal: 'muscle', training_days: 3, gym_access: 'full_gym' }))
+    .training.recommendedProgram.recommendedDaysPerWeek, 3, 'the exact day match still wins');
+
+  const recomp = deriveGym(completeProfile({ goal: 'recomp', gym_access: 'full_gym' }));
+  assert.strictEqual(recomp.training.recommendedProgram.goal, 'muscle');
+  assert.ok(recomp.training.reasons.includes(P.REASON.GOAL_PARTIAL_MATCH));
+});
+
+test('the current production catalog is behaviourally unchanged until its migration', () => {
+  // Every published Program declares a valid "Any Setup", so the gate excludes
+  // nothing today. This is what makes the checkpoint safe to ship before CP2.
+  ACCESS.forEach((access) => GOALS.forEach((goal) => {
+    const plan = P.derivePersonalizedStart(
+      completeProfile({ goal, gym_access: access }), { catalog: catalog() });
+    assert.ok(plan.training.recommendedProgram,
+      'the live catalog must still recommend for ' + access + '/' + goal);
+    assert.strictEqual(plan.training.noFitReason, null);
+  }));
+});
+
+/* ── explicit access demands VERIFIED support; unknown metadata fails closed ─ */
+
+test('unusable Program metadata is never assumed compatible', () => {
+  const unusable = [
+    null, undefined, '', '   ',                       // missing
+    'Any  Setup!!', 'anysetup', 'Full-Gym', '???',    // malformed
+    'Kettlebells Only', 'Sandbag', 'Gym',             // outside the vocabulary
+  ];
+  unusable.forEach((meta) => {
+    ACCESS.forEach((access) => {
+      const plan = planFor(access, meta);
+      assert.strictEqual(plan.training.recommendedProgram, null,
+        JSON.stringify(meta) + ' must not be recommended to ' + access);
+      assert.strictEqual(plan.training.noFitReason, 'equipment');
+    });
+  });
+});
+
+test('a verified Program is eligible while an unknown one is excluded entirely', () => {
+  const list = [
+    { slug: 'verified', name: 'Verified', goal: 'fatloss', difficulty: 'Beginner',
+      recommendedDaysPerWeek: 4, equipmentSummary: 'Bodyweight', sortOrder: 1, pagePath: 'a.html' },
+    { slug: 'unknown', name: 'Unknown', goal: 'fatloss', difficulty: 'Beginner',
+      recommendedDaysPerWeek: 4, equipmentSummary: 'Mystery Kit', sortOrder: 2, pagePath: 'b.html' },
+  ];
+  const plan = P.derivePersonalizedStart(
+    completeProfile({ goal: 'fatloss', training_days: 4, gym_access: 'bodyweight' }),
+    { catalog: list });
+  assert.strictEqual(slug(plan), 'verified');
+  assert.deepStrictEqual(plan.training.alternatives, [],
+    'the unknown Program must be absent, not merely out-ranked');
+});
+
+test('a valid Any Setup stays compatible with every recognized access', () => {
+  ACCESS.forEach((access) => {
+    assert.ok(planFor(access, 'Any Setup').training.recommendedProgram,
+      'Any Setup must remain positively compatible with ' + access);
+  });
+  // Case and surrounding whitespace normalize; they are not malformed.
+  assert.ok(planFor('bodyweight', '  ANY SETUP ').training.recommendedProgram);
+});
+
+test('equipmentSupport distinguishes all five states, and only two are eligible', () => {
+  const S = P.EQUIPMENT_SUPPORT;
+  const prog = (e) => ({ slug: 'x', equipmentSummary: e });
+  [
+    [null,         'Full Gym',    S.NO_SIGNAL,    true],
+    ['full_gym',   'Full Gym',    S.SUPPORTED,    true],
+    ['bodyweight', 'Any Setup',   S.SUPPORTED,    true],
+    ['bodyweight', 'Full Gym',    S.INCOMPATIBLE, false],
+    ['bodyweight', null,          S.MISSING,      false],
+    ['bodyweight', 'Mystery Kit', S.UNRECOGNIZED, false],
+  ].forEach(([access, meta, support, eligible]) => {
+    assert.strictEqual(P.equipmentSupport(access, prog(meta)), support);
+    assert.strictEqual(P.isEligible(prog(meta), { gymAccess: access }), eligible);
+  });
+});
+
+/* ── no stated access is silence, never a gate ────────────────────────────── */
+
+test('gym_access = null preserves legacy behaviour for every metadata state', () => {
+  const legacy = completeProfile({ gym_access: null, training_experience: null });
+  const before = P.derivePersonalizedStart(legacy, { catalog: catalog() });
+  assert.strictEqual(deriveGym(legacy).training.recommendedProgram.slug,
+    before.training.recommendedProgram.slug, 'the same Program as before the gate');
+
+  [null, 'Mystery Kit', 'Full Gym', 'Any Setup'].forEach((meta) => {
+    const plan = P.derivePersonalizedStart(
+      completeProfile({ goal: 'fatloss', training_days: 4, gym_access: null }),
+      { catalog: oneProgram(meta) });
+    assert.ok(plan.training.recommendedProgram,
+      'a legacy profile must still be recommended to, whatever the metadata says');
+    assert.strictEqual(plan.training.noFitReason, null);
+  });
+});
+
+test('an unrecognized gym_access answer is treated as silence, not as a gate', () => {
+  const plan = P.derivePersonalizedStart(
+    completeProfile({ goal: 'fatloss', training_days: 4, gym_access: 'garage_gym' }),
+    { catalog: oneProgram('Full Gym') });
+  assert.ok(plan.training.recommendedProgram,
+    'an answer outside the recognized vocabulary must not exclude everything');
+});
+
+/* ── attribution: the right cause for "nothing to recommend" ──────────────── */
+
+test('"no recommendation" is attributed to the correct cause', () => {
+  const bodyweightUser = () => completeProfile({ gym_access: 'bodyweight' });
+
+  // 1 · empty catalog → NO_CATALOG, never equipment.
+  const empty = P.derivePersonalizedStart(bodyweightUser(), { catalog: [] });
+  assert.ok(empty.warnings.includes(P.WARNING.NO_CATALOG));
+  assert.ok(!empty.warnings.includes(P.WARNING.NO_EQUIPMENT_MATCH));
+  assert.strictEqual(empty.training.noFitReason, null);
+
+  // 2 · rows that are not candidates at all → generic no-match, not equipment.
+  // Blaming the user's answer for a malformed catalog would send them to fix
+  // something that is not broken.
+  const junk = P.derivePersonalizedStart(bodyweightUser(), { catalog: [
+    { name: 'no slug at all', goal: 'fatloss', equipmentSummary: 'Any Setup' },
+    { slug: '', goal: 'fatloss', equipmentSummary: 'Any Setup' },
+    { slug: 42, goal: 'fatloss', equipmentSummary: 'Any Setup' },
+    null,
+  ] });
+  assert.strictEqual(junk.training.recommendedProgram, null);
+  assert.ok(junk.warnings.includes(P.WARNING.NO_MATCH));
+  assert.ok(!junk.warnings.includes(P.WARNING.NO_EQUIPMENT_MATCH));
+  assert.strictEqual(junk.training.noFitReason, null);
+
+  // 3 · valid candidates, all removed by the gate → equipment.
+  const gated = deriveGym(bodyweightUser());
+  assert.ok(gated.warnings.includes(P.WARNING.NO_EQUIPMENT_MATCH));
+  assert.strictEqual(gated.training.noFitReason, 'equipment');
+
+  // 4 · a junk row alongside gated rows is still an equipment verdict.
+  const mixed = P.derivePersonalizedStart(bodyweightUser(),
+    { catalog: gymCatalog().concat([{ name: 'no slug', goal: 'fatloss' }]) });
+  assert.strictEqual(mixed.training.noFitReason, 'equipment');
+
+  // 5 · one eligible candidate → normal ranking, no no-fit at all.
+  const ok = gymCatalog();
+  ok[0].equipmentSummary = 'Bodyweight';
+  const served = P.derivePersonalizedStart(
+    completeProfile({ goal: 'fatloss', gym_access: 'bodyweight' }), { catalog: ok });
+  assert.strictEqual(slug(served), 'fat_loss_blueprint');
+  assert.strictEqual(served.training.noFitReason, null);
+  assert.ok(!served.warnings.includes(P.WARNING.NO_EQUIPMENT_MATCH));
+});
+
+/* ── honesty: a withheld recommendation claims nothing ────────────────────── */
+
+test('a withheld recommendation claims no reasons at all', () => {
+  const plan = deriveGym(completeProfile({ gym_access: 'bodyweight' }));
+  assert.deepStrictEqual(plan.training.reasons, []);
+  assert.deepStrictEqual(P.describeReasons(plan), [],
+    'no reason chips may be rendered for a Program that was not recommended');
+});
+
+test('equipment never claims a reason code under positive-support eligibility', () => {
+  // Every candidate that reaches ranking already supports the user, so a
+  // signal the whole field shares explains nothing about why THIS one won.
+  ACCESS.forEach((access) => GOALS.forEach((goal) => {
+    [catalog(), gymCatalog()].forEach((list) => {
+      const plan = P.derivePersonalizedStart(
+        completeProfile({ goal, gym_access: access }), { catalog: list });
+      assert.ok(!plan.training.reasons.includes(P.REASON.EQUIPMENT_MATCH));
+    });
+  }));
+});
+
+/* ── nothing else moves ───────────────────────────────────────────────────── */
+
+test('nutrition targets are untouched by any equipment outcome', () => {
+  const profile = completeProfile({ gym_access: 'bodyweight' });
+  assert.deepStrictEqual(deriveGym(profile).nutrition,
+    P.derivePersonalizedStart(profile, { catalog: catalog() }).nutrition,
+    'withholding a Program must never alter calories or protein');
+});
+
+test('the engine still writes nothing and remains pure', () => {
+  const cat = gymCatalog();
+  const snapshot = JSON.stringify(cat);
+  P.derivePersonalizedStart(
+    Object.freeze(completeProfile({ gym_access: 'bodyweight' })), { catalog: cat });
+  assert.strictEqual(JSON.stringify(cat), snapshot, 'the catalog must not be mutated');
+});
+
+test('recommendation remains independent of gender', () => {
+  ACCESS.forEach((access) => {
+    const m = deriveGym(completeProfile({ gender: 'male', gym_access: access }));
+    const f = deriveGym(completeProfile({ gender: 'female', gym_access: access }));
+    assert.deepStrictEqual(slug(f), slug(m), 'gender changed the outcome for ' + access);
+    assert.strictEqual(f.training.noFitReason, m.training.noFitReason);
   });
 });
