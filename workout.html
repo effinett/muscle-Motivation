@@ -1599,6 +1599,14 @@
           await Promise.all([checkActiveWorkout(), loadRecommended(profile), loadTemplates(), loadHistory(histOpts)]);
         }
 
+        // Phase 4.3.9-L. Select the pane the address asks for, AFTER the panes
+        // exist. No parameter, or an unsupported one, resolves to Today, so
+        // ordinary navigation to workout.html is unchanged. showTrainPane keeps
+        // the segmented control, the visible panel and aria-selected in step.
+        if (typeof AppNav !== 'undefined' && AppNav.resolveTrainPane) {
+          showTrainPane(AppNav.resolveTrainPane(window.location.search));
+        }
+
         document.getElementById('authGate').style.display   = 'none';
         document.getElementById('appContent').style.display = 'block';
         lucide.createIcons();
@@ -4055,8 +4063,15 @@
   }
 
   // ── Train local navigation (CP5) ─────────────────────────────────────
-  // Today · Workouts · Programs. Pane state is view-local and deliberately
-  // not a route: no router, no history entry, no app-shell change.
+  // Today · Workouts · Programs. Pane state is view-local: no router, no
+  // history entry, no app-shell change.
+  //
+  // Phase 4.3.9-L added ONE read-only entry point — `?pane=` — so another
+  // surface can land the user on a specific pane. It is still not a route:
+  // switching panes in the page does not push history or rewrite the URL, so
+  // Back leaves Train exactly as before, and a reload re-reads the address and
+  // therefore lands on the same pane deterministically. Parsing and the
+  // unsupported-value fallback live in app-nav.js (AppNav.resolveTrainPane).
   var trainPane = 'today';
   var TRAIN_PANES = { today: 'tabToday', workouts: 'tabWorkouts', programs: 'tabPrograms' };
 
@@ -4240,8 +4255,33 @@
 
       var plan = Personalization.derivePersonalizedStart(profile, { catalog: catalog });
       var rec = plan.training.recommendedProgram;
-      // Catalog unavailable, or nothing fits: render nothing at all. Train
-      // behaves exactly as it did before this phase.
+
+      // Phase 4.3.9-L. Nothing suits this person's equipment, so Train states
+      // that rather than leaving a silent gap where a suggestion belongs. It
+      // points at the Programs pane — browsing is explicitly NOT a
+      // recommendation, and no Program is named here.
+      if (!rec && plan.training.noFitReason === 'equipment') {
+        // The action carries type="button" so that a future enclosing <form>
+        // can never turn it into a submit and navigate away instead of
+        // switching pane.
+        document.getElementById('suggestedWrap').innerHTML =
+          '<div class="tpl-card">' +
+            '<div class="tpl-info">' +
+              '<div class="tpl-name">No equipment match yet</div>' +
+              '<div class="tpl-sub">We won\'t recommend a Program that requires ' +
+                'equipment you don\'t have. You can still browse all Programs.</div>' +
+            '</div>' +
+            '<div class="tpl-actions">' +
+              '<button type="button" class="btn-tpl-start" ' +
+                'onclick="showTrainPane(\'programs\')">Browse Programs</button>' +
+            '</div>' +
+          '</div>';
+        document.getElementById('suggestedSection').style.display = '';
+        return;
+      }
+
+      // Catalog unavailable, or nothing fits for any other reason: render
+      // nothing at all. Train behaves exactly as it did before this phase.
       if (!rec || !rec.pagePath) return;
 
       // Reasons first (why THIS program), then catalog facts. Both come from

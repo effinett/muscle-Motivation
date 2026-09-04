@@ -833,8 +833,30 @@
     }
 
     var rec = plan.training.recommendedProgram;
-    // No catalog, or nothing that fits: say nothing. Home stays exactly as it
-    // was rather than showing an empty personalized slot.
+
+    // Phase 4.3.9-L. When the engine deliberately withheld a recommendation
+    // because nothing suits this person's equipment, Home says so in one line
+    // and points at Programs. Browsing is not a recommendation — the link opens
+    // the Programs pane, never a Program we just declined to recommend. The
+    // href is built by AppNav so it cannot drift from what Train parses.
+    if (!rec && plan.training.noFitReason === 'equipment') {
+      document.getElementById('todayRecLabel').textContent =
+        'No equipment match yet:';
+      var browse = document.getElementById('todayRecLink');
+      browse.textContent = 'Browse Programs';
+      // Both branches must open PROGRAMS. The earlier fallback was plain
+      // workout.html, which silently landed on Today and quietly recreated the
+      // defect this state exists to fix — a fallback that does the wrong thing
+      // is worse than no fallback.
+      browse.href = (typeof AppNav !== 'undefined' && AppNav.trainPaneHref)
+        ? AppNav.trainPaneHref('programs')
+        : 'workout.html?pane=programs';
+      row.hidden = false;
+      return;
+    }
+
+    // No catalog, or nothing that fits for any other reason: say nothing. Home
+    // stays exactly as it was rather than showing an empty personalized slot.
     if (!rec || !rec.pagePath) { row.hidden = true; return; }
 
     // The label claims only what the engine's reason codes support. A profile

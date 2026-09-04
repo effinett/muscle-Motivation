@@ -791,3 +791,68 @@ test('perf: each destination resolves auth and the profile exactly once on load'
     assert.strictEqual(auth, 1, `${p} performs one auth round-trip on bootstrap`);
   }
 });
+
+/* ── Train sub-pane deep link (Phase 4.3.9-L) ──────────────────────────────
+ * Home's no-fit state must land the user on Train's Programs pane. These test
+ * the pure route decision directly — the executable behaviour, not the wiring
+ * that calls it. */
+
+test('resolveTrainPane selects the requested pane', () => {
+  assert.strictEqual(AppNav.resolveTrainPane('?pane=programs'), 'programs');
+  assert.strictEqual(AppNav.resolveTrainPane('?pane=workouts'), 'workouts');
+  assert.strictEqual(AppNav.resolveTrainPane('?pane=today'), 'today');
+});
+
+test('resolveTrainPane defaults to Today for ordinary navigation', () => {
+  // Plain navigation to workout.html carries no query at all: unchanged.
+  ['', '?', null, undefined, '?program=fat_loss_blueprint&session=a'].forEach((s) => {
+    assert.strictEqual(AppNav.resolveTrainPane(s), 'today',
+      'no pane parameter must open Today, as before this phase');
+  });
+});
+
+test('resolveTrainPane falls back to Today for any unsupported value', () => {
+  ['?pane=', '?pane=nonsense', '?pane=PROGRAMS%00', '?pane=../admin',
+   '?pane=%E0%A4%A', '?pane[]=programs', '?panes=programs'].forEach((s) => {
+    assert.strictEqual(AppNav.resolveTrainPane(s), 'today',
+      'unsupported or malformed ' + JSON.stringify(s) + ' must fall back safely');
+  });
+});
+
+test('resolveTrainPane normalizes case and padding, and never throws', () => {
+  assert.strictEqual(AppNav.resolveTrainPane('?pane=Programs'), 'programs');
+  assert.strictEqual(AppNav.resolveTrainPane('?pane=%20PROGRAMS%20'), 'programs');
+  assert.strictEqual(AppNav.resolveTrainPane('?pane=programs+'), 'programs');
+  // A lone '%' is invalid percent-encoding; decodeURIComponent would throw.
+  assert.strictEqual(AppNav.resolveTrainPane('?pane=%'), 'today');
+});
+
+test('resolveTrainPane reads the first pane parameter and ignores later ones', () => {
+  assert.strictEqual(AppNav.resolveTrainPane('?pane=programs&pane=today'), 'programs');
+  assert.strictEqual(AppNav.resolveTrainPane('?a=1&pane=workouts&b=2'), 'workouts');
+});
+
+test('resolveTrainPane is a pure function of the address', () => {
+  // Same input, same answer, every time — so reload and Back are deterministic
+  // and no hidden state can make the pane drift.
+  for (let i = 0; i < 3; i++) {
+    assert.strictEqual(AppNav.resolveTrainPane('?pane=programs'), 'programs');
+    assert.strictEqual(AppNav.resolveTrainPane(''), 'today');
+  }
+});
+
+test('trainPaneHref builds links resolveTrainPane understands (round trip)', () => {
+  AppNav.TRAIN_PANES.forEach((pane) => {
+    const href = AppNav.trainPaneHref(pane);
+    const query = href.indexOf('?') >= 0 ? href.slice(href.indexOf('?')) : '';
+    assert.strictEqual(AppNav.resolveTrainPane(query), pane,
+      'the link builder and the parser must agree for ' + pane);
+  });
+});
+
+test('trainPaneHref adds no parameter for Today or an unknown pane', () => {
+  assert.strictEqual(AppNav.trainPaneHref('today'), 'workout.html');
+  assert.strictEqual(AppNav.trainPaneHref('nonsense'), 'workout.html');
+  assert.strictEqual(AppNav.trainPaneHref(undefined), 'workout.html');
+  assert.strictEqual(AppNav.trainPaneHref('programs'), 'workout.html?pane=programs');
+});

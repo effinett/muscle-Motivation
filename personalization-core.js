@@ -122,15 +122,35 @@
     'all levels': ['beginner', 'intermediate', 'advanced']
   };
 
-  /* EQUIPMENT SUMMARY → GYM ACCESS IT SUITS. Same exact-match discipline.
-   * Every published Program is 'Any Setup' today, so this table currently
-   * discriminates nothing — which the reason-code rule below detects on its
-   * own rather than being told. */
+  /* EQUIPMENT SUMMARY → THE GYM-ACCESS ANSWERS THAT CAN PERFORM IT.
+   *
+   * `gym_access` states the equipment a person HAS, not a style they prefer,
+   * so this is a CAPABILITY HIERARCHY and not exact-category matching: more
+   * equipment can always perform a Program that needs less.
+   *
+   *     Program needs        can be performed by
+   *     ─────────────        ───────────────────────────────────────
+   *     Bodyweight           bodyweight · home_basic · full_gym
+   *     Home Basic           home_basic · full_gym
+   *     Full Gym             full_gym
+   *     Any Setup            bodyweight · home_basic · full_gym
+   *
+   * A bodyweight Program therefore stays eligible for a full-gym user; only
+   * the reverse is impossible. Excluding a lower-requirement Program because
+   * someone owns more equipment would be a preference judgement, and preference
+   * belongs in RANKING, never in physical eligibility.
+   *
+   * Keys are matched exactly after normalization, so a value outside this table
+   * is UNRECOGNIZED and fails closed (see equipmentSupport). Synonyms are listed
+   * explicitly rather than inferred. */
   var EQUIPMENT_ACCESS = {
     'any setup': ['full_gym', 'home_basic', 'bodyweight'],
     'full gym': ['full_gym'],
     'home gym': ['full_gym', 'home_basic'],
     'home setup': ['full_gym', 'home_basic'],
+    // Matches the onboarding option "Home setup — some equipment" (home_basic)
+    // and is the term Phase 4.3.9-L Home Programs are expected to declare.
+    'home basic': ['full_gym', 'home_basic'],
     'minimal equipment': ['full_gym', 'home_basic', 'bodyweight'],
     'bodyweight': ['full_gym', 'home_basic', 'bodyweight'],
     'bodyweight only': ['full_gym', 'home_basic', 'bodyweight']
@@ -156,6 +176,12 @@
     PARTIAL_TARGETS: 'partial_nutrition_targets',
     NO_CATALOG: 'no_catalog',
     NO_MATCH: 'no_catalog_match',
+    // Phase 4.3.9-L. Distinct from NO_MATCH so a surface can say WHY there is
+    // no recommendation: the catalog loaded and has Programs, but none of them
+    // is deliverable with the equipment this user stated. NO_MATCH is still
+    // raised alongside it, so consumers that only understand the canonical
+    // no-match state keep working.
+    NO_EQUIPMENT_MATCH: 'no_equipment_match',
     EXPERIENCE_MISMATCH: 'experience_above_program_level',
     EQUIPMENT_MISMATCH: 'equipment_below_program_requirement'
   };
@@ -276,6 +302,70 @@
     return supported.indexOf(gymAccess) >= 0 ? 1 : -1;
   }
 
+  /* ── ELIGIBILITY, not preference (Phase 4.3.9-L) ──────────────────────────
+   * Equipment is the one signal that can make a Program undeliverable rather
+   * than merely a worse fit. A user without a barbell cannot perform a barbell
+   * Program however well it matches their goal, so equipment is checked as a
+   * REQUIREMENT before ranking rather than as another ranking tier.
+   *
+   * This is deliberately the ONLY hard gate. Goal, schedule and experience
+   * remain preferences — a goal-mismatched Program is a worse recommendation,
+   * not an impossible one — so ranking is unchanged for every eligible
+   * candidate and the lexicographic order still decides among them.
+   *
+   * `equipmentFit` above answers a RANKING question and cannot answer this one:
+   * it collapses "no access stated", "metadata missing" and "metadata not in
+   * our vocabulary" all to 0. Personalized recommendation needs those kept
+   * apart, because only the first is a legitimate reason to stay eligible. */
+  var EQUIPMENT_SUPPORT = {
+    NO_SIGNAL: 'no_signal',        // no recognized gym access stated at all
+    SUPPORTED: 'supported',        // vocabulary understood, and it covers them
+    INCOMPATIBLE: 'incompatible',  // vocabulary understood, and it does not
+    MISSING: 'missing',            // no equipment_summary on the row
+    UNRECOGNIZED: 'unrecognized'   // present, but outside EQUIPMENT_ACCESS
+  };
+
+  function equipmentSupport(gymAccess, program) {
+    // readProfile() already reduces gym_access to a recognized value or null,
+    // so an unrecognized ANSWER arrives here as null and is treated as silence.
+    if (!gymAccess) return EQUIPMENT_SUPPORT.NO_SIGNAL;
+    var key = normText(program && program.equipmentSummary);
+    if (!key) return EQUIPMENT_SUPPORT.MISSING;
+    var supported = EQUIPMENT_ACCESS[key];
+    if (!supported) return EQUIPMENT_SUPPORT.UNRECOGNIZED;
+    return supported.indexOf(gymAccess) >= 0
+      ? EQUIPMENT_SUPPORT.SUPPORTED
+      : EQUIPMENT_SUPPORT.INCOMPATIBLE;
+  }
+
+  /* An explicit equipment answer demands VERIFIED SUPPORT, not merely the
+   * absence of a proven mismatch. Missing and unrecognized metadata are
+   * therefore ineligible for a personalized recommendation:
+   *
+   *   - NO_SIGNAL     → eligible. A legacy profile that never answered is not
+   *                     evidence of anything, and its behaviour is unchanged.
+   *   - SUPPORTED     → eligible. This includes a valid 'Any Setup', which
+   *                     canonically covers every recognized access value.
+   *   - INCOMPATIBLE  → INELIGIBLE. We know they cannot do it.
+   *   - MISSING       → INELIGIBLE. We cannot claim it suits them.
+   *   - UNRECOGNIZED  → INELIGIBLE. A typo or an un-modelled value in a
+   *                     controlled catalog must never silently bypass the gate.
+   *
+   * The last two are the safety property: an unreviewed or mistyped catalog row
+   * degrades to "not recommended", never to "recommended on the assumption it
+   * is fine". Such a Program stays visible in Browse — it simply receives no
+   * personalized treatment.
+   *
+   * Consequence: when nothing is eligible the engine returns NO recommendation.
+   * Returning the best remaining Program — which is what a pure ranking does
+   * once every candidate ties — would knowingly recommend something we cannot
+   * confirm the user can do. */
+  function isEligible(program, ctx) {
+    var support = equipmentSupport(ctx.gymAccess, program);
+    return support === EQUIPMENT_SUPPORT.NO_SIGNAL ||
+           support === EQUIPMENT_SUPPORT.SUPPORTED;
+  }
+
   /* ── ranking ─────────────────────────────────────────────────────────────
    * STRICTLY LEXICOGRAPHIC, not a weighted score. Each tier is compared only
    * when every earlier tier ties, which makes the §32 hierarchy a structural
@@ -343,13 +433,35 @@
     return true;
   }
 
-  function rankPrograms(catalog, ctx) {
+  /* Split the catalog into the three groups a caller needs to tell apart:
+   * rows that are not recommendation candidates at all (no usable slug), rows
+   * removed specifically by the equipment gate, and rows that survive.
+   *
+   * This exists so "no recommendation" can be attributed HONESTLY. Counting an
+   * empty result as an equipment problem would blame the user's equipment for
+   * a malformed catalog, which is a different fault with a different fix. */
+  function partitionCandidates(catalog, ctx) {
     var list = Array.isArray(catalog) ? catalog : [];
-    var scored = [];
+    var out = { valid: [], eligible: [], removedByEquipment: [] };
     for (var i = 0; i < list.length; i++) {
       var p = list[i];
+      // Not a candidate in the first place — never an equipment verdict.
       if (!p || typeof p.slug !== 'string' || !p.slug) continue;
-      scored.push(scoreProgram(p, ctx));
+      out.valid.push(p);
+      if (isEligible(p, ctx)) out.eligible.push(p);
+      else out.removedByEquipment.push(p);
+    }
+    return out;
+  }
+
+  function rankPrograms(catalog, ctx) {
+    // Eligibility is applied BEFORE scoring, so an ineligible Program can never
+    // surface as the pick OR as an alternative. Ranking below is untouched and
+    // still decides among eligible candidates alone.
+    var eligible = partitionCandidates(catalog, ctx).eligible;
+    var scored = [];
+    for (var i = 0; i < eligible.length; i++) {
+      scored.push(scoreProgram(eligible[i], ctx));
     }
     // Comparator is a total order, so the sort is stable by construction and
     // needs no index tie-break.
@@ -384,9 +496,17 @@
     if (pick.experienceFit === 1 && discriminated(scored, pick, 'experienceFit')) {
       reasons.push(REASON.EXPERIENCE_MATCH);
     }
-    if (pick.equipmentFit === 1 && discriminated(scored, pick, 'equipmentFit')) {
-      reasons.push(REASON.EQUIPMENT_MATCH);
-    }
+    /* There is deliberately NO equipment reason here (Phase 4.3.9-L).
+     * Equipment stopped being a ranking preference and became an eligibility
+     * requirement, so every candidate that reaches this point already supports
+     * the user. A signal shared by the whole field explains nothing about why
+     * THIS Program won, and claiming it would be exactly the false precision
+     * this function exists to prevent — the same rule that already withholds a
+     * schedule claim when the schedule counted against the winner.
+     *
+     * `REASON.EQUIPMENT_MATCH` and its REASON_COPY entry are retained as
+     * canonical vocabulary so the code→copy table stays total, but nothing
+     * emits them while eligibility requires verified support. */
 
     if (!reasons.length) {
       // Nothing about this user separated the field. Say that plainly instead
@@ -474,7 +594,12 @@
       activeProgram: p.activeProgram,
       recommendedProgram: null,
       reasons: [],
-      alternatives: []
+      alternatives: [],
+      // Phase 4.3.9-L. null unless the engine deliberately withheld a
+      // recommendation; 'equipment' means eligible-by-equipment removed every
+      // candidate. A surface reads this to show a truthful no-fit state rather
+      // than an empty slot that looks like a loading failure.
+      noFitReason: null
     };
 
     if (p.trainingDays == null) {
@@ -491,9 +616,20 @@
       return out;
     }
 
+    var parts = partitionCandidates(list, p);
     var scored = rankPrograms(list, p);
     if (!scored.length) {
       warnings.push(WARNING.NO_MATCH);
+      // Equipment is blamed ONLY when at least one otherwise-valid candidate
+      // was removed by the equipment gate. A catalog whose rows are all
+      // unusable (no slug) produces the same empty result for an entirely
+      // different reason, and saying "no equipment match" there would blame the
+      // user's answer for a data fault. Recorded on the verdict so no surface
+      // has to re-derive the cause.
+      if (parts.removedByEquipment.length) {
+        warnings.push(WARNING.NO_EQUIPMENT_MATCH);
+        out.noFitReason = 'equipment';
+      }
       out.status = STATUS.PARTIAL;
       return out;
     }
@@ -506,9 +642,10 @@
     });
 
     // An honest caveat, not a rejection: the Program is still the best fit,
-    // and the user is told what it does not cover.
+    // and the user is told what it does not cover. Equipment can no longer
+    // reach this point — an equipment mismatch is now an eligibility failure
+    // handled above, never a caveat attached to a recommendation.
     if (pick.experienceFit === -1) warnings.push(WARNING.EXPERIENCE_MISMATCH);
-    if (pick.equipmentFit === -1) warnings.push(WARNING.EQUIPMENT_MISMATCH);
 
     // 'ready' requires a real goal signal. Ranking the catalog by schedule
     // alone produces an ORDER, not a personalized recommendation.
@@ -700,7 +837,10 @@
     rankPrograms: rankPrograms,
     goalRank: goalRank,
     experienceFit: experienceFit,
-    equipmentFit: equipmentFit
+    equipmentFit: equipmentFit,
+    EQUIPMENT_SUPPORT: EQUIPMENT_SUPPORT,
+    equipmentSupport: equipmentSupport,
+    isEligible: isEligible
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = Personalization;

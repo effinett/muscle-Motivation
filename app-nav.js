@@ -379,8 +379,66 @@
     }
   }
 
+  /* ── Train sub-pane deep link (Phase 4.3.9-L) ─────────────────────────────
+   * Train owns three panes (Today · Workouts · Programs) behind ONE route,
+   * workout.html, which has no existing convention for selecting one. Home's
+   * no-fit state needs to land the user on Programs, so this adds the smallest
+   * explicit parameter — `?pane=` — and the pure decision that reads it.
+   *
+   * It lives here because app-nav.js already owns routing and is already loaded
+   * on workout.html; a whole module for one function would be worse. It is a
+   * PURE string→string decision with no DOM, so it is directly testable.
+   *
+   * Deliberate properties:
+   *   - Unknown, missing, malformed or repeated values all fall back to
+   *     'today', so a hand-edited or truncated URL can never leave Train in an
+   *     undefined state.
+   *   - Plain navigation to workout.html carries no parameter and therefore
+   *     still opens Today, unchanged.
+   *   - It reads the URL only. Nothing is stored, so Back and reload are
+   *     deterministic: the pane is a function of the address, nothing else. */
+  var TRAIN_PANES = ['today', 'workouts', 'programs'];
+  var TRAIN_PANE_PARAM = 'pane';
+  var TRAIN_PANE_DEFAULT = 'today';
+
+  function resolveTrainPane(search) {
+    if (typeof search !== 'string' || !search) return TRAIN_PANE_DEFAULT;
+    var q = search.charAt(0) === '?' ? search.slice(1) : search;
+    var parts = q.split('&');
+    for (var i = 0; i < parts.length; i++) {
+      var eq = parts[i].indexOf('=');
+      if (eq < 0) continue;
+      if (parts[i].slice(0, eq) !== TRAIN_PANE_PARAM) continue;
+      var raw = parts[i].slice(eq + 1);
+      var value;
+      try {
+        value = decodeURIComponent(raw.replace(/\+/g, ' '));
+      } catch (e) {
+        return TRAIN_PANE_DEFAULT;      // malformed percent-encoding
+      }
+      value = String(value).trim().toLowerCase();
+      // First occurrence wins, and an unsupported value is a fallback rather
+      // than a reason to keep scanning for a supported one.
+      return TRAIN_PANES.indexOf(value) >= 0 ? value : TRAIN_PANE_DEFAULT;
+    }
+    return TRAIN_PANE_DEFAULT;
+  }
+
+  // The one place that builds the link, so Home cannot drift from what Train
+  // parses.
+  function trainPaneHref(pane) {
+    return TRAIN_PANES.indexOf(pane) >= 0 && pane !== TRAIN_PANE_DEFAULT
+      ? 'workout.html?' + TRAIN_PANE_PARAM + '=' + pane
+      : 'workout.html';
+  }
+
   var AppNav = {
     NAV_DESTINATIONS: NAV_DESTINATIONS,
+    TRAIN_PANES: TRAIN_PANES,
+    TRAIN_PANE_PARAM: TRAIN_PANE_PARAM,
+    TRAIN_PANE_DEFAULT: TRAIN_PANE_DEFAULT,
+    resolveTrainPane: resolveTrainPane,
+    trainPaneHref: trainPaneHref,
     SUPPRESSED_ROUTES: SUPPRESSED_ROUTES,
     VIEW_SUPPRESSED: VIEW_SUPPRESSED,
     MOUNT_ID: MOUNT_ID,

@@ -612,11 +612,22 @@
            Program fits — an empty block would be worse than none. -->
       <div id="ob-trainingBlock" style="display:none;">
         <div class="reveal-label">Training</div>
-        <div class="reveal-program">
+        <div class="reveal-program" id="ob-rProgramCard">
           <div class="reveal-eyebrow">Recommended Program</div>
           <div class="reveal-name" id="ob-rProgramName">—</div>
           <div class="reveal-reasons" id="ob-rProgramReasons"></div>
           <div class="reveal-meta" id="ob-rProgramMeta"></div>
+        </div>
+        <!-- Phase 4.3.9-L. Shown INSTEAD of the card above when the engine
+             deliberately withheld a recommendation because no Program is
+             deliverable with the equipment this person has. Never both. -->
+        <div class="reveal-program" id="ob-rNoFit" style="display:none;">
+          <div class="reveal-eyebrow">Recommended Program</div>
+          <div class="reveal-name">No equipment match yet</div>
+          <div class="reveal-meta">
+            We won't recommend a Program that requires equipment you don't have.
+            Finish setup, then you can browse all Programs.
+          </div>
         </div>
       </div>
 
@@ -1242,9 +1253,27 @@
     // funnel completes but delivers less than it should".
     mmFunnel('personalized_plan_viewed', plan.status);
 
+    var card = document.getElementById('ob-rProgramCard');
+    var noFit = document.getElementById('ob-rNoFit');
     var rec = plan.training.recommendedProgram;
-    if (!rec) { block.style.display = 'none'; return; }
 
+    // Phase 4.3.9-L. A withheld recommendation is a RESULT, not a failure, so
+    // the training block stays visible and states the position plainly. Any
+    // other reason for having no recommendation (no catalog, no goal) keeps the
+    // original behaviour of hiding the block entirely.
+    if (!rec) {
+      if (plan.training.noFitReason === 'equipment') {
+        card.style.display = 'none';
+        noFit.style.display = '';
+        block.style.display = 'block';
+      } else {
+        block.style.display = 'none';
+      }
+      return;
+    }
+
+    card.style.display = '';
+    noFit.style.display = 'none';
     document.getElementById('ob-rProgramName').textContent = rec.name;
 
     var chips = Personalization.describeReasons(plan).map(function (text) {
