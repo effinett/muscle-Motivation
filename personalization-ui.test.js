@@ -410,3 +410,127 @@ test('4.3.9-L: no surface enrols, owns or mutates anything on the no-fit path', 
       name + ' must not write enrolment or ownership state in the no-fit branch');
   });
 });
+
+/* ── 4.3.9-L · no-fit copy, headings and wrapping ──────────────────────────
+ * Corrections from owner-led production validation. Three of these are
+ * source-inspection guards over markup and CSS (the repository still has no
+ * executable DOM or layout harness), and the CSS ones in particular prove the
+ * RULES EXIST — not that the browser lays the card out correctly. Real
+ * viewport behaviour at 320/390/430 remains a production-validation
+ * requirement, recorded rather than claimed. */
+
+// The full text of the shared workout.html <style> block, so CSS rules can be
+// asserted; readCode() strips styles and would hide them entirely.
+const TRAIN_STYLE = (TRAIN.match(/<style[\s\S]*?<\/style>/i) || [''])[0];
+
+test('4.3.9-L: onboarding labels the no-fit card without claiming a recommendation', () => {
+  // Two sibling cards, one eyebrow each: the no-fit card must not say
+  // "Recommended Program" directly above "No equipment match yet". Read the
+  // COMMENT-STRIPPED source — the card's own explanatory comment quotes the
+  // rejected wording, and matching prose would be a false positive.
+  const noFit = ONBOARD_CODE.slice(ONBOARD_CODE.indexOf('id="ob-rNoFit"'));
+  const card = noFit.slice(0, noFit.indexOf('</div>\n        </div>') + 20);
+  assert.ok(/Training Program/.test(card),
+    'the no-fit card must be headed "Training Program"');
+  assert.ok(!/Recommended Program/.test(card),
+    'the no-fit card must not claim a recommendation it did not make');
+
+  // ...while the successful card keeps its own wording.
+  const ok = ONBOARD_CODE.slice(ONBOARD_CODE.indexOf('id="ob-rProgramCard"'),
+                                ONBOARD_CODE.indexOf('id="ob-rNoFit"'));
+  assert.ok(/Recommended Program/.test(ok),
+    'the successful recommendation card must still say "Recommended Program"');
+});
+
+test('4.3.9-L: Train sets its heading per branch, defaulting to the success wording', () => {
+  assert.ok(/id="suggestedLabel"[^>]*>Recommended For You</.test(TRAIN),
+    'the static default must remain the successful wording');
+
+  const nofit = TRAIN_CODE.slice(TRAIN_CODE.indexOf("noFitReason === 'equipment'"));
+  const branch = nofit.slice(0, nofit.indexOf('return;'));
+  assert.ok(/suggestedLabel'\)\.textContent = 'Program Match'/.test(branch),
+    'the equipment no-fit branch must set the heading to "Program Match"');
+  assert.ok(!/Recommended For You/.test(branch),
+    'the no-fit branch must not present itself as a recommendation');
+
+  // The success path must restore it, since one section serves both outcomes.
+  const after = TRAIN_CODE.slice(TRAIN_CODE.indexOf('var bits = Personalization.describeReasons'));
+  assert.ok(/suggestedLabel'\)\.textContent = 'Recommended For You'/.test(
+    after.slice(0, after.indexOf('suggestedWrap'))),
+    'the success branch must restore "Recommended For You"');
+});
+
+test('4.3.9-L: the approved no-fit sentence is used, and the removed phrases are gone', () => {
+  // workout.html emits the sentence from a concatenated JS string, so the
+  // source contains quote/escape noise between the halves. Normalize both
+  // whitespace and that noise, then require the sentence verbatim — and
+  // require it to END there, which is what proves the removed clause is gone.
+  const normalize = (s) => s.replace(/\s+/g, ' ').replace(/'\s*\+\s*'/g, '').replace(/\\'/g, "'");
+  const SENTENCE = "We won't recommend a Program that requires equipment you don't have.";
+  [['onboarding.html', ONBOARD], ['workout.html', TRAIN]].forEach(([name, src]) => {
+    assert.ok(normalize(src).includes(SENTENCE),
+      name + ' must carry the approved no-fit sentence verbatim');
+  });
+  // These made the sentence depend on the button, or promised future content.
+  [['onboarding.html', ONBOARD], ['app.html', HOME], ['workout.html', TRAIN]].forEach(([name, src]) => {
+    assert.ok(!/You can still/.test(src), name + ' must not say "You can still…"');
+    assert.ok(!/Finish setup, then you can browse/.test(src),
+      name + ' must not defer the action into the sentence');
+    assert.ok(!/on the way/.test(src), name + ' must not promise unbuilt Programs');
+  });
+});
+
+test('4.3.9-L: Home keeps its compact treatment and its unchanged route', () => {
+  const home = HOME_CODE.slice(HOME_CODE.indexOf('noFitReason'));
+  const branch = home.slice(0, home.indexOf('return;'));
+  assert.ok(/No equipment match yet:/.test(branch), 'Home keeps the compact label');
+  assert.ok(/Browse Programs/.test(branch), 'Home keeps its action text');
+  assert.ok(/AppNav\.trainPaneHref\('programs'\)/.test(branch),
+    'Home must still build its link through AppNav');
+  const hrefs = branch.match(/'workout\.html[^']*'/g) || [];
+  assert.ok(hrefs.length > 0 && hrefs.every((h) => /\?pane=programs'$/.test(h)),
+    'every Home browse destination must still select Programs');
+});
+
+test('4.3.9-L: the no-fit card opts out of the shared single-line truncation', () => {
+  // The shared rules are correct for their original consumers (template names,
+  // session labels), so the fix is scoped rather than global.
+  assert.ok(/\.tpl-name \{[^}]*text-overflow: ellipsis/.test(TRAIN_STYLE.replace(/\n\s*/g, ' ')),
+    'the shared single-line rule should remain for ordinary cards');
+
+  const scoped = (TRAIN_STYLE.match(
+    /\.tpl-card--nofit \.tpl-name,[\s\S]*?\}/) || [''])[0].replace(/\n\s*/g, ' ');
+  assert.ok(/white-space: normal/.test(scoped), 'the no-fit text must wrap');
+  assert.ok(/overflow: visible/.test(scoped), 'the no-fit text must not be clipped');
+  assert.ok(/text-overflow: clip/.test(scoped), 'the no-fit text must not ellipsize');
+  assert.ok(/overflow-wrap: anywhere/.test(scoped),
+    'a long word must not be able to force horizontal overflow');
+
+  // ...and the card the user actually sees requests that scope.
+  const branch = TRAIN_CODE.slice(TRAIN_CODE.indexOf("noFitReason === 'equipment'"));
+  assert.ok(/tpl-card tpl-card--nofit/.test(branch.slice(0, branch.indexOf('return;'))),
+    'the rendered no-fit card must carry the scoped class');
+});
+
+test('4.3.9-L: narrow widths stack the no-fit card and keep the action tappable', () => {
+  const css = TRAIN_STYLE.replace(/\n\s*/g, ' ');
+  const mq = (css.match(/@media \(max-width: 430px\) \{[\s\S]*?\.tpl-card--nofit[\s\S]*?\} \}/) ||
+              css.match(/@media \(max-width: 430px\) \{[\s\S]*/) || [''])[0];
+  assert.ok(/\.tpl-card--nofit \{[^}]*flex-direction: column/.test(mq),
+    'the card must stack: title, sentence, then button');
+  assert.ok(/\.tpl-card--nofit \.btn-tpl-start \{[^}]*width: 100%/.test(mq),
+    'the stacked action must span the card rather than a sliver');
+  assert.ok(/\.tpl-card--nofit \.btn-tpl-start \{[^}]*min-height: 44px/.test(css),
+    'the action must keep a 44px touch target');
+});
+
+test('4.3.9-L: the copy correction adds no writes of any kind', () => {
+  [['onboarding.html', ONBOARD_CODE], ['app.html', HOME_CODE], ['workout.html', TRAIN_CODE]]
+    .forEach(([name, code]) => {
+      const i = code.indexOf('noFitReason');
+      if (i < 0) return;
+      const branch = code.slice(i, i + 1600);
+      assert.ok(!/user_programs|\.insert\(|\.upsert\(|active_program|purchases/.test(branch),
+        name + ' must not write enrolment, ownership or entitlement state');
+    });
+});

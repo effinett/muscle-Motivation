@@ -420,6 +420,44 @@
     .tpl-sub { font-size: 12px; color: var(--text-muted);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tpl-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+
+    /* ── Equipment no-fit card (Phase 4.3.9-L) ───────────────────────────────
+       The rules above are correct for their original consumers: a template
+       name, a session label, a custom-exercise name — all short, single-line
+       labels where one clipped line is better than a reflowing card.
+
+       The no-fit card is different in kind. Its body is a SENTENCE the user
+       must be able to read, and truncating it produced "No equipmen…" /
+       "We won't recom…" at 320px — a card that occupied space while
+       communicating nothing. Scoped to this one card so every other tpl-card
+       consumer keeps the shipped single-line behaviour unchanged. */
+    .tpl-card--nofit .tpl-name,
+    .tpl-card--nofit .tpl-sub {
+      white-space: normal;        /* undo the shared nowrap */
+      overflow: visible;          /* undo the shared clip   */
+      text-overflow: clip;        /* undo the shared ellipsis */
+      overflow-wrap: anywhere;    /* a long word can never force overflow */
+    }
+    .tpl-card--nofit .tpl-sub { line-height: 1.45; }
+    /* The action must stay whole and stay tappable even as the text reflows. */
+    .tpl-card--nofit .btn-tpl-start { min-height: 44px; white-space: nowrap; }
+
+    /* Narrow widths stack: full title, full sentence, then the button beneath.
+       430px covers the largest common phone (iPhone Pro Max class) and every
+       width below it, which is exactly where the horizontal layout ran out of
+       room for a sentence. */
+    @media (max-width: 430px) {
+      .tpl-card--nofit {
+        flex-direction: column;
+        align-items: stretch;     /* the button spans the card, not a sliver */
+        gap: 10px;
+      }
+      .tpl-card--nofit .tpl-actions { width: 100%; }
+      .tpl-card--nofit .btn-tpl-start {
+        width: 100%;
+        display: flex; align-items: center; justify-content: center;
+      }
+    }
     .btn-tpl-start {
       padding: 9px 16px; background: var(--red); border: none; border-radius: 7px;
       color: #fff; font-family: 'Bebas Neue', sans-serif; font-size: 16px;
@@ -1119,7 +1157,12 @@
            session. A suggestion, never an enrolment: its action opens the
            Program page, where starting it stays the user's explicit choice. -->
       <div id="suggestedSection" style="display:none;">
-        <div class="section-label">Recommended For You</div>
+        <!-- One section serves two outcomes, so the heading is set by whichever
+             branch renders: "Recommended For You" names a pick, and the
+             equipment no-fit state reports a match result instead of claiming a
+             recommendation it deliberately withheld. Default stays the
+             successful wording. -->
+        <div class="section-label" id="suggestedLabel">Recommended For You</div>
         <div id="suggestedWrap"></div>
       </div>
 
@@ -4261,15 +4304,21 @@
       // points at the Programs pane — browsing is explicitly NOT a
       // recommendation, and no Program is named here.
       if (!rec && plan.training.noFitReason === 'equipment') {
-        // The action carries type="button" so that a future enclosing <form>
-        // can never turn it into a submit and navigate away instead of
-        // switching pane.
+        // "Program Match" rather than "Recommended For You": no Program was
+        // recommended, so the heading reports the result instead of promising
+        // a pick that does not exist.
+        document.getElementById('suggestedLabel').textContent = 'Program Match';
+        // tpl-card--nofit opts this ONE card out of the shared single-line
+        // ellipsis treatment. The explanation is a sentence, not a template
+        // name, so it must wrap in full rather than truncate. The action
+        // carries type="button" so a future enclosing <form> can never turn it
+        // into a submit and navigate away instead of switching pane.
         document.getElementById('suggestedWrap').innerHTML =
-          '<div class="tpl-card">' +
+          '<div class="tpl-card tpl-card--nofit">' +
             '<div class="tpl-info">' +
               '<div class="tpl-name">No equipment match yet</div>' +
               '<div class="tpl-sub">We won\'t recommend a Program that requires ' +
-                'equipment you don\'t have. You can still browse all Programs.</div>' +
+                'equipment you don\'t have.</div>' +
             '</div>' +
             '<div class="tpl-actions">' +
               '<button type="button" class="btn-tpl-start" ' +
@@ -4292,6 +4341,11 @@
       if (rec.recommendedDaysPerWeek) {
         bits.push(rec.recommendedDaysPerWeek + ' days / week');
       }
+
+      // A real recommendation exists, so the heading names it. Set explicitly
+      // rather than relying on the markup default, because the no-fit branch
+      // may have changed it earlier in this page's life.
+      document.getElementById('suggestedLabel').textContent = 'Recommended For You';
 
       document.getElementById('suggestedWrap').innerHTML =
         '<div class="tpl-card">' +
