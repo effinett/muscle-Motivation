@@ -1732,6 +1732,53 @@ inference from qualitative observation.**
 
 VD-A, VD-B, and VD-F are all physical-iPhone checks and should be performed in one session.
 
+**VD-B — partial evidence recorded 2026-09-18. The item remains OPEN.** Post-merge validation of the
+Phase 4.3.9-L equipment **no-fit card** (PR #55, squash `54ea0be`). Scope is that card only — not whole
+surfaces and not every onboarding step.
+
+| Surface | 320 px | 390 px | ~430 px class, physical |
+|---|---|---|---|
+| Train → Today | emulation, screenshot | emulation, screenshot | physical, screenshot |
+| Onboarding step 5 reveal | emulation, screenshot | — | physical, owner-reported |
+| Home | — | — | physical, screenshot |
+| Train → Programs (catalog browse) | — | — | physical, screenshot + owner interaction |
+
+Also **owner-reported** on the physical device, without independent audit: Home → Browse Programs opens
+Programs · after reloading Home, Home and Train → Today still show the no-fit state (**observed UI
+persistence, not a database audit**) · the onboarding dropdown was usable, and the small-control issue seen
+under desktop emulation did not reproduce.
+
+**Evidence qualifications.** The 320 and 390 px checks are **desktop responsive emulation**, not physical
+devices at those widths. The device was an **iPhone 14 Plus**, recorded as the **~430 px-class** physical
+check; its exact viewport was not measured. Browser context is **iOS web**; some captures show an in-app
+browser sheet, so this is **not** standalone-PWA evidence and bears on **neither VD-A nor any other item**,
+all of which are unchanged.
+
+**Disposition.** Physical-device validation at 320/390 remains outstanding under §10.11B. The iPhone 14
+Plus provides approximately 430 px-class evidence; its exact viewport was not measured. **VD-B remains
+OPEN. No acceptance criterion is changed.** The evidence is also partial in scope: it covers the
+**no-fit card**, whereas §10.11B's closing criterion names whole surfaces and the onboarding wizard
+generally, and **first-run surface validation is pending delivery** — Phase 4.3.8 has not started, so
+those surfaces do not exist yet (verified 2026-09-18: no product code references a first-run experience
+and `profiles` has no `first_run_version` column).
+
+## 10.14 Onboarding header vertical overhead — **OPEN observation, unscheduled**
+
+Observed 2026-09-18 under 320 px desktop emulation, **on steps 3 and 5**. On those steps the full branded
+header — MM logo · MUSCLE MOTIVATION · "Let's build your personalized plan" · decorative divider ·
+progress indicator and step label — consumes noticeable vertical space on a small screen. **The remaining
+steps have not been audited**, so this is not yet known to affect the whole wizard.
+
+**Step 5 necessarily scrolls** because it carries the plan summary, and scrolling is **not** the defect.
+The concern is unnecessary branding and header overhead, not fitting everything into one viewport.
+
+Proposed direction, requiring **separate approval and its own reviewed scope**: full branded header on
+step 1 · compact MM header plus progress on steps 2–5 · reduced vertical padding · consider removing the
+redundant "Your Personalized Plan" divider on step 5.
+
+**No header implementation is authorized.** Not scheduled, not implemented, not a phase — recorded so the
+observation is not lost.
+
 # 11. PROTECTED FUTURE COMMITMENTS
 
 These are explicitly retained. They may **move between phases with approval**. They may **not** silently
