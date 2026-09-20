@@ -24,6 +24,19 @@ var PROGRAM_SCHEDULES = {
     5: ['push_a', 'pull_a', 'legs_a', 'upper_b', 'lower_b'],
     6: ['push_a', 'pull_a', 'legs_a', 'push_b', 'pull_b', 'legs_b'],
   },
+  // Bodyweight Foundations runs the SAME three full-body sessions at every
+  // frequency — no session is dropped for a lower training day count, so a
+  // 2-day user still reaches C by carrying `current_index` forward across
+  // weeks (A,B → C,A → B,C). This mapping is behaviourally identical to the
+  // unmapped-slug fallback below; it is written out so the intent is explicit
+  // and survives any future change to that fallback.
+  bodyweight_foundations: {
+    2: ['full_a', 'full_b', 'full_c'],
+    3: ['full_a', 'full_b', 'full_c'],
+    4: ['full_a', 'full_b', 'full_c'],
+    5: ['full_a', 'full_b', 'full_c'],
+    6: ['full_a', 'full_b', 'full_c'],
+  },
   glute_builder: {
     2: ['glute_a', 'glute_b'],
     3: ['glute_a', 'glute_b', 'glute_c'],

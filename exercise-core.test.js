@@ -477,3 +477,22 @@ test('CP3b: the 141 pre-existing catalog entries are untouched', () => {
   const bench = EXERCISE_CATALOG.find((e) => e.name === 'Bench Press');
   assert.ok(bench && bench.equipment === 'Barbell', 'Bench Press must be unchanged');
 });
+
+/* Convention guard added with CP3c, protecting a CP3b correction.
+ *
+ * Two CP3b rows were inserted with Title Case aliases while every other row in
+ * the catalog stored them lowercase. Resolution normalizes aliases, so nothing
+ * broke — but the raw value surfaces as `matchedAlias`, and the id-only catalog
+ * checksum is structurally blind to field content, so neither the checksum nor
+ * the existing tests could see the drift. The database was corrected in
+ * migration `phase_439b_cp3b_normalize_alias_casing`; this keeps the fixture
+ * honest from here on. It is a repository invariant only and does NOT replace
+ * live-database verification. */
+test('every alias in the catalog fixture is lowercase', () => {
+  EXERCISE_CATALOG.forEach((ex) => {
+    (ex.aliases || []).forEach((alias) => {
+      assert.strictEqual(alias, alias.toLowerCase(),
+        'alias "' + alias + '" on ' + ex.name + ' must be stored lowercase');
+    });
+  });
+});
