@@ -1,6 +1,7 @@
-// Exercise-intelligence benchmark/test fixture (Phase 4.2.1E; expanded 4.2.1G).
+// Exercise-intelligence benchmark/test fixture (Phase 4.2.1E; expanded 4.2.1G,
+// 4.3.9B CP3b).
 //
-// A deterministic snapshot of the live `public.exercises` catalog (all 141 rows),
+// A deterministic snapshot of the live `public.exercises` catalog (all 144 rows),
 // trimmed to the identity + classification fields the shared exercise-core
 // intelligence reasons over (instructions/tips omitted — not used by resolution,
 // families, or relationships). IDs are the REAL exercises.id values, so a
@@ -8,7 +9,9 @@
 //
 // This is a TEST FIXTURE, not a production data source: the browser/app loads
 // the catalog from Supabase at runtime. Regenerate from the DB if the catalog
-// changes. Checksum = md5 of the sorted id set (Phase 4.2.1G): 3f740fb4f3466d3e15aee5718f4a910e.
+// changes. Checksum = md5 of the sorted id set joined by ',' (Phase 4.3.9B CP3b):
+// a1314c867b375fad835b246f7536ec68. Prior value at 141 rows (Phase 4.2.1G):
+// 3f740fb4f3466d3e15aee5718f4a910e.
 //
 // Same role as benchmarks/fixtures.js for food resolution.
 
@@ -155,7 +158,13 @@ const EXERCISE_CATALOG = [
   { id: '7033cf0a-6ce8-4008-a698-b6e10fc497f2', name: 'Band Bicep Curl', category: 'Biceps', equipment: 'Band', primary_muscle: 'Biceps', secondary_muscles: [], aliases: ['resistance band curl', 'band curl', 'band bicep curls'], movement_pattern: 'isolation', force_type: 'pull', difficulty: 'beginner', is_bodyweight: false, is_unilateral: false, tracking_type: 'weight_reps', default_unit: 'lb' },
   { id: 'eb428a86-18d8-42cc-b7bf-f2808897bf74', name: 'Band Triceps Extension', category: 'Triceps', equipment: 'Band', primary_muscle: 'Triceps', secondary_muscles: [], aliases: ['resistance band tricep extension', 'band tricep extension', 'band pushdown'], movement_pattern: 'isolation', force_type: 'push', difficulty: 'beginner', is_bodyweight: false, is_unilateral: false, tracking_type: 'weight_reps', default_unit: 'lb' },
   { id: '66255be0-4c5d-4ea1-9b75-02029ab88d4b', name: 'Band Pull-Apart', category: 'Vertical Push', equipment: 'Band', primary_muscle: 'Rear Delts', secondary_muscles: ['Upper Back'], aliases: ['band pull apart', 'resistance band pull apart', 'band pull aparts'], movement_pattern: 'isolation', force_type: 'pull', difficulty: 'beginner', is_bodyweight: false, is_unilateral: false, tracking_type: 'weight_reps', default_unit: 'lb' },
-  { id: '72f01eeb-6e45-4165-b575-154917a1aa8d', name: 'Band Squat', category: 'Squat', equipment: 'Band', primary_muscle: 'Quads', secondary_muscles: ['Glutes'], aliases: ['resistance band squat', 'band squats'], movement_pattern: 'squat', force_type: 'push', difficulty: 'beginner', is_bodyweight: false, is_unilateral: false, tracking_type: 'weight_reps', default_unit: 'lb' }
+  { id: '72f01eeb-6e45-4165-b575-154917a1aa8d', name: 'Band Squat', category: 'Squat', equipment: 'Band', primary_muscle: 'Quads', secondary_muscles: ['Glutes'], aliases: ['resistance band squat', 'band squats'], movement_pattern: 'squat', force_type: 'push', difficulty: 'beginner', is_bodyweight: false, is_unilateral: false, tracking_type: 'weight_reps', default_unit: 'lb' },
+  // Phase 4.3.9B CP3b — equipment-free movements for Bodyweight Foundations.
+  // Superman is force_type 'static' and is posterior-chain/postural endurance:
+  // it is deliberately NOT a pulling movement and must never be described as one.
+  { id: 'b1f4c7a2-3e58-4d91-9c26-7a0d8e5f1b34', name: 'Pike Push-Up', category: 'Vertical Push', equipment: 'Bodyweight', primary_muscle: 'Shoulders', secondary_muscles: ['Triceps', 'Chest'], aliases: ['pike pushup', 'pike press'], movement_pattern: 'vertical_push', force_type: 'push', difficulty: 'intermediate', is_bodyweight: true, is_unilateral: false, tracking_type: 'bodyweight_reps', default_unit: 'lb' },
+  { id: 'c2a5d8b3-4f69-4e02-8d37-1b9e0f6a2c45', name: 'Superman', category: 'Hinge', equipment: 'Bodyweight', primary_muscle: 'Lower Back', secondary_muscles: ['Glutes', 'Hamstrings'], aliases: [], movement_pattern: 'hinge', force_type: 'static', difficulty: 'beginner', is_bodyweight: true, is_unilateral: false, tracking_type: 'bodyweight_reps', default_unit: 'lb' },
+  { id: 'd3b6e9c4-5a7a-4f13-9e48-2c0f1a7b3d56', name: 'Bird Dog', category: 'Core', equipment: 'Bodyweight', primary_muscle: 'Core', secondary_muscles: ['Glutes', 'Lower Back'], aliases: ['quadruped opposite arm leg'], movement_pattern: 'core', force_type: 'static', difficulty: 'beginner', is_bodyweight: true, is_unilateral: true, tracking_type: 'bodyweight_reps', default_unit: 'lb' }
 ];
 
 module.exports = { EXERCISE_CATALOG };

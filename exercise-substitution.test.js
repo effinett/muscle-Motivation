@@ -338,10 +338,18 @@ test('real catalog coverage stays high and the known isolates stay isolated', ()
     if (r.best.length || r.other.length) withAny++;
     else zero.push(src.name);
   });
-  assert.ok(withAny >= 130, 'coverage dropped to ' + withAny + '/141');
-  // These five are genuinely alone in their (muscle × tracking) cell. Returning
+  assert.ok(withAny >= 130, 'coverage dropped to ' + withAny + '/' + EXERCISE_CATALOG.length);
+  // These six are genuinely alone in their (muscle × tracking) cell. Returning
   // nothing is the CORRECT answer — the alternative is suggesting something wrong.
+  //
+  // Superman (Phase 4.3.9B CP3b) is the newest, and its isolation is DELIBERATE:
+  // it is the only exercise whose primary_muscle is 'Lower Back'. The sole way to
+  // give it candidates would be to reclassify it as 'Back', which is the primary
+  // muscle of twelve ROWS — so the engine would start offering pulling movements
+  // as substitutes for a floor exercise. That is the exact pulling-equivalence
+  // 4.3.9B forbids, so no substitute is the honest answer here.
   assert.deepStrictEqual(zero.sort(), [
-    'Farmer Carry', 'Hip Adduction', 'Incline Treadmill Walk', 'Treadmill Run', 'Wall Sit'
+    'Farmer Carry', 'Hip Adduction', 'Incline Treadmill Walk', 'Superman',
+    'Treadmill Run', 'Wall Sit'
   ]);
 });

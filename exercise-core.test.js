@@ -280,7 +280,7 @@ test('the production catalog passes validation (no identity errors)', () => {
   const v = EX.validateExerciseCatalog(EXERCISE_CATALOG);
   assert.equal(v.ok, true);
   assert.equal(v.errors.length, 0);
-  assert.equal(v.counts.exercises, 141); // Phase 4.2.1G expansion (57 → 141)
+  assert.equal(v.counts.exercises, 144); // 4.2.1G expansion (57 → 141); 4.3.9B CP3b (→ 144)
   // The expansion introduces no name/equipment or laterality integrity warnings.
   const noisy = v.warnings.filter((w) => w.code === 'equipment_name_mismatch' || w.code === 'laterality_name_mismatch');
   assert.equal(noisy.length, 0);
@@ -369,4 +369,111 @@ test('progression PARITY: omitting metadata matches name-regex inference exactly
   ['Bench Press', 'Goblet Squat', 'Lat Pulldown', 'Plank', 'Farmer Carry'].forEach((n) => {
     assert.equal(P.resolveEquipment({ exerciseName: n }), P.inferEquipment(n));
   });
+});
+
+/* ── Phase 4.3.9B CP3b — Bodyweight Foundations exercise records ───────────
+ * Three equipment-free movements added so a Bodyweight Program can be built
+ * without any exercise that needs a bar, bench, box or implement.
+ *
+ * These assert the FIXTURE, which is a committed mirror of public.exercises.
+ * Fixture↔header consistency is provable here; fixture↔LIVE-DATABASE parity is
+ * not, and is proven at migration time instead. */
+
+const CP3B = {
+  'b1f4c7a2-3e58-4d91-9c26-7a0d8e5f1b34': {
+    name: 'Pike Push-Up', category: 'Vertical Push', equipment: 'Bodyweight',
+    primary_muscle: 'Shoulders', secondary_muscles: ['Chest', 'Triceps'],
+    movement_pattern: 'vertical_push', force_type: 'push', difficulty: 'intermediate',
+    is_bodyweight: true, is_unilateral: false, tracking_type: 'bodyweight_reps',
+    default_unit: 'lb', aliases: ['pike press', 'pike pushup'],
+  },
+  'c2a5d8b3-4f69-4e02-8d37-1b9e0f6a2c45': {
+    name: 'Superman', category: 'Hinge', equipment: 'Bodyweight',
+    primary_muscle: 'Lower Back', secondary_muscles: ['Glutes', 'Hamstrings'],
+    movement_pattern: 'hinge', force_type: 'static', difficulty: 'beginner',
+    is_bodyweight: true, is_unilateral: false, tracking_type: 'bodyweight_reps',
+    default_unit: 'lb', aliases: [],
+  },
+  'd3b6e9c4-5a7a-4f13-9e48-2c0f1a7b3d56': {
+    name: 'Bird Dog', category: 'Core', equipment: 'Bodyweight',
+    primary_muscle: 'Core', secondary_muscles: ['Glutes', 'Lower Back'],
+    movement_pattern: 'core', force_type: 'static', difficulty: 'beginner',
+    is_bodyweight: true, is_unilateral: true, tracking_type: 'bodyweight_reps',
+    default_unit: 'lb', aliases: ['quadruped opposite arm leg'],
+  },
+};
+
+const byId = (id) => EXERCISE_CATALOG.filter((e) => e.id === id);
+const sorted = (a) => (a || []).slice().sort();
+
+test('CP3b: each new exercise appears exactly once, with every approved field', () => {
+  Object.keys(CP3B).forEach((id) => {
+    const hits = byId(id);
+    assert.equal(hits.length, 1, id + ' must appear exactly once');
+    const row = hits[0];
+    const want = CP3B[id];
+    Object.keys(want).forEach((k) => {
+      // Arrays compare order-insensitively, matching the migration's predicate.
+      if (Array.isArray(want[k])) {
+        assert.deepStrictEqual(sorted(row[k]), sorted(want[k]), id + '.' + k);
+      } else {
+        assert.strictEqual(row[k], want[k], id + '.' + k);
+      }
+    });
+  });
+});
+
+test('CP3b: Superman is static, never a pulling movement', () => {
+  const s = byId('c2a5d8b3-4f69-4e02-8d37-1b9e0f6a2c45')[0];
+  assert.strictEqual(s.force_type, 'static');
+  assert.notStrictEqual(s.force_type, 'pull');
+  // Nothing in its identity may support pulling-equivalence copy.
+  const text = [s.name, s.category, s.movement_pattern].concat(s.aliases || []).join(' ').toLowerCase();
+  [/\brow\b/, /pull-?up/, /pulldown/, /\blat\b/].forEach((re) => {
+    assert.ok(!re.test(text), 'Superman must not carry pulling language: ' + re);
+  });
+});
+
+test('CP3b: all three are equipment-free by the approved contract', () => {
+  Object.keys(CP3B).forEach((id) => {
+    const row = byId(id)[0];
+    assert.strictEqual(row.equipment, 'Bodyweight', row.name + ' equipment');
+    assert.strictEqual(row.is_bodyweight, true, row.name + ' is_bodyweight');
+    // The contract is body + floor + wall: no fixture-dependent vocabulary.
+    const text = [row.name].concat(row.aliases || []).join(' ').toLowerCase();
+    [/bench/, /\bbar\b/, /\bbox\b/, /chair/, /\bstep\b/, /machine/, /dumbbell/, /\bband\b/]
+      .forEach((re) => assert.ok(!re.test(text), row.name + ' must not imply equipment: ' + re));
+  });
+});
+
+test('CP3b: the catalog has no case-insensitive name or alias collision', () => {
+  const seen = new Map();
+  EXERCISE_CATALOG.forEach((e) => {
+    [e.name].concat(e.aliases || []).forEach((token) => {
+      const k = String(token).trim().toLowerCase();
+      if (seen.has(k)) {
+        assert.fail('token "' + k + '" is shared by "' + seen.get(k) + '" and "' + e.name + '"');
+      }
+      seen.set(k, e.name);
+    });
+  });
+});
+
+test('CP3b: fixture holds 144 rows and matches its documented checksum', () => {
+  assert.strictEqual(EXERCISE_CATALOG.length, 144);
+  const ids = EXERCISE_CATALOG.map((e) => e.id).sort();
+  assert.strictEqual(new Set(ids).size, 144, 'every id must be unique');
+  const md5 = require('node:crypto').createHash('md5').update(ids.join(',')).digest('hex');
+  const header = require('node:fs')
+    .readFileSync(require('node:path').join(__dirname, 'benchmarks', 'exercise-fixtures.js'), 'utf8');
+  assert.ok(header.includes(md5),
+    'the header checksum must equal md5(sorted ids joined by ","): ' + md5);
+});
+
+test('CP3b: the 141 pre-existing catalog entries are untouched', () => {
+  const added = new Set(Object.keys(CP3B));
+  assert.strictEqual(EXERCISE_CATALOG.filter((e) => !added.has(e.id)).length, 141);
+  // A spot-check on identities other phases depend on.
+  const bench = EXERCISE_CATALOG.find((e) => e.name === 'Bench Press');
+  assert.ok(bench && bench.equipment === 'Barbell', 'Bench Press must be unchanged');
 });
