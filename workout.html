@@ -3868,8 +3868,89 @@
   //   'optional'    (from a Program Page)          → logs only, never advances
   // Default to 'optional' when missing so a stray link can never wrongly
   // advance progression (Priority 2 safety rule — never rely on session_key).
+  /* ── Program-session authorization (Phase 4.3.9B CP3d-1) ──────────────────
+     Every program launch is URL-driven (?program=&session=&mode=), so all three
+     parameters are UNTRUSTED input. Before CP3d-1 the launcher trusted them:
+     loadProgramSession() correctly returned null for a Program the caller
+     cannot read, but startProgramSession() fell through and inserted a
+     `workouts` row anyway — attributing a blank workout to a Program the user
+     has no access to. With mode=progression (also URL-supplied) finishWorkout()
+     would then let advanceProgramSession() bootstrap a `user_programs`
+     ENROLMENT for it. A draft Program was reachable this way.
+
+     This gate is slug-GENERIC and re-derives authorization from the same
+     boundaries every other surface uses. It never widens access — it only
+     refuses to WRITE before access is proven, and every failure path denies.
+
+     Note on the "belongs to this Program" check: loadProgramSession() queries
+     program_routines filtered by BOTH session_key and programs.slug, so a
+     single scoped read proves membership AND readability. A separate schedule
+     -membership test is deliberately NOT used: the database still carries
+     legacy session keys (`push`, `legs`, `session_a`, `upper`, …) that the
+     current schedules no longer list, and denying an old bookmark that still
+     resolves to a real Routine of an entitled Program would be a regression,
+     not a security gain. */
+  var PROGRAM_ACCESS_MESSAGE = {
+    invalid_input:   'That workout link is incomplete.',
+    unknown_program: 'That program isn’t available.',
+    no_access:       'You don’t have access to that program yet.',
+    unavailable:     'That workout isn’t available yet.',
+    lookup_failed:   'Couldn’t check your program access — please try again.',
+  };
+
+  function programAccessDenied(reason) {
+    return { allowed: false, reason: reason, session: null };
+  }
+
+  async function authorizeProgramSession(programSlug, sessionKey) {
+    if (typeof programSlug !== 'string' || typeof sessionKey !== 'string'
+        || !programSlug || !sessionKey) {
+      return programAccessDenied('invalid_input');
+    }
+    try {
+      // 1. The catalog is published-only, so a draft or retired Program is
+      //    simply absent. pcLoadCatalog() degrades to [] on failure, which is
+      //    indistinguishable from an empty catalog — both must deny.
+      var catalog = await pcLoadCatalog();
+      if (!catalog || !catalog.length) return programAccessDenied('lookup_failed');
+
+      var program = pcBySlug(catalog, programSlug);
+      if (!program) return programAccessDenied('unknown_program');
+
+      // 2. Entitlement via the shared resolver, never a page-local predicate.
+      //    Purchases come from the ONE deduped fetch Train already uses, so
+      //    the gate adds no extra request. That helper returns [] when the
+      //    read fails, which the resolver turns into "no qualifying purchase"
+      //    — a denial, so an unreadable purchases table still fails closed.
+      if (!currentUser || !currentUser.id) return programAccessDenied('lookup_failed');
+      var rows = await loadPurchaseRowsOnce();
+      if (!Array.isArray(rows)) return programAccessDenied('lookup_failed');
+
+      var access = resolveProgramAccess(program, rows);
+      if (!access || !access.allowed) return programAccessDenied('no_access');
+
+      // 3 + 4. Program-scoped Routine read. Proves the session key belongs to
+      //        THIS Program and that the Routine is readable under RLS.
+      var session = await loadProgramSession(programSlug, sessionKey);
+      if (!session) return programAccessDenied('unavailable');
+
+      return { allowed: true, reason: 'ok', session: session };
+    } catch (e) {
+      return programAccessDenied('lookup_failed');
+    }
+  }
+
   async function startProgramSession(programSlug, sessionKey, mode) {
     mode = (mode === 'progression') ? 'progression' : 'optional';
+
+    // Authorization BEFORE any write. Nothing below this line may run for a
+    // Program the user cannot currently open.
+    var auth = await authorizeProgramSession(programSlug, sessionKey);
+    if (!auth.allowed) {
+      showToast(PROGRAM_ACCESS_MESSAGE[auth.reason] || PROGRAM_ACCESS_MESSAGE.unavailable);
+      showStartView();
+      return;
+    }
 
     // Resume/discard safety (Priority 5): if an unfinished workout already
     // exists, resume IT instead of overwriting it with this new session.
@@ -3879,7 +3960,7 @@
       return;
     }
 
-    var sessData = await loadProgramSession(programSlug, sessionKey);
+    var sessData = auth.session;
 
     var day = new Date().toLocaleDateString('en-US', { weekday: 'short' });
     // Use template session_name if available, else derive a clean label from the key
@@ -3898,7 +3979,8 @@
     localStorage.setItem('wkt_prog_' + workout.id, programSlug);
     localStorage.setItem('wkt_sess_' + workout.id, sessionKey);
 
-    // Load pre-built exercises if the template exists; otherwise start blank
+    // The authorization gate guarantees sessData; the guard stays as a cheap
+    // defensive check so a future caller cannot reintroduce a blank launch.
     if (sessData) {
       var exList = sessData.exercises || [];
       for (var i = 0; i < exList.length; i++) {
@@ -3930,12 +4012,9 @@
       }
     }
     showActiveView();
-
-    // Task #8 safety net: if this scheduled session has no template content yet,
-    // tell the user clearly instead of silently launching an empty/fallback workout.
-    if (!sessData) {
-      showToast('"' + sessLabel + '" plan is coming soon — add your exercises below to log it.');
-    }
+    // The Task #8 "plan is coming soon" fallback is gone by construction: a
+    // session with no readable Routine is now DENIED before any write rather
+    // than launched blank, so there is no empty program workout to explain.
   }
 
   // ── Custom Workout templates (Tier 2) ────────────────────────────
@@ -4724,6 +4803,27 @@
 
   // PROGRAM_SCHEDULES, SESSION_LABELS, getScheduleForDays come from schedules.js
 
+  /* Can this user's progression advance for `programSlug` right now?
+   * Published-catalog membership + the shared entitlement resolver — the same
+   * two boundaries the launch gate uses, minus the Routine read (progression
+   * is about the Program, not one session). Fails closed on any error. */
+  async function canAdvanceProgram(programSlug) {
+    if (typeof programSlug !== 'string' || !programSlug) return false;
+    try {
+      var catalog = await pcLoadCatalog();
+      if (!catalog || !catalog.length) return false;
+      var program = pcBySlug(catalog, programSlug);
+      if (!program) return false;                    // draft, retired, unknown
+      if (!currentUser || !currentUser.id) return false;
+      var rows = await loadPurchaseRowsOnce();       // shared deduped fetch
+      if (!Array.isArray(rows)) return false;
+      var access = resolveProgramAccess(program, rows);
+      return !!(access && access.allowed);
+    } catch (e) {
+      return false;
+    }
+  }
+
   // Advance progression based on the session the user ACTUALLY completed, not a
   // blind increment of the old index. completedKey is the session_key that was
   // just finished (it may differ from the recommended one if the user manually
@@ -4732,6 +4832,14 @@
   // missing from the schedule we fall back to a safe increment and log it.
   async function advanceProgramSession(programSlug, completedKey) {
     try {
+      // Defense in depth (Phase 4.3.9B CP3d-1). The launch gate should already
+      // have refused an inaccessible Program, but this function can also be
+      // reached from a resumed workout, a second tab, or stale client state —
+      // and it is the ONE place that can create a `user_programs` ENROLMENT.
+      // It therefore re-proves access itself rather than trusting the caller.
+      // Deny → return without creating or advancing anything.
+      if (!(await canAdvanceProgram(programSlug))) return;
+
       var { data: up } = await supabaseClient
         .from('user_programs').select('*')
         .eq('user_id', currentUser.id).eq('program_slug', programSlug).maybeSingle();
