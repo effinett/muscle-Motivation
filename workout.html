@@ -2130,9 +2130,13 @@
       var s = sets[0];
       ex.last_weight = s.weight_lbs;
       ex.last_reps   = s.reps;
+      // Unit-aware (CP3d-2a): a hold reads "45 sec", never "45 reps", and an
+      // unresolved prescription shows the bare number rather than a guess.
+      var lpUnit = unitForExercise(ex);
+      var lpNoun = lpUnit === 'reps' ? ' reps' : lpUnit === 'sec' ? ' sec' : '';
       ex.last_perf   = s.weight_lbs
         ? s.weight_lbs + ' lbs × ' + s.reps
-        : (s.reps ? s.reps + ' reps' : null);
+        : (s.reps ? s.reps + lpNoun : null);
     } catch (e) {
       // Non-fatal — last performance is a convenience feature
     }
@@ -2187,6 +2191,40 @@
   // Build the recommendation block HTML for an exercise card. Pure render —
   // calls the progression engine with whatever history/range we have. Falls
   // back to the legacy "Last:" line if progression.js failed to load.
+  /* ── Tracking units (Phase 4.3.9B CP3d-2a) ───────────────────────────────
+     The canonical catalog is the source of truth and is ALREADY loaded on every
+     workout page (loadExerciseLibrary runs before any launch or resume), so the
+     unit is DERIVED at render time from `exercise_id` rather than persisted
+     onto the workout. That is why it is automatically correct after a reload
+     and after a swap: nothing is stored that could go stale.
+
+     A reference we cannot resolve to a canonical row — a custom exercise, a
+     legacy name-only row, or an id missing from the catalog — is UNKNOWN, never
+     "reps". Unknown is the honest answer, and it is what keeps a 45-second hold
+     from being recorded as 45 reps. */
+  function trackingTypeForExercise(ex) {
+    if (!ex || ex.exercise_id == null) return null;      // custom / legacy / none
+    var lib = (typeof exerciseLibrary !== 'undefined' && exerciseLibrary) ? exerciseLibrary : [];
+    for (var i = 0; i < lib.length; i++) {
+      if (lib[i] && lib[i].id === ex.exercise_id) return lib[i].tracking_type || null;
+    }
+    return null;                                          // not in the catalog
+  }
+
+  function unitForExercise(ex) {
+    if (typeof Progression === 'undefined' || !Progression.trackingUnit) return 'unknown';
+    return Progression.trackingUnit(trackingTypeForExercise(ex));
+  }
+
+  // Column header / input placeholder per unit. Unknown gets a neutral word so
+  // no false unit noun is ever attached to an unresolved prescription.
+  function unitColumnLabel(unit) {
+    return unit === 'reps' ? 'Reps' : unit === 'sec' ? 'Sec' : 'Target';
+  }
+  function unitPlaceholder(unit) {
+    return unit === 'reps' ? 'reps' : unit === 'sec' ? 'sec' : 'value';
+  }
+
   // Single source of truth for an exercise's recommendation. Used by BOTH the
   // rec card (display) and set pre-fill (input seeding) so the boxes always match
   // the "Today" line. Pure read — no DB, no side effects.
@@ -2199,7 +2237,10 @@
       targetSets: ex.target_sets,
       history: ex.history || [],
       programmedWeight: ex.programmed_weight,
-      programmedReps: ex.programmed_reps
+      programmedReps: ex.programmed_reps,
+      // Already resolved here, so an unresolvable exercise stays neutral rather
+      // than falling back to the evaluator's legacy rep wording.
+      unit: unitForExercise(ex)
     });
   }
 
@@ -2400,11 +2441,13 @@
 
   function buildExCard(ex, exIdx) {
     var setsHtml = '';
+    // Derived per render, so a reload or a swap re-resolves automatically.
+    var unit = unitForExercise(ex);
     if (ex.sets.length > 0) {
       setsHtml += '<div class="sets-header">' +
         '<div class="set-col-label">#</div>' +
         '<div class="set-col-label">Weight</div>' +
-        '<div class="set-col-label">Reps</div>' +
+        '<div class="set-col-label">' + unitColumnLabel(unit) + '</div>' +
         '<div></div><div></div></div>';
       ex.sets.forEach(function(s, si) {
         var dc = s.completed ? ' done' : '';
@@ -2418,7 +2461,7 @@
               ' value="' + (s.weight_lbs != null ? s.weight_lbs : '') + '" placeholder="lbs"' + dis +
               ' onchange="updateSet(\'' + s.id + '\',' + exIdx + ',' + si + ',\'weight_lbs\',this.value)">' +
             '<input class="set-input' + ic + '" type="number" min="0" max="999" step="1"' +
-              ' value="' + (s.reps != null ? s.reps : '') + '" placeholder="reps"' + dis +
+              ' value="' + (s.reps != null ? s.reps : '') + '" placeholder="' + unitPlaceholder(unit) + '"' + dis +
               ' onchange="updateSet(\'' + s.id + '\',' + exIdx + ',' + si + ',\'reps\',this.value)">' +
             '<button class="btn-check' + cc + '" onclick="toggleSet(\'' + s.id + '\',' + exIdx + ',' + si + ')">' +
               '<i data-lucide="check"></i></button>' +
@@ -3775,6 +3818,17 @@
     try {
       for (var i = 0; i < exercises.length; i++) {
         var ex = exercises[i];
+
+        // Tracking-unit guard (Phase 4.3.9B CP3d-2a). `workout_sets.reps` holds
+        // SECONDS for a timed exercise, so a weighted hold — 20 lb × 45 s — used
+        // to write best_reps=45, best_volume=900 and a fabricated ~50 lb 1RM into
+        // `personal_records`, permanently. Only a positively rep-tracked exercise
+        // may enter rep-based PR logic; timed, distance, time_distance and any
+        // unresolvable exercise are skipped BEFORE the prior record is read, so a
+        // denied exercise performs zero personal_records reads and zero writes.
+        // Weighted timed work is still logged — it just never becomes a rep PR.
+        if (unitForExercise(ex) !== 'reps') continue;
+
         var working = ex.sets
           .filter(function(s) { return s.completed && s.weight_lbs != null && s.reps != null; })
           .map(function(s) { return { weight: s.weight_lbs, reps: s.reps }; });
@@ -3800,7 +3854,10 @@
                                                         .is('exercise_id', null).is('user_exercise_id', null);
         var { data: prior } = await priorQ.maybeSingle();
 
-        var res = Progression.evaluatePRs(working, prior);
+        // Defence in depth: the caller already filtered non-rep exercises out
+        // above, and the evaluator refuses again on its own.
+        var res = Progression.evaluatePRs(working, prior,
+          { trackingType: trackingTypeForExercise(ex) });
         if (res.updated) {
           var idcols = (typeof ExerciseLog !== 'undefined')
             ? ExerciseLog.prIdentityColumns(pref)
