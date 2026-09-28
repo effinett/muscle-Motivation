@@ -316,6 +316,14 @@
     .rec-val { color: var(--text-2); font-weight: 600; }
     .rec-val.rec-rec { color: var(--text); }
     .rec-val.rec-muted { color: var(--text-muted); font-weight: 500; }
+    /* Program guidance is a sentence, not a short value: it must wrap inside the
+       card. `min-width: 0` is what actually lets a flex item shrink below its
+       content, and `overflow-wrap` stops a single long token forcing the page
+       sideways at 320px. Uses the existing rec-row primitives — no new layout. */
+    .rec-val.rec-guidance {
+      flex: 1; min-width: 0; font-weight: 500;
+      overflow-wrap: anywhere; white-space: normal;
+    }
     .rec-note {
       margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--border-1);
       font-size: 12px; color: var(--text-2); line-height: 1.45;
@@ -2277,7 +2285,17 @@
       deloadBtn = '<button class="rec-deload-btn" onclick="applyDeload(' + exIdx + ',' +
         rec.deloadWeight + ')">Drop to ' + esc(String(rec.deloadWeight)) + ' lb</button>';
     }
-    return '<div class="rec-block">' + rows + note + deloadBtn + '</div>';
+    // Program prescription guidance (CP3d-2c) — plain text through esc(), in the
+    // same rec-row pattern as Goal/Last/Today so it reads as part of the
+    // prescription. No markup, no linkification, no icon, no interaction.
+    // Absent guidance emits nothing at all, so it costs zero vertical space.
+    var guidance = '';
+    if (typeof ex === 'object' && ex && typeof ex.programGuidance === 'string'
+        && ex.programGuidance.trim()) {
+      guidance = '<div class="rec-row"><span class="rec-key">Guidance</span>' +
+                 '<span class="rec-val rec-guidance">' + esc(ex.programGuidance) + '</span></div>';
+    }
+    return '<div class="rec-block">' + rows + guidance + note + deloadBtn + '</div>';
   }
 
   // Apply an accepted deload: set every set's WEIGHT to the suggested load and
@@ -2291,6 +2309,39 @@
     }));
     renderExercises();
     showToast('Deload applied — weights set to ' + weight + ' lb.');
+  }
+
+  /* ── Program prescription guidance (Phase 4.3.9B CP3d-2c) ────────────────
+     Bodyweight Foundations authors per-entry coaching guidance on its Routine
+     prescriptions — "Reps are per leg.", "Hold time in seconds, per side.",
+     the Push-Up Swap instruction, and Superman's explicit non-pulling
+     clarification. That text was stored and never shown, so the safety-relevant
+     parts never reached anyone.
+
+     Scope is decided by ONE explicit Program-slug rule, never by exercise name,
+     note content, Routine title, session key, or whether a note "looks safe".
+     Other Programs carry notes too (including three that reference a "Phase 2"
+     the product cannot express, and a Farmer Carry note that contradicts its own
+     catalog metadata); none of them are in scope here, and no note-string
+     exclusion list exists.
+
+     The guidance is MEMORY ONLY. It is deliberately NOT written to
+     `workout_exercises.notes` — that column is the user's own performance log
+     (routine-history.js: "Performance logs are not reusable coaching notes") —
+     nor to workout_sets, workouts, localStorage, user Routines, or the canonical
+     catalog. It is re-derived from the authorized Routine on reload, which is
+     also why a swapped exercise cannot keep someone else's instructions. */
+  var PROGRAM_GUIDANCE_SLUGS = { bodyweight_foundations: true };
+
+  function programGuidanceEligible(programSlug) {
+    return typeof programSlug === 'string' && PROGRAM_GUIDANCE_SLUGS[programSlug] === true;
+  }
+
+  // A prescription's guidance, or null. Blank, non-string and missing are absent.
+  function readProgramGuidance(entry) {
+    if (!entry || typeof entry.notes !== 'string') return null;
+    var text = entry.notes.trim();
+    return text ? text : null;
   }
 
   /* ── Program session source (CP8b) ──────────────────────────────────────
@@ -2336,13 +2387,18 @@
     try {
       var sess = await loadProgramSession(programSlug, sessionKey);
       if (!sess || !sess.exercises.length) return;
+      var guidanceOk = typeof programGuidanceEligible === 'function'
+        && programGuidanceEligible(programSlug);
       var byName = {};
       sess.exercises.forEach(function(t) { byName[(t.name || '').toLowerCase()] = t; });
       exercises.forEach(function(ex) {
         var t = byName[(ex.name || '').toLowerCase()];
         if (t) { ex.reps_low = t.reps_low; ex.reps_high = t.reps_high; ex.target_sets = t.sets; }
+        // Guidance is re-derived, never persisted. A name miss — which is what a
+        // SWAPPED exercise produces — leaves it absent rather than stale.
+        ex.programGuidance = (guidanceOk && t) ? readProgramGuidance(t) : null;
       });
-    } catch (e) { /* non-fatal */ }
+    } catch (e) { /* non-fatal — guidance is optional and never blocks logging */ }
   }
 
   // ── Start workout ─────────────────────────────────────────────────
@@ -2886,6 +2942,13 @@
       ex.name = name;
       ex.exercise_id = ids.exercise_id;
       ex.customId = ids.user_exercise_id;
+      // Guidance belongs to the PRESCRIBED exercise, so it is cleared in the
+      // same update that changes identity — the Push-Up Swap instruction must
+      // never survive onto Knee Push-Up, and timed guidance must not survive
+      // onto a rep exercise. It can reappear only through the authorized
+      // Program-session re-derivation on a later reload/resume; no extra query
+      // is issued to bring it back sooner.
+      ex.programGuidance = null;
       // Previous-performance and history belong to the OLD identity — drop them
       // and reload ID-first (Phase 4.2.1J) for the new one.
       ex.last_perf = null; ex.last_weight = null; ex.last_reps = null; ex.history = [];
@@ -4051,7 +4114,13 @@
         if (!we) continue;
         var newEx = { id: we.id, name: ex.name, exercise_id: we.exercise_id,
           customId: we.user_exercise_id != null ? we.user_exercise_id : null, order_index: i, last_perf: null, last_weight: null, last_reps: null, sets: [],
-          history: [], reps_low: ex.reps_low, reps_high: ex.reps_high, target_sets: ex.sets };
+          history: [], reps_low: ex.reps_low, reps_high: ex.reps_high, target_sets: ex.sets,
+          // Paired with THIS prescription entry, not looked up by name. Memory
+          // only — the insert above deliberately does not carry it. Guarded by
+          // `typeof` like every other optional collaborator on this page, so a
+          // context without the guidance helpers still logs normally.
+          programGuidance: (typeof programGuidanceEligible === 'function'
+            && programGuidanceEligible(programSlug)) ? readProgramGuidance(ex) : null };
         await Promise.all([loadLastPerf(newEx), loadExerciseHistory(newEx)]);
         exercises.push(newEx);
         // Pre-fill the recommended weight on every straight set; reps stay blank
