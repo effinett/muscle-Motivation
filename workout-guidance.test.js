@@ -684,3 +684,290 @@ test('recap: rep-based PR cards are gated on the same unit rule', () => {
   assert.match(RECAP, /if\(ws\.length && unitOf\(e\) === RECAP_UNIT\.REPS\)\{/,
     'the PR-card block must require a positively rep-tracked exercise');
 });
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * CP3d-2c — Bodyweight Foundations prescription guidance (workout.html)
+ *
+ * The Routine entries already carry per-prescription coaching text — "Reps are
+ * per leg.", "Hold time in seconds, per side.", the Push-Up Swap instruction,
+ * Superman's explicit non-pulling clarification — and none of it was ever
+ * shown. Scope is decided by ONE Program-slug rule; no note-string exclusion
+ * list exists, and nothing is persisted.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+const GUIDANCE_FNS = ['programGuidanceEligible', 'readProgramGuidance'];
+
+// The stored strings, matching bodyweight-foundations.test.js exactly.
+const BWF_NOTE = {
+  'Reverse Lunge': 'Reps are per leg.',
+  'Single-Leg Glute Bridge': 'Reps are per leg.',
+  'Side Plank': 'Hold time in seconds, per side.',
+  'Push-Up': 'Too hard? Use Swap to choose Knee Push-Up before logging sets. ' +
+             'Swap applies to this workout only — repeat it next session.',
+  'Pike Push-Up': 'To regress, raise your hands or shorten the range. ' +
+                  'Do not switch to Knee Push-Up — it trains a different pattern.',
+  'Superman': 'Posterior-chain and postural endurance. ' +
+              'Not a pulling exercise and not a substitute for rows.',
+  'Dead Bug': 'Reps are per side.',
+  'Bird Dog': 'Reps are per side.',
+  'Split Squat': 'Reps are per leg.',
+  'Wall Sit': 'Hold time in seconds.',
+  'Mountain Climber': 'Work time in seconds.',
+  'Russian Twist': 'Reps are total, not per side.',
+  'Bodyweight Squat': '',
+  'Glute Bridge': '',
+};
+
+function guidanceSandbox(source) {
+  const sandbox = { console: { error() {}, warn() {} } };
+  vm.createContext(sandbox);
+  const src = source || WORKOUT;
+  const decl = (src.match(/var PROGRAM_GUIDANCE_SLUGS = \{[\s\S]*?\};/) || [''])[0];
+  assert.ok(decl, 'workout.html declares PROGRAM_GUIDANCE_SLUGS');
+  vm.runInContext(decl + '\n' + GUIDANCE_FNS.map((n) => extractFn(src, n)).join('\n'), sandbox);
+  return sandbox;
+}
+
+/* ── Slug gate ──────────────────────────────────────────────────────────── */
+
+test('guidance: only bodyweight_foundations is eligible', () => {
+  const s = guidanceSandbox();
+  assert.equal(s.programGuidanceEligible('bodyweight_foundations'), true);
+  ['muscle_gain', 'fat_loss_blueprint', 'glute_builder', 'BODYWEIGHT_FOUNDATIONS',
+   'bodyweight_foundations ', '', null, undefined, 0, {}, ['bodyweight_foundations']]
+    .forEach((slug) => {
+      assert.equal(s.programGuidanceEligible(slug), false, JSON.stringify(slug));
+    });
+});
+
+test('guidance: eligibility is a slug rule, not a content or name heuristic', () => {
+  const src = WORKOUT;
+  const fn = extractFn(src, 'programGuidanceEligible');
+  // The gate may not consult anything but the slug.
+  [/exercise_name/, /session_key/, /\.notes/, /name\b/, /purchase/, /routine/i]
+    .forEach((re) => assert.ok(!re.test(fn), 'gate must not consult ' + re));
+  // And there must be no note-string exclusion list anywhere.
+  assert.ok(!/Phase 2: build to a top set/.test(src), 'no note-value exclusion list');
+  assert.ok(!/Walk 30-40 seconds per set/.test(src), 'no note-value exclusion list');
+});
+
+/* ── Reading a prescription entry ───────────────────────────────────────── */
+
+test('guidance: blank, missing and non-string values are absent', () => {
+  const s = guidanceSandbox();
+  [null, undefined, {}, { notes: '' }, { notes: '   ' }, { notes: null },
+   { notes: 42 }, { notes: {} }, { notes: [] }].forEach((entry) => {
+    assert.equal(s.readProgramGuidance(entry), null, JSON.stringify(entry));
+  });
+  assert.equal(s.readProgramGuidance({ notes: '  Reps are per leg.  ' }), 'Reps are per leg.');
+});
+
+test('guidance: every Bodyweight Foundations entry yields its stored text', () => {
+  const s = guidanceSandbox();
+  Object.keys(BWF_NOTE).forEach((name) => {
+    const got = s.readProgramGuidance({ name, notes: BWF_NOTE[name] });
+    assert.equal(got, BWF_NOTE[name] || null, name);
+  });
+  // The two intentionally note-free entries produce nothing to render.
+  assert.equal(s.readProgramGuidance({ name: 'Bodyweight Squat', notes: '' }), null);
+  assert.equal(s.readProgramGuidance({ name: 'Glute Bridge', notes: '' }), null);
+});
+
+test('guidance: representative content reaches the right entries', () => {
+  const s = guidanceSandbox();
+  const g = (n) => s.readProgramGuidance({ name: n, notes: BWF_NOTE[n] });
+  assert.match(g('Reverse Lunge'), /per leg/);
+  assert.match(g('Single-Leg Glute Bridge'), /per leg/);
+  assert.match(g('Split Squat'), /per leg/);
+  assert.match(g('Side Plank'), /seconds, per side/);
+  assert.match(g('Wall Sit'), /seconds/);
+  assert.match(g('Mountain Climber'), /Work time in seconds/);
+  assert.match(g('Dead Bug'), /per side/);       // canonical is_unilateral=false
+  assert.match(g('Bird Dog'), /per side/);
+  assert.match(g('Russian Twist'), /total, not per side/);
+  assert.match(g('Push-Up'), /Use Swap/);
+  assert.match(g('Push-Up'), /this workout only/);
+  assert.match(g('Pike Push-Up'), /raise your hands or shorten the range/);
+  assert.match(g('Pike Push-Up'), /Do not switch to Knee Push-Up/);
+  assert.match(g('Superman'), /Posterior-chain and postural endurance/);
+  assert.match(g('Superman'), /Not a pulling exercise and not a substitute for rows/);
+});
+
+/* ── Wiring: launch, resume, swap ───────────────────────────────────────── */
+
+const launchFn = () => extractFn(WORKOUT, 'startProgramSession');
+const resumeFn = () => extractFn(WORKOUT, 'applyTemplateRanges');
+const swapFn = () => extractFn(WORKOUT, 'applySwap');
+
+test('guidance: first launch pairs guidance with its own prescription entry', () => {
+  const fn = launchFn();
+  assert.match(fn, /programGuidanceEligible\(programSlug\)\)\s*\? readProgramGuidance\(ex\) : null/,
+    'guidance comes from THIS entry, gated on the slug');
+  assert.match(fn, /typeof programGuidanceEligible === 'function'/,
+    'guidance is optional at runtime and never blocks the launch');
+  // It must not be looked up by a global exercise-name map at launch.
+  assert.ok(!/byName\[/.test(fn), 'launch must not resolve guidance by name lookup');
+});
+
+test('guidance: resume re-derives through the authorized Program-session path', () => {
+  const fn = resumeFn();
+  assert.match(fn, /loadProgramSession\(programSlug, sessionKey\)/,
+    'reuses the existing authorized reload');
+  assert.match(fn, /programGuidanceEligible\(programSlug\)/, 'slug-gated on resume too');
+  assert.match(fn, /ex\.programGuidance = \(guidanceOk && t\) \? readProgramGuidance\(t\) : null/,
+    'a name miss (a swapped exercise) yields null, never stale text');
+  // applyTemplateRanges already returns early without a program slug/session.
+  assert.match(fn, /if \(!programSlug \|\| !sessionKey\) return;/);
+  assert.match(fn, /catch/, 'a failed reload must not block logging');
+});
+
+test('guidance: swap clears it in the same identity update', () => {
+  const fn = swapFn();
+  const idIdx = fn.indexOf('ex.exercise_id = ids.exercise_id;');
+  const clrIdx = fn.indexOf('ex.programGuidance = null;');
+  assert.ok(idIdx > -1 && clrIdx > -1, 'both updates present');
+  assert.ok(clrIdx > idIdx, 'cleared alongside the identity change');
+  // No extra query is issued to bring guidance back immediately.
+  const after = fn.slice(clrIdx);
+  assert.ok(!/loadProgramSession/.test(after),
+    'swap must not re-query the Routine merely to restore guidance');
+});
+
+/* ── Rendering and escaping ─────────────────────────────────────────────── */
+
+const recBlock = () => extractFn(WORKOUT, 'buildRecBlock');
+
+test('guidance: rendered as escaped plain text under a GUIDANCE label', () => {
+  const fn = recBlock();
+  assert.match(fn, /rec-key">Guidance</, 'user-facing label is Guidance, not notes');
+  assert.match(fn, /esc\(ex\.programGuidance\)/, 'must go through esc()');
+  assert.ok(!/ex\.programGuidance\s*\+/.test(fn.replace(/esc\(ex\.programGuidance\)/g, '')),
+    'the raw value is never concatenated into markup unescaped');
+  // No linkification, markdown, icon or interaction on the guidance row.
+  const row = fn.slice(fn.indexOf('rec-guidance') - 200, fn.indexOf('rec-guidance') + 200);
+  [/<a /, /href=/, /onclick=/, /data-lucide/, /<button/].forEach((re) =>
+    assert.ok(!re.test(row), 'guidance row must not contain ' + re));
+});
+
+test('guidance: absent guidance emits no markup at all', () => {
+  const fn = recBlock();
+  assert.match(fn, /typeof ex\.programGuidance === 'string'\s*\n?\s*&& ex\.programGuidance\.trim\(\)/,
+    'only a non-empty string renders');
+  assert.match(fn, /var guidance = '';/, 'the default contributes nothing');
+});
+
+test('guidance: injected markup is displayed as text, not executed', () => {
+  // esc() is the shared helper used across the logger; prove it neutralises the
+  // representative payload rather than assuming it does.
+  const escSrc = fs.readFileSync(path.join(__dirname, 'workout-history.js'), 'utf8');
+  const sandbox = {};
+  vm.createContext(sandbox);
+  vm.runInContext(extractFn(escSrc, 'esc'), sandbox);
+  const out = sandbox.esc('<img src=x onerror="alert(1)">');
+  // What makes markup live is an unescaped angle bracket or quote. The literal
+  // text "onerror=" surviving is harmless — there is no element for it to bind
+  // to — so the assertions target the characters that actually matter.
+  assert.ok(!/[<>]/.test(out), 'no unescaped angle brackets: ' + out);
+  assert.ok(!/"/.test(out), 'no unescaped attribute quote: ' + out);
+  assert.match(out, /&lt;img/, 'displayed as text');
+  assert.match(out, /onerror=&quot;/, 'the handler is inert text, not an attribute');
+});
+
+test('guidance: wraps inside the card at narrow widths', () => {
+  assert.match(WORKOUT, /\.rec-val\.rec-guidance\s*\{[^}]*min-width:\s*0/,
+    'min-width:0 is what lets a flex item wrap');
+  assert.match(WORKOUT, /\.rec-val\.rec-guidance\s*\{[^}]*overflow-wrap:\s*anywhere/,
+    'a long token cannot force horizontal scrolling');
+  const rule = (WORKOUT.match(/\.rec-val\.rec-guidance\s*\{[^}]*\}/) || [''])[0];
+  assert.ok(!/nowrap/.test(rule), 'guidance must never be nowrap');
+  assert.ok(!/text-overflow/.test(rule), 'guidance must never be ellipsised');
+});
+
+/* ── Exposure: nothing but Bodyweight Foundations, nothing persisted ────── */
+
+test('guidance: no other Program, template or Quick Session receives it', () => {
+  const s = guidanceSandbox();
+  // Another Program's entry carries a note, and is still ineligible.
+  assert.equal(s.programGuidanceEligible('muscle_gain'), false);
+  assert.equal(s.readProgramGuidance({ name: 'Barbell Back Squat',
+    notes: 'Phase 2: build to a top set of 5.' }), 'Phase 2: build to a top set of 5.',
+    'the reader is content-agnostic by design');
+  // …so the ONLY thing standing between that note and the screen is the gate,
+  // which the launch and resume paths both apply.
+  assert.match(launchFn(), /programGuidanceEligible\(programSlug\)/);
+  assert.match(resumeFn(), /programGuidanceEligible\(programSlug\)/);
+  // Quick Session and template launches never touch the guidance paths.
+  const manual = extractFn(WORKOUT, 'startWorkout');
+  const tpl = extractFn(WORKOUT, 'startTemplateSession');
+  [manual, tpl].forEach((fn) => {
+    assert.ok(!/programGuidance/.test(fn), 'non-Program launch must not set guidance');
+  });
+});
+
+test('guidance: a user Routine note cannot become programGuidance', () => {
+  // saveTemplate writes the user's own note; nothing reads it back as guidance.
+  const save = extractFn(WORKOUT, 'saveTemplate');
+  assert.match(save, /notes: ex\.notes/, 'user Routine notes still save as before');
+  assert.ok(!/programGuidance/.test(save), 'and never become Program guidance');
+  const tplLaunch = extractFn(WORKOUT, 'startTemplateSession');
+  assert.ok(!/programGuidance/.test(tplLaunch));
+});
+
+test('guidance: never written to any table or storage', () => {
+  // Every persistence call site must be free of the field.
+  const writes = WORKOUT.match(/\.(insert|update|upsert)\(\{[\s\S]{0,400}?\}\)/g) || [];
+  assert.ok(writes.length > 0, 'write payloads found to inspect');
+  writes.forEach((w) => {
+    assert.ok(!/programGuidance/.test(w), 'no write payload may carry guidance: ' + w.slice(0, 90));
+  });
+  // Specifically not the performance-log column.
+  assert.ok(!/notes:\s*ex\.programGuidance/.test(WORKOUT));
+  assert.ok(!/workout_exercises[\s\S]{0,200}programGuidance/.test(WORKOUT));
+  // And not into localStorage as standalone content.
+  const ls = WORKOUT.match(/localStorage\.setItem\([^)]*\)/g) || [];
+  ls.forEach((c) => assert.ok(!/programGuidance/.test(c), c));
+});
+
+test('guidance: adds no query and no purchases fetch', () => {
+  // The one-purchases-fetch invariant (CP3d-1) is unchanged.
+  const hits = (WORKOUT.match(/from\('purchases'\)/g) || []).length;
+  assert.strictEqual(hits, 1, 'still exactly one purchases fetch');
+  // Guidance is read from the session already loaded; it issues nothing itself.
+  GUIDANCE_FNS.forEach((n) => {
+    const fn = extractFn(WORKOUT, n);
+    assert.ok(!/supabaseClient/.test(fn), n + ' must not query');
+  });
+});
+
+/* ── Mutation sensitivity ───────────────────────────────────────────────── */
+
+test('guidance mutation: removing the slug gate would expose another Program', () => {
+  const broken = WORKOUT.replace(
+    'return typeof programSlug === \'string\' && PROGRAM_GUIDANCE_SLUGS[programSlug] === true;',
+    'return true;');
+  assert.notEqual(broken, WORKOUT, 'the gate body was not found to mutate');
+  const s = guidanceSandbox(broken);
+  assert.equal(s.programGuidanceEligible('muscle_gain'), true,
+    'without the gate another Program IS eligible — otherwise the gate test proves nothing');
+  assert.equal(guidanceSandbox().programGuidanceEligible('muscle_gain'), false);
+});
+
+test('guidance mutation: removing escaping would create live markup', () => {
+  const escSrc = fs.readFileSync(path.join(__dirname, 'workout-history.js'), 'utf8');
+  const sandbox = {};
+  vm.createContext(sandbox);
+  vm.runInContext(extractFn(escSrc, 'esc'), sandbox);
+  const payload = '<img src=x onerror="alert(1)">';
+  assert.match(sandbox.esc(payload), /&lt;img/);
+  // Unescaped, the same string is live markup — which is what esc() prevents.
+  assert.match(payload, /<img/);
+  assert.match(recBlock(), /esc\(ex\.programGuidance\)/);
+});
+
+test('guidance mutation: not clearing on swap would leave stale text', () => {
+  const broken = WORKOUT.replace('      ex.programGuidance = null;\n', '');
+  assert.notEqual(broken, WORKOUT, 'the swap clear was not found to mutate');
+  assert.ok(!/ex\.programGuidance = null;/.test(extractFn(broken, 'applySwap')),
+    'without it the swapped exercise keeps the previous prescription guidance');
+  assert.match(swapFn(), /ex\.programGuidance = null;/);
+});
