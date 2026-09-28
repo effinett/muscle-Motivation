@@ -26,6 +26,53 @@
   var DEFAULT_HIGH = 12;
   var PLATEAU_SESSIONS = 3; // sessions without improvement before flagging plateau
 
+  /* ── Tracking units (Phase 4.3.9B CP3d-2a) ────────────────────────────────
+   * ONE semantic classification of what a prescription's numbers MEAN, so no
+   * surface has to compare `tracking_type` strings itself and drift.
+   *
+   * Why this matters beyond labels: `workout_sets.reps` is a bare integer that
+   * holds repetitions for a rep exercise and SECONDS for a timed one. Every
+   * rep-based calculation — volume (w × reps), Epley 1RM, best_reps — is
+   * nonsense for a hold, and `personal_records` is persistent, so a single
+   * weighted timed set used to write a permanent false record.
+   *
+   * UNKNOWN is a real answer, not a failure to decide. It covers distance and
+   * time_distance (whose stored magnitude is genuinely ambiguous today), a
+   * missing or unrecognized tracking_type, and any exercise the canonical
+   * catalog cannot resolve. It must NEVER degrade to reps: guessing "reps" is
+   * exactly how a 45-second hold became a 45-rep personal record. */
+  var TRACKING_UNIT = { REPS: 'reps', SECONDS: 'sec', UNKNOWN: 'unknown' };
+
+  var TRACKING_UNIT_BY_TYPE = {
+    weight_reps:         TRACKING_UNIT.REPS,
+    bodyweight_reps:     TRACKING_UNIT.REPS,
+    weighted_bodyweight: TRACKING_UNIT.REPS,
+    time:                TRACKING_UNIT.SECONDS,
+    // Stored magnitude is not trustworthy as a unit today, so it stays neutral
+    // rather than being labelled with default_unit.
+    distance:            TRACKING_UNIT.UNKNOWN,
+    time_distance:       TRACKING_UNIT.UNKNOWN
+  };
+
+  // Resolve a canonical `exercises.tracking_type` to its unit. Anything else —
+  // null, undefined, non-string, unrecognized — is UNKNOWN.
+  function trackingUnit(trackingType) {
+    if (typeof trackingType !== 'string') return TRACKING_UNIT.UNKNOWN;
+    var unit = TRACKING_UNIT_BY_TYPE[trackingType];
+    return unit || TRACKING_UNIT.UNKNOWN;
+  }
+
+  // Only a positively rep-tracked exercise may enter rep-based math.
+  function isRepTracked(trackingType) {
+    return trackingUnit(trackingType) === TRACKING_UNIT.REPS;
+  }
+
+  // Did a caller actually supply tracking metadata? Callers that predate this
+  // seam omit it entirely and must keep their existing behaviour exactly.
+  function hasTrackingMeta(source, key) {
+    return !!source && source[key] !== undefined && source[key] !== null;
+  }
+
   // Default working-set target for a brand-new exercise with no prescription.
   var DEFAULT_TARGET_SETS = 3;
   // History must span more than one session before it can establish a target —
@@ -298,7 +345,23 @@
     var last = history.length ? history[0] : null;
     var lastWorking = workingSets(last);
 
-    var goalRange = { low: low, high: high, display: low + '–' + high + ' reps' };
+    // Unit-aware goal text. A caller may pass an already-resolved `unit`
+    // (workout.html does, so an UNRESOLVED exercise stays neutral instead of
+    // silently reading "reps") or a raw `trackingType`. Passing NEITHER keeps
+    // the historical " reps" suffix, so every pre-CP3d-2a call site is
+    // byte-identical.
+    var goalUnit = (typeof input.unit === 'string' && input.unit)
+      ? input.unit
+      : (hasTrackingMeta(input, 'trackingType')
+          ? trackingUnit(input.trackingType)
+          : TRACKING_UNIT.REPS);
+    var goalSuffix = goalUnit === TRACKING_UNIT.REPS ? ' reps'
+                   : goalUnit === TRACKING_UNIT.SECONDS ? ' sec'
+                   : '';                       // unknown → no noun, never a guess
+    var goalRange = {
+      low: low, high: high, unit: goalUnit,
+      display: low + '–' + high + goalSuffix
+    };
 
     // ── No history → empty state, lean on programmed targets if present ──────
     if (!lastWorking.length) {
@@ -496,10 +559,33 @@
   //   2. same top weight, more reps           -> rep PR at that weight
   //   3. higher estimated 1RM                 -> 1RM PR
   //   4. higher single-set volume (w × reps)  -> volume PR
-  function evaluatePRs(sets, prior) {
+  function evaluatePRs(sets, prior, options) {
     prior = prior || {};
     var hadPrior = prior.best_weight != null || prior.best_reps != null ||
                    prior.best_volume != null || prior.best_estimated_1rm != null;
+
+    // Second line of defence (Phase 4.3.9B CP3d-2a). The caller already filters
+    // non-rep exercises out before reading personal_records; this makes the
+    // evaluator itself refuse rather than trusting every future caller to
+    // remember. Supplying `trackingType` is optional — omitted means "no
+    // metadata", which preserves the original behaviour exactly.
+    if (hasTrackingMeta(options, 'trackingType') && !isRepTracked(options.trackingType)) {
+      return {
+        // Prior bests are echoed back untouched: a no-op must not erase a
+        // legitimate record that an earlier rep-tracked session established.
+        best: {
+          best_weight:        prior.best_weight != null ? num(prior.best_weight) : null,
+          best_reps:          prior.best_reps != null ? num(prior.best_reps) : null,
+          best_volume:        prior.best_volume != null ? num(prior.best_volume) : null,
+          best_estimated_1rm: prior.best_estimated_1rm != null ? num(prior.best_estimated_1rm) : null
+        },
+        updated: false,
+        hadPrior: hadPrior,
+        prMessages: [],
+        topMessage: null,
+        skippedReason: 'non_rep_tracking'
+      };
+    }
 
     var best = {
       best_weight:        prior.best_weight != null ? num(prior.best_weight) : null,
@@ -556,6 +642,11 @@
     weightIncrement: weightIncrement,
     estimate1RM: estimate1RM,
     workingSets: workingSets,
+    // Tracking-unit seam (Phase 4.3.9B CP3d-2a) — the ONE place that decides
+    // what a prescription's numbers mean.
+    TRACKING_UNIT: TRACKING_UNIT,
+    trackingUnit: trackingUnit,
+    isRepTracked: isRepTracked,
     // Exercise classification / target-set seam (extend in future phases)
     classifyExercise: classifyExercise,
     defaultTargetSets: defaultTargetSets,
