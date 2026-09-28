@@ -365,3 +365,322 @@ test('source: the caller guard precedes the prior-record read', () => {
   assert.ok(guard > -1 && read > -1);
   assert.ok(guard < read, 'the unit guard must run before any personal_records read');
 });
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * CP3d-2b — unit-correct completion recap (workout-complete.html)
+ *
+ * The recap summed `workout_sets.reps` into a "reps" stat and multiplied
+ * weight × reps into "lb volume" without ever consulting tracking_type, so a
+ * plank's seconds were counted as repetitions and a weighted hold inflated
+ * pound-volume. These tests execute the REAL render aggregation out of
+ * workout-complete.html in a vm sandbox.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+const RECAP = fs.readFileSync(path.join(__dirname, 'workout-complete.html'), 'utf8');
+
+const RECAP_FNS = ['num', 'working', 'recapUnitFor', 'fmtSeconds'];
+
+// Canonical rows exactly as loadTrackingTypes() shapes them.
+const TRACK = {
+  'ex-plank': { id: 'ex-plank', tracking_type: 'time' },
+  'ex-squat': { id: 'ex-squat', tracking_type: 'bodyweight_reps' },
+  'ex-bench': { id: 'ex-bench', tracking_type: 'weight_reps' },
+  'ex-carry': { id: 'ex-carry', tracking_type: 'distance' },
+  'ex-run':   { id: 'ex-run',   tracking_type: 'time_distance' },
+  'ex-blank': { id: 'ex-blank', tracking_type: null },
+  'ex-weird': { id: 'ex-weird', tracking_type: 'quantum_reps' },
+};
+
+function recapSandbox(source) {
+  const sandbox = { console: { error() {}, warn() {} }, Progression };
+  vm.createContext(sandbox);
+  const src = source || RECAP;
+  // `var` declarations the extracted functions close over.
+  const decls = ['RECAP_NEUTRAL_TYPES', 'RECAP_UNIT']
+    .map((n) => (src.match(new RegExp('var ' + n + ' = \\{[\\s\\S]*?\\};')) || [''])[0])
+    .join('\n');
+  vm.runInContext(decls + '\n' + RECAP_FNS.map((n) => extractFn(src, n)).join('\n'), sandbox);
+  return sandbox;
+}
+
+/* The aggregation block, lifted verbatim from render() so the test exercises
+ * the shipped arithmetic rather than a restatement of it. */
+function extractAggregation(src) {
+  const start = src.indexOf('var totalSets=0, totalReps=0, totalVol=0, totalSec=0');
+  assert.ok(start > -1, 'workout-complete.html defines the recap totals');
+  const end = src.indexOf("document.getElementById('statGrid').innerHTML = statsHtml;");
+  assert.ok(end > start, 'workout-complete.html assigns the stat grid');
+  const block = src.slice(start, end);
+  // The block declares its own stat() HTML builder, which would hoist over the
+  // capturing one the harness injects. Strip that single declaration so the
+  // arithmetic under test is untouched but each stat is observable.
+  const statDecl = block.match(/function stat\(n,l\)\{[^\n]*\}\n/);
+  assert.ok(statDecl, 'the recap block declares stat()');
+  return block.replace(statDecl[0], '');
+}
+
+function runRecap(exs, tracking, source) {
+  const s = recapSandbox(source);
+  const src = source || RECAP;
+  const captured = [];
+  s.exs = exs;
+  s.tracking = tracking || { byId: TRACK, failed: false };
+  // unitOf() as render() defines it, against the injected tracking result.
+  vm.runInContext(`
+    function unitOf(e){
+      if(tracking.failed) return RECAP_UNIT.UNRESOLVED;
+      if(!e || e.exercise_id == null) return RECAP_UNIT.UNRESOLVED;
+      var row = tracking.byId[e.exercise_id];
+      return recapUnitFor(row ? row.tracking_type : null, !!row);
+    }
+    function stat(n,l){ __stats.push({ value:String(n), label:l }); return ''; }
+    var __stats = [];
+  `, Object.assign(s, { __stats: captured }));
+  vm.runInContext(extractAggregation(src) + '\n__out = __stats;', s);
+  return s.__out;
+}
+
+// The exercise-count label is singular for one exercise ("exercise"), which is
+// pre-existing behaviour this checkpoint deliberately leaves alone.
+const statFor = (stats, label) => (label === 'exercises')
+  ? stats.find((x) => x.label === 'exercise' || x.label === 'exercises')
+  : stats.find((x) => x.label === label);
+const set = (reps, weight, extra) =>
+  Object.assign({ set_number: 1, reps, weight_lbs: weight === undefined ? null : weight,
+    completed: true, is_warmup: false }, extra || {});
+
+/* ── Resolver coupling ──────────────────────────────────────────────────── */
+
+test('recap: neutral types stay in step with the shared resolver', () => {
+  const s = recapSandbox();
+  // Both recognized-but-non-aggregatable types must be UNKNOWN to the CP3d-2a
+  // resolver — this pins the recap's list to progression.js rather than letting
+  // the two drift silently.
+  ['distance', 'time_distance'].forEach((t) => {
+    assert.equal(Progression.trackingUnit(t), 'unknown', t);
+    assert.equal(s.RECAP_NEUTRAL_TYPES[t], true, t);
+  });
+  assert.deepEqual(Object.keys(s.RECAP_NEUTRAL_TYPES).sort(), ['distance', 'time_distance']);
+});
+
+test('recap: unit classification separates neutral from unresolved', () => {
+  const s = recapSandbox();
+  assert.equal(s.recapUnitFor('weight_reps', true), 'reps');
+  assert.equal(s.recapUnitFor('bodyweight_reps', true), 'reps');
+  assert.equal(s.recapUnitFor('weighted_bodyweight', true), 'reps');
+  assert.equal(s.recapUnitFor('time', true), 'sec');
+  assert.equal(s.recapUnitFor('distance', true), 'neutral');
+  assert.equal(s.recapUnitFor('time_distance', true), 'neutral');
+  assert.equal(s.recapUnitFor(null, true), 'unresolved');        // missing type
+  assert.equal(s.recapUnitFor('quantum_reps', true), 'unresolved'); // unrecognized
+  assert.equal(s.recapUnitFor('time', false), 'unresolved');     // row missing
+});
+
+/* ── Layouts ────────────────────────────────────────────────────────────── */
+
+test('recap: reps-only workout', () => {
+  const stats = runRecap([
+    { name: 'Bench Press', exercise_id: 'ex-bench', sets: [set(8, 100), set(8, 100)] },
+  ]);
+  assert.equal(statFor(stats, 'exercises').value, '1');
+  assert.equal(statFor(stats, 'working sets').value, '2');
+  assert.equal(statFor(stats, 'reps').value, '16');
+  assert.equal(statFor(stats, 'lb volume').value, '1.6k');
+  assert.equal(statFor(stats, 'time'), undefined, 'no TIME stat');
+});
+
+test('recap: timed-only workout', () => {
+  const stats = runRecap([
+    { name: 'Plank', exercise_id: 'ex-plank', sets: [set(45), set(45)] },
+  ]);
+  assert.equal(statFor(stats, 'reps').value, '0');
+  assert.equal(statFor(stats, 'lb volume').value, '0');
+  assert.equal(statFor(stats, 'time').value, '1:30');
+});
+
+test('recap: reps plus timed', () => {
+  const stats = runRecap([
+    { name: 'Bench Press', exercise_id: 'ex-bench', sets: [set(8, 100)] },
+    { name: 'Plank', exercise_id: 'ex-plank', sets: [set(60)] },
+  ]);
+  assert.equal(statFor(stats, 'reps').value, '8', 'seconds must not enter reps');
+  assert.equal(statFor(stats, 'lb volume').value, '800');
+  assert.equal(statFor(stats, 'time').value, '1:00');
+});
+
+test('recap: distance-only workout', () => {
+  const stats = runRecap([
+    { name: 'Farmer Carry', exercise_id: 'ex-carry', sets: [set(40, 50)] },
+  ]);
+  assert.equal(statFor(stats, 'reps').value, '0');
+  assert.equal(statFor(stats, 'lb volume').value, '0');
+  assert.equal(statFor(stats, 'time'), undefined);
+  // Recognized distance must NOT be treated as a metadata failure.
+  assert.notEqual(statFor(stats, 'reps').value, '—');
+});
+
+test('recap: reps plus timed plus distance', () => {
+  const stats = runRecap([
+    { name: 'Bench Press', exercise_id: 'ex-bench', sets: [set(10, 100)] },
+    { name: 'Plank', exercise_id: 'ex-plank', sets: [set(150)] },
+    { name: 'Farmer Carry', exercise_id: 'ex-carry', sets: [set(40, 50)] },
+    { name: 'Treadmill Run', exercise_id: 'ex-run', sets: [set(30)] },
+  ]);
+  assert.equal(statFor(stats, 'reps').value, '10');
+  assert.equal(statFor(stats, 'lb volume').value, '1k');
+  assert.equal(statFor(stats, 'time').value, '2:30');
+  assert.equal(statFor(stats, 'working sets').value, '4', 'set counting is unchanged');
+});
+
+test('recap: skipped and empty sets are excluded as before', () => {
+  const stats = runRecap([
+    { name: 'Bench Press', exercise_id: 'ex-bench',
+      sets: [set(8, 100), set(8, 100, { completed: false }),
+             set(8, 100, { is_warmup: true }), set(null, 100)] },
+    { name: 'Empty', exercise_id: 'ex-squat', sets: [] },
+  ]);
+  assert.equal(statFor(stats, 'exercises').value, '1', 'an exercise with no working sets does not count');
+  assert.equal(statFor(stats, 'working sets').value, '1');
+  assert.equal(statFor(stats, 'reps').value, '8');
+});
+
+test('recap: an entirely empty workout does not crash', () => {
+  const stats = runRecap([]);
+  assert.equal(statFor(stats, 'exercises').value, '0');
+  assert.equal(statFor(stats, 'working sets').value, '0');
+  assert.equal(statFor(stats, 'reps').value, '0');
+  assert.equal(statFor(stats, 'time'), undefined);
+});
+
+test('recap: a weighted timed set counts as time only', () => {
+  const stats = runRecap([
+    { name: 'Plank', exercise_id: 'ex-plank', sets: [set(45, 20)] },
+  ]);
+  assert.equal(statFor(stats, 'time').value, '45s');
+  assert.equal(statFor(stats, 'reps').value, '0', '45 seconds must not become 45 reps');
+  assert.equal(statFor(stats, 'lb volume').value, '0', '20 lb × 45 s must not become 900');
+});
+
+test('recap: TIME is omitted when no timed work was identified', () => {
+  const stats = runRecap([
+    { name: 'Bench Press', exercise_id: 'ex-bench', sets: [set(8, 100)] },
+  ]);
+  assert.equal(statFor(stats, 'time'), undefined);
+  assert.equal(stats.length, 4, 'the usual four-stat layout is unchanged');
+});
+
+/* ── Seconds formatting ─────────────────────────────────────────────────── */
+
+test('recap: seconds formatting', () => {
+  const s = recapSandbox();
+  assert.equal(s.fmtSeconds(45), '45s');
+  assert.equal(s.fmtSeconds(59), '59s');
+  assert.equal(s.fmtSeconds(60), '1:00');
+  assert.equal(s.fmtSeconds(90), '1:30');
+  assert.equal(s.fmtSeconds(150), '2:30');
+  assert.equal(s.fmtSeconds(0), '0s');
+  assert.equal(s.fmtSeconds(605), '10:05', 'seconds stay zero-padded');
+});
+
+/* ── Fail-safe ──────────────────────────────────────────────────────────── */
+
+const failSafe = (stats, label) => {
+  assert.equal(statFor(stats, 'reps').value, '—', label + ': reps');
+  assert.equal(statFor(stats, 'lb volume').value, '—', label + ': volume');
+  assert.equal(statFor(stats, 'time'), undefined, label + ': no TIME');
+  assert.ok(/^\d+$/.test(statFor(stats, 'exercises').value), label + ': exercises numeric');
+  assert.ok(/^\d+$/.test(statFor(stats, 'working sets').value), label + ': sets numeric');
+};
+
+test('recap: a failed metadata query fails safe', () => {
+  failSafe(runRecap(
+    [{ name: 'Bench Press', exercise_id: 'ex-bench', sets: [set(8, 100)] }],
+    { byId: {}, failed: true }), 'query failure');
+});
+
+test('recap: a missing exercise id fails safe', () => {
+  failSafe(runRecap([{ name: 'My Custom', exercise_id: null, sets: [set(8, 100)] }]),
+    'missing id');
+});
+
+test('recap: a missing canonical row fails safe', () => {
+  failSafe(runRecap([{ name: 'Ghost', exercise_id: 'ex-absent', sets: [set(8, 100)] }]),
+    'missing row');
+});
+
+test('recap: a missing tracking type fails safe', () => {
+  failSafe(runRecap([{ name: 'No Metadata', exercise_id: 'ex-blank', sets: [set(8, 100)] }]),
+    'missing tracking_type');
+});
+
+test('recap: an unrecognized tracking type fails safe', () => {
+  failSafe(runRecap([{ name: 'Weird', exercise_id: 'ex-weird', sets: [set(8, 100)] }]),
+    'unrecognized tracking_type');
+});
+
+test('recap: one unresolved exercise makes the whole total unprovable', () => {
+  // A partial number must never be presented as a complete total.
+  const stats = runRecap([
+    { name: 'Bench Press', exercise_id: 'ex-bench', sets: [set(8, 100)] },
+    { name: 'Ghost', exercise_id: 'ex-absent', sets: [set(8, 100)] },
+  ]);
+  assert.equal(statFor(stats, 'reps').value, '—', 'must not report only the resolvable half');
+  assert.notEqual(statFor(stats, 'reps').value, '8');
+});
+
+test('recap: unresolved values never fall back to reps', () => {
+  [
+    [{ name: 'X', exercise_id: null, sets: [set(45, 20)] }, undefined],
+    [{ name: 'X', exercise_id: 'ex-absent', sets: [set(45, 20)] }, undefined],
+    [{ name: 'X', exercise_id: 'ex-blank', sets: [set(45, 20)] }, undefined],
+    [{ name: 'X', exercise_id: 'ex-weird', sets: [set(45, 20)] }, undefined],
+  ].forEach(([ex]) => {
+    const stats = runRecap([ex]);
+    assert.notEqual(statFor(stats, 'reps').value, '45');
+    assert.notEqual(statFor(stats, 'lb volume').value, '900');
+  });
+});
+
+/* ── Layout ─────────────────────────────────────────────────────────────── */
+
+test('recap: the five-stat grid rule exists and only affects an odd last stat', () => {
+  assert.match(RECAP, /\.stat:last-child:nth-child\(odd\)\s*\{\s*grid-column:\s*1\s*\/\s*-1;?\s*\}/,
+    'the odd-last-stat rule must be present');
+  assert.match(RECAP, /\.stat-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*1fr\)/,
+    'the two-column grid is unchanged');
+});
+
+/* ── Mutation sensitivity ───────────────────────────────────────────────── */
+
+test('recap mutation: dropping the unit filter lets seconds become reps', () => {
+  const broken = RECAP.replace(
+    'if(unit === RECAP_UNIT.SECONDS){',
+    'if(false){').replace(
+    'if(unit === RECAP_UNIT.REPS){',
+    'if(true){');
+  assert.notEqual(broken, RECAP, 'the unit branches were not found to mutate');
+  const stats = runRecap(
+    [{ name: 'Plank', exercise_id: 'ex-plank', sets: [set(45, 20)] }], null, broken);
+  assert.equal(statFor(stats, 'reps').value, '45',
+    'without the filter seconds DO become reps — otherwise the guard proves nothing');
+  assert.equal(statFor(stats, 'lb volume').value, '900',
+    'and weighted seconds DO inflate volume');
+});
+
+test('recap mutation: removing the fail-safe reintroduces a guessed total', () => {
+  const broken = RECAP.replace(
+    'if(unit === RECAP_UNIT.UNRESOLVED){ unresolved = true; return; }',
+    'if(unit === RECAP_UNIT.UNRESOLVED){ unit = RECAP_UNIT.REPS; }');
+  assert.notEqual(broken, RECAP, 'the fail-safe branch was not found to mutate');
+  const stats = runRecap(
+    [{ name: 'Ghost', exercise_id: 'ex-absent', sets: [set(45, 20)] }], null, broken);
+  assert.equal(statFor(stats, 'reps').value, '45',
+    'without the fail-safe an unresolved value IS counted as reps');
+});
+
+test('recap: rep-based PR cards are gated on the same unit rule', () => {
+  // A weighted hold must not yield "New Best Volume" (lb × seconds) or a
+  // fabricated estimated 1RM card.
+  assert.match(RECAP, /if\(ws\.length && unitOf\(e\) === RECAP_UNIT\.REPS\)\{/,
+    'the PR-card block must require a positively rep-tracked exercise');
+});
