@@ -82,6 +82,9 @@
     }
     .stat-num { font-family:'Bebas Neue',sans-serif; font-size:30px; letter-spacing:1px; line-height:1; }
     .stat-label { font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text-muted); margin-top:6px; }
+    /* A fifth stat (TIME) would otherwise sit alone in a half-width cell.
+       Only an ODD last stat spans, so the usual four-stat grid is untouched. */
+    .stat:last-child:nth-child(odd) { grid-column: 1 / -1; }
 
     /* ── Sub labels (inside the collapsed breakdown) ── */
     .sub-label {
@@ -280,6 +283,69 @@
   // Completed, non-warmup sets only (what "counts").
   function working(sets){ return (sets||[]).filter(function(s){ return s.completed && !s.is_warmup && num(s.reps)!=null; }); }
 
+  /* ── Tracking units in the recap (Phase 4.3.9B CP3d-2b) ────────────────────
+   * `workout_sets.reps` holds repetitions for a rep exercise and SECONDS for a
+   * timed one, so the recap used to add seconds into its "reps" total and, for a
+   * weighted hold, multiply pounds by seconds into "lb volume".
+   *
+   * The UNIT decision is not made here — it comes from the shared CP3d-2a
+   * resolver in progression.js, which this page already loads. What the recap
+   * adds is a second, different question the resolver does not answer: is a
+   * total PROVABLY COMPLETE?
+   *
+   *   reps / sec  → aggregatable
+   *   neutral     → the catalog answered, but the magnitude is deliberately not
+   *                 aggregatable (distance, time_distance). Excluded, and NOT a
+   *                 failure: the total is still complete.
+   *   unresolved  → we could not read the catalog, the row is missing, or the
+   *                 type is absent/unrecognized. The total cannot be promised,
+   *                 so unit-dependent stats show "—" rather than a partial
+   *                 number dressed up as a complete one.
+   *
+   * RECAP_NEUTRAL_TYPES must stay in step with progression.js's unit table. A
+   * test pins both entries to the resolver's UNKNOWN unit so the coupling is
+   * enforced rather than assumed. */
+  var RECAP_NEUTRAL_TYPES = { distance:true, time_distance:true };
+  var RECAP_UNIT = { REPS:'reps', SECONDS:'sec', NEUTRAL:'neutral', UNRESOLVED:'unresolved' };
+
+  function recapUnitFor(trackingType, rowFound){
+    if(!rowFound) return RECAP_UNIT.UNRESOLVED;
+    if(typeof Progression==='undefined' || !Progression.trackingUnit) return RECAP_UNIT.UNRESOLVED;
+    var u = Progression.trackingUnit(trackingType);
+    if(u==='reps') return RECAP_UNIT.REPS;
+    if(u==='sec')  return RECAP_UNIT.SECONDS;
+    // Non-aggregatable: recognized catalog type, or something we cannot vouch for.
+    return RECAP_NEUTRAL_TYPES[trackingType] ? RECAP_UNIT.NEUTRAL : RECAP_UNIT.UNRESOLVED;
+  }
+
+  // 45 → "45s" · 60 → "1:00" · 90 → "1:30" · 150 → "2:30"
+  function fmtSeconds(total){
+    var t = Math.round(num(total)||0);
+    if(t < 60) return t + 's';
+    var m = Math.floor(t/60), s = t % 60;
+    return m + ':' + (s < 10 ? '0' + s : s);
+  }
+
+  /* Canonical tracking types for the completed workout's exercises. Keyed by the
+   * `exercise_id` already on the workout rows — never by name — and deduplicated,
+   * so this is one small read and none at all when nothing carries an id. Read
+   * only: nothing is written and nothing is persisted onto the workout. */
+  async function loadTrackingTypes(exs){
+    var ids = [...new Set((exs||[]).map(function(e){ return e.exercise_id; })
+                                   .filter(function(x){ return x!=null; }))];
+    if(!ids.length) return { byId:{}, failed:false };
+    try {
+      var res = await supabaseClient.from('exercises').select('id,tracking_type').in('id', ids);
+      if(res.error || !res.data) return { byId:{}, failed:true };
+      var byId = {};
+      res.data.forEach(function(r){ byId[r.id] = r; });
+      return { byId:byId, failed:false };
+    } catch(e){
+      console.error('loadTrackingTypes', e);
+      return { byId:{}, failed:true };
+    }
+  }
+
   // Format a set list: "165 × 8, 8, 8" when uniform weight, else per-set.
   function fmtSets(sets){
     var rich = sets.map(function(s){ return { w:num(s.weight_lbs!=null?s.weight_lbs:s.weight), r:num(s.reps) }; })
@@ -384,7 +450,9 @@
         tmplEx.forEach(function(t){ ranges[(t.name||'').toLowerCase()] = t; });
       } catch(e){}
     }
-    return { w:w, exs:exs, ranges:ranges };
+    var tracking = await loadTrackingTypes(exs);
+
+    return { w:w, exs:exs, ranges:ranges, tracking:tracking };
   }
 
   // Attach `e.history` (prior sessions, newest first) to each current exercise,
@@ -452,6 +520,15 @@
   // ── render ────────────────────────────────────────────────────────
   function render(d){
     var w=d.w, exs=d.exs, ranges=d.ranges;
+    var tracking = d.tracking || { byId:{}, failed:true };
+
+    // One classification, used by BOTH the stat totals and the PR cards below.
+    function unitOf(e){
+      if(tracking.failed) return RECAP_UNIT.UNRESOLVED;
+      if(!e || e.exercise_id == null) return RECAP_UNIT.UNRESOLVED;
+      var row = tracking.byId[e.exercise_id];
+      return recapUnitFor(row ? row.tracking_type : null, !!row);
+    }
 
     // Hero meta + stats
     var dt = new Date(w.created_at || w.date);
@@ -460,23 +537,46 @@
     document.getElementById('heroMeta').innerHTML =
       '<strong>' + esc(w.name || 'Workout') + '</strong><br>' + dateStr + (dur ? ' · ' + dur + ' min' : '');
 
-    var totalSets=0, totalReps=0, totalVol=0, workingExCount=0;
+    // Exercise count, working-set count and skipped-set filtering are unchanged;
+    // only the unit-dependent totals below are affected.
+    var totalSets=0, totalReps=0, totalVol=0, totalSec=0, workingExCount=0;
+    var unresolved=false;
     exs.forEach(function(e){
       var ws = working(e.sets);
       if(ws.length) workingExCount++;
       totalSets += ws.length;
+      if(!ws.length) return;              // nothing completed → nothing to classify
+
+      var unit = unitOf(e);
+      // An exercise we cannot classify makes the unit-dependent totals
+      // unprovable. Its values are never guessed into reps.
+      if(unit === RECAP_UNIT.UNRESOLVED){ unresolved = true; return; }
+      if(unit === RECAP_UNIT.NEUTRAL) return;   // recognized, deliberately excluded
+
       ws.forEach(function(s){
         var r=num(s.reps), wt=num(s.weight_lbs);
-        if(r!=null){ totalReps+=r; if(wt!=null) totalVol+=wt*r; }
+        if(r==null) return;
+        if(unit === RECAP_UNIT.REPS){
+          totalReps += r;
+          if(wt!=null) totalVol += wt*r;
+        } else if(unit === RECAP_UNIT.SECONDS){
+          // A weighted hold contributes its seconds and nothing else — never
+          // reps, and never pounds × seconds.
+          totalSec += r;
+        }
       });
     });
     var volLabel = totalVol>=1000 ? (Math.round(totalVol/100)/10)+'k' : totalVol;
     function stat(n,l){ return '<div class="stat"><div class="stat-num">'+n+'</div><div class="stat-label">'+l+'</div></div>'; }
-    document.getElementById('statGrid').innerHTML =
+    var statsHtml =
       stat(workingExCount, workingExCount===1?'exercise':'exercises') +
       stat(totalSets, 'working sets') +
-      stat(totalReps, 'reps') +
-      stat(volLabel, 'lb volume');
+      stat(unresolved ? '—' : totalReps, 'reps') +
+      stat(unresolved ? '—' : volLabel, 'lb volume');
+    // "time", not "hold time": timed entries include work intervals such as
+    // Mountain Climbers, not only static holds.
+    if(!unresolved && totalSec > 0) statsHtml += stat(fmtSeconds(totalSec), 'time');
+    document.getElementById('statGrid').innerHTML = statsHtml;
 
     // PR detection + exercise breakdown + progression (single pass)
     var prCards=[], bdRows=[], progItems=[], improved=0, analyzable=0;
@@ -487,7 +587,10 @@
       var prevSession = sessions.length ? sessions[0] : null;
 
       // ---- PR cards ----
-      if(ws.length){
+      // Same unit rule as the totals: a weighted hold must not produce a
+      // "New Best Volume" (pounds × seconds) or "New Estimated 1RM" card.
+      // Only positively rep-tracked exercises get rep-based PR cards.
+      if(ws.length && unitOf(e) === RECAP_UNIT.REPS){
         if(!base.everLogged){
           prCards.push({ kind:'First Time Logged', detail:e.name });
         } else {
