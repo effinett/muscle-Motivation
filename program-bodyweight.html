@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <!-- Neutral static title. The real Program name is written from the catalog
+       only after authorization succeeds, so view-source on the draft page
+       reveals nothing about it. -->
+  <title>Muscle Motivation – Program</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js" integrity="sha384-ouAVEJVCMsf8Svzn+BwqbaBhxBEA0xgeVBhHnxmWd+Wqyv18yhWCQwGegFD/OHLq" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --red: #B1121B;
+      --red-dim: rgba(177,18,27,0.12);
+      --bg: #050505;
+      --surface: #0f0f0f;
+      --surface2: #161616;
+      --border: #222;
+      --text: #ffffff;
+      --muted: #888;
+      --light: #ccc;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Barlow', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 0; opacity: 0.4;
+    }
+
+    /* Auth / loading gate */
+    #authGate {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      min-height: 100vh; background: var(--bg);
+      position: relative; z-index: 10;
+    }
+    #authGate img { width: 90px; margin-bottom: 20px; opacity: 0.8; filter: drop-shadow(0 0 12px rgba(177,18,27,0.4)); }
+    #authGate p { color: #555; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; }
+
+    /* Header */
+    header {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(5,5,5,0.97);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      display: flex; align-items: center;
+      justify-content: space-between;
+      height: 64px;
+    }
+    .header-logo { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+    .header-logo img { height: 44px; filter: drop-shadow(0 0 8px rgba(177,18,27,0.35)); }
+    .header-logo span {
+      font-family: 'Barlow', sans-serif; font-weight: 700;
+      font-size: 11px; letter-spacing: 3px;
+      color: var(--red); text-transform: uppercase;
+    }
+    .header-right { display: flex; align-items: center; gap: 14px; }
+    .back-link {
+      font-size: 12px; color: var(--muted); text-decoration: none;
+      letter-spacing: 1px; text-transform: uppercase; font-weight: 600;
+      transition: color 0.2s; min-height: 44px; display: flex; align-items: center;
+    }
+    .back-link:hover { color: var(--red); }
+
+    /* Unavailable + locked states share one centred layout */
+    #unavailableState, #lockedState {
+      display: none; flex-direction: column;
+      align-items: center; justify-content: center;
+      min-height: 80vh; text-align: center;
+      padding: 40px 20px; position: relative; z-index: 1;
+    }
+    #unavailableState .state-icon, #lockedState .lock-icon { color: var(--red); margin-bottom: 20px; }
+    #unavailableState .state-icon svg, #lockedState .lock-icon svg { width: 48px; height: 48px; }
+    #unavailableState h2, #lockedState h2 {
+      font-family: 'Bebas Neue', sans-serif; font-size: 32px;
+      letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px;
+    }
+    #unavailableState p, #lockedState p {
+      color: var(--muted); max-width: 420px; line-height: 1.6; margin-bottom: 28px;
+    }
+    .btn-primary {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-height: 44px; padding: 14px 28px;
+      background: var(--red); border: none; border-radius: 10px;
+      color: white; font-size: 16px; font-weight: 700;
+      font-family: 'Bebas Neue', sans-serif; letter-spacing: 3px;
+      text-transform: uppercase; cursor: pointer; text-decoration: none;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 30px rgba(177,18,27,0.35); }
+
+    /* Container */
+    .container {
+      max-width: 760px; margin: 0 auto;
+      padding: 28px 16px 120px;
+      position: relative; z-index: 1;
+    }
+
+    /* Hero */
+    .hero { text-align: center; padding: 24px 0 8px; }
+    .hero .eyebrow {
+      font-family: 'Barlow', sans-serif; font-weight: 700; font-size: 10px;
+      letter-spacing: 4px; color: var(--red); text-transform: uppercase;
+    }
+    .hero h1 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(34px, 9vw, 60px);
+      letter-spacing: 2px; text-transform: uppercase;
+      margin: 12px 0 8px; line-height: 1;
+      overflow-wrap: anywhere;
+    }
+    .hero p {
+      color: var(--muted); font-size: 15px; max-width: 520px;
+      margin: 0 auto; line-height: 1.6; overflow-wrap: anywhere;
+    }
+
+    /* Section label */
+    .section-label {
+      font-family: 'Barlow', sans-serif; font-weight: 700;
+      font-size: 10px; letter-spacing: 3px;
+      color: var(--red); text-transform: uppercase;
+      margin: 36px 0 14px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 22px 20px;
+      margin-bottom: 14px;
+      position: relative; overflow: hidden;
+    }
+    .card::before {
+      content: ''; position: absolute;
+      top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(177,18,27,0.25), transparent);
+    }
+    .card h3 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 20px; letter-spacing: 1px;
+      color: var(--text); margin-bottom: 10px;
+    }
+    .card p { color: var(--light); font-size: 14px; line-height: 1.7; margin-bottom: 10px; }
+    .card p:last-child { margin-bottom: 0; }
+
+    /* Facts grid — wraps to one column on the narrowest phones */
+    .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .fact {
+      background: var(--surface2); border-radius: 10px; padding: 12px 14px;
+      min-width: 0;
+    }
+    .fact-key {
+      font-size: 10px; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 4px;
+    }
+    .fact-val {
+      font-size: 14px; font-weight: 600; color: var(--text);
+      line-height: 1.4; overflow-wrap: anywhere;
+    }
+    @media (max-width: 360px) { .facts { grid-template-columns: 1fr; } }
+
+    /* Session rows — same primitives as the other Program pages */
+    .sched-grid { display: grid; gap: 8px; }
+    .sched-row {
+      display: flex; justify-content: space-between; gap: 12px; align-items: center;
+      background: var(--surface2); border-radius: 8px; padding: 11px 14px;
+      border: 1px solid transparent; transition: border-color .15s;
+      width: 100%; text-align: left; font-family: inherit; min-height: 44px;
+      color: inherit; cursor: pointer;
+    }
+    .sched-row:hover { border-color: var(--red); }
+    .sched-row:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+    .sched-row .day { font-weight: 600; color: var(--muted); font-size: 13px; min-width: 90px; }
+    .sched-row .sess { color: var(--text); font-size: 13px; text-align: right; overflow-wrap: anywhere; }
+    .sched-row.selected { border-color: var(--red); background: var(--red-dim); }
+    .sched-row.selected .day { color: var(--red); }
+    .sched-note { color: var(--muted); font-size: 13px; margin-top: 14px; line-height: 1.6; }
+    .sched-note a { color: var(--red); text-decoration: none; font-weight: 600; }
+    .sched-note a:hover { text-decoration: underline; }
+
+    /* Sticky CTA */
+    .sticky-cta {
+      display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+      background: rgba(5,5,5,0.97); backdrop-filter: blur(12px);
+      border-top: 1px solid var(--border); padding: 14px 20px 18px;
+    }
+    .sticky-cta-inner {
+      max-width: 760px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    }
+    .sticky-cta-label {
+      font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--muted); font-weight: 700; margin-bottom: 4px;
+    }
+    .sticky-cta-name {
+      font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 1px;
+      color: var(--text); line-height: 1.1; overflow-wrap: anywhere;
+    }
+    .sticky-cta-btn {
+      background: var(--red); color: white; border: none; border-radius: 10px;
+      padding: 12px 22px; min-height: 44px;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 2px;
+      cursor: pointer; text-decoration: none; white-space: nowrap;
+      transition: background 0.15s; flex-shrink: 0;
+    }
+    .sticky-cta-btn:hover { background: #D11D27; }
+    .sticky-cta-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+    @media (max-width: 480px) { .header-logo span { display: none; } }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
+      .btn-primary:hover { transform: none; }
+    }
+  </style>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#121011">
+  <meta name="application-name" content="Muscle Motivation">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Muscle Motivation">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="safe-area.css">
+  <script src="mm-errors.js" defer></script>
+</head>
+<body>
+
+<!-- Loading / auth gate -->
+<div id="authGate">
+  <img src="logow.png" alt="Muscle Motivation">
+  <p>Loading your program...</p>
+</div>
+
+<!-- Unavailable state. Covers a Program that is not in the published catalog
+     (draft, retired, unknown slug) AND every failure to establish access:
+     catalog error, unreadable purchases, unreadable Routines. Deliberately
+     neutral — it never says "draft", never names the Program, and never hints
+     at content. -->
+<div id="unavailableState">
+  <span class="state-icon"><i data-lucide="alert-circle"></i></span>
+  <h2>This program isn't available</h2>
+  <p id="unavailableCopy">We couldn't open this program right now. Browse the programs available to you and try again from there.</p>
+  <a class="btn-primary" href="workout.html?pane=programs">Browse programs</a>
+</div>
+
+<!-- Locked state — the Program IS published, the user simply has no access.
+     Copy is written at runtime from the catalog's own access flags, so it never
+     promises a purchase option the Program does not offer. -->
+<div id="lockedState">
+  <span class="lock-icon"><i data-lucide="lock"></i></span>
+  <h2>You don't have access yet</h2>
+  <p id="lockedCopy">This program isn't part of your current access.</p>
+  <a class="btn-primary" href="workout.html?pane=programs">Browse programs</a>
+</div>
+
+<!-- Program content. EVERY value is written from the catalog and from
+     program_routines at runtime; nothing about this Program is present in the
+     static markup, so an unauthorized visitor cannot read it from source. -->
+<div id="programContent" style="display:none;">
+
+  <header>
+    <a class="header-logo" href="app.html">
+      <img src="logow.png" alt="Muscle Motivation">
+      <span>Muscle Motivation</span>
+    </a>
+    <div class="header-right">
+      <a class="back-link" href="workout.html?pane=programs">← Programs</a>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <div class="hero">
+      <div class="eyebrow">Your Program</div>
+      <h1 id="progName"></h1>
+      <p id="progDesc"></p>
+    </div>
+
+    <div class="section-label">At a glance</div>
+    <div class="card">
+      <div class="facts" id="progFacts"></div>
+    </div>
+
+    <div class="section-label">Sessions</div>
+    <div class="card">
+      <p id="sessSummary"></p>
+      <div class="sched-grid" id="sessList"></div>
+      <p class="sched-note">Your training frequency applies to every program you own. To change it, use
+        <a href="app.html">Recalculate Goals</a> on your dashboard.</p>
+    </div>
+
+  </div>
+</div>
+
+<div class="sticky-cta" id="stickyCta">
+  <div class="sticky-cta-inner">
+    <div>
+      <div class="sticky-cta-label" id="ctaLabel">Selected workout</div>
+      <div class="sticky-cta-name" id="ctaSessionName">—</div>
+    </div>
+    <a class="sticky-cta-btn" id="startBtn" href="workout.html">Start workout</a>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.0/dist/umd/supabase.js" integrity="sha384-3wY11tldQ5+yWqAvmTN4XtQvnjoTva0cV15O/O/O5NTtp0ivVopSzLOzsVXWZse9" crossorigin="anonymous"></script>
+<script src="supabase.js"></script>
+<script src="schedules.js"></script>
+<script src="program-catalog.js"></script>
+<script src="entitlement-core.js"></script>
+<script src="program-state.js"></script>
+<script>
+  /* ── Bodyweight Foundations Program page (Phase 4.3.9B CP3d-3) ────────────
+     Written while the Program is still `status='draft'`, so the central design
+     question is: what stops someone who knows this URL from seeing private
+     Program or Routine content before publication?
+
+     FOUR independent layers, all enforced in code rather than described:
+
+       1. requireAuth() — an unauthenticated visitor is redirected to auth.html
+          and never runs any of this.
+       2. pcLoadCatalog() reads the catalog with `.eq('status','published')`, so
+          a draft/retired Program is simply ABSENT. pcBySlug() returns null.
+       3. resolveProgramAccess(null, rows) returns `invalid_program` and denies
+          BEFORE any purchase or membership logic runs — a matching purchase or
+          an active membership cannot bypass draft status, because the Program
+          never reaches the entitlement comparison at all.
+       4. RLS independently withholds the draft `programs` row and the three
+          `private` platform Routines from every browser client.
+
+     And a fifth, structural one: the static markup contains NO Program name,
+     description, session name or exercise. Every value is injected after
+     authorization succeeds, so view-source on the draft page reveals nothing.
+
+     The same page renders normally the moment CP3e publishes the Program — the
+     authorized path is the ONLY path, so nothing here needs rewriting. */
+  var PROGRAM_SLUG = 'bodyweight_foundations';
+  var PRODUCT_SLUG = 'bodyweight_foundations';
+
+  var SESSIONS = [];        // [{ session_key, name, sort_order }]
+  var SELECTED = null;      // session_key the CTA will launch
+
+  function showOnly(id) {
+    ['authGate', 'unavailableState', 'lockedState', 'programContent'].forEach(function (el) {
+      var node = document.getElementById(el);
+      if (node) node.style.display = 'none';
+    });
+    var target = document.getElementById(id);
+    if (target) target.style.display = (id === 'programContent') ? 'block' : 'flex';
+  }
+
+  // Every non-authorized outcome lands here. One exit, so no future branch can
+  // accidentally fall through to rendered content.
+  function showUnavailable() {
+    document.getElementById('stickyCta').style.display = 'none';
+    showOnly('unavailableState');
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function showLocked(program) {
+    // Written from the catalog's own flags — never a hard-coded purchase pitch.
+    var copy = 'This program isn’t part of your current access.';
+    if (program && program.includedWithMembership && program.standalonePurchasable) {
+      copy = 'This program is included with an active membership, or available as a one-time purchase.';
+    } else if (program && program.includedWithMembership) {
+      copy = 'This program is included with an active Muscle Motivation membership.';
+    } else if (program && program.standalonePurchasable) {
+      copy = 'This program is available as a one-time purchase.';
+    }
+    document.getElementById('lockedCopy').textContent = copy;
+    document.getElementById('stickyCta').style.display = 'none';
+    showOnly('lockedState');
+    if (window.lucide) lucide.createIcons();
+  }
+
+  /* Sessions come from program_routines scoped by BOTH the Program slug and the
+     relationship — never by session_key alone, so a same-keyed Routine that
+     belongs to another Program can never be substituted here. `exercises` is
+     deliberately NOT selected: this page summarises the Program, it never needs
+     the prescriptions, and not fetching them means they cannot leak. RLS gates
+     the read, so an unentitled caller receives an empty list. */
+  async function loadSessions() {
+    try {
+      var res = await supabaseClient
+        .from('program_routines')
+        .select('session_key, sort_order, programs!inner(slug), workout_templates!inner(id, name)')
+        .eq('programs.slug', PROGRAM_SLUG)
+        .order('sort_order', { ascending: true });
+      if (res.error || !Array.isArray(res.data)) return null;
+      var rows = res.data
+        .filter(function (r) { return r && r.session_key && r.workout_templates; })
+        .map(function (r) {
+          return {
+            session_key: r.session_key,
+            name: r.workout_templates.name || r.session_key,
+            sort_order: r.sort_order,
+          };
+        });
+      return rows.length ? rows : null;     // nothing readable → fail closed
+    } catch (e) {
+      console.error('loadSessions:', e);
+      return null;
+    }
+  }
+
+  function esc(str) {
+    return String(str == null ? '' : str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function renderFacts(program) {
+    var goalLabel = (typeof GOAL_LABELS !== 'undefined' && program.goal)
+      ? (GOAL_LABELS[program.goal] || program.goal) : null;
+    var facts = [
+      ['Goal', goalLabel],
+      ['Equipment', program.equipmentSummary],
+      ['Duration', program.durationWeeks ? program.durationWeeks + ' weeks' : null],
+      ['Per week', program.recommendedDaysPerWeek ? program.recommendedDaysPerWeek + ' days' : null],
+      ['Level', program.difficulty],
+      ['Access', program.includedWithMembership ? 'Included with membership' : null],
+    ].filter(function (f) { return f[1]; });   // a missing value shows no row
+    document.getElementById('progFacts').innerHTML = facts.map(function (f) {
+      return '<div class="fact"><div class="fact-key">' + esc(f[0]) + '</div>' +
+             '<div class="fact-val">' + esc(f[1]) + '</div></div>';
+    }).join('');
+  }
+
+  function selectSession(key) {
+    var match = SESSIONS.filter(function (s) { return s.session_key === key; })[0];
+    if (!match) return;                       // only a listed session is selectable
+    SELECTED = key;
+    document.getElementById('ctaSessionName').textContent = match.name;
+    // Canonical launch URL. CP3d-1's authorizeProgramSession re-checks the
+    // catalog, entitlement and the Program-scoped Routine read at the WRITE
+    // boundary, so this link cannot create a workout for a draft Program even
+    // if it is copied elsewhere. `mode=optional` never advances progression.
+    document.getElementById('startBtn').href =
+      'workout.html?program=' + encodeURIComponent(PROGRAM_SLUG) +
+      '&session=' + encodeURIComponent(key) + '&mode=optional';
+    renderSessions();
+  }
+
+  function renderSessions() {
+    document.getElementById('sessList').innerHTML = SESSIONS.map(function (s) {
+      var sel = (s.session_key === SELECTED) ? ' selected' : '';
+      return '<button type="button" class="sched-row' + sel + '"' +
+        ' aria-pressed="' + (sel ? 'true' : 'false') + '"' +
+        ' onclick="selectSession(\'' + esc(s.session_key) + '\')">' +
+        '<span class="day">Session ' + esc(String(s.sort_order)) + '</span>' +
+        '<span class="sess">' + esc(s.name) + '</span></button>';
+    }).join('');
+  }
+
+  // Which session to preselect: the user's progression position when they have
+  // one, otherwise the first. Read-only — this page never creates an enrolment.
+  async function preselect(userId, program) {
+    var recommended = SESSIONS[0].session_key;
+    try {
+      var profile = await getProfile(userId);
+      var days = (profile && profile.training_days)
+        ? profile.training_days
+        : (program.recommendedDaysPerWeek || 3);
+      var schedule = (typeof getScheduleForDays === 'function')
+        ? getScheduleForDays(PROGRAM_SLUG, days) : [];
+      var up = await supabaseClient
+        .from('user_programs').select('current_index')
+        .eq('user_id', userId).eq('program_slug', PROGRAM_SLUG).maybeSingle();
+      var idx = (up && up.data && up.data.current_index) ? up.data.current_index : 0;
+      var key = (schedule && schedule.length)
+        ? schedule[idx % schedule.length] : recommended;
+      // Only honour a scheduled key that this Program actually links.
+      if (SESSIONS.some(function (s) { return s.session_key === key; })) recommended = key;
+      document.getElementById('sessSummary').textContent =
+        'You train ' + days + ' days a week. Pick any session below — starting one here logs it ' +
+        'to your history without changing your dashboard progression.';
+    } catch (e) {
+      document.getElementById('sessSummary').textContent =
+        'Pick any session below — starting one here logs it to your history without ' +
+        'changing your dashboard progression.';
+    }
+    selectSession(recommended);
+  }
+
+  window.addEventListener('load', function () {
+    (async () => {
+      try {
+        var session = await requireAuth();       // layer 1
+        var user = session.user;
+
+        // Layer 2 + 3. One purchases request for the page, matching the other
+        // Program pages: the catalog and the unfiltered purchase rows are
+        // fetched together and the SHARED resolver decides. A status filter
+        // here would be a second entitlement policy.
+        var both = await Promise.all([
+          pcLoadCatalog(),
+          supabaseClient.from('purchases').select('product, status').eq('user_id', user.id),
+        ]);
+        var catalog = both[0];
+        var purchases = both[1];
+
+        // A catalog that failed to load is indistinguishable from an empty one.
+        // Both deny — never fall back to anything hard-coded.
+        if (!Array.isArray(catalog) || !catalog.length) { showUnavailable(); return; }
+
+        var program = pcBySlug(catalog, PRODUCT_SLUG);   // null while draft
+
+        // Defence in depth. The catalog is already published-only, and the
+        // shared resolver deliberately knows nothing about status — it answers
+        // "does this user have access to this Program?", not "is it live?". So
+        // the page refuses anything not explicitly published rather than
+        // trusting the loader's filter to be the only thing standing between a
+        // draft or retired Program and a rendered page.
+        if (program && program.status !== 'published') program = null;
+
+        var access = resolveProgramAccess(program, purchases.error ? null : purchases.data);
+
+        if (!access || !access.allowed) {
+          // `invalid_program` (absent from the published catalog) and
+          // `invalid_purchases` (access could not be evaluated) are NOT
+          // "you don't own this" — they are unavailable.
+          if (!program || access.reason === 'invalid_program'
+              || access.reason === 'invalid_purchases') {
+            showUnavailable();
+          } else {
+            showLocked(program);
+          }
+          return;
+        }
+
+        // Authorized. Layer 4 still applies: the Routine read below is RLS-gated
+        // and returns nothing if anything about this Program is not readable.
+        SESSIONS = await loadSessions();
+        if (!SESSIONS) { showUnavailable(); return; }
+
+        document.title = 'Muscle Motivation – ' + program.name;
+        document.getElementById('progName').textContent = program.name;
+        document.getElementById('progDesc').textContent = program.description || '';
+        renderFacts(program);
+        await preselect(user.id, program);
+
+        showOnly('programContent');
+        document.getElementById('stickyCta').style.display = 'block';
+        if (window.lucide) lucide.createIcons();
+      } catch (err) {
+        // requireAuth() redirects on its own; anything else fails closed rather
+        // than leaving a half-rendered page.
+        console.error('program page:', err);
+        showUnavailable();
+      }
+    })();
+  });
+</script>
+</body>
+</html>
