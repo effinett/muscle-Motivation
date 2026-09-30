@@ -573,3 +573,178 @@ test('mutation: removing the write-boundary gate would allow a draft workout', (
   assert.match(readCode(wk), /authorizeProgramSession\(programSlug, sessionKey\)/,
     'the gate is present and load-bearing');
 });
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * Phase 4.3.9B — schedule-guidance truthfulness.
+ *
+ * The session intro previously read "You train N days a week", where N fell
+ * back to the PROGRAM's recommended_days_per_week whenever the profile could
+ * not be read. A 4-day account was therefore told it trained 3 days — the
+ * Program's number presented as the user's. The intro is now STATIC markup, so
+ * no profile value and no code path can vary it.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+const SESSION_INTRO = 'Choose any session below. Starting one here logs it to your history ' +
+  'without changing your dashboard progression.';
+const PULLING_NOTE = 'No-equipment training cannot fully train pulling muscles. For balanced ' +
+  'development, add rows, pulldowns, or chin-ups when equipment is available.';
+
+// Collapse the HTML's source line breaks/indentation the way a browser would.
+const flat = (s) => String(s).replace(/\s+/g, ' ').trim();
+
+// Brace-matched extraction of one function from the page source.
+function extractPageFn(src, name) {
+  let start = src.indexOf('function ' + name + '(');
+  assert.ok(start > -1, 'the page defines ' + name + '()');
+  if (src.slice(Math.max(0, start - 6), start) === 'async ') start -= 6;
+  let i = src.indexOf('{', start);
+  let depth = 0;
+  for (; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}' && --depth === 0) return src.slice(start, i + 1);
+  }
+  throw new Error('unbalanced braces in ' + name);
+}
+
+test('frequency: no rendered path claims a personal training frequency', () => {
+  // PAGE_CODE is comment-stripped: the phrase survives only in explanatory
+  // comments describing the defect, which are never rendered.
+  assert.ok(!/You train/.test(PAGE_CODE), 'the "You train N days" claim must be gone');
+  assert.ok(!/days a week/.test(PAGE_CODE), 'no script path may assert a weekly frequency');
+  // The only remaining "days" string is the At a Glance Program fact.
+  const perWeek = PAGE_CODE.match(/\['Per week',[^\]]*\]/);
+  assert.ok(perWeek, 'the At a Glance Per week fact still exists');
+  assert.match(perWeek[0], /recommendedDaysPerWeek/, 'it is Program metadata, not profile data');
+});
+
+test('frequency: the session intro is static markup, not script-assigned', () => {
+  const body = PAGE.slice(PAGE.indexOf('<body>'), PAGE.lastIndexOf('<script>'));
+  assert.ok(flat(body).includes(SESSION_INTRO), 'the approved intro is in the markup verbatim');
+  // Nothing may write to it at runtime.
+  assert.ok(!/getElementById\('sessSummary'\)/.test(PAGE_CODE),
+    'sessSummary must not be assigned by script');
+});
+
+test('frequency: training_days is read for scheduling only, never rendered', () => {
+  const fn = extractPageFn(PAGE, 'preselect');
+  assert.match(fn, /getScheduleForDays\(PROGRAM_SLUG, days\)/, 'still selects the schedule');
+  assert.ok(!/textContent/.test(fn), 'preselect must not write any copy');
+  assert.ok(!/sessSummary/.test(fn), 'preselect must not touch the intro');
+});
+
+test('frequency: the intro renders identically for every profile frequency', async () => {
+  for (const training_days of [2, 3, 4, 5, 6, null, 0, undefined]) {
+    const h = authorized({ profile: training_days == null ? { training_days } : { training_days } });
+    await h.run();
+    assert.deepEqual(h.shown(), ['programContent'], 'days=' + training_days);
+    assert.equal(flat(h.el('sessSummary').textContent || ''), '',
+      'the harness never assigns it — the real value is static markup');
+    // And the page still selects a legitimate session for each frequency.
+    assert.match(h.el('startBtn').href, /session=full_[abc]/, 'days=' + training_days);
+  }
+});
+
+test('frequency: an unavailable profile cannot produce a false claim', async () => {
+  // getProfile returning null was the exact trigger: `days` fell back to the
+  // Program's 3 and was printed as the user's frequency.
+  const h = authorized({ profile: null });
+  await h.run();
+  assert.deepEqual(h.shown(), ['programContent'], 'the page still renders');
+  assert.match(h.el('startBtn').href, /session=full_a/, 'preselection degrades safely');
+  noWrites(h, 'null profile');
+});
+
+test('frequency: the footer states no number', () => {
+  const note = (PAGE.match(/<p class="sched-note">[\s\S]*?<\/p>/) || [''])[0];
+  assert.ok(note, 'the footer note exists');
+  assert.ok(!/\b[2-7]\b/.test(note.replace(/<[^>]*>/g, '')),
+    'the footer must not restate a numeric frequency: ' + note);
+  assert.match(flat(note), /applies to every program you own/);
+  // Accuracy of the claim, verified in source rather than asserted in prose.
+  assert.match(readCode(read('program-state.js')), /function pgRemapAllSchedules/);
+});
+
+test('At a Glance still shows the Program recommendation of 3 days', async () => {
+  const h = authorized();
+  await h.run();
+  const facts = h.el('progFacts').innerHTML;
+  assert.match(facts, /Per week/);
+  assert.match(facts, /3 days/, 'the Program recommendation stays visible');
+});
+
+/* ── Pulling limitation: entitled Program content only ──────────────────── */
+
+test('pulling note: present in the entitled Program content', async () => {
+  const h = authorized();
+  await h.run();
+  assert.deepEqual(h.shown(), ['programContent']);
+  const body = PAGE.slice(PAGE.indexOf('id="programContent"'), PAGE.lastIndexOf('<script>'));
+  assert.ok(flat(body).includes(PULLING_NOTE), 'the approved note is inside programContent');
+  assert.match(PAGE, /<div class="section-label">Equipment note<\/div>/,
+    'uses the existing section-label + card pattern');
+});
+
+test('pulling note: absent from locked, unavailable and loading states', () => {
+  const region = (startMarker, endMarker) => {
+    const a = PAGE.indexOf(startMarker);
+    const b = PAGE.indexOf(endMarker, a);
+    assert.ok(a > -1 && b > a, 'region found: ' + startMarker);
+    return flat(PAGE.slice(a, b));
+  };
+  const gate = region('<div id="authGate">', '<!-- Unavailable state');
+  const unavailable = region('<div id="unavailableState">', '<!-- Locked state');
+  const locked = region('<div id="lockedState">', '<!-- Program content');
+  [['loading', gate], ['unavailable', unavailable], ['locked', locked]].forEach(([label, html]) => {
+    assert.ok(!html.includes(PULLING_NOTE), label + ' must not contain the pulling note');
+    assert.ok(!/pulling/i.test(html), label + ' must not mention pulling');
+  });
+});
+
+test('pulling note: never enters the canonical description or compact surfaces', () => {
+  // It is page copy, not catalog data — so it must not be written into the row
+  // the compact cards, Home and Today read.
+  assert.ok(!/programs[\s\S]{0,40}description/.test(PAGE_CODE),
+    'the page never writes programs.description');
+  assert.ok(!/\.(insert|update|upsert)\(/.test(PAGE_CODE), 'the page performs no writes');
+  // Home renders name + link only; Today renders a session label.
+  const home = readCode(read('app.html'));
+  assert.ok(!/pulling/i.test(home), 'Home must not carry the pulling note');
+  const train = readCode(read('workout.html'));
+  assert.ok(!/pulling/i.test(train), 'Train must not carry the pulling note');
+});
+
+test('pulling note: plain text, escaped context, wraps safely', () => {
+  const card = (PAGE.match(/Equipment note<\/div>\s*<div class="card">[\s\S]*?<\/div>/) || [''])[0];
+  assert.ok(card, 'the card exists');
+  // Static prose only — no interpolation, no markup, no link, no interaction.
+  assert.ok(!/\$\{|' \+|" \+/.test(card), 'no interpolation into the note');
+  [/<a /, /href=/, /onclick=/, /data-lucide/, /<button/, /<script/].forEach((re) =>
+    assert.ok(!re.test(card), 'note must not contain ' + re));
+  // Wrapping: .card p carries no nowrap/clip, and the page forbids h-scroll.
+  const cardP = (PAGE.match(/\.card p \{[^}]*\}/) || [''])[0];
+  assert.ok(cardP, '.card p rule exists');
+  assert.ok(!/nowrap|text-overflow/.test(cardP), '.card p must wrap');
+  assert.match(PAGE, /body\s*\{[^}]*overflow-x:\s*hidden/);
+});
+
+/* ── Mutation sensitivity ───────────────────────────────────────────────── */
+
+test('mutation: restoring a dynamic personal claim would fail', () => {
+  const broken = PAGE.replace(
+    '<p id="sessSummary">Choose any session below.',
+    '<p id="sessSummary">You train 3 days a week. Choose any session below.');
+  assert.notEqual(broken, PAGE, 'the static intro was found to mutate');
+  assert.ok(/You train/.test(readCode(broken)), 'the mutated page DOES claim a frequency');
+  assert.ok(!/You train/.test(PAGE_CODE), 'the shipped page does not');
+});
+
+test('mutation: moving the pulling note outside entitled content would fail', () => {
+  const idx = PAGE.indexOf(PULLING_NOTE.slice(0, 40).replace(/ /g, ' '));
+  const contentStart = PAGE.indexOf('id="programContent"');
+  const contentEnd = PAGE.lastIndexOf('<script src="https://cdn.jsdelivr.net');
+  assert.ok(idx > contentStart && idx < contentEnd,
+    'the note lives strictly inside programContent');
+  // If it were moved above programContent it would sit in a denial state.
+  assert.ok(PAGE.indexOf('id="unavailableState"') < contentStart);
+  assert.ok(PAGE.indexOf('id="lockedState"') < contentStart);
+});
