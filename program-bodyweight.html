@@ -301,10 +301,25 @@
 
     <div class="section-label">Sessions</div>
     <div class="card">
-      <p id="sessSummary"></p>
+      <!-- STATIC by design (Phase 4.3.9B). This sentence previously read
+           "You train N days a week", where N fell back to the PROGRAM's
+           recommended_days_per_week whenever the profile could not be read —
+           so a 4-day account was told it trained 3 days. Static copy is true
+           for every profile frequency and cannot be varied by any code path. -->
+      <p id="sessSummary">Choose any session below. Starting one here logs it to your history
+        without changing your dashboard progression.</p>
       <div class="sched-grid" id="sessList"></div>
-      <p class="sched-note">Your training frequency applies to every program you own. To change it, use
+      <!-- Deliberately states no number. Accuracy verified in source:
+           profiles.training_days is global and program-state.js
+           pgRemapAllSchedules() remaps every owned Program when it changes. -->
+      <p class="sched-note">Your workout frequency applies to every program you own. To change it, use
         <a href="app.html">Recalculate Goals</a> on your dashboard.</p>
+    </div>
+
+    <div class="section-label">Equipment note</div>
+    <div class="card">
+      <p>No-equipment training cannot fully train pulling muscles. For balanced development, add rows,
+        pulldowns, or chin-ups when equipment is available.</p>
     </div>
 
   </div>
@@ -474,6 +489,12 @@
   async function preselect(userId, program) {
     var recommended = SESSIONS[0].session_key;
     try {
+      // training_days is read for SCHEDULE SELECTION ONLY and is never rendered.
+      // The previous code used it to print "You train N days a week", falling
+      // back to the Program's own recommended_days_per_week when the profile
+      // could not be read — which stated the PROGRAM's frequency as if it were
+      // the USER's. No copy on this page depends on it any more, so an
+      // unavailable profile can no longer produce a false personal claim.
       var profile = await getProfile(userId);
       var days = (profile && profile.training_days)
         ? profile.training_days
@@ -488,13 +509,10 @@
         ? schedule[idx % schedule.length] : recommended;
       // Only honour a scheduled key that this Program actually links.
       if (SESSIONS.some(function (s) { return s.session_key === key; })) recommended = key;
-      document.getElementById('sessSummary').textContent =
-        'You train ' + days + ' days a week. Pick any session below — starting one here logs it ' +
-        'to your history without changing your dashboard progression.';
     } catch (e) {
-      document.getElementById('sessSummary').textContent =
-        'Pick any session below — starting one here logs it to your history without ' +
-        'changing your dashboard progression.';
+      // Preselection is a convenience; the session intro is static markup and
+      // needs no fallback copy.
+      console.error('preselect:', e);
     }
     selectSession(recommended);
   }
