@@ -37,8 +37,11 @@ const PAGE_CODE = readCode(PAGE);
 const BWF_ROW = {
   slug: 'bodyweight_foundations',
   name: 'Bodyweight Foundations',
-  description: 'An equipment-free strength foundation focused on legs, pushing, core, and ' +
-    'training consistency. It does not replace balanced resistance training with pulling movements.',
+  // Compacted in migration phase_439b_bodyweight_description_compact so the
+  // canonical description matches the other Programs' length on the two compact
+  // surfaces that render it. The pulling limitation it used to carry now lives
+  // as page copy on the Bodyweight detail page only.
+  description: 'Equipment-free full-body strength program',
   goal: 'muscle',
   difficulty: 'Beginner – Intermediate',
   duration_weeks: 8,
