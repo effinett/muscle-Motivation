@@ -73,6 +73,47 @@ function normalizeTrainingDays(trainingDays) {
   return d;
 }
 
+/* ── Canonical profile-frequency validation ─────────────────────────────────
+ * The ONE rule that decides whether a profile's training frequency is USABLE.
+ * Separate from normalizeTrainingDays() on purpose: normalize answers "which
+ * bucket does this value belong to", which is only a meaningful question once
+ * the value is known to be real. This answers "do we actually know the user's
+ * frequency at all?" — and a caller that cannot answer yes must fail closed
+ * rather than substitute a number, because substituting one silently selects
+ * the wrong schedule family (a 4-day user shown the 3-day Full Body split).
+ *
+ * Canonical domain: integers 0–6 inclusive. `profiles.training_days` carries no
+ * database CHECK constraint (verified 2026-09-29: nullable integer, no
+ * default), so the domain is defined by the only writer that validates it —
+ * onboarding-draft.js, which accepts inRange(v, 0, 6). `0` is a real ANSWER
+ * ("not training yet"), not a missing value.
+ *
+ * Truthiness is deliberately NOT the test. `!v` rejects the valid answer 0,
+ * while NaN, 4.5, '4' and 12 pass or fail for reasons unrelated to validity.
+ * Values outside the domain are treated as CORRUPT, not clampable: nothing in
+ * the profile schema authorises silently reinterpreting 12 as 6. */
+var TRAINING_DAYS_MIN = 0;
+var TRAINING_DAYS_MAX = 6;
+
+function isValidTrainingDays(value) {
+  return typeof value === 'number' && isFinite(value)
+    && Math.floor(value) === value
+    && value >= TRAINING_DAYS_MIN && value <= TRAINING_DAYS_MAX;
+}
+
+/* profile → { ok: true, days: n }
+ *         | { ok: false, reason: 'no_profile' | 'missing' | 'invalid' }
+ * `no_profile` covers both "the read failed" and "there is no row": getProfile()
+ * returns null for both, so no surface can tell them apart, and both mean the
+ * same thing here — the frequency is unknown. */
+function resolveTrainingDays(profile) {
+  if (!profile || typeof profile !== 'object') return { ok: false, reason: 'no_profile' };
+  var value = profile.training_days;
+  if (value === null || value === undefined) return { ok: false, reason: 'missing' };
+  if (!isValidTrainingDays(value)) return { ok: false, reason: 'invalid' };
+  return { ok: true, days: value };
+}
+
 /* The single function every surface uses to decide the schedule. */
 function getScheduleForDays(programSlug, trainingDays) {
   var table = PROGRAM_SCHEDULES[programSlug];

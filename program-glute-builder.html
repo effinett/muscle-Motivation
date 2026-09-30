@@ -215,6 +215,7 @@
     .sched-row.today, .sched-row.selected { border: 1px solid var(--red); background: var(--red-dim); }
     .sched-row.today .day, .sched-row.selected .day { color: var(--red); }
     .sched-note { color: var(--muted); font-size: 13px; margin-top: 14px; }
+    .sched-retry { margin-top: 14px; padding: 10px 20px; font-size: 14px; letter-spacing: 2px; }
     .sched-note a { color: var(--red); text-decoration: none; font-weight: 600; }
     .sched-note a:hover { text-decoration: underline; }
 
@@ -695,9 +696,38 @@
   // The browsable list shows EVERY session in the program (Priority 3), not just
   // the ones in the user's frequency schedule; the recommended next progression
   // workout is highlighted but starting any session here is optional.
+  // Fail closed on an unknown frequency. getProfile() returns null for BOTH a
+  // failed read and a missing row, so a truthiness fallback to 3 silently told a
+  // 4-day user to train the 3-day Full Body split and stated it as fact. There
+  // is no safe number to substitute: the correct answer is to recommend nothing
+  // and let the user retry. resolveTrainingDays() (schedules.js) is the one
+  // canonical rule — 0 is a real answer, 12 and NaN are corrupt, not clampable.
+  function showFrequencyUnavailable(userId) {
+    PROG_KEYS        = [];
+    PROG_RECOMMENDED = null;
+    PROG_SELECTED    = null;
+    document.getElementById('schedPreview').innerHTML = '';
+    document.getElementById('schedSummary').innerHTML =
+      'We couldn’t load your training frequency, so no workout is recommended ' +
+      'right now. Your program and training history are unchanged.' +
+      '<br><button type="button" class="btn-primary sched-retry" id="schedRetryBtn">Try again</button>';
+    // Guarded: if the retry control is somehow absent, the page must still
+    // settle in this neutral state rather than throw and be mistaken for a
+    // Program that is unavailable.
+    var retry = document.getElementById('schedRetryBtn');
+    if (retry) retry.addEventListener('click', function () {
+      retry.disabled = true; retry.textContent = 'Checking…';
+      loadUserProgram(userId);
+    });
+    document.getElementById('stickyCta').style.display = 'none';
+  }
+
   async function loadUserProgram(userId) {
-    var profile = await getProfile(userId);
-    var days = (profile && profile.training_days) ? profile.training_days : 3;
+    var profile = null;
+    try { profile = await getProfile(userId); } catch (e) { profile = null; }
+    var freq = resolveTrainingDays(profile);
+    if (!freq.ok) { showFrequencyUnavailable(userId); return; }
+    var days = freq.days;
     var schedule = getScheduleForDays(PROGRAM_SLUG, days);
 
     var { data: up } = await supabaseClient
