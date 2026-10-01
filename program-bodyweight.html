@@ -491,12 +491,27 @@
   // preselected. Neutral and retryable — the Program is fine, we just cannot
   // read the profile. Deliberately distinct from showUnavailable(), which means
   // "this Program is not available to you" and offers no retry.
-  function showFrequencyUnavailable(userId, program) {
+  function showFrequencyUnavailable(reason, userId, program) {
     SELECTED = null;
     document.getElementById('sessList').innerHTML = '';
+    document.getElementById('stickyCta').style.display = 'none';
+
+    // Two states, one per thing the user can actually DO about it. The reason
+    // code comes from resolveTrainingDays(); frequencyFailureState() owns the
+    // mapping so all four Program pages classify it identically. Neither state
+    // names a column, a value or an error — only the next step.
+    if (frequencyFailureState(reason) === 'unsupported') {
+      // We have a frequency and no Program schedule covers it. A retry would
+      // return the same answer for ever, so the only action offered is the route
+      // that lets the user change it.
+      document.getElementById('sessSummary').innerHTML =
+        'Choose between 2 and 6 workout days to use this program.' +
+        '<br><a class="btn-primary sched-retry" href="profile.html">Recalculate Goals</a>';
+      return;
+    }
+
     document.getElementById('sessSummary').innerHTML =
-      'No session can be selected right now. Your program and training history ' +
-      'are unchanged.' +
+      'We couldn’t load your workout schedule.' +
       '<br><button type="button" class="btn-primary sched-retry" id="sessRetryBtn">Try again</button>';
     // Guarded: if the retry control is somehow absent, the page must still settle
     // in this neutral state rather than throw and be mistaken for a Program that
@@ -508,7 +523,6 @@
         if (ready) document.getElementById('stickyCta').style.display = 'block';
       });
     });
-    document.getElementById('stickyCta').style.display = 'none';
   }
 
   // Returns true only when a session was actually selected — the caller shows
@@ -526,7 +540,7 @@
     var profile = null;
     try { profile = await getProfile(userId); } catch (e) { profile = null; }
     var freq = resolveTrainingDays(profile);
-    if (!freq.ok) { showFrequencyUnavailable(userId, program); return false; }
+    if (!freq.ok) { showFrequencyUnavailable(freq.reason, userId, program); return false; }
 
     var recommended = SESSIONS[0].session_key;
     try {

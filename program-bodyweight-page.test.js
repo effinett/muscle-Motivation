@@ -640,13 +640,14 @@ test('frequency: the session intro is static markup on every rendering path', ()
   const inOwner = owner.match(/getElementById\('sessSummary'\)/g) || [];
   assert.equal(writes.length, inOwner.length,
     'only showFrequencyUnavailable() may assign sessSummary');
-  assert.equal(inOwner.length, 1, 'and it assigns it exactly once');
+  assert.equal(inOwner.length, 2,
+    'once per failure state — unavailable and unsupported');
   assert.ok(!/You train|days a week|days\/week/.test(owner),
-    'the failure copy states no frequency');
-  assert.match(owner, /No session can be selected right now/);
-  // Cause-neutral by design: 0 and 1 are frequencies that loaded perfectly
-  // well and simply are not schedulable, so copy blaming a failed load would
-  // be false for them.
+    'neither failure copy states a frequency');
+  // Two user-actionable states. Which one appears for which reason, and the
+  // action each offers, is asserted against rendered output below.
+  assert.match(owner, /We couldn’t load your workout schedule\./);
+  assert.match(owner, /Choose between 2 and 6 workout days to use this program\./);
 });
 
 test('frequency: training_days is read for scheduling only, never rendered', () => {
@@ -681,21 +682,42 @@ test('frequency: an unknown frequency fails closed instead of guessing one', asy
   // program-frequency.test.js; this pins the page-level contract.
   // 0 and 1 are STORABLE onboarding answers that no Program schedule maps, so
   // they fail closed here too rather than being promoted to the 3-day family.
-  for (const profile of [null, {}, { training_days: null }, { training_days: 12 },
-                         { training_days: 0 }, { training_days: 1 }]) {
+  // Both states must fail closed identically; only the copy and the offered
+  // action differ. 0 and 1 are STORABLE onboarding answers that no Program
+  // schedule maps, so they are 'unsupported' rather than promoted to 3 days.
+  const cases = [
+    [null, 'unavailable'],
+    [{}, 'unavailable'],
+    [{ training_days: null }, 'unavailable'],
+    [{ training_days: 12 }, 'unsupported'],
+    [{ training_days: 0 }, 'unsupported'],
+    [{ training_days: 1 }, 'unsupported'],
+  ];
+  for (const [profile, state] of cases) {
     const h = authorized({ profile });
     await h.run();
-    const label = JSON.stringify(profile);
+    const label = JSON.stringify(profile) + ' → ' + state;
     // Navigation and the rest of the Program are preserved — this is not an
     // error page, and it is never confused with a lost entitlement.
     assert.deepEqual(h.shown(), ['programContent'], 'the page still renders: ' + label);
     assert.equal(h.el('startBtn').href, '', 'no launchable workout: ' + label);
     assert.equal(h.el('stickyCta').style.display, 'none', 'no Start CTA: ' + label);
     assert.equal(h.el('sessList').innerHTML, '', 'no session buttons: ' + label);
-    const copy = h.el('sessSummary').innerHTML;
-    assert.match(copy, /No session can be selected right now/, label);
-    assert.ok(!/You train/.test(copy), 'states no frequency: ' + label);
     noWrites(h, 'unknown frequency ' + label);
+
+    const copy = h.el('sessSummary').innerHTML;
+    assert.ok(!/You train/.test(copy), 'states no frequency: ' + label);
+    assert.ok(!/training_days|undefined|NaN|error/i.test(copy),
+      'exposes no technical detail: ' + label);
+    if (state === 'unsupported') {
+      assert.match(copy, /Choose between 2 and 6 workout days/, label);
+      assert.match(copy, /href="profile\.html"[^>]*>Recalculate Goals</, label);
+      assert.ok(!/Try again/.test(copy), 'no useless retry: ' + label);
+    } else {
+      assert.match(copy, /We couldn’t load your workout schedule\./, label);
+      assert.match(copy, /Try again/, label);
+      assert.ok(!/Recalculate Goals/.test(copy), label);
+    }
   }
 });
 

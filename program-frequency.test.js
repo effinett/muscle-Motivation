@@ -130,6 +130,39 @@ test('canonical rule: 0 and 1 are storable answers but are NOT schedulable', () 
   }
 });
 
+test('canonical rule: each reason maps to the state whose action can help', () => {
+  const s = loadSchedules();
+  assert.equal(typeof s.frequencyFailureState, 'function');
+  // We do not have the value → retrying can genuinely help.
+  assert.equal(s.frequencyFailureState('no_profile'), 'unavailable');
+  assert.equal(s.frequencyFailureState('missing'), 'unavailable');
+  // We have it and it is not schedulable → only changing it can help.
+  assert.equal(s.frequencyFailureState('invalid'), 'unsupported');
+  // Fails safe: an unrecognised reason claims less about the user's data.
+  for (const r of [undefined, null, '', 'something_new', 0]) {
+    assert.equal(s.frequencyFailureState(r), 'unavailable',
+      'unknown reason defaults to the state that asserts least');
+  }
+});
+
+test('canonical rule: every reason resolveTrainingDays can emit has a state', () => {
+  // Mutation-sensitive: adding a reason code without classifying it would leave
+  // it silently defaulting, so the emitted set is enumerated from real inputs.
+  const s = loadSchedules();
+  const emitted = new Set();
+  for (const p of ['throws-equivalent', null, undefined, {}, { training_days: null },
+                   { training_days: 0 }, { training_days: 1 }, { training_days: 12 },
+                   { training_days: 4.5 }, { training_days: '4' }, { training_days: NaN }]) {
+    const r = s.resolveTrainingDays(p);
+    if (!r.ok) emitted.add(r.reason);
+  }
+  assert.deepEqual([...emitted].sort(), ['invalid', 'missing', 'no_profile']);
+  for (const reason of emitted) {
+    assert.ok(['unavailable', 'unsupported'].includes(s.frequencyFailureState(reason)),
+      reason + ' is classified');
+  }
+});
+
 test('canonical rule: the lower boundary is exactly 2', () => {
   // Mutation-sensitive pair: 1 must fail and 2 must pass. Either bound moving
   // by one breaks one of these two assertions.
@@ -229,12 +262,17 @@ test('the frequency failure state never claims a frequency the user did not choo
   for (const file of Object.values(PAGES)) {
     const src = read(file).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
     const claim = /You train'\s*\+|You train \d/;
-    const failureCopy = /No (workout|session) can be (recommended|selected) right now/;
-    assert.match(src, failureCopy, file + ' has neutral failure copy');
-    // That the copy blames no CAUSE is asserted against the rendered text in the
-    // per-page behaviour tests below, not here: this function also contains the
-    // loadUserProgram/preselect retry call, so a source-level word match would
-    // be testing identifiers rather than anything the user reads.
+    // Both failure states must exist in every page. What each one SAYS and which
+    // action it offers is asserted against rendered output in the per-page
+    // behaviour tests, not here — the handler also contains the
+    // loadUserProgram/preselect retry call, so a source-level word match would be
+    // testing identifiers rather than anything the user reads.
+    assert.match(src, /We couldn’t load your workout schedule\./,
+      file + ' has the unavailable state');
+    assert.match(src, /Choose between 2 and 6 workout days to use this program\./,
+      file + ' has the unsupported state');
+    assert.match(src, /frequencyFailureState\(/,
+      file + ' classifies the two states through the shared rule');
     if (claim.test(src)) {
       // Only permitted where it is built from an already-validated number.
       assert.match(src, /freq\.ok[\s\S]*You train/,
@@ -323,30 +361,52 @@ const CLASSIC = [
   ['program-glute-builder.html', 'glute_builder'],
 ];
 
+/* [label, profile, expected failure state].
+ *
+ * 'unavailable' — we do not have the value, so a retry can genuinely help.
+ * 'unsupported' — the value is PRESENT and no Program schedule covers it, so the
+ *                 user has to change it and a retry would be useless. */
 const UNKNOWN_FREQUENCIES = [
-  ['profile read failed', 'throws'],
-  ['no profile row', null],
-  ['column null', { training_days: null }],
-  ['column absent', {}],
-  ['non-numeric', { training_days: '4' }],
-  ['not an integer', { training_days: 4.5 }],
-  ['out of domain high', { training_days: 12 }],
-  ['out of domain negative', { training_days: -1 }],
-  ['NaN', { training_days: NaN }],
+  ['profile read failed', 'throws', 'unavailable'],
+  ['no profile row', null, 'unavailable'],
+  ['column null', { training_days: null }, 'unavailable'],
+  ['column absent', {}, 'unavailable'],
+  ['non-numeric', { training_days: '4' }, 'unsupported'],
+  ['not an integer', { training_days: 4.5 }, 'unsupported'],
+  ['out of domain high', { training_days: 12 }, 'unsupported'],
+  ['out of domain negative', { training_days: -1 }, 'unsupported'],
+  ['NaN', { training_days: NaN }, 'unsupported'],
   // Storable onboarding answers that no Program schedule maps (owner ruling
   // 2026-09-29). These are the mutation-sensitive cases: they pass only because
   // the lower bound is 2. Restore the bound to 0 and both regress to selecting
   // the 3-day family via normalizeTrainingDays().
-  ['stored 0 days, not schedulable', { training_days: 0 }],
-  ['stored 1 day, not schedulable', { training_days: 1 }],
+  ['stored 0 days, not schedulable', { training_days: 0 }, 'unsupported'],
+  ['stored 1 day, not schedulable', { training_days: 1 }, 'unsupported'],
 ];
 
+/* Copy and action, per state. Asserted against RENDERED output, not source. */
+const UNAVAILABLE_COPY = /We couldn’t load your workout schedule\./;
+const UNSUPPORTED_COPY = /Choose between 2 and 6 workout days to use this program\./;
+
+/* Shared by both states and by all four pages: nothing offered, nothing written,
+ * nothing technical disclosed. */
+function assertFailedClosedCopy(copy, label) {
+  assert.doesNotMatch(copy, /You train/, 'states no frequency: ' + label);
+  assert.doesNotMatch(copy, /\b\d+ days?\/week\b/, 'states no personal day count: ' + label);
+  // No technical detail: no reason code, column name, status code or stack text.
+  assert.doesNotMatch(copy, /training_days|no_profile|missing|invalid|undefined|null|NaN/,
+    'exposes no technical detail: ' + label);
+  assert.doesNotMatch(copy, /error|failed|exception|supabase|profile row/i,
+    'exposes no error detail: ' + label);
+}
+
 for (const [file, slug] of CLASSIC) {
-  for (const [label, profile] of UNKNOWN_FREQUENCIES) {
-    test(file + ': fails closed — ' + label, async () => {
+  for (const [label, profile, state] of UNKNOWN_FREQUENCIES) {
+    test(file + ': fails closed — ' + label + ' → ' + state, async () => {
       const h = classicHarness(file, slug, profile);
       await h.run();
 
+      // Identical in both states.
       assert.deepEqual(h.sandbox.PROG_KEYS, [], 'no browsable sessions');
       assert.equal(h.sandbox.PROG_RECOMMENDED, null, 'nothing recommended');
       assert.equal(h.sandbox.PROG_SELECTED, null, 'nothing selected');
@@ -356,16 +416,49 @@ for (const [file, slug] of CLASSIC) {
       assert.deepEqual(h.writes, [], 'no database access on the failure path');
 
       const copy = h.dom.els.schedSummary.innerHTML;
-      assert.match(copy, /No workout can be recommended right now/);
-      assert.match(copy, /unchanged/, 'reassures that nothing was altered');
-      assert.doesNotMatch(copy, /You train/, 'states no frequency');
-      assert.doesNotMatch(copy, /\b[0-6] days\/week\b/, 'states no number of days');
-      // Cause-neutral: a genuine 0- or 1-day answer WAS loaded successfully, so
-      // copy blaming a failed load would be false for those two cases.
-      assert.doesNotMatch(copy, /load|loaded|couldn/i, 'claims no cause');
-      assert.ok(h.dom.els.schedRetryBtn.listeners.click, 'offers a retry');
+      assertFailedClosedCopy(copy, label);
+
+      if (state === 'unsupported') {
+        // We HAVE a value and no schedule covers it. Retrying returns the same
+        // answer for ever, so the action must be the route that changes it.
+        assert.match(copy, UNSUPPORTED_COPY);
+        assert.doesNotMatch(copy, UNAVAILABLE_COPY, 'does not blame a failed load');
+        assert.match(copy, /href="profile\.html"[^>]*>Recalculate Goals</,
+          'offers the Recalculate Goals route');
+        assert.doesNotMatch(copy, /Try again/, 'offers no useless retry');
+        assert.equal(h.dom.els.schedRetryBtn.listeners.click, undefined,
+          'and wires no retry handler');
+      } else {
+        assert.match(copy, UNAVAILABLE_COPY);
+        assert.doesNotMatch(copy, UNSUPPORTED_COPY, 'does not ask for a value change');
+        assert.match(copy, /Try again/, 'offers a retry');
+        assert.ok(h.dom.els.schedRetryBtn.listeners.click, 'and wires it');
+      }
     });
   }
+
+  test(file + ': the two failure states are distinct and not interchangeable', async () => {
+    // Mutation-sensitive: collapsing the mapping to one state, or inverting it,
+    // breaks this — the copy AND the offered action must both differ.
+    const unavailable = classicHarness(file, slug, null);
+    await unavailable.run();
+    const unsupported = classicHarness(file, slug, { training_days: 1 });
+    await unsupported.run();
+
+    const a = unavailable.dom.els.schedSummary.innerHTML;
+    const b = unsupported.dom.els.schedSummary.innerHTML;
+    assert.notEqual(a, b, 'the two states render different copy');
+    assert.match(a, /Try again/);
+    assert.doesNotMatch(a, /Recalculate Goals/);
+    assert.match(b, /Recalculate Goals/);
+    assert.doesNotMatch(b, /Try again/);
+    // Both still fail closed identically.
+    for (const h of [unavailable, unsupported]) {
+      assert.equal(h.dom.els.schedPreview.innerHTML, '');
+      assert.equal(h.dom.els.stickyCta.style.display, 'none');
+      assert.deepEqual(h.writes, []);
+    }
+  });
 
   test(file + ': 0 and 1 never reach schedule selection', async () => {
     // Mutation-sensitive at the call-site level, not just the validator: proves
@@ -477,8 +570,8 @@ function bwHarness(profile, opts) {
   };
 }
 
-for (const [label, profile] of UNKNOWN_FREQUENCIES) {
-  test('program-bodyweight.html: fails closed — ' + label, async () => {
+for (const [label, profile, state] of UNKNOWN_FREQUENCIES) {
+  test('program-bodyweight.html: fails closed — ' + label + ' → ' + state, async () => {
     const h = bwHarness(profile);
     const ready = await h.run();
 
@@ -490,13 +583,59 @@ for (const [label, profile] of UNKNOWN_FREQUENCIES) {
     assert.deepEqual(h.tables, [], 'no database access on the failure path');
 
     const copy = h.dom.els.sessSummary.innerHTML;
-    assert.match(copy, /No session can be selected right now/);
-    assert.match(copy, /unchanged/);
-    assert.doesNotMatch(copy, /You train/);
-    assert.doesNotMatch(copy, /load|loaded|couldn/i, 'claims no cause');
-    assert.ok(h.dom.els.sessRetryBtn.listeners.click, 'offers a retry');
+    assertFailedClosedCopy(copy, label);
+
+    if (state === 'unsupported') {
+      assert.match(copy, UNSUPPORTED_COPY);
+      assert.doesNotMatch(copy, UNAVAILABLE_COPY, 'does not blame a failed load');
+      assert.match(copy, /href="profile\.html"[^>]*>Recalculate Goals</,
+        'offers the Recalculate Goals route');
+      assert.doesNotMatch(copy, /Try again/, 'offers no useless retry');
+      assert.equal(h.dom.els.sessRetryBtn.listeners.click, undefined,
+        'and wires no retry handler');
+    } else {
+      assert.match(copy, UNAVAILABLE_COPY);
+      assert.doesNotMatch(copy, UNSUPPORTED_COPY, 'does not ask for a value change');
+      assert.match(copy, /Try again/, 'offers a retry');
+      assert.ok(h.dom.els.sessRetryBtn.listeners.click, 'and wires it');
+    }
   });
 }
+
+test('program-bodyweight.html: the two failure states are distinct and not interchangeable', async () => {
+  const unavailable = bwHarness(null);
+  await unavailable.run();
+  const unsupported = bwHarness({ training_days: 1 });
+  await unsupported.run();
+
+  const a = unavailable.dom.els.sessSummary.innerHTML;
+  const b = unsupported.dom.els.sessSummary.innerHTML;
+  assert.notEqual(a, b, 'the two states render different copy');
+  assert.match(a, /Try again/);
+  assert.doesNotMatch(a, /Recalculate Goals/);
+  assert.match(b, /Recalculate Goals/);
+  assert.doesNotMatch(b, /Try again/);
+  for (const h of [unavailable, unsupported]) {
+    assert.equal(h.dom.els.sessList.innerHTML, '');
+    assert.equal(h.dom.els.startBtn.href, '');
+    assert.equal(h.dom.els.stickyCta.style.display, 'none');
+    assert.deepEqual(h.tables, []);
+  }
+});
+
+test('the unsupported-state action routes to the surface that actually hosts it', () => {
+  // profile.html is where the Recalculate Goals control lives (the row that opens
+  // #recalcModal). Pointing the primary action anywhere else would make it a
+  // dead end, which is the whole thing this state exists to avoid.
+  const profile = read('profile.html');
+  assert.match(profile, /Recalculate Goals/, 'profile.html hosts the control');
+  assert.match(profile, /id="recalcModal"/, 'and the modal it opens');
+  assert.match(profile, /id="rc-training"/, 'including the training-days input');
+  for (const file of Object.values(PAGES)) {
+    assert.match(read(file), /href="profile\.html"[^>]*>Recalculate Goals</,
+      file + ' routes the unsupported state to profile.html');
+  }
+});
 
 test('program-bodyweight.html: 0 and 1 never reach schedule selection', async () => {
   // Bodyweight maps one family at every frequency, so 0/1 would have produced a

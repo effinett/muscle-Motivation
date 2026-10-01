@@ -126,6 +126,23 @@ function resolveTrainingDays(profile) {
   return { ok: true, days: value };
 }
 
+/* Which of the TWO user-actionable failure states a reason belongs to. Kept here,
+ * beside the rule that produces the reasons, so all four Program pages classify
+ * identically instead of each mapping reason codes to copy itself.
+ *
+ *  'unavailable'  — we do not have the value: the profile read failed, there is
+ *                   no row, or the column is NULL. Retrying can genuinely help.
+ *  'unsupported'  — we HAVE a value and it is not a frequency any Program
+ *                   schedule covers: 0, 1, fractional, non-numeric, out of
+ *                   range. Retrying can never help; the user has to change the
+ *                   value, so the action is the Recalculate Goals route.
+ *
+ * An unrecognised reason is treated as 'unavailable': that state claims less
+ * about the user's data and still shows nothing, so it is the safe default. */
+function frequencyFailureState(reason) {
+  return reason === 'invalid' ? 'unsupported' : 'unavailable';
+}
+
 /* The single function every surface uses to decide the schedule. */
 function getScheduleForDays(programSlug, trainingDays) {
   var table = PROGRAM_SCHEDULES[programSlug];
