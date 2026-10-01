@@ -189,6 +189,7 @@
     .sched-row.selected { border-color: var(--red); background: var(--red-dim); }
     .sched-row.selected .day { color: var(--red); }
     .sched-note { color: var(--muted); font-size: 13px; margin-top: 14px; line-height: 1.6; }
+    .sched-retry { margin-top: 14px; padding: 10px 20px; font-size: 14px; letter-spacing: 2px; }
     .sched-note a { color: var(--red); text-decoration: none; font-weight: 600; }
     .sched-note a:hover { text-decoration: underline; }
 
@@ -313,7 +314,7 @@
            profiles.training_days is global and program-state.js
            pgRemapAllSchedules() remaps every owned Program when it changes. -->
       <p class="sched-note">Your workout frequency applies to every program you own. To change it, use
-        <a href="app.html">Recalculate Goals</a> on your dashboard.</p>
+        <a href="profile.html">Recalculate Goals</a> in your profile.</p>
     </div>
 
     <div class="section-label">Equipment note</div>
@@ -486,21 +487,65 @@
 
   // Which session to preselect: the user's progression position when they have
   // one, otherwise the first. Read-only — this page never creates an enrolment.
+  // Fail closed on an unknown frequency: no session rows, no Start CTA, nothing
+  // preselected. Neutral and retryable — the Program is fine, we just cannot
+  // read the profile. Deliberately distinct from showUnavailable(), which means
+  // "this Program is not available to you" and offers no retry.
+  function showFrequencyUnavailable(reason, userId, program) {
+    SELECTED = null;
+    document.getElementById('sessList').innerHTML = '';
+    document.getElementById('stickyCta').style.display = 'none';
+
+    // Two states, one per thing the user can actually DO about it. The reason
+    // code comes from resolveTrainingDays(); frequencyFailureState() owns the
+    // mapping so all four Program pages classify it identically. Neither state
+    // names a column, a value or an error — only the next step.
+    if (frequencyFailureState(reason) === 'unsupported') {
+      // We have a frequency and no Program schedule covers it. A retry would
+      // return the same answer for ever, so the only action offered is the route
+      // that lets the user change it.
+      document.getElementById('sessSummary').innerHTML =
+        'Choose between 2 and 6 workout days to use this program.' +
+        '<br><a class="btn-primary sched-retry" href="profile.html">Recalculate Goals</a>';
+      return;
+    }
+
+    document.getElementById('sessSummary').innerHTML =
+      'We couldn’t load your workout schedule.' +
+      '<br><button type="button" class="btn-primary sched-retry" id="sessRetryBtn">Try again</button>';
+    // Guarded: if the retry control is somehow absent, the page must still settle
+    // in this neutral state rather than throw and be mistaken for a Program that
+    // is unavailable.
+    var retry = document.getElementById('sessRetryBtn');
+    if (retry) retry.addEventListener('click', function () {
+      retry.disabled = true; retry.textContent = 'Checking…';
+      preselect(userId, program).then(function (ready) {
+        if (ready) document.getElementById('stickyCta').style.display = 'block';
+      });
+    });
+  }
+
+  // Returns true only when a session was actually selected — the caller shows
+  // the Start CTA off this answer rather than assuming success.
   async function preselect(userId, program) {
+    // training_days is read for SCHEDULE SELECTION ONLY and is never rendered.
+    // The previous code fell back to the Program's own recommended_days_per_week
+    // when the profile could not be read, which selected a schedule family from
+    // the PROGRAM's frequency as if it were the USER's. There is no safe number
+    // to substitute, so anything that is not a schedulable frequency now fails
+    // closed via the one canonical rule, resolveTrainingDays() in schedules.js:
+    // only a raw integer 2–6 may drive schedule selection. 0 and 1 are storable
+    // onboarding answers that no schedule covers, so they fail closed too rather
+    // than being normalised up to the 3-day family.
+    var profile = null;
+    try { profile = await getProfile(userId); } catch (e) { profile = null; }
+    var freq = resolveTrainingDays(profile);
+    if (!freq.ok) { showFrequencyUnavailable(freq.reason, userId, program); return false; }
+
     var recommended = SESSIONS[0].session_key;
     try {
-      // training_days is read for SCHEDULE SELECTION ONLY and is never rendered.
-      // The previous code used it to print "You train N days a week", falling
-      // back to the Program's own recommended_days_per_week when the profile
-      // could not be read — which stated the PROGRAM's frequency as if it were
-      // the USER's. No copy on this page depends on it any more, so an
-      // unavailable profile can no longer produce a false personal claim.
-      var profile = await getProfile(userId);
-      var days = (profile && profile.training_days)
-        ? profile.training_days
-        : (program.recommendedDaysPerWeek || 3);
       var schedule = (typeof getScheduleForDays === 'function')
-        ? getScheduleForDays(PROGRAM_SLUG, days) : [];
+        ? getScheduleForDays(PROGRAM_SLUG, freq.days) : [];
       var up = await supabaseClient
         .from('user_programs').select('current_index')
         .eq('user_id', userId).eq('program_slug', PROGRAM_SLUG).maybeSingle();
@@ -515,6 +560,7 @@
       console.error('preselect:', e);
     }
     selectSession(recommended);
+    return true;
   }
 
   window.addEventListener('load', function () {
@@ -572,10 +618,12 @@
         document.getElementById('progName').textContent = program.name;
         document.getElementById('progDesc').textContent = program.description || '';
         renderFacts(program);
-        await preselect(user.id, program);
+        var ready = await preselect(user.id, program);
 
         showOnly('programContent');
-        document.getElementById('stickyCta').style.display = 'block';
+        // Gated on preselect's answer: an unknown training frequency leaves the
+        // Start CTA hidden rather than launching an unselected session.
+        if (ready) document.getElementById('stickyCta').style.display = 'block';
         if (window.lucide) lucide.createIcons();
       } catch (err) {
         // requireAuth() redirects on its own; anything else fails closed rather

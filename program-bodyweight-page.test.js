@@ -83,6 +83,9 @@ function makeElement(id) {
     id, innerHTML: '', textContent: '', href: '',
     style: { _d: '', set display(v) { this._d = v; }, get display() { return this._d; } },
     _attrs: {},
+    disabled: false,
+    listeners: {},
+    addEventListener(ev, fn) { (this.listeners[ev] = this.listeners[ev] || []).push(fn); },
     setAttribute(k, v) { this._attrs[k] = String(v); },
     getAttribute(k) { return this._attrs[k] == null ? null : this._attrs[k]; },
   };
@@ -141,7 +144,6 @@ function makeHarness(opts) {
     console: { error() {}, warn() {} },
     resolveProgramAccess, pcBySlug,
     GOAL_LABELS: { fatloss: 'Fat Loss', recomp: 'Recomposition', muscle: 'Muscle Gain' },
-    getScheduleForDays: () => ['full_a', 'full_b', 'full_c'],
     supabaseClient: { from: builder },
     requireAuth: async () => {
       if (o.authFails) throw new Error('Not authenticated');
@@ -159,6 +161,10 @@ function makeHarness(opts) {
   sandbox.addEventListener = (evt, fn) => { if (evt === 'load') handler = fn; };
 
   vm.createContext(sandbox);
+  // The page loads schedules.js before its inline script, so the harness runs the
+  // REAL module rather than stubbing getScheduleForDays(). It also supplies
+  // resolveTrainingDays(), the canonical frequency rule the page fails closed on.
+  vm.runInContext(read('schedules.js'), sandbox);
   const src = o.source || PAGE;
   const script = src.slice(src.lastIndexOf('<script>') + '<script>'.length,
                            src.lastIndexOf('</script>'));
@@ -620,41 +626,99 @@ test('frequency: no rendered path claims a personal training frequency', () => {
   assert.match(perWeek[0], /recommendedDaysPerWeek/, 'it is Program metadata, not profile data');
 });
 
-test('frequency: the session intro is static markup, not script-assigned', () => {
+test('frequency: the session intro is static markup on every rendering path', () => {
   const body = PAGE.slice(PAGE.indexOf('<body>'), PAGE.lastIndexOf('<script>'));
   assert.ok(flat(body).includes(SESSION_INTRO), 'the approved intro is in the markup verbatim');
-  // Nothing may write to it at runtime.
-  assert.ok(!/getElementById\('sessSummary'\)/.test(PAGE_CODE),
-    'sessSummary must not be assigned by script');
+
+  // One script path may now replace it: the fail-closed frequency state, which
+  // must say the frequency is UNKNOWN. The original assertion (nothing writes
+  // this element) existed to stop a runtime frequency CLAIM, so it is narrowed
+  // to that intent rather than dropped — every write must live in that one
+  // handler, and what it writes may not state a frequency.
+  const owner = extractPageFn(PAGE, 'showFrequencyUnavailable');
+  const writes = PAGE_CODE.match(/getElementById\('sessSummary'\)/g) || [];
+  const inOwner = owner.match(/getElementById\('sessSummary'\)/g) || [];
+  assert.equal(writes.length, inOwner.length,
+    'only showFrequencyUnavailable() may assign sessSummary');
+  assert.equal(inOwner.length, 2,
+    'once per failure state — unavailable and unsupported');
+  assert.ok(!/You train|days a week|days\/week/.test(owner),
+    'neither failure copy states a frequency');
+  // Two user-actionable states. Which one appears for which reason, and the
+  // action each offers, is asserted against rendered output below.
+  assert.match(owner, /We couldn’t load your workout schedule\./);
+  assert.match(owner, /Choose between 2 and 6 workout days to use this program\./);
 });
 
 test('frequency: training_days is read for scheduling only, never rendered', () => {
   const fn = extractPageFn(PAGE, 'preselect');
-  assert.match(fn, /getScheduleForDays\(PROGRAM_SLUG, days\)/, 'still selects the schedule');
+  assert.match(fn, /getScheduleForDays\(PROGRAM_SLUG, freq\.days\)/,
+    'still selects the schedule, now from a validated value');
+  assert.match(fn, /resolveTrainingDays\(profile\)/, 'via the canonical rule');
   assert.ok(!/textContent/.test(fn), 'preselect must not write any copy');
-  assert.ok(!/sessSummary/.test(fn), 'preselect must not touch the intro');
+  assert.ok(!/sessSummary/.test(fn), 'preselect must not touch the intro itself');
 });
 
-test('frequency: the intro renders identically for every profile frequency', async () => {
-  for (const training_days of [2, 3, 4, 5, 6, null, 0, undefined]) {
-    const h = authorized({ profile: training_days == null ? { training_days } : { training_days } });
+test('frequency: the intro renders identically for every VALID profile frequency', async () => {
+  // The schedulable domain is 2–6 (owner ruling 2026-09-29): exactly the
+  // frequencies PROGRAM_SCHEDULES maps. 0 and 1 are covered below.
+  for (const training_days of [2, 3, 4, 5, 6]) {
+    const h = authorized({ profile: { training_days } });
     await h.run();
     assert.deepEqual(h.shown(), ['programContent'], 'days=' + training_days);
-    assert.equal(flat(h.el('sessSummary').textContent || ''), '',
-      'the harness never assigns it — the real value is static markup');
+    assert.equal(flat(h.el('sessSummary').innerHTML || ''), '',
+      'the intro is untouched — the real value is static markup');
     // And the page still selects a legitimate session for each frequency.
     assert.match(h.el('startBtn').href, /session=full_[abc]/, 'days=' + training_days);
+    assert.equal(h.el('stickyCta').style.display, 'block', 'Start is offered');
   }
 });
 
-test('frequency: an unavailable profile cannot produce a false claim', async () => {
-  // getProfile returning null was the exact trigger: `days` fell back to the
-  // Program's 3 and was printed as the user's frequency.
-  const h = authorized({ profile: null });
-  await h.run();
-  assert.deepEqual(h.shown(), ['programContent'], 'the page still renders');
-  assert.match(h.el('startBtn').href, /session=full_a/, 'preselection degrades safely');
-  noWrites(h, 'null profile');
+test('frequency: an unknown frequency fails closed instead of guessing one', async () => {
+  // getProfile() returning null was the exact trigger: `days` fell back to the
+  // Program's own recommended_days_per_week and drove schedule selection from
+  // it. The page now recommends NOTHING rather than a session chosen from a
+  // frequency the user never gave. Full per-input coverage of the rule lives in
+  // program-frequency.test.js; this pins the page-level contract.
+  // 0 and 1 are STORABLE onboarding answers that no Program schedule maps, so
+  // they fail closed here too rather than being promoted to the 3-day family.
+  // Both states must fail closed identically; only the copy and the offered
+  // action differ. 0 and 1 are STORABLE onboarding answers that no Program
+  // schedule maps, so they are 'unsupported' rather than promoted to 3 days.
+  const cases = [
+    [null, 'unavailable'],
+    [{}, 'unavailable'],
+    [{ training_days: null }, 'unavailable'],
+    [{ training_days: 12 }, 'unsupported'],
+    [{ training_days: 0 }, 'unsupported'],
+    [{ training_days: 1 }, 'unsupported'],
+  ];
+  for (const [profile, state] of cases) {
+    const h = authorized({ profile });
+    await h.run();
+    const label = JSON.stringify(profile) + ' → ' + state;
+    // Navigation and the rest of the Program are preserved — this is not an
+    // error page, and it is never confused with a lost entitlement.
+    assert.deepEqual(h.shown(), ['programContent'], 'the page still renders: ' + label);
+    assert.equal(h.el('startBtn').href, '', 'no launchable workout: ' + label);
+    assert.equal(h.el('stickyCta').style.display, 'none', 'no Start CTA: ' + label);
+    assert.equal(h.el('sessList').innerHTML, '', 'no session buttons: ' + label);
+    noWrites(h, 'unknown frequency ' + label);
+
+    const copy = h.el('sessSummary').innerHTML;
+    assert.ok(!/You train/.test(copy), 'states no frequency: ' + label);
+    assert.ok(!/training_days|undefined|NaN|error/i.test(copy),
+      'exposes no technical detail: ' + label);
+    if (state === 'unsupported') {
+      assert.match(copy, /Choose between 2 and 6 workout days/, label);
+      assert.match(copy, /href="profile\.html"[^>]*>Recalculate Goals</, label);
+      assert.ok(!/Try again/.test(copy), 'no useless retry: ' + label);
+    } else {
+      assert.match(copy, /We couldn’t load your workout schedule\./, label);
+      assert.match(copy, /Try again/, label);
+      assert.ok(!/Recalculate Goals/.test(copy), label);
+    }
+  }
 });
 
 test('frequency: the footer states no number', () => {

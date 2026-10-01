@@ -206,6 +206,7 @@
     .sched-row.today, .sched-row.selected { border: 1px solid var(--red); background: var(--red-dim); }
     .sched-row.today .day, .sched-row.selected .day { color: var(--red); }
     .sched-note { color: var(--muted); font-size: 13px; margin-top: 14px; }
+    .sched-retry { margin-top: 14px; padding: 10px 20px; font-size: 14px; letter-spacing: 2px; }
     .sched-note a { color: var(--red); text-decoration: none; font-weight: 600; }
     .sched-note a:hover { text-decoration: underline; }
 
@@ -378,7 +379,7 @@
       <p id="schedSummary">Loading your schedule…</p>
       <div class="sched-grid" id="schedPreview"></div>
       <p class="sched-note">Your training frequency applies to every program you own. To change it, use
-        <a href="app.html">Recalculate Goals</a> on your dashboard.</p>
+        <a href="profile.html">Recalculate Goals</a> in your profile.</p>
     </div>
 
     <!-- Templates -->
@@ -696,9 +697,55 @@
   // training_days is GLOBAL — this page only READS it. The browsable list shows
   // EVERY session in the program (Priority 3); the recommended next progression
   // workout is highlighted but starting any session here is optional.
+  // Fail closed on an unknown frequency. getProfile() returns null for BOTH a
+  // failed read and a missing row, so a truthiness fallback to 3 silently told a
+  // 4-day user to train the 3-day Full Body split and stated it as fact. There
+  // is no safe number to substitute: the correct answer is to recommend nothing
+  // and let the user retry. resolveTrainingDays() (schedules.js) is the one
+  // canonical rule: only a raw integer 2–6 — the frequencies PROGRAM_SCHEDULES
+  // actually maps — may drive schedule selection. 0 and 1 are storable
+  // onboarding answers that no schedule covers, so they fail closed here too
+  // rather than being normalised up to the 3-day family.
+  function showFrequencyUnavailable(reason) {
+    PROG_KEYS        = [];
+    PROG_RECOMMENDED = null;
+    PROG_SELECTED    = null;
+    document.getElementById('schedPreview').innerHTML = '';
+    document.getElementById('stickyCta').style.display = 'none';
+
+    // Two states, one per thing the user can actually DO about it. The reason
+    // code comes from resolveTrainingDays(); frequencyFailureState() owns the
+    // mapping so all four Program pages classify it identically. Neither state
+    // names a column, a value or an error — only the next step.
+    if (frequencyFailureState(reason) === 'unsupported') {
+      // We have a frequency and no Program schedule covers it. A retry would
+      // return the same answer for ever, so the only action offered is the route
+      // that lets the user change it.
+      document.getElementById('schedSummary').innerHTML =
+        'Choose between 2 and 6 workout days to use this program.' +
+        '<br><a class="btn-primary sched-retry" href="profile.html">Recalculate Goals</a>';
+      return;
+    }
+
+    document.getElementById('schedSummary').innerHTML =
+      'We couldn’t load your workout schedule.' +
+      '<br><button type="button" class="btn-primary sched-retry" id="schedRetryBtn">Try again</button>';
+    // Guarded: if the retry control is somehow absent, the page must still
+    // settle in this neutral state rather than throw and be mistaken for a
+    // Program that is unavailable.
+    var retry = document.getElementById('schedRetryBtn');
+    if (retry) retry.addEventListener('click', function () {
+      retry.disabled = true; retry.textContent = 'Checking…';
+      loadUserProgram();
+    });
+  }
+
   async function loadUserProgram() {
-    var profile = await getProfile(currentUser.id);
-    var days = (profile && profile.training_days) ? profile.training_days : 3;
+    var profile = null;
+    try { profile = await getProfile(currentUser.id); } catch (e) { profile = null; }
+    var freq = resolveTrainingDays(profile);
+    if (!freq.ok) { showFrequencyUnavailable(freq.reason); return; }
+    var days = freq.days;
     var schedule = getScheduleForDays(PROGRAM_SLUG, days);
 
     var { data: up } = await supabaseClient
