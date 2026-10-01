@@ -637,6 +637,98 @@ test('the unsupported-state action routes to the surface that actually hosts it'
   }
 });
 
+/* ════════════════════════════════════════════════════════════════════════
+ * 5. The schedule-card footer points at the same place
+ *
+ * The footer said "use Recalculate Goals on your dashboard" and linked to
+ * app.html, which does not host that control — it moved to profile.html. With
+ * the unsupported state now routing users there, leaving the footer pointing
+ * elsewhere would send two different answers from inside one card.
+ * ══════════════════════════════════════════════════════════════════════ */
+
+/* The schedule-card footer note, markup included. */
+function footerNote(file) {
+  const src = read(file);
+  const note = (src.match(/<p class="sched-note">[\s\S]*?<\/p>/) || [''])[0];
+  assert.ok(note, file + ' has a schedule-card footer note');
+  return note;
+}
+
+for (const file of Object.values(PAGES)) {
+  test(file + ': the footer Recalculate link points at profile.html', () => {
+    const note = footerNote(file);
+    assert.match(note, /<a href="profile\.html">Recalculate Goals<\/a>/,
+      'links to the page that hosts the control');
+    assert.doesNotMatch(note, /app\.html/,
+      'no longer points at the dashboard, which does not host it');
+  });
+
+  test(file + ': the footer says where the control actually is', () => {
+    const text = footerNote(file).replace(/<[^>]*>/g, '');
+    assert.match(text, /in your profile/, 'names the profile');
+    assert.doesNotMatch(text, /dashboard/i, 'does not claim it is on the dashboard');
+    // The pre-existing truthfulness pins still hold.
+    assert.match(text, /applies to every program you own/, 'frequency is still global');
+    assert.doesNotMatch(text, /\b[0-9]\b/, 'the footer still states no number');
+  });
+
+  test(file + ': the footer and the unsupported-state action agree', () => {
+    // Exactly two Recalculate routes per page — the footer and the state action —
+    // and both must resolve to the same destination. A future edit that moves one
+    // without the other fails here.
+    const src = read(file);
+    const toProfile = src.match(/href="profile\.html"[^>]*>Recalculate Goals</g) || [];
+    assert.equal(toProfile.length, 2,
+      'the footer note and the unsupported-state action, both to profile.html');
+    assert.equal((src.match(/>Recalculate Goals</g) || []).length, 2,
+      'and there is no third, differently-routed Recalculate link');
+  });
+
+  test(file + ': dashboard navigation is untouched', () => {
+    // Only the Recalculate route moved. Every other app.html link on the page is
+    // real dashboard navigation and must stay.
+    const src = read(file);
+    assert.match(src, /class="header-logo" href="app\.html"/,
+      'the logo still returns to the dashboard');
+    const appLinks = src.match(/href="app\.html"/g) || [];
+    assert.ok(appLinks.length >= 1, 'dashboard links remain');
+    // None of them is a Recalculate link any more.
+    assert.doesNotMatch(src, /href="app\.html"[^>]*>Recalculate/,
+      'no Recalculate link points at the dashboard');
+  });
+
+  test(file + ': the footer is static markup that no script touches', () => {
+    // Evidence that this change cannot alter Program behaviour: the note is not
+    // assigned, read, or branched on at runtime.
+    const src = read(file);
+    const code = src.slice(src.lastIndexOf('<script>'), src.lastIndexOf('</script>'));
+    assert.ok(!/sched-note/.test(code), 'no script references the footer');
+    assert.ok(!/Recalculate Goals/.test(code.replace(
+      /'Choose between 2 and 6[\s\S]*?Recalculate Goals<\/a>'/, '')),
+      'the only scripted Recalculate text is the unsupported-state action');
+  });
+}
+
+test('the footer change alters no schedule behaviour on any page', async () => {
+  // Re-runs the real resolution path per page at a valid frequency and asserts the
+  // same recommendation, session list and CTA as the pre-footer-change behaviour.
+  const s = loadSchedules();
+  for (const [file, slug] of CLASSIC) {
+    const h = classicHarness(file, slug, { training_days: 4 }, { up: { current_index: 0 } });
+    await h.run();
+    assert.equal(h.sandbox.PROG_RECOMMENDED, s.getScheduleForDays(slug, 4)[0], file);
+    assert.deepEqual(h.sandbox.PROG_KEYS, s.getAllSessionsForProgram(slug), file);
+    assert.equal(h.dom.els.stickyCta.style.display, 'block', file);
+    assert.match(h.dom.els.startTodayBtn.href,
+      new RegExp('^workout\\.html\\?program=' + slug + '&session=\\w+&mode=optional$'), file);
+  }
+  const bw = bwHarness({ training_days: 4 }, { up: { current_index: 1 } });
+  assert.equal(await bw.run(), true);
+  assert.equal(bw.sandbox.SELECTED, 'full_b');
+  assert.match(bw.dom.els.startBtn.href,
+    /^workout\.html\?program=bodyweight_foundations&session=full_b&mode=optional$/);
+});
+
 test('program-bodyweight.html: 0 and 1 never reach schedule selection', async () => {
   // Bodyweight maps one family at every frequency, so 0/1 would have produced a
   // usable-looking session. It must still refuse, because the frequency is not a
