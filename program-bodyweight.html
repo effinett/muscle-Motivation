@@ -495,8 +495,8 @@
     SELECTED = null;
     document.getElementById('sessList').innerHTML = '';
     document.getElementById('sessSummary').innerHTML =
-      'We couldn’t load your training frequency, so no session is selected right ' +
-      'now. Your program and training history are unchanged.' +
+      'No session can be selected right now. Your program and training history ' +
+      'are unchanged.' +
       '<br><button type="button" class="btn-primary sched-retry" id="sessRetryBtn">Try again</button>';
     // Guarded: if the retry control is somehow absent, the page must still settle
     // in this neutral state rather than throw and be mistaken for a Program that
@@ -518,8 +518,11 @@
     // The previous code fell back to the Program's own recommended_days_per_week
     // when the profile could not be read, which selected a schedule family from
     // the PROGRAM's frequency as if it were the USER's. There is no safe number
-    // to substitute, so an unreadable or corrupt frequency now fails closed via
-    // the one canonical rule, resolveTrainingDays() in schedules.js.
+    // to substitute, so anything that is not a schedulable frequency now fails
+    // closed via the one canonical rule, resolveTrainingDays() in schedules.js:
+    // only a raw integer 2–6 may drive schedule selection. 0 and 1 are storable
+    // onboarding answers that no schedule covers, so they fail closed too rather
+    // than being normalised up to the 3-day family.
     var profile = null;
     try { profile = await getProfile(userId); } catch (e) { profile = null; }
     var freq = resolveTrainingDays(profile);

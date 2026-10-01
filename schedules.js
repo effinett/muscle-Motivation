@@ -82,17 +82,26 @@ function normalizeTrainingDays(trainingDays) {
  * rather than substitute a number, because substituting one silently selects
  * the wrong schedule family (a 4-day user shown the 3-day Full Body split).
  *
- * Canonical domain: integers 0–6 inclusive. `profiles.training_days` carries no
- * database CHECK constraint (verified 2026-09-29: nullable integer, no
- * default), so the domain is defined by the only writer that validates it —
- * onboarding-draft.js, which accepts inRange(v, 0, 6). `0` is a real ANSWER
- * ("not training yet"), not a missing value.
+ * Canonical domain: integers 2–6 inclusive (owner ruling, 2026-09-29) — the
+ * frequencies PROGRAM_SCHEDULES actually maps. `profiles.training_days` carries
+ * no database CHECK constraint (verified 2026-09-29: nullable integer, no
+ * default), and onboarding-draft.js stores a wider range, inRange(v, 0, 6). So
+ * `0` and `1` are STORABLE answers that no Program schedule covers, and the
+ * distinction matters: a value can be legitimately stored yet still not be a
+ * basis for selecting a schedule family. Program pages must not invoke schedule
+ * selection for them — normalizeTrainingDays() maps 0/1 to the 3-day bucket,
+ * which is precisely the substitution this rule exists to prevent.
  *
- * Truthiness is deliberately NOT the test. `!v` rejects the valid answer 0,
- * while NaN, 4.5, '4' and 12 pass or fail for reasons unrelated to validity.
- * Values outside the domain are treated as CORRUPT, not clampable: nothing in
- * the profile schema authorises silently reinterpreting 12 as 6. */
-var TRAINING_DAYS_MIN = 0;
+ * Truthiness is deliberately NOT the test, in either direction: `!v` conflates
+ * the stored answer 0 with a missing value, while NaN, 4.5, '4' and 12 pass or
+ * fail for reasons unrelated to validity. Values outside the domain are treated
+ * as UNUSABLE, never clamped — nothing authorises reinterpreting 12 as 6, or 1
+ * as 3.
+ *
+ * normalizeTrainingDays() keeps its legacy behaviour for its own callers (the
+ * dashboard split label, profile recalc). This rule governs schedule selection
+ * on the Program pages only, and does not change what that function returns. */
+var TRAINING_DAYS_MIN = 2;
 var TRAINING_DAYS_MAX = 6;
 
 function isValidTrainingDays(value) {
@@ -105,7 +114,10 @@ function isValidTrainingDays(value) {
  *         | { ok: false, reason: 'no_profile' | 'missing' | 'invalid' }
  * `no_profile` covers both "the read failed" and "there is no row": getProfile()
  * returns null for both, so no surface can tell them apart, and both mean the
- * same thing here — the frequency is unknown. */
+ * same thing here — the frequency is unknown. `invalid` covers everything that
+ * is not a schedulable integer 2–6, including the storable answers 0 and 1; a
+ * single reason keeps callers from growing a per-case branch, and no consumer
+ * distinguishes them today. */
 function resolveTrainingDays(profile) {
   if (!profile || typeof profile !== 'object') return { ok: false, reason: 'no_profile' };
   var value = profile.training_days;

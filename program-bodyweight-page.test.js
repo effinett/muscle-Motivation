@@ -643,7 +643,10 @@ test('frequency: the session intro is static markup on every rendering path', ()
   assert.equal(inOwner.length, 1, 'and it assigns it exactly once');
   assert.ok(!/You train|days a week|days\/week/.test(owner),
     'the failure copy states no frequency');
-  assert.match(owner, /couldn’t load your training frequency/);
+  assert.match(owner, /No session can be selected right now/);
+  // Cause-neutral by design: 0 and 1 are frequencies that loaded perfectly
+  // well and simply are not schedulable, so copy blaming a failed load would
+  // be false for them.
 });
 
 test('frequency: training_days is read for scheduling only, never rendered', () => {
@@ -656,8 +659,9 @@ test('frequency: training_days is read for scheduling only, never rendered', () 
 });
 
 test('frequency: the intro renders identically for every VALID profile frequency', async () => {
-  // 0 ("not training yet") is a real onboarding answer, so it belongs here.
-  for (const training_days of [0, 2, 3, 4, 5, 6]) {
+  // The schedulable domain is 2–6 (owner ruling 2026-09-29): exactly the
+  // frequencies PROGRAM_SCHEDULES maps. 0 and 1 are covered below.
+  for (const training_days of [2, 3, 4, 5, 6]) {
     const h = authorized({ profile: { training_days } });
     await h.run();
     assert.deepEqual(h.shown(), ['programContent'], 'days=' + training_days);
@@ -675,7 +679,10 @@ test('frequency: an unknown frequency fails closed instead of guessing one', asy
   // it. The page now recommends NOTHING rather than a session chosen from a
   // frequency the user never gave. Full per-input coverage of the rule lives in
   // program-frequency.test.js; this pins the page-level contract.
-  for (const profile of [null, {}, { training_days: null }, { training_days: 12 }]) {
+  // 0 and 1 are STORABLE onboarding answers that no Program schedule maps, so
+  // they fail closed here too rather than being promoted to the 3-day family.
+  for (const profile of [null, {}, { training_days: null }, { training_days: 12 },
+                         { training_days: 0 }, { training_days: 1 }]) {
     const h = authorized({ profile });
     await h.run();
     const label = JSON.stringify(profile);
@@ -686,7 +693,7 @@ test('frequency: an unknown frequency fails closed instead of guessing one', asy
     assert.equal(h.el('stickyCta').style.display, 'none', 'no Start CTA: ' + label);
     assert.equal(h.el('sessList').innerHTML, '', 'no session buttons: ' + label);
     const copy = h.el('sessSummary').innerHTML;
-    assert.match(copy, /couldn’t load your training frequency/, label);
+    assert.match(copy, /No session can be selected right now/, label);
     assert.ok(!/You train/.test(copy), 'states no frequency: ' + label);
     noWrites(h, 'unknown frequency ' + label);
   }

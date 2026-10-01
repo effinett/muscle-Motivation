@@ -701,15 +701,18 @@
   // 4-day user to train the 3-day Full Body split and stated it as fact. There
   // is no safe number to substitute: the correct answer is to recommend nothing
   // and let the user retry. resolveTrainingDays() (schedules.js) is the one
-  // canonical rule — 0 is a real answer, 12 and NaN are corrupt, not clampable.
+  // canonical rule: only a raw integer 2–6 — the frequencies PROGRAM_SCHEDULES
+  // actually maps — may drive schedule selection. 0 and 1 are storable
+  // onboarding answers that no schedule covers, so they fail closed here too
+  // rather than being normalised up to the 3-day family.
   function showFrequencyUnavailable(userId) {
     PROG_KEYS        = [];
     PROG_RECOMMENDED = null;
     PROG_SELECTED    = null;
     document.getElementById('schedPreview').innerHTML = '';
     document.getElementById('schedSummary').innerHTML =
-      'We couldn’t load your training frequency, so no workout is recommended ' +
-      'right now. Your program and training history are unchanged.' +
+      'No workout can be recommended right now. Your program and training ' +
+      'history are unchanged.' +
       '<br><button type="button" class="btn-primary sched-retry" id="schedRetryBtn">Try again</button>';
     // Guarded: if the retry control is somehow absent, the page must still
     // settle in this neutral state rather than throw and be mistaken for a

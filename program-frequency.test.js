@@ -87,23 +87,61 @@ test('canonical rule: schedules.js exposes one frequency validator', () => {
   const s = loadSchedules();
   assert.equal(typeof s.resolveTrainingDays, 'function');
   assert.equal(typeof s.isValidTrainingDays, 'function');
-  assert.equal(s.TRAINING_DAYS_MIN, 0);
+  assert.equal(s.TRAINING_DAYS_MIN, 2);
   assert.equal(s.TRAINING_DAYS_MAX, 6);
 });
 
-test('canonical rule: every integer in the onboarding domain 0–6 is valid', () => {
+test('canonical rule: every integer in the schedulable domain 2–6 is valid', () => {
   const s = loadSchedules();
-  for (let d = 0; d <= 6; d++) {
+  for (let d = 2; d <= 6; d++) {
     assert.deepEqual(s.resolveTrainingDays({ training_days: d }), { ok: true, days: d },
       d + ' is inside the canonical domain');
   }
 });
 
-test('canonical rule: 0 is a real answer, not a missing value', () => {
-  // "Not training yet" is an answer onboarding-draft.js accepts. A truthiness
-  // test rejects it, which is one half of the original defect.
+test('canonical rule: the domain is exactly the frequencies PROGRAM_SCHEDULES maps', () => {
+  // Mutation-sensitive: widening the domain to 0 or narrowing it to 3 breaks
+  // this, because the validator's bounds must equal the mapped buckets of every
+  // Program. It is derived from the data rather than restated as literals.
   const s = loadSchedules();
-  assert.deepEqual(s.resolveTrainingDays({ training_days: 0 }), { ok: true, days: 0 });
+  const mapped = new Set();
+  for (const table of Object.values(s.PROGRAM_SCHEDULES)) {
+    for (const k of Object.keys(table)) mapped.add(Number(k));
+  }
+  const domain = [];
+  for (let d = -2; d <= 9; d++) if (s.isValidTrainingDays(d)) domain.push(d);
+  assert.deepEqual(domain, [...mapped].sort((a, b) => a - b),
+    'the valid domain is exactly the mapped schedule buckets');
+  assert.deepEqual(domain, [2, 3, 4, 5, 6]);
+});
+
+test('canonical rule: 0 and 1 are storable answers but are NOT schedulable', () => {
+  // Owner ruling 2026-09-29. onboarding-draft.js accepts inRange(v, 0, 6), so
+  // these values legitimately reach the database — but no Program schedule maps
+  // them, and normalizeTrainingDays() would silently promote them to the 3-day
+  // family. That substitution is the defect, so validation rejects them.
+  const s = loadSchedules();
+  for (const v of [0, 1]) {
+    assert.deepEqual(s.resolveTrainingDays({ training_days: v }),
+      { ok: false, reason: 'invalid' }, v + ' is not schedulable');
+    // …and the thing it must not be allowed to become:
+    assert.equal(s.normalizeTrainingDays(v), 3,
+      'normalizeTrainingDays still promotes it — which is why validation must run first');
+  }
+});
+
+test('canonical rule: the lower boundary is exactly 2', () => {
+  // Mutation-sensitive pair: 1 must fail and 2 must pass. Either bound moving
+  // by one breaks one of these two assertions.
+  const s = loadSchedules();
+  assert.equal(s.resolveTrainingDays({ training_days: 1 }).ok, false, '1 rejected');
+  assert.equal(s.resolveTrainingDays({ training_days: 2 }).ok, true, '2 accepted');
+});
+
+test('canonical rule: the upper boundary is exactly 6', () => {
+  const s = loadSchedules();
+  assert.equal(s.resolveTrainingDays({ training_days: 6 }).ok, true, '6 accepted');
+  assert.equal(s.resolveTrainingDays({ training_days: 7 }).ok, false, '7 rejected');
 });
 
 test('canonical rule: a null profile is no_profile, not a default', () => {
@@ -125,7 +163,7 @@ test('canonical rule: an absent column is missing, not a default', () => {
 
 test('canonical rule: out-of-domain and non-integer values are invalid, never clamped', () => {
   const s = loadSchedules();
-  const corrupt = [-1, 7, 12, 365, 4.5, 0.5, NaN, Infinity, -Infinity];
+  const corrupt = [-1, 0, 1, 7, 12, 365, 4.5, 0.5, NaN, Infinity, -Infinity];
   for (const v of corrupt) {
     assert.deepEqual(s.resolveTrainingDays({ training_days: v }),
       { ok: false, reason: 'invalid' }, String(v) + ' is corrupt, not clampable');
@@ -143,8 +181,9 @@ test('canonical rule: a non-number is invalid even when numeric-looking', () => 
 });
 
 test('canonical rule: validation is separate from bucketing, and does not change it', () => {
-  // normalizeTrainingDays() keeps its existing contract untouched: it answers
-  // "which bucket", which is only meaningful once validity is established.
+  // normalizeTrainingDays() keeps its LEGACY contract untouched for its own
+  // callers (the dashboard split label, profile recalc). The new rule governs
+  // what the Program pages may pass to it, not what it returns.
   const s = loadSchedules();
   assert.equal(s.normalizeTrainingDays(0), 3);
   assert.equal(s.normalizeTrainingDays(1), 3);
@@ -153,8 +192,8 @@ test('canonical rule: validation is separate from bucketing, and does not change
   // …and a valid value still routes to exactly the family it always did.
   assert.deepEqual(s.getScheduleForDays('fat_loss_blueprint', 4),
     ['upper_a', 'lower_a', 'upper_b', 'lower_b']);
-  assert.deepEqual(s.getScheduleForDays('fat_loss_blueprint', 0),
-    ['full_a', 'full_b', 'full_c']);
+  assert.deepEqual(s.getScheduleForDays('fat_loss_blueprint', 2),
+    ['full_a', 'full_b']);
 });
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -190,8 +229,12 @@ test('the frequency failure state never claims a frequency the user did not choo
   for (const file of Object.values(PAGES)) {
     const src = read(file).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
     const claim = /You train'\s*\+|You train \d/;
-    const failureCopy = /couldn’t load your training frequency/;
+    const failureCopy = /No (workout|session) can be (recommended|selected) right now/;
     assert.match(src, failureCopy, file + ' has neutral failure copy');
+    // That the copy blames no CAUSE is asserted against the rendered text in the
+    // per-page behaviour tests below, not here: this function also contains the
+    // loadUserProgram/preselect retry call, so a source-level word match would
+    // be testing identifiers rather than anything the user reads.
     if (claim.test(src)) {
       // Only permitted where it is built from an already-validated number.
       assert.match(src, /freq\.ok[\s\S]*You train/,
@@ -290,6 +333,12 @@ const UNKNOWN_FREQUENCIES = [
   ['out of domain high', { training_days: 12 }],
   ['out of domain negative', { training_days: -1 }],
   ['NaN', { training_days: NaN }],
+  // Storable onboarding answers that no Program schedule maps (owner ruling
+  // 2026-09-29). These are the mutation-sensitive cases: they pass only because
+  // the lower bound is 2. Restore the bound to 0 and both regress to selecting
+  // the 3-day family via normalizeTrainingDays().
+  ['stored 0 days, not schedulable', { training_days: 0 }],
+  ['stored 1 day, not schedulable', { training_days: 1 }],
 ];
 
 for (const [file, slug] of CLASSIC) {
@@ -307,13 +356,36 @@ for (const [file, slug] of CLASSIC) {
       assert.deepEqual(h.writes, [], 'no database access on the failure path');
 
       const copy = h.dom.els.schedSummary.innerHTML;
-      assert.match(copy, /couldn’t load your training frequency/);
+      assert.match(copy, /No workout can be recommended right now/);
       assert.match(copy, /unchanged/, 'reassures that nothing was altered');
       assert.doesNotMatch(copy, /You train/, 'states no frequency');
       assert.doesNotMatch(copy, /\b[0-6] days\/week\b/, 'states no number of days');
+      // Cause-neutral: a genuine 0- or 1-day answer WAS loaded successfully, so
+      // copy blaming a failed load would be false for those two cases.
+      assert.doesNotMatch(copy, /load|loaded|couldn/i, 'claims no cause');
       assert.ok(h.dom.els.schedRetryBtn.listeners.click, 'offers a retry');
     });
   }
+
+  test(file + ': 0 and 1 never reach schedule selection', async () => {
+    // Mutation-sensitive at the call-site level, not just the validator: proves
+    // the page no longer consults getScheduleForDays() for these values, by
+    // showing what it WOULD have produced.
+    const s = loadSchedules();
+    for (const days of [0, 1]) {
+      const would = s.getScheduleForDays(slug, days);
+      assert.ok(would.length, 'the mapping would have returned a family: ' + days);
+      const h = classicHarness(file, slug, { training_days: days },
+        { up: { current_index: 0 } });
+      await h.run();
+      assert.equal(h.sandbox.PROG_RECOMMENDED, null,
+        'but nothing is recommended for days=' + days);
+      assert.notEqual(h.sandbox.PROG_RECOMMENDED, would[0],
+        'specifically not the promoted 3-day family for days=' + days);
+      assert.deepEqual(h.writes, [], 'and no database access for days=' + days);
+      assert.equal(h.dom.els.stickyCta.style.display, 'none');
+    }
+  });
 
   test(file + ': a valid frequency still behaves exactly as before', async () => {
     const h = classicHarness(file, slug, { training_days: 4 }, { up: { current_index: 0 } });
@@ -330,12 +402,13 @@ for (const [file, slug] of CLASSIC) {
     assert.ok(h.dom.els.schedPreview.innerHTML.length > 0, 'session rows rendered');
   });
 
-  test(file + ': 0 days is honoured as an answer, not treated as unknown', async () => {
-    const h = classicHarness(file, slug, { training_days: 0 }, { up: { current_index: 0 } });
+  test(file + ': 2 days — the lower boundary — still works', async () => {
+    const h = classicHarness(file, slug, { training_days: 2 }, { up: { current_index: 0 } });
     await h.run();
-    const expected = loadSchedules().getScheduleForDays(slug, 0);
+    const expected = loadSchedules().getScheduleForDays(slug, 2);
     assert.equal(h.sandbox.PROG_RECOMMENDED, expected[0]);
     assert.equal(h.dom.els.stickyCta.style.display, 'block');
+    assert.match(h.dom.els.schedSummary.textContent, /You train 2 days\/week/);
   });
 
   test(file + ': the 4-day regression the defect caused is gone', async () => {
@@ -417,12 +490,31 @@ for (const [label, profile] of UNKNOWN_FREQUENCIES) {
     assert.deepEqual(h.tables, [], 'no database access on the failure path');
 
     const copy = h.dom.els.sessSummary.innerHTML;
-    assert.match(copy, /couldn’t load your training frequency/);
+    assert.match(copy, /No session can be selected right now/);
     assert.match(copy, /unchanged/);
     assert.doesNotMatch(copy, /You train/);
+    assert.doesNotMatch(copy, /load|loaded|couldn/i, 'claims no cause');
     assert.ok(h.dom.els.sessRetryBtn.listeners.click, 'offers a retry');
   });
 }
+
+test('program-bodyweight.html: 0 and 1 never reach schedule selection', async () => {
+  // Bodyweight maps one family at every frequency, so 0/1 would have produced a
+  // usable-looking session. It must still refuse, because the frequency is not a
+  // legitimate basis for the decision regardless of where the mapping lands.
+  const s = loadSchedules();
+  for (const days of [0, 1]) {
+    assert.ok(s.getScheduleForDays('bodyweight_foundations', days).length,
+      'the mapping would have returned a family: ' + days);
+    const h = bwHarness({ training_days: days }, { up: { current_index: 0 } });
+    assert.equal(await h.run(), false, 'not ready for days=' + days);
+    assert.equal(h.sandbox.SELECTED, null, 'nothing selected for days=' + days);
+    assert.equal(h.dom.els.sessList.innerHTML, '', 'no session buttons: ' + days);
+    assert.equal(h.dom.els.startBtn.href, '', 'no launchable workout: ' + days);
+    assert.equal(h.dom.els.stickyCta.style.display, 'none', 'no Start CTA: ' + days);
+    assert.deepEqual(h.tables, [], 'no database access: ' + days);
+  }
+});
 
 test('program-bodyweight.html: a valid frequency still preselects and launches', async () => {
   const h = bwHarness({ training_days: 4 }, { up: { current_index: 1 } });
@@ -435,10 +527,11 @@ test('program-bodyweight.html: a valid frequency still preselects and launches',
   assert.deepEqual(h.tables, ['user_programs'], 'reads progression only');
 });
 
-test('program-bodyweight.html: 0 days is honoured as an answer', async () => {
-  const h = bwHarness({ training_days: 0 }, { up: { current_index: 0 } });
+test('program-bodyweight.html: 2 days — the lower boundary — still works', async () => {
+  const h = bwHarness({ training_days: 2 }, { up: { current_index: 0 } });
   assert.equal(await h.run(), true);
   assert.equal(h.sandbox.SELECTED, 'full_a');
+  assert.equal(h.dom.els.sessSummary.innerHTML, '', 'the static intro is untouched');
 });
 
 test('program-bodyweight.html: the Start CTA is gated on preselect, not assumed', () => {
