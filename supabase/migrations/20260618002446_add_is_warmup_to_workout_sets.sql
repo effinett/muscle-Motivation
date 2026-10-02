@@ -1,0 +1,1 @@
+ALTER TABLE workout_sets ADD COLUMN IF NOT EXISTS is_warmup boolean DEFAULT false;
