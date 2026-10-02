@@ -1,7 +1,7 @@
 // Exercise-intelligence benchmark/test fixture (Phase 4.2.1E; expanded 4.2.1G,
-// 4.3.9B CP3b).
+// 4.3.9B CP3b, 4.3.9B CP4b).
 //
-// A deterministic snapshot of the live `public.exercises` catalog (all 144 rows),
+// A deterministic snapshot of the live `public.exercises` catalog (all 159 rows),
 // trimmed to the identity + classification fields the shared exercise-core
 // intelligence reasons over (instructions/tips omitted — not used by resolution,
 // families, or relationships). IDs are the REAL exercises.id values, so a
@@ -9,8 +9,9 @@
 //
 // This is a TEST FIXTURE, not a production data source: the browser/app loads
 // the catalog from Supabase at runtime. Regenerate from the DB if the catalog
-// changes. Checksum = md5 of the sorted id set joined by ',' (Phase 4.3.9B CP3b):
-// a1314c867b375fad835b246f7536ec68. Prior value at 141 rows (Phase 4.2.1G):
+// changes. Checksum = md5 of the sorted id set joined by ',' (Phase 4.3.9B CP4b):
+// dec5ac379151ad7d0f6463820dc76dc8. Prior values: 144 rows (Phase 4.3.9B CP3b)
+// a1314c867b375fad835b246f7536ec68; 141 rows (Phase 4.2.1G)
 // 3f740fb4f3466d3e15aee5718f4a910e.
 //
 // Same role as benchmarks/fixtures.js for food resolution.
@@ -164,7 +165,27 @@ const EXERCISE_CATALOG = [
   // it is deliberately NOT a pulling movement and must never be described as one.
   { id: 'b1f4c7a2-3e58-4d91-9c26-7a0d8e5f1b34', name: 'Pike Push-Up', category: 'Vertical Push', equipment: 'Bodyweight', primary_muscle: 'Shoulders', secondary_muscles: ['Triceps', 'Chest'], aliases: ['pike pushup', 'pike press'], movement_pattern: 'vertical_push', force_type: 'push', difficulty: 'intermediate', is_bodyweight: true, is_unilateral: false, tracking_type: 'bodyweight_reps', default_unit: 'lb' },
   { id: 'c2a5d8b3-4f69-4e02-8d37-1b9e0f6a2c45', name: 'Superman', category: 'Hinge', equipment: 'Bodyweight', primary_muscle: 'Lower Back', secondary_muscles: ['Glutes', 'Hamstrings'], aliases: [], movement_pattern: 'hinge', force_type: 'static', difficulty: 'beginner', is_bodyweight: true, is_unilateral: false, tracking_type: 'bodyweight_reps', default_unit: 'lb' },
-  { id: 'd3b6e9c4-5a7a-4f13-9e48-2c0f1a7b3d56', name: 'Bird Dog', category: 'Core', equipment: 'Bodyweight', primary_muscle: 'Core', secondary_muscles: ['Glutes', 'Lower Back'], aliases: ['quadruped opposite arm leg'], movement_pattern: 'core', force_type: 'static', difficulty: 'beginner', is_bodyweight: true, is_unilateral: true, tracking_type: 'bodyweight_reps', default_unit: 'lb' }
+  { id: 'd3b6e9c4-5a7a-4f13-9e48-2c0f1a7b3d56', name: 'Bird Dog', category: 'Core', equipment: 'Bodyweight', primary_muscle: 'Core', secondary_muscles: ['Glutes', 'Lower Back'], aliases: ['quadruped opposite arm leg'], movement_pattern: 'core', force_type: 'static', difficulty: 'beginner', is_bodyweight: true, is_unilateral: true, tracking_type: 'bodyweight_reps', default_unit: 'lb' },
+  // Phase 4.3.9B CP4b — equipment-free catalog foundations, in migration order.
+  // Push foundations: Pike Lean is a timed straight-arm hold that PREPARES for the
+  // Pike Push-Up; it is not a pressing regression and never swaps with it.
+  { id: '784a0508-84c3-42a6-98b1-c00cc780e5cd', name: 'Wall Push-Up', category: 'Horizontal Push', equipment: 'Bodyweight', primary_muscle: 'Chest', secondary_muscles: ['Triceps'], aliases: ['wall pushup', 'wall press up'], movement_pattern: 'horizontal_push', force_type: 'push', difficulty: 'beginner', is_bodyweight: true, is_unilateral: false, tracking_type: 'bodyweight_reps', default_unit: 'lb' },
+  { id: 'c3d81925-04dc-4caf-b5ef-5b42740028e8', name: 'Pike Lean', category: 'Vertical Push', equipment: 'Bodyweight', primary_muscle: 'Shoulders', secondary_muscles: ['Triceps', 'Core'], aliases: ['pike hold'], movement_pattern: 'vertical_push', force_type: 'static', difficulty: 'beginner', is_bodyweight: true, is_unilateral: false, tracking_type: 'time', default_unit: 'sec' },
+  // Conditioning stays on the existing gait/Cardio convention.
+  { id: '1b836b2c-af56-40a6-9afe-023c3ccd5361', name: 'Step Jack', category: 'Cardio', equipment: 'Bodyweight', primary_muscle: 'Full Body', secondary_muscles: ['Shoulders', 'Calves'], aliases: ['step jacks', 'low impact jack'], movement_pattern: 'gait', force_type: 'push', difficulty: 'beginner', is_bodyweight: true, is_unilateral: false, tracking_type: 'time', default_unit: 'sec' },
+  { id: '41fe1cb7-ffc7-48a0-8ad4-c0b4d46c0fa5', name: 'Jumping Jack', category: 'Cardio', equipment: 'Bodyweight', primary_muscle: 'Full Body', secondary_muscles: ['Shoulders', 'Calves'], aliases: ['jumping jacks'], movement_pattern: 'gait', force_type: 'push', difficulty: 'beginner', is_bodyweight: true, is_unilateral: false, tracking_type: 'time', default_unit: 'sec' },
+  { id: '7fae5cd2-712d-4df2-982d-850091d10329', name: 'March in Place', category: 'Cardio', equipment: 'Bodyweight', primary_muscle: 'Full Body', secondary_muscles: ['Hip Flexors', 'Calves'], aliases: ['marching in place', 'standing march'], movement_pattern: 'gait', force_type: 'push', difficulty: 'beginner', is_bodyweight: true, is_unilateral: false, tracking_type: 'time', default_unit: 'sec' },
+  { id: '6d50c3a6-0dde-46e4-bc3a-508c2f358803', name: 'High Knees', category: 'Cardio', equipment: 'Bodyweight', primary_muscle: 'Full Body', secondary_muscles: ['Hip Flexors', 'Calves'], aliases: ['high knee'], movement_pattern: 'gait', force_type: 'push', difficulty: 'beginner', is_bodyweight: true, is_unilateral: false, tracking_type: 'time', default_unit: 'sec' },
+  // Mobility: first-class movement_pattern 'mobility' with NO strength split.
+  { id: 'ead731d6-bfdd-4119-bd0b-bb3092457e69', name: 'Cat-Cow', category: 'Mobility', equipment: 'Bodyweight', primary_muscle: 'Lower Back', secondary_muscles: ['Upper Back', 'Core'], aliases: ['cat camel', 'cat cow stretch'], movement_pattern: 'mobility', force_type: 'static', difficulty: 'beginner', is_bodyweight: true, is_unilateral: false, tracking_type: 'time', default_unit: 'sec' },
+  { id: '44ebe984-c8e9-4842-8617-7f54f1179d2b', name: 'Quadruped Thoracic Rotation', category: 'Mobility', equipment: 'Bodyweight', primary_muscle: 'Upper Back', secondary_muscles: ['Core'], aliases: ['thoracic rotation', 't spine rotation'], movement_pattern: 'mobility', force_type: 'static', difficulty: 'beginner', is_bodyweight: true, is_unilateral: true, tracking_type: 'time', default_unit: 'sec' },
+  { id: 'e3f12784-cf40-4aa5-ae41-6770416c4d1f', name: 'Wall Slide', category: 'Mobility', equipment: 'Bodyweight', primary_muscle: 'Upper Back', secondary_muscles: ['Shoulders'], aliases: ['wall slides', 'wall angel'], movement_pattern: 'mobility', force_type: 'static', difficulty: 'beginner', is_bodyweight: true, is_unilateral: false, tracking_type: 'time', default_unit: 'sec' },
+  { id: '6962172b-18eb-4def-88d3-acc67c62f9ce', name: 'Kneeling Hip Flexor Stretch', category: 'Mobility', equipment: 'Bodyweight', primary_muscle: 'Hip Flexors', secondary_muscles: ['Quads'], aliases: ['hip flexor stretch', 'half kneeling hip flexor stretch'], movement_pattern: 'mobility', force_type: 'static', difficulty: 'beginner', is_bodyweight: true, is_unilateral: true, tracking_type: 'time', default_unit: 'sec' },
+  { id: 'b2168db4-fb33-4dd0-a8e2-ab5fa81677e4', name: '90/90 Hip Rotation', category: 'Mobility', equipment: 'Bodyweight', primary_muscle: 'Glutes', secondary_muscles: ['Hip Flexors'], aliases: ['90 90 stretch', '90 90 hip stretch'], movement_pattern: 'mobility', force_type: 'static', difficulty: 'beginner', is_bodyweight: true, is_unilateral: true, tracking_type: 'time', default_unit: 'sec' },
+  { id: '4b0b5faa-4704-4959-a550-c01de705a540', name: 'Supine Hamstring Stretch', category: 'Mobility', equipment: 'Bodyweight', primary_muscle: 'Hamstrings', secondary_muscles: ['Calves'], aliases: ['lying hamstring stretch', 'hamstring stretch'], movement_pattern: 'mobility', force_type: 'static', difficulty: 'beginner', is_bodyweight: true, is_unilateral: true, tracking_type: 'time', default_unit: 'sec' },
+  { id: '53c57e39-51e9-42e5-991a-3357bd610b4a', name: 'Standing Ankle Rock', category: 'Mobility', equipment: 'Bodyweight', primary_muscle: 'Calves', secondary_muscles: [], aliases: ['ankle rock', 'ankle rocks'], movement_pattern: 'mobility', force_type: 'static', difficulty: 'beginner', is_bodyweight: true, is_unilateral: true, tracking_type: 'time', default_unit: 'sec' },
+  { id: 'fd10bcf3-a09f-41fe-aca5-7996972d496f', name: 'Supine Spinal Twist', category: 'Mobility', equipment: 'Bodyweight', primary_muscle: 'Lower Back', secondary_muscles: ['Glutes'], aliases: ['lying spinal twist', 'supine twist'], movement_pattern: 'mobility', force_type: 'static', difficulty: 'beginner', is_bodyweight: true, is_unilateral: true, tracking_type: 'time', default_unit: 'sec' },
+  { id: '04429fae-c385-47dd-91ec-7e1fe3a4a83c', name: 'Diaphragmatic Breathing', category: 'Mobility', equipment: 'Bodyweight', primary_muscle: 'Diaphragm', secondary_muscles: ['Core'], aliases: ['belly breathing', 'deep breathing'], movement_pattern: 'mobility', force_type: 'static', difficulty: 'beginner', is_bodyweight: true, is_unilateral: false, tracking_type: 'time', default_unit: 'sec' }
 ];
 
 module.exports = { EXERCISE_CATALOG };

@@ -138,12 +138,19 @@ test('movement pattern is shown in words, never as the raw snake_case enum', () 
 
 test('every catalog movement pattern maps to a readable label', () => {
   const patterns = ['squat', 'hinge', 'lunge', 'horizontal_push', 'vertical_push',
-    'horizontal_pull', 'vertical_pull', 'carry', 'rotation', 'isolation', 'core', 'gait'];
+    'horizontal_pull', 'vertical_pull', 'carry', 'rotation', 'isolation', 'core', 'gait', 'mobility'];
   patterns.forEach((p) => {
     const d = buildExerciseDetail(benchRef, benchRow({ movement_pattern: p }));
     const v = classValue(d, 'movement_pattern');
     assert.ok(v && !v.includes('_'), 'pattern ' + p + ' rendered as ' + v);
   });
+});
+
+test('Phase 4.3.9B CP4b: a mobility exercise shows the movement label "Mobility"', () => {
+  // An explicit table entry, not the readable fallback for unknown enums.
+  assert.strictEqual(ExerciseDetail.PATTERN_LABEL.mobility, 'Mobility');
+  const d = buildExerciseDetail(benchRef, benchRow({ movement_pattern: 'mobility' }));
+  assert.strictEqual(classValue(d, 'movement_pattern'), 'Mobility');
 });
 
 /* ── 7. custom exercise is NOT treated as canonical ───────────────────────── */

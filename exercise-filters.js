@@ -72,6 +72,8 @@
   // user-facing labels. `rotation` folds into Core (a user thinks "core", not
   // "rotation"); `gait` (treadmill/cardio) is deliberately NOT a movement chip —
   // it is not a resistance-training movement pattern users filter by.
+  // `mobility` (Phase 4.3.9B CP4b) IS a chip: it is legitimate catalog content
+  // users look for directly, so it is first-class here rather than hidden.
   var MOVEMENTS = [
     { key: 'squat',           label: 'Squat' },
     { key: 'hinge',           label: 'Hinge' },
@@ -82,7 +84,8 @@
     { key: 'lunge',           label: 'Lunge' },
     { key: 'carry',           label: 'Carry' },
     { key: 'isolation',       label: 'Isolation' },
-    { key: 'core',            label: 'Core' }
+    { key: 'core',            label: 'Core' },
+    { key: 'mobility',        label: 'Mobility' }
   ];
 
   // Equipment filter keys are exercise-core's normalized equipment vocabulary
@@ -127,11 +130,20 @@
     return '';
   }
 
+  // Movement patterns that DELIBERATELY belong to no training split. Splits
+  // (Push/Pull/Legs/Upper/Lower/Full Body/Core) describe strength work, and
+  // mobility drills are not strength work — assigning one (e.g. Full Body)
+  // would misrepresent them. They stay reachable through their own movement
+  // chip, the equipment chips, the unfiltered library and search. This is an
+  // explicit rule, not the unknown-pattern fallback below.
+  var SPLITLESS_PATTERNS = ['mobility'];
+
   // Split membership. Returns an array of split keys (may be 0, 1, or 2).
   // Compound patterns map by pattern; isolation maps by target-muscle region.
   function getExerciseSplits(ex) {
     if (!ex) return [];
     var mp = ex.movement_pattern;
+    if (SPLITLESS_PATTERNS.indexOf(mp) !== -1) return [];
     switch (mp) {
       case 'horizontal_push':
       case 'vertical_push':   return ['push', 'upper'];
@@ -162,7 +174,8 @@
     squat: 'squat', hinge: 'hinge', lunge: 'lunge',
     horizontal_push: 'horizontal_push', vertical_push: 'vertical_push',
     horizontal_pull: 'horizontal_pull', vertical_pull: 'vertical_pull',
-    carry: 'carry', isolation: 'isolation', core: 'core', rotation: 'core'
+    carry: 'carry', isolation: 'isolation', core: 'core', rotation: 'core',
+    mobility: 'mobility'
   };
   function getExerciseMovement(ex) {
     if (!ex || !ex.movement_pattern) return null;
@@ -448,6 +461,7 @@
   var ExerciseFilters = {
     // vocabularies
     SPLITS: SPLITS, MOVEMENTS: MOVEMENTS, EQUIPMENT: EQUIPMENT, CATEGORIES: CATEGORIES,
+    SPLITLESS_PATTERNS: SPLITLESS_PATTERNS,
     // membership
     getExerciseSplits: getExerciseSplits,
     getExerciseMovement: getExerciseMovement,

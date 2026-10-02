@@ -48,7 +48,7 @@
   var MOVEMENT_PATTERNS = [
     'squat', 'hinge', 'lunge', 'horizontal_push', 'vertical_push',
     'horizontal_pull', 'vertical_pull', 'carry', 'rotation', 'isolation',
-    'core', 'gait'
+    'core', 'gait', 'mobility'
   ];
   var EQUIPMENT = [
     'barbell', 'dumbbell', 'machine', 'cable', 'bodyweight', 'kettlebell',
@@ -303,7 +303,16 @@
     'cable crunch': 'crunch', 'bicycle crunch': 'crunch', 'reverse crunch': 'crunch',
     'sit up': 'sit-up', 'hanging leg raise': 'leg-raise', 'side plank': 'plank',
     'ab wheel rollout': 'ab-wheel', 'mountain climber': 'core', 'cable woodchopper': 'woodchopper',
-    'leg press calf raise': 'calf-raise', 'donkey calf raise': 'calf-raise'
+    'leg press calf raise': 'calf-raise', 'donkey calf raise': 'calf-raise',
+    // Mobility (Phase 4.3.9B CP4b). Each is its own movement, so each gets its
+    // own family: the pattern+last-token fallback would otherwise collapse
+    // unrelated drills that merely share a generic word ("rotation", "stretch")
+    // into one family and pair them as variants.
+    'cat cow': 'cat-cow', 'quadruped thoracic rotation': 'thoracic-rotation',
+    'wall slide': 'wall-slide', 'kneeling hip flexor stretch': 'hip-flexor-stretch',
+    '90 90 hip rotation': 'hip-90-90', 'supine hamstring stretch': 'hamstring-stretch',
+    'standing ankle rock': 'ankle-rock', 'supine spinal twist': 'spinal-twist',
+    'diaphragmatic breathing': 'diaphragmatic-breathing'
   };
 
   function getExerciseFamily(ex) {
