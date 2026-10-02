@@ -702,10 +702,10 @@ const BWF_NOTE = {
   'Reverse Lunge': 'Reps are per leg.',
   'Single-Leg Glute Bridge': 'Reps are per leg.',
   'Side Plank': 'Hold time in seconds, per side.',
-  'Push-Up': 'Too hard? Use Swap to choose Knee Push-Up before logging sets. ' +
-             'Swap applies to this workout only — repeat it next session.',
-  'Pike Push-Up': 'To regress, raise your hands or shorten the range. ' +
-                  'Do not switch to Knee Push-Up — it trains a different pattern.',
+  'Push-Up': 'Too hard? Use Swap before logging sets: Knee Push-Up, or Wall Push-Up if ' +
+             'that is too hard. Swap applies to this workout only.',
+  'Pike Lean': 'Hold time in seconds, arms straight. Prepares you for the Pike Push-Up but ' +
+               'is not a full-range replacement. Lean less to make it easier.',
   'Superman': 'Posterior-chain and postural endurance. ' +
               'Not a pulling exercise and not a substitute for rows.',
   'Dead Bug': 'Reps are per side.',
@@ -787,8 +787,11 @@ test('guidance: representative content reaches the right entries', () => {
   assert.match(g('Russian Twist'), /total, not per side/);
   assert.match(g('Push-Up'), /Use Swap/);
   assert.match(g('Push-Up'), /this workout only/);
-  assert.match(g('Pike Push-Up'), /raise your hands or shorten the range/);
-  assert.match(g('Pike Push-Up'), /Do not switch to Knee Push-Up/);
+  assert.match(g('Push-Up'), /Knee Push-Up, or Wall Push-Up/);          // CP4c
+  assert.match(g('Pike Lean'), /Hold time in seconds, arms straight/);  // CP4c
+  assert.match(g('Pike Lean'), /not a full-range replacement/);
+  // Pike Push-Up is no longer a Bodyweight Foundations prescription (CP4c).
+  assert.ok(!Object.prototype.hasOwnProperty.call(BWF_NOTE, 'Pike Push-Up'));
   assert.match(g('Superman'), /Posterior-chain and postural endurance/);
   assert.match(g('Superman'), /Not a pulling exercise and not a substitute for rows/);
 });
@@ -970,4 +973,122 @@ test('guidance mutation: not clearing on swap would leave stale text', () => {
   assert.ok(!/ex\.programGuidance = null;/.test(extractFn(broken, 'applySwap')),
     'without it the swapped exercise keeps the previous prescription guidance');
   assert.match(swapFn(), /ex\.programGuidance = null;/);
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * Phase 4.3.9B CP4c — Pike Lean in Full Body B (migration 20261002173108)
+ *
+ * The prescription carries its seconds target in reps_low/reps_high, exactly
+ * like Side Plank and Wall Sit; everything that makes it TIME comes from the
+ * canonical catalog row's tracking_type. These run the shipped page/recap code
+ * against the real catalog rows rather than synthetic ids.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+const { EXERCISE_CATALOG } = require('./benchmarks/exercise-fixtures.js');
+const { rtNormalizeExercises } = require('./routine-core.js');
+
+const PIKE_LEAN = 'c3d81925-04dc-4caf-b5ef-5b42740028e8';
+const PIKE_PUSH_UP = 'b1f4c7a2-3e58-4d91-9c26-7a0d8e5f1b34';
+const PUSH_UP = 'dfb48ed7-a1b9-4dc3-91c2-eabf52c821ac';
+const catalogRow = (id) => EXERCISE_CATALOG.find((x) => x.id === id);
+// The page's library and the recap's tracking map, built from canonical rows.
+const CP4C_LIB = [PIKE_LEAN, PIKE_PUSH_UP, PUSH_UP].map((id) => {
+  const r = catalogRow(id);
+  return { id: r.id, name: r.name, tracking_type: r.tracking_type };
+});
+const CP4C_TRACK = {};
+CP4C_LIB.forEach((r) => { CP4C_TRACK[r.id] = { id: r.id, tracking_type: r.tracking_type }; });
+
+const e4c = (name, exercise_id, sets, reps_low, reps_high, rest_sec, notes) =>
+  ({ name, sets, reps_low, reps_high, notes, rest_sec, exercise_id });
+// Full Body B as it is in production after CP4c (mirrors bodyweight-foundations.test.js).
+const FULL_BODY_B = [
+  e4c('Push-Up', PUSH_UP, 4, 6, 12, 75, BWF_NOTE['Push-Up']),
+  e4c('Pike Lean', PIKE_LEAN, 3, 15, 30, 60, BWF_NOTE['Pike Lean']),
+  e4c('Superman', 'c2a5d8b3-4f69-4e02-8d37-1b9e0f6a2c45', 3, 10, 12, 45, BWF_NOTE.Superman),
+  e4c('Dead Bug', '9c8998ab-9713-43f4-940b-5f8feec39d3c', 3, 10, 10, 45, BWF_NOTE['Dead Bug']),
+  e4c('Bird Dog', 'd3b6e9c4-5a7a-4f13-9e48-2c0f1a7b3d56', 2, 8, 10, 45, BWF_NOTE['Bird Dog']),
+];
+
+test('CP4c: Pike Lean is time-tracked in the catalog and renders Sec, not Reps', () => {
+  assert.equal(catalogRow(PIKE_LEAN).tracking_type, 'time');
+  const s = makeSandbox({ library: CP4C_LIB }).sandbox;
+  assert.equal(s.unitForExercise({ exercise_id: PIKE_LEAN }), 'sec');
+  assert.equal(s.unitColumnLabel(s.unitForExercise({ exercise_id: PIKE_LEAN })), 'Sec');
+  assert.equal(s.unitPlaceholder(s.unitForExercise({ exercise_id: PIKE_LEAN })), 'sec');
+  // The exercise it replaced is rep-tracked — the unit follows the id, not the slot.
+  assert.equal(s.unitForExercise({ exercise_id: PIKE_PUSH_UP }), 'reps');
+  assert.equal(s.unitColumnLabel(s.unitForExercise({ exercise_id: PIKE_PUSH_UP })), 'Reps');
+  // The 15–30 target is presented as seconds by the shared goal wording.
+  assert.match(Progression.analyze({ repsLow: 15, repsHigh: 30, trackingType: 'time' }).goalRange.display, /sec/);
+});
+
+test('CP4c: timed Pike Lean work never reaches personal_records; Push-Up still does', async () => {
+  const lean = { id: 'we-1', name: 'Pike Lean', exercise_id: PIKE_LEAN, customId: null,
+    sets: [completedSet(null, 30), Object.assign(completedSet(20, 30), { id: 's2', set_number: 2 })] };
+  const t = await runPRs([lean], { library: CP4C_LIB });
+  assert.equal(prTouches(t), 0, 'no rep, volume or estimated-1RM evaluation for a hold');
+  assert.deepEqual(t.writes, []);
+  // Same workout with a weighted (vest) rep-tracked Push-Up: only the Push-Up
+  // reaches the table, so the zero above is the unit guard working, not an inert
+  // harness. (PR logic only considers sets with a recorded weight — which is why
+  // the 20 lb Pike Lean set above is the case that matters.)
+  const pu = { id: 'we-2', name: 'Push-Up', exercise_id: PUSH_UP, customId: null, sets: [completedSet(10, 12)] };
+  const mixed = await runPRs([lean, pu], { library: CP4C_LIB });
+  assert.ok(prTouches(mixed) > 0, 'the rep-tracked Push-Up is still evaluated');
+});
+
+test('CP4c: the recap counts Pike Lean as time only — never reps or pound-volume', () => {
+  const stats = runRecap([
+    { name: 'Push-Up', exercise_id: PUSH_UP, sets: [set(10), set(8)] },
+    { name: 'Pike Lean', exercise_id: PIKE_LEAN, sets: [set(30), set(25), set(20, 20)] },
+  ], { byId: CP4C_TRACK, failed: false });
+  assert.equal(statFor(stats, 'time').value, '1:15', '30 + 25 + 20 seconds');
+  assert.equal(statFor(stats, 'reps').value, '18', 'only the Push-Up reps; Pike Lean seconds never enter reps');
+  assert.equal(statFor(stats, 'lb volume').value, '0', 'a 20 lb hold is not 20 × 20 lb of volume');
+});
+
+test('CP4c: Pike Lean guidance is plain text, shown only on the Bodyweight Foundations path', () => {
+  const s = guidanceSandbox();
+  const entry = FULL_BODY_B[1];
+  assert.equal(s.programGuidanceEligible('bodyweight_foundations') ? s.readProgramGuidance(entry) : null,
+    BWF_NOTE['Pike Lean']);
+  ['muscle_gain', 'fat_loss_blueprint', 'glute_builder', null].forEach((slug) => {
+    assert.equal(s.programGuidanceEligible(slug), false, String(slug));
+  });
+  // Escaping is a no-op on this text: it is plain words, no markup to neutralise.
+  const escSrc = fs.readFileSync(path.join(__dirname, 'workout-history.js'), 'utf8');
+  const sb = {};
+  vm.createContext(sb);
+  vm.runInContext(extractFn(escSrc, 'esc'), sb);
+  assert.equal(sb.esc(BWF_NOTE['Pike Lean']), BWF_NOTE['Pike Lean']);
+  assert.equal(sb.esc(BWF_NOTE['Push-Up']), BWF_NOTE['Push-Up']);
+});
+
+test('CP4c: resume re-derives Pike Lean guidance and its seconds target; a swapped row gets none', async () => {
+  function resumeSandbox(slug) {
+    const sandbox = {
+      console: { error() {}, warn() {} },
+      exercises: [
+        { name: 'Push-Up', programGuidance: 'stale' },
+        { name: 'Pike Lean', programGuidance: 'stale' },
+        { name: 'Pike Push-Up', programGuidance: 'stale' },   // what a Swap away from Pike Lean leaves
+      ],
+      loadProgramSession: async () => ({ exercises: rtNormalizeExercises(FULL_BODY_B) }),
+    };
+    vm.createContext(sandbox);
+    const decl = (WORKOUT.match(/var PROGRAM_GUIDANCE_SLUGS = \{[\s\S]*?\};/) || [''])[0];
+    vm.runInContext(decl + '\n' + GUIDANCE_FNS.concat(['applyTemplateRanges'])
+      .map((n) => extractFn(WORKOUT, n)).join('\n'), sandbox);
+    return sandbox.applyTemplateRanges(slug, 'full_b').then(() => sandbox.exercises);
+  }
+  const [pu, lean, swapped] = await resumeSandbox('bodyweight_foundations');
+  assert.equal(pu.programGuidance, BWF_NOTE['Push-Up']);
+  assert.deepEqual([pu.reps_low, pu.reps_high, pu.target_sets], [6, 12, 4]);
+  assert.equal(lean.programGuidance, BWF_NOTE['Pike Lean']);
+  assert.deepEqual([lean.reps_low, lean.reps_high, lean.target_sets], [15, 30, 3]);
+  assert.equal(swapped.programGuidance, null, 'a name miss never keeps stale guidance');
+  assert.equal(swapped.reps_low, undefined, 'and takes no prescription it does not own');
+  // Another Program's slug gets no guidance at all on resume.
+  (await resumeSandbox('muscle_gain')).forEach((x) => assert.equal(x.programGuidance, null, x.name));
 });
