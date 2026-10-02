@@ -10,6 +10,12 @@
  * copy of what the migration inserted: the migration proves the DATABASE holds
  * them, this file proves the repository agrees about what they should be.
  *
+ * Phase 4.3.9B CP4c (migration 20261002173108) updated Full Body A and B in
+ * place: both Push-Up entries carry the new Swap guidance, and Full Body B's
+ * Pike Push-Up became the timed Pike Lean foundation. ROUTINE_A/ROUTINE_B
+ * mirror that CURRENT state; the pre-CP4c arrays are kept below only to prove
+ * the change touched exactly the approved paths.
+ *
  * `schedules.js` has no Node exports (browser-global script), so it is
  * evaluated in a vm sandbox — the same pattern dashboard-zero-state.test.js
  * uses to exercise real browser code. No product file was given exports for
@@ -38,6 +44,7 @@ const EX = {
   PUSH_UP:          'dfb48ed7-a1b9-4dc3-91c2-eabf52c821ac',
   SIDE_PLANK:       'be4abe1a-93fa-4e87-9250-2627fe45ad3c',
   PIKE_PUSH_UP:     'b1f4c7a2-3e58-4d91-9c26-7a0d8e5f1b34',
+  PIKE_LEAN:        'c3d81925-04dc-4caf-b5ef-5b42740028e8',
   SUPERMAN:         'c2a5d8b3-4f69-4e02-8d37-1b9e0f6a2c45',
   DEAD_BUG:         '9c8998ab-9713-43f4-940b-5f8feec39d3c',
   BIRD_DOG:         'd3b6e9c4-5a7a-4f13-9e48-2c0f1a7b3d56',
@@ -52,11 +59,13 @@ const EX = {
  * through SWAP so the logged identity changes with it — a note must never ask
  * someone to perform a different movement while logging the original one. */
 const NOTE_SWAP =
-  'Too hard? Use Swap to choose Knee Push-Up before logging sets. ' +
-  'Swap applies to this workout only — repeat it next session.';
-const NOTE_PIKE =
-  'To regress, raise your hands or shorten the range. ' +
-  'Do not switch to Knee Push-Up — it trains a different pattern.';
+  'Too hard? Use Swap before logging sets: Knee Push-Up, or Wall Push-Up if ' +
+  'that is too hard. Swap applies to this workout only.';
+/* Pike Lean is a timed straight-arm hold that PREPARES for the Pike Push-Up;
+ * it is not a full-range replacement and must never be described as one. */
+const NOTE_PIKE_LEAN =
+  'Hold time in seconds, arms straight. Prepares you for the Pike Push-Up but ' +
+  'is not a full-range replacement. Lean less to make it easier.';
 const NOTE_SUPERMAN =
   'Posterior-chain and postural endurance. ' +
   'Not a pulling exercise and not a substitute for rows.';
@@ -85,7 +94,7 @@ const ROUTINE_B = {
   name: 'Full Body B',
   exercises: [
     e('Push-Up',      EX.PUSH_UP,      4,  6, 12, 75, NOTE_SWAP),
-    e('Pike Push-Up', EX.PIKE_PUSH_UP, 3,  6, 10, 75, NOTE_PIKE),
+    e('Pike Lean',    EX.PIKE_LEAN,    3, 15, 30, 60, NOTE_PIKE_LEAN),
     e('Superman',     EX.SUPERMAN,     3, 10, 12, 45, NOTE_SUPERMAN),
     e('Dead Bug',     EX.DEAD_BUG,     3, 10, 10, 45, 'Reps are per side.'),
     e('Bird Dog',     EX.BIRD_DOG,     2,  8, 10, 45, 'Reps are per side.'),
@@ -163,7 +172,7 @@ test('exact A/B/C ordering and every prescribed field', () => {
   ]);
   assert.deepEqual(ROUTINE_B.exercises.map((x) => [x.name, x.sets, x.reps_low, x.reps_high, x.rest_sec]), [
     ['Push-Up', 4, 6, 12, 75],
-    ['Pike Push-Up', 3, 6, 10, 75],
+    ['Pike Lean', 3, 15, 30, 60],
     ['Superman', 3, 10, 12, 45],
     ['Dead Bug', 3, 10, 10, 45],
     ['Bird Dog', 2, 8, 10, 45],
@@ -271,18 +280,26 @@ test('the Push-Up regression routes through Swap, not a silent substitution', ()
     assert.match(x.notes, /Use Swap/);
     assert.match(x.notes, /before logging sets/);
     assert.match(x.notes, /this workout only/);   // Swap does not carry forward
+    // CP4c: the full beginner path, easiest last — Knee, then Wall.
+    assert.match(x.notes, /Knee Push-Up, or Wall Push-Up if that is too hard/);
   });
 
-  // Pike Push-Up regresses by RANGE and must not redirect to Knee Push-Up.
-  const pike = ALL_ENTRIES.find((x) => x.exercise_id === EX.PIKE_PUSH_UP);
-  assert.equal(pike.notes, NOTE_PIKE);
-  assert.match(pike.notes, /Do not switch to Knee Push-Up/);
+  // CP4c: the vertical push is the timed Pike Lean, which prepares for the
+  // Pike Push-Up and must not claim to replace it. Pike Push-Up is no longer
+  // prescribed anywhere in the Program.
+  const pike = ALL_ENTRIES.find((x) => x.exercise_id === EX.PIKE_LEAN);
+  assert.equal(pike.notes, NOTE_PIKE_LEAN);
+  assert.match(pike.notes, /Prepares you for the Pike Push-Up/);
+  assert.match(pike.notes, /not a full-range replacement/);
+  assert.ok(!ALL_ENTRIES.some((x) => x.exercise_id === EX.PIKE_PUSH_UP || x.name === 'Pike Push-Up'));
 
-  // Knee Push-Up is a real catalog exercise, so the Swap instruction is
-  // actionable — but it is never itself a prescribed entry.
-  const knee = EXERCISE_CATALOG.find((x) => x.name === 'Knee Push-Up');
-  assert.ok(knee, 'Knee Push-Up must exist for the Swap guidance to be actionable');
-  assert.ok(!ALL_ENTRIES.some((x) => x.exercise_id === knee.id));
+  // Knee Push-Up and Wall Push-Up are real catalog exercises, so the Swap
+  // instruction is actionable — but neither is itself a prescribed entry.
+  ['Knee Push-Up', 'Wall Push-Up'].forEach((n) => {
+    const row = EXERCISE_CATALOG.find((x) => x.name === n);
+    assert.ok(row, n + ' must exist for the Swap guidance to be actionable');
+    assert.ok(!ALL_ENTRIES.some((x) => x.exercise_id === row.id), n + ' is not prescribed');
+  });
 });
 
 /* ── Program and link records ───────────────────────────────────────────── */
@@ -564,4 +581,112 @@ test('CP3c creates no enrolment, ownership, entitlement or purchase state', () =
   assert.ok(!/supabaseClient|from\(|insert|update|upsert|delete/.test(src),
     'schedules.js must remain a pure data module');
   assert.match(src, /bodyweight_foundations/);
+});
+
+/* ── Phase 4.3.9B CP4c — Push-Up guidance + Pike Lean (migration 20261002173108)
+ * The arrays as CP3c created them, frozen. The CP4c migration's own self-check
+ * proved the new arrays differ from these at exactly three paths; the same
+ * proof is repeated here against the repository mirror. */
+
+const NOTE_SWAP_CP3C =
+  'Too hard? Use Swap to choose Knee Push-Up before logging sets. ' +
+  'Swap applies to this workout only — repeat it next session.';
+const PRE_CP4C_A = ROUTINE_A.exercises.map((x, i) => (i === 3 ? Object.assign({}, x, { notes: NOTE_SWAP_CP3C }) : x));
+const PRE_CP4C_B = [
+  e('Push-Up',      EX.PUSH_UP,      4,  6, 12, 75, NOTE_SWAP_CP3C),
+  e('Pike Push-Up', EX.PIKE_PUSH_UP, 3,  6, 10, 75,
+    'To regress, raise your hands or shorten the range. ' +
+    'Do not switch to Knee Push-Up — it trains a different pattern.'),
+].concat(ROUTINE_B.exercises.slice(2));
+
+/* Postgres `jsonb::text` serialization (keys by byte length, then bytewise;
+ * ", " and ": " separators), so a Routine literal can be hashed exactly as
+ * production prints it. Proven against the pre-CP4c hashes below. */
+function pgJsonbText(v) {
+  if (Array.isArray(v)) return '[' + v.map(pgJsonbText).join(', ') + ']';
+  if (v && typeof v === 'object') {
+    const keys = Object.keys(v).sort((a, b) =>
+      Buffer.byteLength(a) - Buffer.byteLength(b) || Buffer.compare(Buffer.from(a), Buffer.from(b)));
+    return '{' + keys.map((k) => JSON.stringify(k) + ': ' + pgJsonbText(v[k])).join(', ') + '}';
+  }
+  return JSON.stringify(v);
+}
+const pgMd5 = (arr) => require('node:crypto').createHash('md5').update(pgJsonbText(arr)).digest('hex');
+
+test('CP4c: the repository mirror hashes exactly as production stores each Routine', () => {
+  // md5(workout_templates.exercises::text), read from production after the
+  // migration (A, B) and before it (pre-CP4c A/B; C is unchanged by CP4c).
+  assert.equal(pgMd5(PRE_CP4C_A), 'df9134eba4631b0aad87d550e194e928', 'serializer check: pre-CP4c A');
+  assert.equal(pgMd5(PRE_CP4C_B), '6d5ecbd1afd19f26adef58dbc6f0f10b', 'serializer check: pre-CP4c B');
+  assert.equal(pgMd5(ROUTINE_A.exercises), '3325d7ae57f6c007d99c9db69d9cb311', 'Full Body A');
+  assert.equal(pgMd5(ROUTINE_B.exercises), '04d6831d81623921fe8ead42f44e311a', 'Full Body B');
+  assert.equal(pgMd5(ROUTINE_C.exercises), 'a9b1d9785031b8b47799a3a2cc9d05ac', 'Full Body C is unchanged');
+});
+
+test('CP4c: A and B changed at exactly {3,notes}, {0,notes} and {1}', () => {
+  const changed = (before, after) => {
+    const out = [];
+    assert.equal(after.length, before.length, 'entry count and order are preserved');
+    before.forEach((x, i) => {
+      const keys = new Set(Object.keys(x).concat(Object.keys(after[i])));
+      keys.forEach((k) => { if (JSON.stringify(x[k]) !== JSON.stringify(after[i][k])) out.push(i + '.' + k); });
+    });
+    return out;
+  };
+  assert.deepEqual(changed(PRE_CP4C_A, ROUTINE_A.exercises), ['3.notes']);
+  assert.deepEqual(changed(PRE_CP4C_B, ROUTINE_B.exercises),
+    ['0.notes', '1.name', '1.reps_low', '1.reps_high', '1.notes', '1.rest_sec', '1.exercise_id']);
+  // Entry 1 keeps only its set count; everything else is the Pike Lean prescription.
+  assert.equal(ROUTINE_B.exercises[1].sets, PRE_CP4C_B[1].sets);
+});
+
+test('CP4c: both Push-Up prescriptions carry the identical approved guidance', () => {
+  const a = ROUTINE_A.exercises[3];
+  const b = ROUTINE_B.exercises[0];
+  assert.equal(a.notes, 'Too hard? Use Swap before logging sets: Knee Push-Up, or Wall Push-Up if that is too hard. Swap applies to this workout only.');
+  assert.equal(b.notes, a.notes);
+  // Otherwise identical except the approved set counts.
+  const { sets: setsA, ...restA } = a;
+  const { sets: setsB, ...restB } = b;
+  assert.deepEqual(restA, restB);
+  assert.deepEqual([setsA, setsB], [2, 4]);
+});
+
+test('CP4c: Full Body B position 1 is canonical timed Pike Lean; Pike Push-Up is gone', () => {
+  assert.deepEqual(ROUTINE_B.exercises[1], {
+    name: 'Pike Lean', sets: 3, reps_low: 15, reps_high: 30,
+    notes: 'Hold time in seconds, arms straight. Prepares you for the Pike Push-Up but is not a full-range replacement. Lean less to make it easier.',
+    rest_sec: 60, exercise_id: 'c3d81925-04dc-4caf-b5ef-5b42740028e8',
+  });
+  const lean = byId(EX.PIKE_LEAN);
+  assert.equal(lean.name, 'Pike Lean');
+  assert.equal(lean.tracking_type, 'time', 'the 15–30 target is seconds');
+  assert.equal(lean.default_unit, 'sec');
+  assert.equal(lean.is_unilateral, false, 'no per-side wording is owed');
+  assert.ok(!ROUTINE_B.exercises.some((x) => x.exercise_id === EX.PIKE_PUSH_UP || x.name === 'Pike Push-Up'));
+  // Pike Push-Up remains a catalog exercise; CP4c only stopped prescribing it.
+  assert.equal(byId(EX.PIKE_PUSH_UP).name, 'Pike Push-Up');
+});
+
+test('CP4c: Bodyweight Squat stays without guidance', () => {
+  assert.equal(ROUTINE_A.exercises[0].name, 'Bodyweight Squat');
+  assert.equal(ROUTINE_A.exercises[0].notes, '');
+});
+
+test('CP4c: the repository records the exact applied migration', () => {
+  const file = 'supabase/migrations/20261002173108_phase_439b_cp4c_bodyweight_guidance_pike_lean.sql';
+  const sql = read(file);
+  // Byte-for-byte the reviewed SQL applied to production.
+  assert.equal(require('node:crypto').createHash('sha256').update(sql).digest('hex'),
+    'c2774a38edd1aeee82d385af9b60c9c5b63726d94338f60ffb083907c5ea75d0');
+  // The correction that lets PL/pgSQL read the IF condition: an unparenthesised
+  // CASE is cut at its own THEN. The failed version must never be recorded.
+  assert.ok(sql.includes("IF v_n <> (CASE v_state WHEN 'FRESH' THEN 2 ELSE 0 END) THEN"));
+  assert.ok(!sql.includes("IF v_n <> CASE v_state"), 'the failed unparenthesised form is absent');
+  // The recovery README stays in step with the directory it documents.
+  const readme = read('supabase/README.md');
+  const files = fs.readdirSync(path.join(__dirname, 'supabase', 'migrations')).filter((f) => f.endsWith('.sql'));
+  assert.match(readme, new RegExp('The ' + files.length + ' migrations applied to production'));
+  assert.match(readme, /`20261002173108`/);
+  assert.ok(files.includes(path.basename(file)));
 });
