@@ -286,13 +286,10 @@ test('draft: retired, unknown, malformed and failure states all fail closed', as
     ['catalog throws', { purchases: MEMBERSHIP, catalogThrows: true }],
     ['purchases unreadable', { purchasesError: true,
       catalog: pcNormalizeCatalog([published(BWF_ROW)]) }],
-    ['routines unreadable', { purchases: MEMBERSHIP, linksError: true,
-      catalog: pcNormalizeCatalog([published(BWF_ROW)]) }],
-    ['no routines readable', { purchases: MEMBERSHIP, links: [],
-      catalog: pcNormalizeCatalog([published(BWF_ROW)]) }],
-    ['malformed routine rows', { purchases: MEMBERSHIP,
-      links: [{ session_key: null, workout_templates: null }],
-      catalog: pcNormalizeCatalog([published(BWF_ROW)]) }],
+    // The three session-read failures that used to live here now resolve to the
+    // CP4a schedule state instead, because they happen AFTER a valid frequency
+    // was established and are retryable rather than terminal. Their full
+    // contract is asserted in 'CP4a state 3: a total session-read failure' below.
   ];
   for (const [label, opts] of cases) {
     const h = makeHarness(opts);
@@ -390,11 +387,16 @@ test('a same-keyed Routine from another Program cannot be substituted', async ()
   ];
   const h = authorized({ links: foreign });
   await h.run();
-  // The stub honours the page's own scoping, so a correctly scoped query
-  // returns nothing here and the page fails closed.
-  assert.deepEqual(h.shown(), ['unavailableState']);
+  // The stub honours the page's own scoping, so a correctly scoped query returns
+  // nothing here. CP4a reports that as the retryable schedule state rather than
+  // as an unavailable Program; the load-bearing assertion — that a foreign
+  // Routine never renders and is never launchable — is unchanged.
+  assert.match(h.el('sessSummary').innerHTML, SCHED_COPY);
   assert.ok(!/Muscle Gain Full Body/.test(renderedText(h)),
     'a foreign Routine must never render on this page');
+  assert.equal(h.el('sessList').innerHTML, '', 'no session rows');
+  assert.equal(h.el('startBtn').href, '', 'nothing launchable');
+  assert.equal(h.el('stickyCta').style.display, 'none', 'no Start CTA');
   noWrites(h, 'foreign routine');
 });
 
@@ -560,17 +562,42 @@ test('mutation: removing the unavailable branch would mislabel a draft', () => {
     'the draft case is distinguished from "you do not own this"');
 });
 
+/* A COMPLETE foreign session set. CP4a added a second, independent gate: an
+ * incomplete expected set fails the whole schedule closed, so a single foreign
+ * row would now be rejected for being incomplete rather than for being foreign.
+ * To keep this mutation testing the SCOPING specifically, the foreign Program
+ * supplies every key the current schedule expects — then the only thing left
+ * standing between it and the page is `.eq('programs.slug', PROGRAM_SLUG)`. */
+const FOREIGN_FULL_SET = ['full_a', 'full_b', 'full_c'].map((k, i) => ({
+  session_key: k, sort_order: i + 1,
+  programs: { slug: 'muscle_gain' },
+  workout_templates: { id: 'mg-' + k, name: 'Muscle Gain ' + k.toUpperCase() },
+}));
+
 test('mutation: removing Program scoping would admit a foreign Routine', async () => {
   const broken = PAGE.replace(".eq('programs.slug', PROGRAM_SLUG)", '');
   assert.notEqual(broken, PAGE, 'the scoping call was found to mutate');
-  const foreign = [{ session_key: 'full_a', sort_order: 1,
-    programs: { slug: 'muscle_gain' },
-    workout_templates: { id: 'mg-a', name: 'Muscle Gain Full Body A' } }];
-  const h = makeHarness({ purchases: MEMBERSHIP, links: foreign, source: broken,
+  const h = makeHarness({ purchases: MEMBERSHIP, links: FOREIGN_FULL_SET, source: broken,
     catalog: pcNormalizeCatalog([published(BWF_ROW)]) });
   await h.run();
-  assert.match(renderedText(h), /Muscle Gain Full Body A/,
+  assert.match(renderedText(h), /Muscle Gain FULL_A/,
     'unscoped, a foreign Routine DOES render — so the scoping test is meaningful');
+});
+
+test('scoped, that same complete foreign set never reaches the page', async () => {
+  // The other half of the pair: with scoping intact the harness filters the
+  // foreign rows out, leaving nothing readable, and the page refuses.
+  const h = makeHarness({ purchases: MEMBERSHIP, links: FOREIGN_FULL_SET,
+    catalog: pcNormalizeCatalog([published(BWF_ROW)]) });
+  await h.run();
+  // Checked against the session list, not the whole page: renderFacts()
+  // legitimately prints the GOAL label "Muscle Gain" for this Program's
+  // goal:'muscle', which is Program metadata and not a foreign Routine.
+  assert.equal(h.el('sessList').innerHTML, '', 'no foreign session rows');
+  assert.ok(!/Muscle Gain FULL_/.test(renderedText(h)), 'no foreign Routine name');
+  assert.match(h.el('sessSummary').innerHTML, SCHED_COPY, 'fails the schedule closed');
+  assert.equal(h.el('startBtn').href, '', 'and nothing launchable');
+  noWrites(h, 'scoped foreign set');
 });
 
 test('mutation: removing the write-boundary gate would allow a draft workout', () => {
@@ -630,24 +657,26 @@ test('frequency: the session intro is static markup on every rendering path', ()
   const body = PAGE.slice(PAGE.indexOf('<body>'), PAGE.lastIndexOf('<script>'));
   assert.ok(flat(body).includes(SESSION_INTRO), 'the approved intro is in the markup verbatim');
 
-  // One script path may now replace it: the fail-closed frequency state, which
-  // must say the frequency is UNKNOWN. The original assertion (nothing writes
-  // this element) existed to stop a runtime frequency CLAIM, so it is narrowed
-  // to that intent rather than dropped — every write must live in that one
-  // handler, and what it writes may not state a frequency.
-  const owner = extractPageFn(PAGE, 'showFrequencyUnavailable');
+  // Designated failure handlers may replace it. The original assertion (nothing
+  // writes this element) existed to stop a runtime frequency CLAIM, so it is
+  // narrowed to that intent rather than dropped: every write must live in one of
+  // the two fail-closed handlers, and none of them may state a frequency.
+  const freqOwner = extractPageFn(PAGE, 'showFrequencyUnavailable');
+  const schedOwner = extractPageFn(PAGE, 'showScheduleUnavailable');
   const writes = PAGE_CODE.match(/getElementById\('sessSummary'\)/g) || [];
-  const inOwner = owner.match(/getElementById\('sessSummary'\)/g) || [];
-  assert.equal(writes.length, inOwner.length,
-    'only showFrequencyUnavailable() may assign sessSummary');
-  assert.equal(inOwner.length, 2,
-    'once per failure state — unavailable and unsupported');
-  assert.ok(!/You train|days a week|days\/week/.test(owner),
-    'neither failure copy states a frequency');
-  // Two user-actionable states. Which one appears for which reason, and the
+  const inFreq = freqOwner.match(/getElementById\('sessSummary'\)/g) || [];
+  const inSched = schedOwner.match(/getElementById\('sessSummary'\)/g) || [];
+  assert.equal(writes.length, inFreq.length + inSched.length,
+    'only the two fail-closed handlers may assign sessSummary');
+  assert.equal(inFreq.length, 2, 'frequency handler: unavailable + unsupported');
+  assert.equal(inSched.length, 1, 'CP4a handler: schedule incomplete');
+  assert.ok(!/You train|days a week|days\/week/.test(freqOwner + schedOwner),
+    'no failure copy states a frequency');
+  // Three user-actionable states. Which one appears for which reason, and the
   // action each offers, is asserted against rendered output below.
-  assert.match(owner, /We couldn’t load your workout schedule\./);
-  assert.match(owner, /Choose between 2 and 6 workout days to use this program\./);
+  assert.match(freqOwner, /We couldn’t load your workout schedule\./);
+  assert.match(freqOwner, /Choose between 2 and 6 workout days to use this program\./);
+  assert.match(schedOwner, /Your program schedule is temporarily unavailable\./);
 });
 
 test('frequency: training_days is read for scheduling only, never rendered', () => {
@@ -814,4 +843,422 @@ test('mutation: moving the pulling note outside entitled content would fail', ()
   // If it were moved above programContent it would sit in a denial state.
   assert.ok(PAGE.indexOf('id="unavailableState"') < contentStart);
   assert.ok(PAGE.indexOf('id="lockedState"') < contentStart);
+});
+
+/* ════════════════════════════════════════════════════════════════════════
+ * CP4a · Schedule containment (parity-only)
+ *
+ * The page used to render every linked Routine. It now renders exactly the
+ * sessions the user's validated frequency calls for, in schedule order. With the
+ * current mapping that is still Full Body A/B/C at every frequency 2–6, so this
+ * checkpoint is behaviour-preserving by design — what it adds is a containment
+ * boundary, so the Routines CP4d links cannot appear before CP4e activates the
+ * frequency-specific arrays.
+ * ══════════════════════════════════════════════════════════════════════ */
+
+const SCHED_COPY = /Your program schedule is temporarily unavailable\. Your progress is safe\. Please try again shortly\./;
+
+/* The pure helper, lifted out of the page and run in isolation. */
+function loadResolver() {
+  const sandbox = {};
+  vm.createContext(sandbox);
+  vm.runInContext(extractPageFn(PAGE, 'resolveScheduledSessions'), sandbox);
+  return sandbox.resolveScheduledSessions;
+}
+
+const ABC = ['full_a', 'full_b', 'full_c'];
+const row = (k, name) => ({ session_key: k, sort_order: 9, name: name || k.toUpperCase() });
+
+/* ── Pure resolution behaviour ──────────────────────────────────────────── */
+
+test('CP4a resolver: the three expected keys plus their three rows succeeds', () => {
+  const r = loadResolver()(ABC, ABC.map((k) => row(k)));
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.sessions.map((s) => s.session_key), ABC);
+});
+
+test('CP4a resolver: order follows the expected array, not the loaded order', () => {
+  const shuffled = [row('full_c'), row('full_a'), row('full_b')];
+  const r = loadResolver()(ABC, shuffled);
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.sessions.map((s) => s.session_key), ABC,
+    'schedule order wins over database/result order');
+  assert.deepEqual(r.sessions.map((s) => s.sort_order), [1, 2, 3],
+    'display position is the position in this user\'s week');
+});
+
+test('CP4a resolver: neither input is mutated', () => {
+  const expected = ABC.slice();
+  const loaded = [row('full_c'), row('full_a'), row('full_b')];
+  const expectedCopy = JSON.parse(JSON.stringify(expected));
+  const loadedCopy = JSON.parse(JSON.stringify(loaded));
+  loadResolver()(expected, loaded);
+  assert.deepEqual(expected, expectedCopy, 'expected array untouched');
+  assert.deepEqual(loaded, loadedCopy, 'loaded rows untouched');
+});
+
+test('CP4a resolver: one missing expected key fails', () => {
+  for (const drop of ABC) {
+    const loaded = ABC.filter((k) => k !== drop).map((k) => row(k));
+    assert.deepEqual(loadResolver()(ABC, loaded), { ok: false, reason: 'missing' },
+      'missing ' + drop);
+  }
+});
+
+test('CP4a resolver: a duplicate loaded row for an expected key fails', () => {
+  const loaded = [row('full_a'), row('full_a', 'Full Body A (copy)'), row('full_b'), row('full_c')];
+  assert.deepEqual(loadResolver()(ABC, loaded), { ok: false, reason: 'duplicate' });
+});
+
+test('CP4a resolver: a duplicate key in the expected array fails', () => {
+  const loaded = ABC.map((k) => row(k));
+  assert.deepEqual(loadResolver()(['full_a', 'full_a', 'full_b'], loaded),
+    { ok: false, reason: 'duplicate' });
+});
+
+test('CP4a resolver: a malformed expected array fails', () => {
+  const resolve = loadResolver();
+  const loaded = ABC.map((k) => row(k));
+  for (const bad of [[], null, undefined, 'full_a', {}, 3]) {
+    assert.deepEqual(resolve(bad, loaded), { ok: false, reason: 'invalid_expected' },
+      JSON.stringify(bad));
+  }
+});
+
+test('CP4a resolver: a blank or non-string expected key fails', () => {
+  const resolve = loadResolver();
+  const loaded = ABC.map((k) => row(k));
+  for (const bad of ['', null, undefined, 7, {}, []]) {
+    assert.deepEqual(resolve(['full_a', bad], loaded),
+      { ok: false, reason: 'invalid_expected' }, JSON.stringify(bad));
+  }
+});
+
+test('CP4a resolver: a malformed loaded collection fails', () => {
+  const resolve = loadResolver();
+  for (const bad of [null, undefined, 'rows', {}, 5]) {
+    assert.deepEqual(resolve(ABC, bad), { ok: false, reason: 'invalid_loaded' },
+      JSON.stringify(bad));
+  }
+});
+
+test('CP4a resolver: a required row with no usable name fails', () => {
+  const resolve = loadResolver();
+  for (const bad of [null, undefined, '', 7, {}]) {
+    const loaded = [{ session_key: 'full_a', name: bad }, row('full_b'), row('full_c')];
+    assert.deepEqual(resolve(ABC, loaded), { ok: false, reason: 'invalid_loaded' },
+      'name=' + JSON.stringify(bad));
+  }
+});
+
+test('CP4a resolver: a Routine dropped by the inner join reads as missing', () => {
+  // loadSessions() selects workout_templates!inner(...), so an unreadable or
+  // private Routine never appears as a row at all — the only evidence is absence.
+  const loaded = [row('full_a'), row('full_c')];
+  assert.deepEqual(loadResolver()(ABC, loaded), { ok: false, reason: 'missing' });
+});
+
+test('CP4a resolver: an unexpected extra linked row is excluded, not fatal', () => {
+  const loaded = ABC.map((k) => row(k)).concat([row('upper_push_core_a', 'Upper Push & Core A')]);
+  const r = loadResolver()(ABC, loaded);
+  assert.equal(r.ok, true, 'a complete expected set still succeeds');
+  assert.deepEqual(r.sessions.map((s) => s.session_key), ABC, 'the extra is absent');
+});
+
+test('CP4a resolver: a malformed unexpected extra row is also just ignored', () => {
+  const resolve = loadResolver();
+  const extras = [
+    { session_key: 'upper_push_core_a', name: null },
+    { session_key: 'lower_a' },
+    { session_key: '', name: 'blank' },
+    null, undefined, 'junk', 42,
+  ];
+  for (const extra of extras) {
+    const r = resolve(ABC, ABC.map((k) => row(k)).concat([extra]));
+    assert.equal(r.ok, true, 'extra ' + JSON.stringify(extra) + ' must not fail the schedule');
+    assert.deepEqual(r.sessions.map((s) => s.session_key), ABC);
+  }
+});
+
+test('CP4a resolver: Routine names never determine identity or order', () => {
+  // Names deliberately contradict the keys. Identity comes from session_key and
+  // order from the expected array, so the result must ignore both.
+  const loaded = [
+    row('full_c', 'Full Body A'),
+    row('full_a', 'Full Body C'),
+    row('full_b', 'Zzz Last'),
+  ];
+  const r = loadResolver()(ABC, loaded);
+  assert.deepEqual(r.sessions.map((s) => s.session_key), ABC);
+  assert.deepEqual(r.sessions.map((s) => s.name), ['Full Body C', 'Zzz Last', 'Full Body A'],
+    'each key keeps ITS OWN row name, however misleading');
+});
+
+/* ── Valid-frequency parity: CP4a changes nothing for 2–6 ───────────────── */
+
+const SCHEDULES = (() => {
+  const s = {};
+  vm.createContext(s);
+  vm.runInContext(read('schedules.js'), s);
+  return s;
+})();
+
+for (const days of [2, 3, 4, 5, 6]) {
+  test('CP4a parity: a ' + days + '-day user still sees exactly Full Body A/B/C', async () => {
+    // Guard the premise: this parity only holds while the mapping is unactivated.
+    assert.deepEqual(SCHEDULES.getScheduleForDays('bodyweight_foundations', days), ABC,
+      'CP4a must run against the pre-CP4e mapping');
+
+    const h = authorized({ profile: { training_days: days } });
+    await h.run();
+
+    assert.deepEqual(h.shown(), ['programContent'], 'days=' + days);
+    const list = h.el('sessList').innerHTML;
+    for (const name of ['Full Body A', 'Full Body B', 'Full Body C']) {
+      assert.ok(list.includes(name), name + ' renders at days=' + days);
+    }
+    assert.ok(list.indexOf('Full Body A') < list.indexOf('Full Body B'), 'A before B');
+    assert.ok(list.indexOf('Full Body B') < list.indexOf('Full Body C'), 'B before C');
+    assert.equal((list.match(/class="sched-row/g) || []).length, 3, 'exactly three rows');
+
+    assert.equal(h.el('ctaSessionName').textContent, 'Full Body A', 'A selected initially');
+    assert.equal(h.el('startBtn').href,
+      'workout.html?program=bodyweight_foundations&session=full_a&mode=optional',
+      'canonical Start URL unchanged');
+    assert.equal(h.el('stickyCta').style.display, 'block', 'Start CTA offered');
+    assert.ok(!SCHED_COPY.test(renderedText(h)), 'no new failure state appears');
+    noWrites(h, days + '-day parity');
+  });
+}
+
+/* ── Fail the whole schedule closed ─────────────────────────────────────── */
+
+const INCOMPLETE = [
+  ['missing Full Body B', { links: BWF_LINKS.filter((r) => r.session_key !== 'full_b') }],
+  ['missing Full Body C', { links: BWF_LINKS.filter((r) => r.session_key !== 'full_c') }],
+  ['duplicate Full Body A', { links: BWF_LINKS.concat([BWF_LINKS[0]]) }],
+  ['Full Body B unreadable (inner-join drop)',
+    { links: BWF_LINKS.filter((r) => r.session_key !== 'full_b') }],
+  // A required Routine whose relationship object is absent. loadSessions()
+  // filters such a row out, so through the page this surfaces as MISSING rather
+  // than as a malformed row — either way the whole schedule fails closed. (The
+  // resolver's own invalid_loaded contract is unit-tested separately above.)
+  ['required Routine relationship malformed',
+    { links: BWF_LINKS.map((r) => (r.session_key === 'full_b'
+        ? Object.assign({}, r, { workout_templates: null }) : r)) }],
+];
+
+for (const [label, opts] of INCOMPLETE) {
+  test('CP4a fail-closed: ' + label, async () => {
+    const h = authorized(opts);
+    await h.run();
+
+    // Navigation and the Program page itself are preserved — this is not an
+    // error page and it is never confused with a lost entitlement.
+    assert.deepEqual(h.shown(), ['programContent'], label + ' still renders the page');
+    const copy = h.el('sessSummary').innerHTML;
+    assert.match(copy, SCHED_COPY, label);
+    assert.match(copy, /Try Again/, 'primary action present');
+    assert.match(copy, /href="workout\.html\?pane=programs"[^>]*>Back to Programs</,
+      'secondary navigation present');
+
+    assert.equal(h.el('sessList').innerHTML, '', 'no session rows');
+    assert.equal(h.el('stickyCta').style.display, 'none', 'no Start CTA');
+    assert.equal(h.el('startBtn').href, '', 'no launchable URL');
+    assert.ok(!PRESCRIPTION_WORDS.test(copy), 'no session content leaked into the copy');
+    noWrites(h, label);
+
+    // No technical detail of any kind.
+    assert.ok(!/full_[abc]|session_key|workout_templates|program_routines|RLS|supabase|null|undefined|NaN|error|missing|duplicate|invalid/i.test(copy),
+      'copy exposes no technical detail: ' + copy);
+  });
+}
+
+test('CP4a fail-closed: a malformed schedule array fails the whole schedule', async () => {
+  // Simulates getScheduleForDays returning nothing usable for a valid frequency.
+  const broken = PAGE.replace(
+    '? getScheduleForDays(PROGRAM_SLUG, freq.days)', '? []');
+  assert.notEqual(broken, PAGE, 'the schedule call was found to mutate');
+  const h = authorized({ source: broken });
+  await h.run();
+  assert.match(h.el('sessSummary').innerHTML, SCHED_COPY);
+  assert.equal(h.el('sessList').innerHTML, '');
+  assert.equal(h.el('startBtn').href, '');
+  assert.equal(h.el('stickyCta').style.display, 'none');
+  noWrites(h, 'malformed schedule');
+});
+
+/* ── Hidden extra: the containment proof for CP4d ───────────────────────── */
+
+test('CP4a containment: a future linked Routine stays hidden and unlaunchable', async () => {
+  const future = BWF_LINKS.concat([{
+    session_key: 'upper_push_core_a', sort_order: 4,
+    programs: { slug: 'bodyweight_foundations' },
+    workout_templates: { id: 'r-upc-a', name: 'Upper Push & Core A' },
+  }]);
+  const h = authorized({ links: future });
+  await h.run();
+
+  assert.deepEqual(h.shown(), ['programContent'], 'the page remains usable');
+  const list = h.el('sessList').innerHTML;
+  assert.ok(!/Upper Push & Core A|upper_push_core_a/.test(list), 'the future session is hidden');
+  assert.equal((list.match(/class="sched-row/g) || []).length, 3, 'still exactly three rows');
+  assert.ok(!SCHED_COPY.test(renderedText(h)), 'and it does not break the schedule');
+
+  // It cannot be selected, and selecting it cannot mint a Start URL.
+  const before = h.el('startBtn').href;
+  h.sandbox.selectSession('upper_push_core_a');
+  assert.equal(h.sandbox.SELECTED, 'full_a', 'selection unchanged');
+  assert.equal(h.el('startBtn').href, before, 'no new Start URL');
+  assert.match(before, /session=full_a&mode=optional$/, 'A/B/C behaviour unchanged');
+  noWrites(h, 'hidden future Routine');
+});
+
+test('CP4a containment: a missing key cannot be selected either', async () => {
+  const h = authorized();
+  await h.run();
+  const before = h.el('startBtn').href;
+  for (const key of ['core_conditioning', 'mobility_recovery', '', null, undefined, 'full_z']) {
+    h.sandbox.selectSession(key);
+    assert.equal(h.sandbox.SELECTED, 'full_a', 'selection unchanged for ' + JSON.stringify(key));
+    assert.equal(h.el('startBtn').href, before, 'no Start URL for ' + JSON.stringify(key));
+  }
+  noWrites(h, 'unknown key selection');
+});
+
+/* ── The three states stay distinct ─────────────────────────────────────── */
+
+test('CP4a states: frequency failures never become the schedule state', async () => {
+  for (const profile of [null, {}, { training_days: null }]) {
+    const h = authorized({ profile });
+    await h.run();
+    const copy = h.el('sessSummary').innerHTML;
+    assert.match(copy, /We couldn’t load your workout schedule\./, JSON.stringify(profile));
+    assert.ok(!SCHED_COPY.test(copy), 'not the CP4a state');
+    noWrites(h, 'unavailable ' + JSON.stringify(profile));
+  }
+  for (const days of [0, 1, 12, 4.5]) {
+    const h = authorized({ profile: { training_days: days } });
+    await h.run();
+    const copy = h.el('sessSummary').innerHTML;
+    assert.match(copy, /Choose between 2 and 6 workout days/, 'days=' + days);
+    assert.ok(!SCHED_COPY.test(copy), 'not the CP4a state');
+    noWrites(h, 'unsupported ' + days);
+  }
+});
+
+test('CP4a states: the schedule state never borrows frequency copy', async () => {
+  const h = authorized({ links: BWF_LINKS.filter((r) => r.session_key !== 'full_c') });
+  await h.run();
+  const copy = h.el('sessSummary').innerHTML;
+  assert.match(copy, SCHED_COPY);
+  assert.ok(!/We couldn’t load your workout schedule\./.test(copy));
+  assert.ok(!/Choose between 2 and 6 workout days/.test(copy));
+  assert.ok(!/Recalculate Goals/.test(copy), 'the frequency is fine — no recalc prompt');
+});
+
+test('CP4a states: all three are mutually exclusive in source', () => {
+  const sched = extractPageFn(PAGE, 'showScheduleUnavailable');
+  const freq = extractPageFn(PAGE, 'showFrequencyUnavailable');
+  assert.ok(!/showUnavailable\(/.test(sched), 'not the Program-unavailable state');
+  assert.ok(!/Recalculate Goals|Choose between/.test(sched), 'no unsupported-state copy');
+  assert.ok(!/temporarily unavailable/.test(freq), 'no schedule-state copy');
+  assert.match(sched, /Back to Programs/, 'schedule state offers navigation');
+});
+
+/* ── CP4a state 3 · total session-read failure ───────────────────────────────
+ * These three cases used to render the generic unavailable state, which offered
+ * no retry and read as "this Program is not available to you". They happen AFTER
+ * a valid frequency was established and are transient, so they now resolve to the
+ * cause-neutral, retryable schedule state. The full contract is asserted, not
+ * just the wording. */
+
+const TOTAL_READ_FAILURES = [
+  ['session query failed', { linksError: true }],
+  ['no readable sessions', { links: [] }],
+  ['every session row malformed', { links: [{ session_key: null, workout_templates: null }] }],
+];
+
+for (const [label, opts] of TOTAL_READ_FAILURES) {
+  test('CP4a state 3: a total session-read failure — ' + label, async () => {
+    const h = authorized(opts);
+    await h.run();
+
+    // A valid frequency was resolved first — the harness default is 3 days.
+    const copy = h.el('sessSummary').innerHTML;
+    assert.match(copy, SCHED_COPY, label);
+    assert.match(copy, /Try Again/, 'primary action');
+    assert.match(copy, /href="workout\.html\?pane=programs"[^>]*>Back to Programs</,
+      'secondary navigation');
+
+    assert.equal(h.el('sessList').innerHTML, '', 'no session rows');
+    assert.equal(h.sandbox.SELECTED, null, 'no selected workout');
+    assert.equal(h.el('stickyCta').style.display, 'none', 'no Start CTA');
+    assert.equal(h.el('startBtn').href, '', 'no launchable URL');
+    assert.ok(!PRESCRIPTION_WORDS.test(copy), 'no partial schedule content');
+    noWrites(h, label);
+
+    // No technical detail of any kind.
+    assert.ok(!/session_key|workout_templates|program_routines|RLS|supabase|null|undefined|NaN|error|boom|full_[abc]/i.test(copy),
+      'copy exposes no technical detail: ' + copy);
+  });
+}
+
+test('CP4a state 3: frequency is classified first, so sessions are never queried after a frequency failure', async () => {
+  // Both broken at once: an unreadable profile AND a failing session query.
+  // Frequency wins because it is resolved first, and no session read is issued
+  // on behalf of a user whose frequency could not be established.
+  for (const profile of [null, {}, { training_days: null }]) {
+    const h = authorized({ profile, linksError: true });
+    await h.run();
+    const copy = h.el('sessSummary').innerHTML;
+    assert.match(copy, /We couldn’t load your workout schedule\./, JSON.stringify(profile));
+    assert.ok(!SCHED_COPY.test(copy), 'frequency classification wins');
+    assert.ok(!h.reads.includes('program_routines'),
+      'no session query was issued: ' + JSON.stringify(h.reads));
+    noWrites(h, 'frequency+session both broken ' + JSON.stringify(profile));
+  }
+  for (const days of [0, 1, 12, 4.5]) {
+    const h = authorized({ profile: { training_days: days }, linksError: true });
+    await h.run();
+    const copy = h.el('sessSummary').innerHTML;
+    assert.match(copy, /Choose between 2 and 6 workout days/, 'days=' + days);
+    assert.ok(!SCHED_COPY.test(copy), 'frequency classification wins');
+    assert.ok(!h.reads.includes('program_routines'), 'no session query was issued');
+    noWrites(h, 'unsupported+session both broken ' + days);
+  }
+});
+
+test('CP4a state 3: the three states are pairwise distinct for their own cause', async () => {
+  const freqMissing = authorized({ profile: null });
+  await freqMissing.run();
+  const freqInvalid = authorized({ profile: { training_days: 1 } });
+  await freqInvalid.run();
+  const sessionFailed = authorized({ linksError: true });
+  await sessionFailed.run();
+
+  const a = freqMissing.el('sessSummary').innerHTML;
+  const b = freqInvalid.el('sessSummary').innerHTML;
+  const c = sessionFailed.el('sessSummary').innerHTML;
+  assert.notEqual(a, b); assert.notEqual(b, c); assert.notEqual(a, c);
+
+  assert.match(a, /We couldn’t load your workout schedule\./);
+  assert.ok(!SCHED_COPY.test(a) && !/Choose between/.test(a));
+  assert.match(b, /Choose between 2 and 6 workout days/);
+  assert.ok(!SCHED_COPY.test(b));
+  assert.match(c, SCHED_COPY);
+  assert.ok(!/We couldn’t load your workout schedule\.|Choose between|Recalculate Goals/.test(c),
+    'the schedule state borrows no frequency copy — the frequency was fine');
+});
+
+test('CP4a state 3: sessions are read only after frequency resolution, in source', () => {
+  const fn = extractPageFn(PAGE, 'preselect');
+  const freqGate = fn.indexOf('resolveTrainingDays(profile)');
+  const load = fn.indexOf('loadSessions()');
+  assert.ok(freqGate > -1 && load > -1, 'both steps are in preselect');
+  assert.ok(freqGate < load, 'frequency is resolved before sessions are read');
+  // And the boot sequence must not read them earlier.
+  const boot = PAGE.slice(PAGE.indexOf("addEventListener('load'"));
+  assert.ok(!/LINKED_SESSIONS = await loadSessions\(\)/.test(boot.slice(0, boot.indexOf('preselect('))),
+    'boot does not load sessions before preselect');
 });
