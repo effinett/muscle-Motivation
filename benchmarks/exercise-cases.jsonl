@@ -186,3 +186,24 @@
 { "id": "pridk-two-customs-samekey", "prIdentity": { "a": { "customId": "ueA", "name": "Row" }, "b": { "customId": "ueB", "name": "Row" }, "sameKey": false }, "tags": ["pr-identity", "4.2.1k", "custom"] }
 { "id": "pridk-recreate-samekey", "prIdentity": { "a": { "customId": "ue-old", "name": "Hip Thrust" }, "b": { "customId": "ue-new", "name": "Hip Thrust" }, "sameKey": false }, "tags": ["pr-identity", "4.2.1k", "recreate", "custom"] }
 { "id": "pridk-canonical-key", "prIdentity": { "a": { "exerciseId": "cx1", "name": "Bench Press" }, "key": "canon:cx1", "conflict": "user_id,exercise_id" }, "tags": ["pr-identity", "4.2.1k"] }
+{"id":"cp4b-exact-wall-pushup","input":{"query":"Wall Push-Up"},"expect":{"name":"Wall Push-Up","matchType":"exact_canonical"},"tags":["cp4b","exact"]}
+{"id":"cp4b-exact-pike-lean","input":{"query":"Pike Lean"},"expect":{"name":"Pike Lean","matchType":"exact_canonical"},"tags":["cp4b","exact"]}
+{"id":"cp4b-exact-cat-cow","input":{"query":"Cat-Cow"},"expect":{"name":"Cat-Cow","matchType":"exact_canonical"},"tags":["cp4b","exact"]}
+{"id":"cp4b-exact-90-90","input":{"query":"90/90 Hip Rotation"},"expect":{"name":"90/90 Hip Rotation","matchType":"exact_canonical"},"tags":["cp4b","exact"]}
+{"id":"cp4b-exact-high-knees","input":{"query":"High Knees"},"expect":{"name":"High Knees","matchType":"exact_canonical"},"tags":["cp4b","exact"]}
+{"id":"cp4b-alias-jumping-jacks","input":{"query":"jumping jacks"},"expect":{"name":"Jumping Jack","matchType":"exact_alias"},"tags":["cp4b","alias"]}
+{"id":"cp4b-alias-pike-hold","input":{"query":"pike hold"},"expect":{"name":"Pike Lean","matchType":"exact_alias"},"tags":["cp4b","alias"]}
+{"id":"cp4b-alias-hamstring-stretch","input":{"query":"hamstring stretch"},"expect":{"name":"Supine Hamstring Stretch","matchType":"exact_alias"},"tags":["cp4b","alias"]}
+{"id":"cp4b-alias-belly-breathing","input":{"query":"belly breathing"},"expect":{"name":"Diaphragmatic Breathing","matchType":"exact_alias"},"tags":["cp4b","alias"]}
+{"id":"cp4b-alias-thoracic-rotation","input":{"query":"thoracic rotation"},"expect":{"name":"Quadruped Thoracic Rotation","matchType":"exact_alias"},"tags":["cp4b","alias"]}
+{"id":"cp4b-pushup-still-exact","input":{"query":"push up"},"expect":{"name":"Push-Up","matchType":"exact_canonical"},"tags":["cp4b","exact"]}
+{"id":"cp4b-pike-pushup-still-exact","input":{"query":"pike push up"},"expect":{"name":"Pike Push-Up","matchType":"exact_canonical"},"tags":["cp4b","exact"]}
+{"id":"cp4b-chooser-pike","input":{"query":"pike"},"expect":{"matchType":"ambiguous","unresolvedId":true},"tags":["cp4b","ambiguity"]}
+{"id":"cp4b-chooser-twist","input":{"query":"twist"},"expect":{"matchType":"ambiguous","unresolvedId":true},"tags":["cp4b","ambiguity"]}
+{"id":"cp4b-chooser-wall","input":{"query":"wall"},"expect":{"matchType":"ambiguous","unresolvedId":true},"tags":["cp4b","ambiguity"]}
+{"id":"cp4b-chooser-hamstring","input":{"query":"hamstring"},"expect":{"matchType":"ambiguous","unresolvedId":true},"tags":["cp4b","ambiguity"]}
+{"id":"cp4b-disc-mobility-chip","input":{"query":"","filters":{"movements":["mobility"]}},"expect":{"discoveryIncludes":["Cat-Cow","Quadruped Thoracic Rotation","Wall Slide","Kneeling Hip Flexor Stretch","90/90 Hip Rotation","Supine Hamstring Stretch","Standing Ankle Rock","Supine Spinal Twist","Diaphragmatic Breathing"],"discoveryExcludes":["Plank","Bird Dog","Russian Twist","Jumping Jack"],"discoveryEquip":["Bodyweight"]},"tags":["cp4b","discovery","movement","mobility"]}
+{"id":"cp4b-disc-stretch-mobility","input":{"query":"stretch","filters":{"movements":["mobility"]}},"expect":{"discoveryIncludes":["Kneeling Hip Flexor Stretch","Supine Hamstring Stretch"],"discoveryEquip":["Bodyweight"]},"tags":["cp4b","discovery","mobility"]}
+{"id":"cp4b-disc-full-no-mobility","input":{"query":"","filters":{"splits":["full"]}},"expect":{"discoveryIncludes":["Step Jack","Jumping Jack","March in Place","High Knees","Farmer Carry"],"discoveryExcludes":["Cat-Cow","Quadruped Thoracic Rotation","Wall Slide","Kneeling Hip Flexor Stretch","90/90 Hip Rotation","Supine Hamstring Stretch","Standing Ankle Rock","Supine Spinal Twist","Diaphragmatic Breathing"]},"tags":["cp4b","discovery","split","mobility"]}
+{"id":"cp4b-disc-core-no-mobility","input":{"query":"","filters":{"splits":["core"]}},"expect":{"discoveryIncludes":["Plank"],"discoveryExcludes":["Cat-Cow","Quadruped Thoracic Rotation","Wall Slide","Kneeling Hip Flexor Stretch","90/90 Hip Rotation","Supine Hamstring Stretch","Standing Ankle Rock","Supine Spinal Twist","Diaphragmatic Breathing"]},"tags":["cp4b","discovery","split","mobility"]}
+{"id":"cp4b-disc-wall-pushup-bodyweight","input":{"query":"wall push up","filters":{"equipment":["bodyweight"]}},"expect":{"discoveryTop":"Wall Push-Up","discoveryEquip":["Bodyweight"]},"tags":["cp4b","discovery","equipment"]}

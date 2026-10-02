@@ -280,7 +280,7 @@ test('the production catalog passes validation (no identity errors)', () => {
   const v = EX.validateExerciseCatalog(EXERCISE_CATALOG);
   assert.equal(v.ok, true);
   assert.equal(v.errors.length, 0);
-  assert.equal(v.counts.exercises, 144); // 4.2.1G expansion (57 → 141); 4.3.9B CP3b (→ 144)
+  assert.equal(v.counts.exercises, 159); // 4.2.1G (57 → 141); 4.3.9B CP3b (→ 144); CP4b (→ 159)
   // The expansion introduces no name/equipment or laterality integrity warnings.
   const noisy = v.warnings.filter((w) => w.code === 'equipment_name_mismatch' || w.code === 'laterality_name_mismatch');
   assert.equal(noisy.length, 0);
@@ -403,6 +403,27 @@ const CP3B = {
   },
 };
 
+/* Phase 4.3.9B CP4b — the fifteen live catalog additions (migration
+ * phase_439b_cp4b_bodyweight_catalog_foundations). Approved semantics per row;
+ * every remaining field is pinned by CP4B_CONTENT_MD5 below. */
+const CP4B_ROLE = {
+  '784a0508-84c3-42a6-98b1-c00cc780e5cd': ['Wall Push-Up', 'push', 'Horizontal Push', 'horizontal_push', 'Chest', 'bodyweight_reps', 'lb', false],
+  'c3d81925-04dc-4caf-b5ef-5b42740028e8': ['Pike Lean', 'push', 'Vertical Push', 'vertical_push', 'Shoulders', 'time', 'sec', false],
+  '1b836b2c-af56-40a6-9afe-023c3ccd5361': ['Step Jack', 'conditioning', 'Cardio', 'gait', 'Full Body', 'time', 'sec', false],
+  '41fe1cb7-ffc7-48a0-8ad4-c0b4d46c0fa5': ['Jumping Jack', 'conditioning', 'Cardio', 'gait', 'Full Body', 'time', 'sec', false],
+  '7fae5cd2-712d-4df2-982d-850091d10329': ['March in Place', 'conditioning', 'Cardio', 'gait', 'Full Body', 'time', 'sec', false],
+  '6d50c3a6-0dde-46e4-bc3a-508c2f358803': ['High Knees', 'conditioning', 'Cardio', 'gait', 'Full Body', 'time', 'sec', false],
+  'ead731d6-bfdd-4119-bd0b-bb3092457e69': ['Cat-Cow', 'mobility', 'Mobility', 'mobility', 'Lower Back', 'time', 'sec', false],
+  '44ebe984-c8e9-4842-8617-7f54f1179d2b': ['Quadruped Thoracic Rotation', 'mobility', 'Mobility', 'mobility', 'Upper Back', 'time', 'sec', true],
+  'e3f12784-cf40-4aa5-ae41-6770416c4d1f': ['Wall Slide', 'mobility', 'Mobility', 'mobility', 'Upper Back', 'time', 'sec', false],
+  '6962172b-18eb-4def-88d3-acc67c62f9ce': ['Kneeling Hip Flexor Stretch', 'mobility', 'Mobility', 'mobility', 'Hip Flexors', 'time', 'sec', true],
+  'b2168db4-fb33-4dd0-a8e2-ab5fa81677e4': ['90/90 Hip Rotation', 'mobility', 'Mobility', 'mobility', 'Glutes', 'time', 'sec', true],
+  '4b0b5faa-4704-4959-a550-c01de705a540': ['Supine Hamstring Stretch', 'mobility', 'Mobility', 'mobility', 'Hamstrings', 'time', 'sec', true],
+  '53c57e39-51e9-42e5-991a-3357bd610b4a': ['Standing Ankle Rock', 'mobility', 'Mobility', 'mobility', 'Calves', 'time', 'sec', true],
+  'fd10bcf3-a09f-41fe-aca5-7996972d496f': ['Supine Spinal Twist', 'mobility', 'Mobility', 'mobility', 'Lower Back', 'time', 'sec', true],
+  '04429fae-c385-47dd-91ec-7e1fe3a4a83c': ['Diaphragmatic Breathing', 'mobility', 'Mobility', 'mobility', 'Diaphragm', 'time', 'sec', false],
+};
+
 const byId = (id) => EXERCISE_CATALOG.filter((e) => e.id === id);
 const sorted = (a) => (a || []).slice().sort();
 
@@ -459,10 +480,10 @@ test('CP3b: the catalog has no case-insensitive name or alias collision', () => 
   });
 });
 
-test('CP3b: fixture holds 144 rows and matches its documented checksum', () => {
-  assert.strictEqual(EXERCISE_CATALOG.length, 144);
+test('fixture holds 159 rows and matches its documented checksum (CP4b)', () => {
+  assert.strictEqual(EXERCISE_CATALOG.length, 159);
   const ids = EXERCISE_CATALOG.map((e) => e.id).sort();
-  assert.strictEqual(new Set(ids).size, 144, 'every id must be unique');
+  assert.strictEqual(new Set(ids).size, 159, 'every id must be unique');
   const md5 = require('node:crypto').createHash('md5').update(ids.join(',')).digest('hex');
   const header = require('node:fs')
     .readFileSync(require('node:path').join(__dirname, 'benchmarks', 'exercise-fixtures.js'), 'utf8');
@@ -471,7 +492,7 @@ test('CP3b: fixture holds 144 rows and matches its documented checksum', () => {
 });
 
 test('CP3b: the 141 pre-existing catalog entries are untouched', () => {
-  const added = new Set(Object.keys(CP3B));
+  const added = new Set(Object.keys(CP3B).concat(Object.keys(CP4B_ROLE)));
   assert.strictEqual(EXERCISE_CATALOG.filter((e) => !added.has(e.id)).length, 141);
   // A spot-check on identities other phases depend on.
   const bench = EXERCISE_CATALOG.find((e) => e.name === 'Bench Press');
@@ -494,5 +515,163 @@ test('every alias in the catalog fixture is lowercase', () => {
       assert.strictEqual(alias, alias.toLowerCase(),
         'alias "' + alias + '" on ' + ex.name + ' must be stored lowercase');
     });
+  });
+});
+
+/* ── Phase 4.3.9B CP4b — catalog foundations + first-class Mobility ─────────
+ * The fifteen rows are a committed mirror of the live migration. The content
+ * hashes pin EVERY fixture field of the new rows and prove the 144 rows that
+ * existed before CP4b are byte-identical to the pre-CP4b fixture. */
+
+const CP4B_FIELDS = ['id', 'name', 'category', 'equipment', 'primary_muscle', 'secondary_muscles', 'aliases',
+  'movement_pattern', 'force_type', 'difficulty', 'is_bodyweight', 'is_unilateral', 'tracking_type', 'default_unit'];
+const contentMd5 = (rows) => require('node:crypto').createHash('md5').update(rows.slice()
+  .sort((a, b) => (a.id < b.id ? -1 : 1))
+  .map((r) => JSON.stringify(CP4B_FIELDS.map((k) => r[k]))).join('\n')).digest('hex');
+const isCp4b = (e) => Object.prototype.hasOwnProperty.call(CP4B_ROLE, e.id);
+const CP4B_ROWS = () => EXERCISE_CATALOG.filter(isCp4b);
+const PRE_CP4B_ROWS = () => EXERCISE_CATALOG.filter((e) => !isCp4b(e));
+const MOBILITY_FAMILY = {
+  'Cat-Cow': 'cat-cow',
+  'Quadruped Thoracic Rotation': 'thoracic-rotation',
+  'Wall Slide': 'wall-slide',
+  'Kneeling Hip Flexor Stretch': 'hip-flexor-stretch',
+  '90/90 Hip Rotation': 'hip-90-90',
+  'Supine Hamstring Stretch': 'hamstring-stretch',
+  'Standing Ankle Rock': 'ankle-rock',
+  'Supine Spinal Twist': 'spinal-twist',
+  'Diaphragmatic Breathing': 'diaphragmatic-breathing',
+};
+
+test('CP4b: the fifteen additions appear exactly once with their approved semantics', () => {
+  Object.keys(CP4B_ROLE).forEach((id) => {
+    const hits = byId(id);
+    assert.strictEqual(hits.length, 1, id + ' must appear exactly once');
+    const r = hits[0];
+    const [name, , category, pattern, primary, tracking, unit, unilateral] = CP4B_ROLE[id];
+    assert.strictEqual(r.name, name);
+    assert.strictEqual(r.category, category, name + ' category');
+    assert.strictEqual(r.movement_pattern, pattern, name + ' movement_pattern');
+    assert.strictEqual(r.primary_muscle, primary, name + ' primary_muscle');
+    assert.strictEqual(r.tracking_type, tracking, name + ' tracking_type');
+    assert.strictEqual(r.default_unit, unit, name + ' default_unit');
+    assert.strictEqual(r.is_unilateral, unilateral, name + ' is_unilateral');
+    assert.strictEqual(r.equipment, 'Bodyweight', name + ' equipment');
+    assert.strictEqual(r.is_bodyweight, true, name + ' is_bodyweight');
+    assert.strictEqual(r.difficulty, 'beginner', name + ' difficulty');
+  });
+  assert.strictEqual(contentMd5(CP4B_ROWS()), 'ad2f37e7d42e69ad4560bf038be5df6d',
+    'a CP4b row drifted from the reviewed live values');
+});
+
+test('CP4b: the 144 pre-CP4b rows are byte-identical to the previous fixture', () => {
+  const prior = PRE_CP4B_ROWS();
+  assert.strictEqual(prior.length, 144);
+  const idMd5 = require('node:crypto').createHash('md5').update(prior.map((e) => e.id).sort().join(',')).digest('hex');
+  assert.strictEqual(idMd5, 'a1314c867b375fad835b246f7536ec68', 'pre-CP4b id set changed');
+  assert.strictEqual(contentMd5(prior), '87828a231aaaebe88c42a9fba5f04c3c', 'a pre-CP4b row changed');
+  assert.strictEqual(EXERCISE_CATALOG.filter((e) => e.equipment === 'Bodyweight').length, 52);
+});
+
+test('CP4b: roles partition the additions 2 push / 4 conditioning / 9 mobility', () => {
+  const count = (role) => Object.keys(CP4B_ROLE).filter((id) => CP4B_ROLE[id][1] === role).length;
+  assert.deepStrictEqual([count('push'), count('conditioning'), count('mobility')], [2, 4, 9]);
+  // Mobility is exactly the nine rows tagged mobility — nothing else in the catalog.
+  const mobility = EXERCISE_CATALOG.filter((e) => e.movement_pattern === 'mobility').map((e) => e.name).sort();
+  assert.deepStrictEqual(mobility, Object.keys(MOBILITY_FAMILY).sort());
+  EXERCISE_CATALOG.filter((e) => e.movement_pattern === 'mobility')
+    .forEach((e) => assert.strictEqual(e.category, 'Mobility', e.name));
+});
+
+test('CP4b: mobility is a member of the canonical movement-pattern taxonomy', () => {
+  assert.ok(EX.MOVEMENT_PATTERNS.includes('mobility'));
+  const v = EX.validateExerciseCatalog(EXERCISE_CATALOG);
+  assert.deepStrictEqual(v.warnings.filter((w) => w.code === 'invalid_movement_pattern'), []);
+});
+
+test('CP4b: every mobility exercise resolves to its own explicit, stable family', () => {
+  Object.keys(MOBILITY_FAMILY).forEach((name) => {
+    const fam = EX.getExerciseFamily(byName[name]);
+    assert.strictEqual(fam, MOBILITY_FAMILY[name], name + ' family');
+    // Never the pattern+token fallback, whose generic last word groups drills.
+    assert.ok(!/^mobility:/.test(fam), name + ' fell back to ' + fam);
+  });
+  const fams = Object.values(MOBILITY_FAMILY);
+  assert.strictEqual(new Set(fams).size, fams.length, 'two mobility drills share a family');
+});
+
+test('CP4b: generic words never pair unrelated mobility drills as variants', () => {
+  const pairs = [
+    ['Quadruped Thoracic Rotation', '90/90 Hip Rotation'],
+    ['Kneeling Hip Flexor Stretch', 'Supine Hamstring Stretch'],
+  ];
+  pairs.forEach(([a, b]) => {
+    assert.notStrictEqual(EX.getExerciseFamily(byName[a]), EX.getExerciseFamily(byName[b]), a + ' vs ' + b);
+    assert.ok(!relsOf(a).some((r) => r.target.name === b), a + ' must not relate to ' + b);
+    assert.ok(!relsOf(b).some((r) => r.target.name === a), b + ' must not relate to ' + a);
+  });
+  // The mechanism the curated entries defend against: without them both pairs
+  // DO share a fallback family, so this guard is load-bearing, not decorative.
+  const fallback = (name) => EX.getExerciseFamily({ name: name + ' Drill', movement_pattern: 'mobility' });
+  assert.strictEqual(fallback('Thoracic Rotation'), fallback('Hip Rotation'));
+  // No mobility drill gets ANY derived relationship: each is its own family and
+  // mobility is not a compound pattern, so no user-facing progression is implied.
+  Object.keys(MOBILITY_FAMILY).forEach((name) => {
+    assert.deepStrictEqual(relsOf(name), [], name + ' relationships');
+  });
+});
+
+test('CP4b: existing exercise families are unchanged', () => {
+  const prior = PRE_CP4B_ROWS().slice().sort((a, b) => (a.id < b.id ? -1 : 1));
+  const md5 = require('node:crypto').createHash('md5')
+    .update(prior.map((e) => e.id + '|' + EX.getExerciseFamily(e)).join('\n')).digest('hex');
+  assert.strictEqual(md5, '85de0031a850e265570fa6f1066da1f1');
+});
+
+test('CP4b: Pike Lean is a timed hold, never a Pike Push-Up variant or regression', () => {
+  const lean = byName['Pike Lean'];
+  assert.notStrictEqual(EX.getExerciseFamily(lean), EX.getExerciseFamily(byName['Pike Push-Up']));
+  assert.deepStrictEqual(relsOf('Pike Lean'), []);
+  assert.ok(!relsOf('Pike Push-Up').some((r) => r.target.name === 'Pike Lean'));
+  assert.strictEqual(lean.tracking_type, 'time');
+  assert.strictEqual(lean.force_type, 'static');
+});
+
+test('CP4b: exact names and aliases of every addition resolve to that exercise', () => {
+  CP4B_ROWS().forEach((e) => {
+    const r = idx.resolve(e.name);
+    assert.strictEqual(r.canonicalExerciseId, e.id, e.name + ' by name -> ' + r.canonicalName);
+    (e.aliases || []).forEach((a) => {
+      const ra = idx.resolve(a);
+      assert.strictEqual(ra.canonicalExerciseId, e.id, 'alias "' + a + '" -> ' + ra.canonicalName);
+    });
+  });
+});
+
+test('CP4b: broad terms produce a deterministic chooser, never a guessed auto-pick', () => {
+  const expected = {
+    pike: ['Pike Lean', 'Pike Push-Up'],
+    twist: ['Russian Twist', 'Supine Spinal Twist'],
+    wall: ['Wall Sit', 'Wall Slide', 'Wall Push-Up'],
+    hamstring: ['Leg Curl', 'Supine Hamstring Stretch', 'Lying Leg Curl', 'Seated Leg Curl'],
+  };
+  Object.keys(expected).forEach((q) => {
+    const r = idx.resolve(q);
+    assert.strictEqual(r.matchType, 'ambiguous', q + ' must not auto-select (' + r.canonicalName + ')');
+    assert.strictEqual(r.canonicalExerciseId, null, q);
+    const run = () => idx.search(q, { limit: 5 }).results.map((x) => x.exercise.name);
+    assert.deepStrictEqual(run(), expected[q], q + ' chooser order');
+    assert.deepStrictEqual(run(), run(), q + ' chooser must be deterministic');
+  });
+});
+
+test('CP4b: additions use only floor, wall, standing space and the body', () => {
+  // "step" is excluded from the vocabulary on purpose: Step Jack steps a foot
+  // sideways (a verb), it never uses a step platform.
+  const FORBIDDEN = [/bench/, /\bbar\b/, /\bbox\b/, /chair/, /table/, /machine/, /dumbbell/, /\bband\b/,
+    /cable/, /treadmill/, /roller/, /strap/, /towel/, /platform/, /wedge/, /\bwheel\b/];
+  CP4B_ROWS().forEach((e) => {
+    const text = [e.name].concat(e.aliases || []).join(' ').toLowerCase();
+    FORBIDDEN.forEach((re) => assert.ok(!re.test(text), e.name + ' implies equipment: ' + re));
   });
 });

@@ -86,7 +86,13 @@ test('every canonical exercise receives a valid filter treatment', () => {
   const equipKeys = new Set(EF.EQUIPMENT.map((e) => e.key));
   EXERCISE_CATALOG.forEach((e) => {
     const sp = EF.getExerciseSplits(e);
-    assert.ok(sp.length >= 1, `${e.name} has no split`);
+    // The ONLY exemption from "1–2 splits" is the explicit split-less rule
+    // (mobility, Phase 4.3.9B CP4b); every other row still needs a split.
+    if (EF.SPLITLESS_PATTERNS.includes(e.movement_pattern)) {
+      assert.deepEqual(sp, [], `${e.name} is split-less by rule but got ${sp}`);
+    } else {
+      assert.ok(sp.length >= 1, `${e.name} has no split`);
+    }
     assert.ok(sp.length <= 2, `${e.name} has too many splits (${sp})`);
     sp.forEach((k) => assert.ok(splitKeys.has(k), `${e.name} bad split ${k}`));
     const mv = EF.getExerciseMovement(e);
@@ -471,4 +477,116 @@ test('collapsing the panel is orthogonal to filter state (filters survive)', () 
   assert.equal(EF.panelStaysOpenAfterFilterToggle(), false);
   assert.equal(EF.countActiveFilters(f), 2);
   assert.deepEqual(EF.activeChips(f).map((c) => c.key), ['legs', 'machine']);
+});
+
+/* ── Phase 4.3.9B CP4b — first-class Mobility ───────────────────────────────
+ * Mobility is a visible movement chip with NO strength split (owner decision).
+ * Conditioning stays on `gait` (Full Body split, no movement chip). The 144
+ * rows that existed before CP4b keep byte-identical membership. */
+
+const MOBILITY_NAMES = [
+  '90/90 Hip Rotation', 'Cat-Cow', 'Diaphragmatic Breathing', 'Kneeling Hip Flexor Stretch',
+  'Quadruped Thoracic Rotation', 'Standing Ankle Rock', 'Supine Hamstring Stretch',
+  'Supine Spinal Twist', 'Wall Slide'
+];
+const CONDITIONING_NAMES = ['High Knees', 'Jumping Jack', 'March in Place', 'Step Jack'];
+const CP4B_IDS = new Set([
+  '784a0508-84c3-42a6-98b1-c00cc780e5cd', 'c3d81925-04dc-4caf-b5ef-5b42740028e8',
+  '1b836b2c-af56-40a6-9afe-023c3ccd5361', '41fe1cb7-ffc7-48a0-8ad4-c0b4d46c0fa5',
+  '7fae5cd2-712d-4df2-982d-850091d10329', '6d50c3a6-0dde-46e4-bc3a-508c2f358803',
+  'ead731d6-bfdd-4119-bd0b-bb3092457e69', '44ebe984-c8e9-4842-8617-7f54f1179d2b',
+  'e3f12784-cf40-4aa5-ae41-6770416c4d1f', '6962172b-18eb-4def-88d3-acc67c62f9ce',
+  'b2168db4-fb33-4dd0-a8e2-ab5fa81677e4', '4b0b5faa-4704-4959-a550-c01de705a540',
+  '53c57e39-51e9-42e5-991a-3357bd610b4a', 'fd10bcf3-a09f-41fe-aca5-7996972d496f',
+  '04429fae-c385-47dd-91ec-7e1fe3a4a83c'
+]);
+
+test('CP4b: the Mobility chip exists once, last in Movement, and no prior chip changed', () => {
+  assert.deepEqual(EF.MOVEMENTS.map((m) => m.key + '=' + m.label), [
+    'squat=Squat', 'hinge=Hinge', 'horizontal_push=Horizontal Push', 'vertical_push=Vertical Push',
+    'horizontal_pull=Horizontal Pull', 'vertical_pull=Vertical Pull', 'lunge=Lunge', 'carry=Carry',
+    'isolation=Isolation', 'core=Core', 'mobility=Mobility'
+  ]);
+  assert.equal(EF.MOVEMENTS.filter((m) => m.label === 'Mobility').length, 1);
+  // Split and equipment vocabularies are untouched by CP4b.
+  assert.deepEqual(EF.SPLITS.map((s) => s.key), ['push', 'pull', 'legs', 'upper', 'lower', 'full', 'core']);
+  assert.deepEqual(EF.EQUIPMENT.map((e) => e.key),
+    ['barbell', 'dumbbell', 'cable', 'machine', 'bodyweight', 'smith', 'kettlebell', 'band']);
+  assert.deepEqual(EF.activeChips({ movements: ['mobility'] }),
+    [{ category: 'movements', key: 'mobility', label: 'Mobility' }]);
+});
+
+test('CP4b: selecting Mobility returns exactly the nine canonical mobility exercises', () => {
+  const r = disc('', { movements: ['mobility'] }, { limit: 500 });
+  assert.deepEqual(rowNames(r).slice().sort(), MOBILITY_NAMES);
+  assert.ok(r.rows.every((x) => !x.isCustom && x.id && x.movement === 'mobility'));
+  // Customs (no taxonomy) never leak into an active metadata filter.
+  assert.ok(!rowNames(r).includes('Sled Push'));
+});
+
+test('CP4b: no-split for mobility is an explicit rule, not a fallback or a disguised split', () => {
+  assert.deepEqual(EF.SPLITLESS_PATTERNS, ['mobility']);
+  MOBILITY_NAMES.forEach((n) => assert.deepEqual(EF.getExerciseSplits(ex(n)), [], n));
+  // No strength split surfaces any mobility exercise.
+  EF.SPLITS.forEach((s) => {
+    const names = rowNames(disc('', { splits: [s.key] }, { limit: 500 }));
+    MOBILITY_NAMES.forEach((n) => assert.ok(!names.includes(n), n + ' leaked into split ' + s.key));
+  });
+  // The rule is specific to mobility: a known pattern still gets its split.
+  assert.deepEqual(EF.getExerciseSplits({ movement_pattern: 'gait' }), ['full']);
+});
+
+test('CP4b: mobility exercises stay reachable via Mobility, Bodyweight, All and search', () => {
+  const all = rowNames(disc('', null, { limit: 500 }));
+  const bw = rowNames(disc('', { equipment: ['bodyweight'] }, { limit: 500 }));
+  MOBILITY_NAMES.forEach((n) => {
+    assert.ok(all.includes(n), n + ' missing from All');
+    assert.ok(bw.includes(n), n + ' missing from Bodyweight');
+    assert.equal(disc(n, null).rows[0].name, n, n + ' not the top search hit');
+    assert.equal(EF.getExerciseEquipment(ex(n)), 'bodyweight');
+  });
+  assert.equal(all.length, EXERCISE_CATALOG.length + CUSTOMS.length);
+  assert.equal(EXERCISE_CATALOG.length, 159);
+});
+
+test('CP4b: Bodyweight returns all 52 Bodyweight exercises', () => {
+  const r = disc('', { equipment: ['bodyweight'] }, { limit: 500 });
+  assert.equal(r.rows.length, 52);
+  assert.equal(EXERCISE_CATALOG.filter((e) => e.equipment === 'Bodyweight').length, 52);
+});
+
+test('CP4b: conditioning stays on gait — Full Body split, no movement chip', () => {
+  CONDITIONING_NAMES.forEach((n) => {
+    assert.equal(ex(n).movement_pattern, 'gait', n);
+    assert.equal(EF.getExerciseMovement(ex(n)), null, n);
+    assert.deepEqual(EF.getExerciseSplits(ex(n)), ['full'], n);
+  });
+  const full = rowNames(disc('', { splits: ['full'] }, { limit: 500 }));
+  CONDITIONING_NAMES.forEach((n) => assert.ok(full.includes(n), n));
+});
+
+test('CP4b: push foundations join their existing push chips and splits', () => {
+  assert.equal(EF.getExerciseMovement(ex('Wall Push-Up')), 'horizontal_push');
+  assert.equal(EF.getExerciseMovement(ex('Pike Lean')), 'vertical_push');
+  assert.deepEqual(EF.getExerciseSplits(ex('Wall Push-Up')).sort(), ['push', 'upper']);
+  assert.deepEqual(EF.getExerciseSplits(ex('Pike Lean')).sort(), ['push', 'upper']);
+});
+
+test('CP4b: every pre-CP4b exercise keeps byte-identical split/movement/equipment membership', () => {
+  const prior = EXERCISE_CATALOG.filter((e) => !CP4B_IDS.has(e.id)).sort((a, b) => (a.id < b.id ? -1 : 1));
+  assert.equal(prior.length, 144);
+  const snapshot = prior.map((e) => [e.id, EF.getExerciseSplits(e).slice().sort().join('+'),
+    EF.getExerciseMovement(e), EF.getExerciseEquipment(e)].join('|')).join('\n');
+  const md5 = require('node:crypto').createHash('md5').update(snapshot).digest('hex');
+  // Captured from the pre-CP4b filter code over the same 144 rows.
+  assert.equal(md5, '9d079326d0193970a2f87802d7dbe8c0');
+  assert.ok(prior.every((e) => EF.getExerciseMovement(e) !== 'mobility'));
+});
+
+test('CP4b: the picker renders chips from the vocabulary into a wrapping container (source-level)', () => {
+  // Source-level only. Physical 320/390/430 px validation remains Phase 4.3.9B CP4f.
+  const page = require('node:fs').readFileSync(require('node:path').join(__dirname, 'workout.html'), 'utf8');
+  assert.match(page, /\.filter-chips\s*\{\s*display:\s*flex;\s*flex-wrap:\s*wrap;/);
+  assert.match(page, /items:\s*ExerciseFilters\.MOVEMENTS/);
+  assert.ok(!/>Mobility</.test(page), 'the Mobility chip must not be hard-coded in workout.html');
 });

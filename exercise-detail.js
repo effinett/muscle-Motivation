@@ -101,7 +101,8 @@
     rotation: 'Rotation',
     isolation: 'Isolation',
     core: 'Core',
-    gait: 'Gait'
+    gait: 'Gait',
+    mobility: 'Mobility'
   };
 
   /* ── Value hygiene ────────────────────────────────────────────────────────

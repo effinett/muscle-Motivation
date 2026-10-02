@@ -342,14 +342,108 @@ test('real catalog coverage stays high and the known isolates stay isolated', ()
   // These six are genuinely alone in their (muscle × tracking) cell. Returning
   // nothing is the CORRECT answer — the alternative is suggesting something wrong.
   //
-  // Superman (Phase 4.3.9B CP3b) is the newest, and its isolation is DELIBERATE:
-  // it is the only exercise whose primary_muscle is 'Lower Back'. The sole way to
-  // give it candidates would be to reclassify it as 'Back', which is the primary
-  // muscle of twelve ROWS — so the engine would start offering pulling movements
-  // as substitutes for a floor exercise. That is the exact pulling-equivalence
-  // 4.3.9B forbids, so no substitute is the honest answer here.
+  // Superman's (Phase 4.3.9B CP3b) isolation is DELIBERATE: it is the only
+  // REP-tracked exercise whose primary_muscle is 'Lower Back' (CP4b's Cat-Cow and
+  // Supine Spinal Twist share the muscle but are timed, so the tracking gate keeps
+  // them apart). The sole way to give it candidates would be to reclassify it as
+  // 'Back', which is the primary muscle of twelve ROWS — so the engine would start
+  // offering pulling movements as substitutes for a floor exercise. That is the
+  // exact pulling-equivalence 4.3.9B forbids, so no substitute is the honest answer.
+  //
+  // The six CP4b isolates are equally deliberate: Pike Lean is the only timed
+  // Shoulders hold (it must never inherit Pike Push-Up's rep prescription), and
+  // five mobility drills are alone in their (muscle × timed) cell — offering a
+  // strength exercise instead would be the wrong answer.
   assert.deepStrictEqual(zero.sort(), [
-    'Farmer Carry', 'Hip Adduction', 'Incline Treadmill Walk', 'Superman',
-    'Treadmill Run', 'Wall Sit'
+    '90/90 Hip Rotation', 'Diaphragmatic Breathing', 'Farmer Carry', 'Hip Adduction',
+    'Incline Treadmill Walk', 'Kneeling Hip Flexor Stretch', 'Pike Lean',
+    'Standing Ankle Rock', 'Superman', 'Supine Hamstring Stretch', 'Treadmill Run', 'Wall Sit'
   ]);
+});
+
+/* ── Phase 4.3.9B CP4b — containment for the fifteen catalog additions ───── */
+
+const CP4B_NAMES = ['Wall Push-Up', 'Pike Lean', 'Step Jack', 'Jumping Jack', 'March in Place', 'High Knees',
+  'Cat-Cow', 'Quadruped Thoracic Rotation', 'Wall Slide', 'Kneeling Hip Flexor Stretch', '90/90 Hip Rotation',
+  'Supine Hamstring Stretch', 'Standing Ankle Rock', 'Supine Spinal Twist', 'Diaphragmatic Breathing'];
+const CONDITIONING = ['High Knees', 'Jumping Jack', 'March in Place', 'Step Jack'];
+const swapOf = (n, catalog) => {
+  const src = byName(n);
+  return findSubstitutions({ name: src.name, exerciseId: src.id }, catalog || EXERCISE_CATALOG);
+};
+
+test('CP4b: Pike Lean and Pike Push-Up never substitute for each other (tracking differs)', () => {
+  assert.deepStrictEqual(allNames(swapOf('Pike Lean')), []);
+  assert.ok(!allNames(swapOf('Pike Push-Up')).includes('Pike Lean'));
+  assert.strictEqual(canInheritPrescription(byName('Pike Push-Up'), byName('Pike Lean')), false);
+  assert.strictEqual(canInheritPrescription(byName('Pike Lean'), byName('Pike Push-Up')), false);
+  assert.strictEqual(explain(byName('Pike Push-Up'), byName('Pike Lean')).eligible, false);
+});
+
+test('CP4b: Wall Push-Up joins only the rep-tracked chest/push group', () => {
+  const r = swapOf('Wall Push-Up');
+  assert.deepStrictEqual(names(r.best),
+    ['Incline Push-Up', 'Knee Push-Up', 'Push-Up', 'Decline Push-Up', 'Dumbbell Press']);
+  assert.deepStrictEqual(names(r.other), ['Dumbbell Fly', 'Cable Fly', 'Pec Deck']);
+  r.best.concat(r.other).forEach((c) => {
+    const cand = byName(c.name);
+    assert.strictEqual(muscleGroup(cand.primary_muscle), 'chest', c.name);
+    assert.strictEqual(trackingClass(cand.tracking_type), 'reps', c.name);
+  });
+});
+
+test('CP4b: the four conditioning movements form one closed timed group', () => {
+  CONDITIONING.forEach((n) => {
+    const got = allNames(swapOf(n)).slice().sort();
+    assert.deepStrictEqual(got, CONDITIONING.filter((x) => x !== n), n);
+  });
+});
+
+test('CP4b: mobility never pairs with strength work in either direction', () => {
+  const mobility = EXERCISE_CATALOG.filter((e) => e.movement_pattern === 'mobility');
+  assert.strictEqual(mobility.length, 9);
+  const isMob = new Set(mobility.map((e) => e.name));
+  mobility.forEach((m) => {
+    allNames(swapOf(m.name)).forEach((c) => assert.ok(isMob.has(c), m.name + ' offered strength move ' + c));
+  });
+  EXERCISE_CATALOG.filter((e) => !isMob.has(e.name)).forEach((e) => {
+    allNames(swapOf(e.name)).forEach((c) => assert.ok(!isMob.has(c), e.name + ' offered mobility drill ' + c));
+  });
+  // The only mobility pairs are same-muscle timed drills, by construction.
+  assert.deepStrictEqual(allNames(swapOf('Cat-Cow')), ['Supine Spinal Twist']);
+  assert.deepStrictEqual(allNames(swapOf('Wall Slide')), ['Quadruped Thoracic Rotation']);
+});
+
+test('CP4b: every pre-CP4b exercise keeps its swaps, except the approved Wall Push-Up additions', () => {
+  const added = new Set(CP4B_NAMES);
+  const prior = EXERCISE_CATALOG.filter((e) => !added.has(e.name));
+  assert.strictEqual(prior.length, 144);
+  const changed = [];
+  const displaced = {};
+  prior.forEach((e) => {
+    const before = swapOf(e.name, prior);
+    const after = swapOf(e.name);
+    if (JSON.stringify([names(before.best), names(before.other)]) === JSON.stringify([names(after.best), names(after.other)])) return;
+    changed.push(e.name);
+    // The ONLY permitted change is Wall Push-Up joining the list.
+    const newcomers = allNames(after).filter((n) => added.has(n));
+    assert.deepStrictEqual(newcomers, ['Wall Push-Up'], e.name + ' gained ' + newcomers);
+    // Per tier, every prior candidate keeps its relative order; the newcomer can
+    // only push the TAIL of its own tier past that tier's limit. Nothing else is
+    // reordered, substituted, or moved between tiers.
+    ['best', 'other'].forEach((tier) => {
+      const kept = names(after[tier]).filter((n) => !added.has(n));
+      assert.deepStrictEqual(kept, names(before[tier]).slice(0, kept.length), e.name + ' ' + tier + ' reordered');
+    });
+    displaced[e.name] = allNames(before).filter((n) => !allNames(after).includes(n));
+  });
+  // Exactly what the approved Wall Push-Up addition pushes out of the 5-slot
+  // best tier: the lowest-scored barbell press, never another bodyweight push.
+  assert.deepStrictEqual(displaced, {
+    'Push-Up': ['Bench Press'], 'Knee Push-Up': ['Bench Press'],
+    'Incline Push-Up': ['Bench Press'], 'Decline Push-Up': ['Decline Bench Press']
+  });
+  assert.deepStrictEqual(changed.sort(), ['Decline Push-Up', 'Incline Push-Up', 'Knee Push-Up', 'Push-Up']);
+  ['Plank', 'Wall Sit', 'Mountain Climber', 'Side Plank', 'Treadmill Run', 'Incline Treadmill Walk']
+    .forEach((n) => assert.deepStrictEqual(allNames(swapOf(n)), allNames(swapOf(n, prior)), n));
 });
