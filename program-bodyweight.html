@@ -190,6 +190,12 @@
     .sched-row.selected .day { color: var(--red); }
     .sched-note { color: var(--muted); font-size: 13px; margin-top: 14px; line-height: 1.6; }
     .sched-retry { margin-top: 14px; padding: 10px 20px; font-size: 14px; letter-spacing: 2px; }
+    .sched-alt {
+      display: inline-block; margin-top: 12px; color: var(--muted);
+      font-size: 13px; font-weight: 600; text-decoration: none;
+      min-height: 44px; line-height: 44px;
+    }
+    .sched-alt:hover { color: var(--red); text-decoration: underline; }
     .sched-note a { color: var(--red); text-decoration: none; font-weight: 600; }
     .sched-note a:hover { text-decoration: underline; }
 
@@ -370,7 +376,8 @@
   var PROGRAM_SLUG = 'bodyweight_foundations';
   var PRODUCT_SLUG = 'bodyweight_foundations';
 
-  var SESSIONS = [];        // [{ session_key, name, sort_order }]
+  var LINKED_SESSIONS = []; // everything this Program links, as loaded
+  var SESSIONS = [];        // [{ session_key, name, sort_order }] — THIS user's week
   var SELECTED = null;      // session_key the CTA will launch
 
   function showOnly(id) {
@@ -474,6 +481,74 @@
     renderSessions();
   }
 
+  /* ── CP4a: schedule containment ──────────────────────────────────────────
+   * The page must render exactly the sessions the user's validated training
+   * frequency calls for — no more, no fewer, in schedule order. Pure: DOM-free,
+   * fetch-free, write-free, and it mutates neither input, so it is directly
+   * testable.
+   *
+   * Why a SET COMPARISON and not a null check: loadSessions() selects
+   * `workout_templates!inner(...)`, so a Routine that is missing, private or
+   * unreadable is DROPPED from the result rather than returned as a null row.
+   * Comparing the returned keys against what the schedule demands is the only
+   * way to notice, and noticing is the whole point — a silently shorter week
+   * would hand a 5-day user the 4-day program without telling them.
+   *
+   * Identity and order come from the expected array ALONE. Routine names are
+   * never parsed and `sort_order` is never trusted as the order, so a future
+   * link inserted at any sort position cannot reshuffle a user's week.
+   *
+   *   → { ok: true, sessions: [...] }
+   *   → { ok: false, reason: 'invalid_expected'|'invalid_loaded'|'duplicate'|'missing' }
+   */
+  function resolveScheduledSessions(expectedKeys, loadedRows) {
+    if (!Array.isArray(expectedKeys) || !expectedKeys.length) {
+      return { ok: false, reason: 'invalid_expected' };
+    }
+    var wanted = {};
+    for (var i = 0; i < expectedKeys.length; i++) {
+      var key = expectedKeys[i];
+      if (typeof key !== 'string' || !key) return { ok: false, reason: 'invalid_expected' };
+      if (wanted[key]) return { ok: false, reason: 'duplicate' };
+      wanted[key] = true;
+    }
+    if (!Array.isArray(loadedRows)) return { ok: false, reason: 'invalid_loaded' };
+
+    // Index only the rows the schedule asks for. An unexpected extra linked
+    // Routine is skipped here, so it can never render, never be selected, and
+    // never make an otherwise-complete schedule fail — including when the extra
+    // row is itself malformed.
+    var byKey = {};
+    for (var j = 0; j < loadedRows.length; j++) {
+      var row = loadedRows[j];
+      if (!row || typeof row !== 'object') continue;
+      var k = row.session_key;
+      if (typeof k !== 'string' || !k) continue;
+      if (!wanted[k]) continue;
+      // A row the schedule REQUIRES must be well formed; this one is not, and
+      // guessing a display name would be inventing content.
+      if (typeof row.name !== 'string' || !row.name) {
+        return { ok: false, reason: 'invalid_loaded' };
+      }
+      if (byKey[k]) return { ok: false, reason: 'duplicate' };
+      byKey[k] = row;
+    }
+
+    var sessions = [];
+    for (var m = 0; m < expectedKeys.length; m++) {
+      var want = expectedKeys[m];
+      if (!byKey[want]) return { ok: false, reason: 'missing' };
+      sessions.push({
+        session_key: want,
+        name: byKey[want].name,
+        // Display position is the position in THIS user's week, not the row's
+        // database sort_order.
+        sort_order: m + 1,
+      });
+    }
+    return { ok: true, sessions: sessions };
+  }
+
   function renderSessions() {
     document.getElementById('sessList').innerHTML = SESSIONS.map(function (s) {
       var sel = (s.session_key === SELECTED) ? ' selected' : '';
@@ -525,6 +600,36 @@
     });
   }
 
+  // CP4a third state. The frequency IS valid and supported, but the complete set
+  // of Routines it calls for could not be constructed. Deliberately distinct
+  // from the two PR #66 frequency states (which are about the frequency itself)
+  // and from showUnavailable() (which means the Program is not available to this
+  // user at all, and offers no retry).
+  //
+  // Cause-neutral by contract: no reason code, session key, Routine name, table,
+  // column, or error text — none of which the user could act on, and some of
+  // which would disclose unpublished content. The whole schedule fails, never a
+  // partial week.
+  function showScheduleUnavailable(userId, program) {
+    SESSIONS = [];
+    SELECTED = null;
+    document.getElementById('sessList').innerHTML = '';
+    document.getElementById('stickyCta').style.display = 'none';
+    document.getElementById('startBtn').href = '';
+    document.getElementById('sessSummary').innerHTML =
+      'Your program schedule is temporarily unavailable. Your progress is safe. ' +
+      'Please try again shortly.' +
+      '<br><button type="button" class="btn-primary sched-retry" id="schedRetryBtn">Try Again</button>' +
+      '<br><a class="sched-alt" href="workout.html?pane=programs">Back to Programs</a>';
+    var retry = document.getElementById('schedRetryBtn');
+    if (retry) retry.addEventListener('click', function () {
+      retry.disabled = true; retry.textContent = 'Checking…';
+      preselect(userId, program).then(function (ready) {
+        if (ready) document.getElementById('stickyCta').style.display = 'block';
+      });
+    });
+  }
+
   // Returns true only when a session was actually selected — the caller shows
   // the Start CTA off this answer rather than assuming success.
   async function preselect(userId, program) {
@@ -542,18 +647,35 @@
     var freq = resolveTrainingDays(profile);
     if (!freq.ok) { showFrequencyUnavailable(freq.reason, userId, program); return false; }
 
+    // CP4a: the schedule array decides WHICH sessions exist for this user and in
+    // what order. LINKED_SESSIONS is everything the Program links; SESSIONS is
+    // only the subset this frequency calls for. Until CP4e activates the
+    // frequency-specific arrays this still resolves to Full Body A/B/C at every
+    // frequency, so behaviour is unchanged — what changes is that an unexpected
+    // linked Routine can no longer reach the page.
+    var expected = (typeof getScheduleForDays === 'function')
+      ? getScheduleForDays(PROGRAM_SLUG, freq.days) : null;
+
+    // Sessions are read ONLY now, after the frequency is known good. Ordering it
+    // this way means frequency classification always wins when both are broken,
+    // and no session query is issued on behalf of a user whose frequency we
+    // could not establish.
+    LINKED_SESSIONS = await loadSessions();
+    if (!LINKED_SESSIONS) { showScheduleUnavailable(userId, program); return false; }
+
+    var resolved = resolveScheduledSessions(expected, LINKED_SESSIONS);
+    if (!resolved.ok) { showScheduleUnavailable(userId, program); return false; }
+    SESSIONS = resolved.sessions;
+
     var recommended = SESSIONS[0].session_key;
     try {
-      var schedule = (typeof getScheduleForDays === 'function')
-        ? getScheduleForDays(PROGRAM_SLUG, freq.days) : [];
       var up = await supabaseClient
         .from('user_programs').select('current_index')
         .eq('user_id', userId).eq('program_slug', PROGRAM_SLUG).maybeSingle();
       var idx = (up && up.data && up.data.current_index) ? up.data.current_index : 0;
-      var key = (schedule && schedule.length)
-        ? schedule[idx % schedule.length] : recommended;
-      // Only honour a scheduled key that this Program actually links.
-      if (SESSIONS.some(function (s) { return s.session_key === key; })) recommended = key;
+      // SESSIONS is already the ordered schedule, so the rotation lands on a key
+      // that is guaranteed present — no membership re-check is needed.
+      recommended = SESSIONS[idx % SESSIONS.length].session_key;
     } catch (e) {
       // Preselection is a convenience; the session intro is static markup and
       // needs no fallback copy.
@@ -611,9 +733,11 @@
 
         // Authorized. Layer 4 still applies: the Routine read below is RLS-gated
         // and returns nothing if anything about this Program is not readable.
-        SESSIONS = await loadSessions();
-        if (!SESSIONS) { showUnavailable(); return; }
-
+        // Sessions are deliberately NOT loaded here. preselect() resolves the
+        // training frequency FIRST and only then reads sessions, so a user whose
+        // frequency is unknown or unsupported is never the subject of a session
+        // query, and a session read failure is always reported as the retryable
+        // schedule state rather than as an unavailable Program (CP4a).
         document.title = 'Muscle Motivation – ' + program.name;
         document.getElementById('progName').textContent = program.name;
         document.getElementById('progDesc').textContent = program.description || '';

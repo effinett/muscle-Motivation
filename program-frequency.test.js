@@ -528,6 +528,17 @@ for (const [file, slug] of CLASSIC) {
 const BW_IDS = ['sessList', 'sessSummary', 'stickyCta', 'startBtn', 'sessRetryBtn',
   'ctaSessionName'];
 
+/* The Program-linked rows the stub serves, in the shape loadSessions() reads them.
+ * Same three sessions the harness previously seeded directly as SESSIONS. */
+const BW_LINK_ROWS = [
+  { session_key: 'full_a', sort_order: 1, programs: { slug: 'bodyweight_foundations' },
+    workout_templates: { id: 'r-a', name: 'Full Body A' } },
+  { session_key: 'full_b', sort_order: 2, programs: { slug: 'bodyweight_foundations' },
+    workout_templates: { id: 'r-b', name: 'Full Body B' } },
+  { session_key: 'full_c', sort_order: 3, programs: { slug: 'bodyweight_foundations' },
+    workout_templates: { id: 'r-c', name: 'Full Body C' } },
+];
+
 function bwHarness(profile, opts) {
   const file = 'program-bodyweight.html';
   const src = read(file);
@@ -543,9 +554,25 @@ function bwHarness(profile, opts) {
     supabaseClient: {
       from(t) {
         tables.push(t);
-        return { select: () => ({ eq: () => ({ eq: () => ({
-          maybeSingle: async () => ({ data: (opts && opts.up) || null }),
-        }) }) }) };
+        // CP4a moved the Program-linked session read INSIDE preselect(), after
+        // frequency resolution, so the stub answers both reads. `program_routines`
+        // ends with .order() and is awaited directly; `user_programs` ends with
+        // .maybeSingle(). Neither path offers a write verb, so a write would throw
+        // rather than pass silently.
+        const links = (opts && opts.links !== undefined)
+          ? opts.links
+          : BW_LINK_ROWS;
+        const linkResult = { data: links, error: (opts && opts.linksError) ? { message: 'boom' } : null };
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({ data: (opts && opts.up) || null }),
+              }),
+              order: () => Promise.resolve(linkResult),
+            }),
+          }),
+        };
       },
     },
     document: dom.document,
@@ -554,14 +581,16 @@ function bwHarness(profile, opts) {
 
   vm.runInContext(SCHEDULES, sandbox);
   vm.runInContext('var PROGRAM_SLUG = "bodyweight_foundations"; var SELECTED = null;', sandbox);
-  vm.runInContext('var SESSIONS = ' + JSON.stringify([
-    { session_key: 'full_a', name: 'Full Body A', sort_order: 1 },
-    { session_key: 'full_b', name: 'Full Body B', sort_order: 2 },
-    { session_key: 'full_c', name: 'Full Body C', sort_order: 3 },
-  ]) + ';', sandbox);
+  // CP4a harness contract change: preselect() no longer receives a ready-made
+  // SESSIONS array. It loads the Program's linked sessions itself and narrows them
+  // to the ones the validated frequency calls for, so the harness seeds the LINKED
+  // set (and the production helpers that do the narrowing) instead. The fixture's
+  // intended A/B/C content is unchanged — see BW_LINK_ROWS.
+  vm.runInContext('var LINKED_SESSIONS = []; var SESSIONS = [];', sandbox);
   vm.runInContext('function esc(s) { return String(s); }', sandbox);
   loadOptional(src, sandbox, file);
-  for (const fn of ['preselect', 'selectSession', 'renderSessions']) {
+  for (const fn of ['resolveScheduledSessions', 'showScheduleUnavailable',
+                    'loadSessions', 'preselect', 'selectSession', 'renderSessions']) {
     vm.runInContext(extractFn(src, fn, file), sandbox);
   }
   return {
@@ -755,7 +784,15 @@ test('program-bodyweight.html: a valid frequency still preselects and launches',
   assert.match(h.dom.els.startBtn.href,
     /^workout\.html\?program=bodyweight_foundations&session=full_b&mode=optional$/);
   assert.ok(h.dom.els.sessList.innerHTML.includes('Full Body B'));
-  assert.deepEqual(h.tables, ['user_programs'], 'reads progression only');
+  // The original assertion is preserved verbatim in substance: exactly ONE
+  // progression read, and no write. CP4a adds the Program-linked session read to
+  // preselect() (it moved there so frequency resolution always happens first), so
+  // the full expected set is pinned too — still an exact set, so an extra or
+  // repeated read fails.
+  assert.equal(h.tables.filter((t) => t === 'user_programs').length, 1,
+    'exactly one progression read');
+  assert.deepEqual(h.tables, ['program_routines', 'user_programs'],
+    'sessions then progression — nothing else, and in that order');
 });
 
 test('program-bodyweight.html: 2 days — the lower boundary — still works', async () => {
