@@ -690,3 +690,379 @@ test('CP4c: the repository records the exact applied migration', () => {
   assert.match(readme, /`20261002173108`/);
   assert.ok(files.includes(path.basename(file)));
 });
+
+/* ── Phase 4.3.9B CP4d — frequency Routines as PRIVATE drafts (migration 20261003000515)
+ * Six platform Routines linked to Bodyweight Foundations at positions 4–9, for
+ * the CP4e 4/5/6-day mapping. They are private, nothing is published and no
+ * schedule maps them, so until CP4e every frequency still runs A/B/C only.
+ *
+ * As above, the literals are a deliberate second copy: the migration proves the
+ * database holds them, and these tests prove the repository agrees. */
+
+const CP4D_FILE = 'supabase/migrations/20261003000515_phase_439b_cp4d_bodyweight_frequency_routines.sql';
+const CP4D_SQL = read(CP4D_FILE);
+
+/* The reviewed equipment-free pool (38) and the explicit exclusions (14), in
+ * the migration's own order. Names are checked against the catalog below, so a
+ * wrong id cannot hide behind a right-looking name. */
+const CP4D_POOL = [
+  ['Wall Push-Up', '784a0508-84c3-42a6-98b1-c00cc780e5cd'], ['Knee Push-Up', 'a1bb3980-ae49-48ce-a0b5-91bffd5daeda'],
+  ['Push-Up', 'dfb48ed7-a1b9-4dc3-91c2-eabf52c821ac'], ['Pike Lean', 'c3d81925-04dc-4caf-b5ef-5b42740028e8'],
+  ['Pike Push-Up', 'b1f4c7a2-3e58-4d91-9c26-7a0d8e5f1b34'], ['Plank', 'c320bf46-9f16-4483-bd2f-9ae9e88b7ad5'],
+  ['Side Plank', 'be4abe1a-93fa-4e87-9250-2627fe45ad3c'], ['Dead Bug', '9c8998ab-9713-43f4-940b-5f8feec39d3c'],
+  ['Bird Dog', 'd3b6e9c4-5a7a-4f13-9e48-2c0f1a7b3d56'], ['Reverse Crunch', 'a224a468-28c0-4ba2-b6f9-c8a3f45d2147'],
+  ['Bicycle Crunch', '694c48ac-9251-4fa7-bb25-23353048963c'], ['Mountain Climber', 'ed45d50d-5411-4e47-8309-97314b94adfb'],
+  ['Wall Slide', 'e3f12784-cf40-4aa5-ae41-6770416c4d1f'], ['Bodyweight Squat', '97501496-7f81-4552-82ab-d3f326b8ff06'],
+  ['Reverse Lunge', 'd2812c92-d4c6-420c-b2d9-d2c5757871c9'], ['Split Squat', 'a7942454-736c-4d84-980d-39b40298a1b2'],
+  ['Lateral Lunge', 'eee8a605-10d6-41ad-9b79-65d626b598db'], ['Glute Bridge', 'ff15ede3-a361-415a-8e20-6a7244bad0b3'],
+  ['Single-Leg Glute Bridge', 'da2d9535-6e82-4790-84c9-8e1a0d549718'], ['Superman', 'c2a5d8b3-4f69-4e02-8d37-1b9e0f6a2c45'],
+  ['Wall Sit', '7948f9c4-2ec1-432b-ad79-7f27c5961577'], ['Standing Ankle Rock', '53c57e39-51e9-42e5-991a-3357bd610b4a'],
+  ['Kneeling Hip Flexor Stretch', '6962172b-18eb-4def-88d3-acc67c62f9ce'], ['March in Place', '7fae5cd2-712d-4df2-982d-850091d10329'],
+  ['Step Jack', '1b836b2c-af56-40a6-9afe-023c3ccd5361'], ['Jumping Jack', '41fe1cb7-ffc7-48a0-8ad4-c0b4d46c0fa5'],
+  ['High Knees', '6d50c3a6-0dde-46e4-bc3a-508c2f358803'], ['Cat-Cow', 'ead731d6-bfdd-4119-bd0b-bb3092457e69'],
+  ['Quadruped Thoracic Rotation', '44ebe984-c8e9-4842-8617-7f54f1179d2b'], ['90/90 Hip Rotation', 'b2168db4-fb33-4dd0-a8e2-ab5fa81677e4'],
+  ['Supine Hamstring Stretch', '4b0b5faa-4704-4959-a550-c01de705a540'], ['Supine Spinal Twist', 'fd10bcf3-a09f-41fe-aca5-7996972d496f'],
+  ['Diaphragmatic Breathing', '04429fae-c385-47dd-91ec-7e1fe3a4a83c'], ['Forward Lunge', 'a3ffb069-e0ea-4d01-a038-f9f72b1dd7fe'],
+  ['Crunches', '0d28f8c9-7485-4b0a-9552-b56cf3c556bf'], ['Lying Leg Raise', '0b519d3f-6a32-4883-955c-ad9c87f7385f'],
+  ['Sit-Up', 'c84d3609-cca3-4652-a1ee-b119105aac1a'], ['Russian Twist', 'e4015387-bed0-43e2-9129-4ca3c2b67414'],
+];
+const CP4D_FORBIDDEN = [
+  ['Ab Wheel Rollout', '9d60b74a-91d4-4059-89fa-ac53160ca767'], ['Back Extension', 'b0c178b6-bd81-477d-ae23-2a9aa40d67b4'],
+  ['Bench Dip', 'b3661213-09f8-45bf-83fa-72edebca5001'], ['Box Jump', '0d298f82-6688-46ab-82e1-2ea3e914fc84'],
+  ['Chin-Up', '9daedcaa-e007-488f-8a4d-17957361b10e'], ['Decline Push-Up', 'eecf2677-57d4-4bc1-a0e9-bd3ffe59ab15'],
+  ['Dips', 'd609a511-99d8-46a2-8dad-674b03c7f1ec'], ['Hanging Knee Raise', '5df17fbb-fe7e-4a33-bc4b-a8be97e3d9e5'],
+  ['Hanging Leg Raise', 'd06aa93c-276f-4b9e-ad8f-3477c96f4f4e'], ['Incline Push-Up', 'c6b852dd-8773-4417-9244-b51989a308b1'],
+  ['Inverted Row', 'd75c33fa-5435-47f5-93fc-e796ad22322e'], ['Pistol Squat', '8a56a474-29e1-47b1-a68f-8cb98718223e'],
+  ['Pull-Up', '39e89b3b-bc0c-4cf3-b78f-dff5fcdc6481'], ['Single-Leg Hip Thrust', 'db9208d9-0190-40dd-849b-38724ec9e09d'],
+];
+const P = Object.fromEntries(CP4D_POOL);
+const POOL_IDS = new Set(CP4D_POOL.map((x) => x[1]));
+const FORBIDDEN_IDS = new Set(CP4D_FORBIDDEN.map((x) => x[1]));
+
+const NOTE_HIGH_KNEES =
+  'Work time in seconds. Keep one foot down and drive your knees only as high as comfortable for a low-impact option.';
+const NOTE_PLANK = 'Hold time in seconds, on your forearms.';
+
+const CP4D_ROUTINES = [
+  { id: 'b654c396-08a2-5ec9-bf7a-f901e797c77b', link_id: 'bc291137-42de-5f96-b493-d1b50aab7fd6',
+    session_key: 'push_core_a', sort_order: 4, name: 'Push & Core A', exercises: [
+      e('Wall Push-Up', P['Wall Push-Up'], 3, 10, 15, 60,
+        'Ready for more? Use Swap before logging sets: Knee Push-Up, then Push-Up. Swap applies to this workout only.'),
+      e('Pike Lean',  P['Pike Lean'],  3, 15, 30, 60, NOTE_PIKE_LEAN),
+      e('Dead Bug',   P['Dead Bug'],   3,  8, 10, 45, 'Reps are per side.'),
+      e('Plank',      P['Plank'],      3, 20, 40, 45, NOTE_PLANK),
+      e('Wall Slide', P['Wall Slide'], 2, 30, 45, 30, 'Work time in seconds. Keep your lower back against the wall.'),
+    ] },
+  { id: 'f1699018-7e10-5d31-97f9-91b2555d1f29', link_id: '34d87501-141f-5e60-a62a-d6a0c3f4cc12',
+    session_key: 'lower_a', sort_order: 5, name: 'Lower Body A', exercises: [
+      e('Bodyweight Squat',    P['Bodyweight Squat'],    3, 10, 15, 75),
+      e('Reverse Lunge',       P['Reverse Lunge'],       3,  6, 10, 75, 'Reps are per leg. Rest a hand on a wall for balance if needed.'),
+      e('Glute Bridge',        P['Glute Bridge'],        3, 12, 15, 60),
+      e('Wall Sit',            P['Wall Sit'],            2, 20, 40, 60, 'Hold time in seconds. Sit higher on the wall to make it easier.'),
+      e('Standing Ankle Rock', P['Standing Ankle Rock'], 2, 30, 45, 30, 'Work time in seconds, per side.'),
+    ] },
+  { id: '645bd86b-c15c-5096-9103-5da1d418bf2c', link_id: '7aafce9c-27a3-5bae-959d-ec94066d4f5d',
+    session_key: 'conditioning_core', sort_order: 6, name: 'Conditioning & Core', exercises: [
+      e('March in Place', P['March in Place'], 2, 45, 60, 30, 'Work time in seconds, at an easy warm-up pace.'),
+      e('Step Jack',      P['Step Jack'],      3, 30, 45, 45,
+        'Work time in seconds. Low impact: one foot stays down. Swap to Jumping Jack only once this feels easy.'),
+      e('High Knees',     P['High Knees'],     3, 20, 30, 45, NOTE_HIGH_KNEES),
+      e('Bicycle Crunch', P['Bicycle Crunch'], 2, 10, 16, 45, 'Reps are total, not per side.'),
+      e('Plank',          P['Plank'],          2, 20, 40, 45, NOTE_PLANK),
+    ] },
+  { id: '7fb1a573-1ff3-59a5-ae72-e4c91a0e2a78', link_id: 'db2d039d-5da0-569d-9abe-505094259168',
+    session_key: 'push_core_b', sort_order: 7, name: 'Push & Core B', exercises: [
+      e('Knee Push-Up',   P['Knee Push-Up'],   3,  8, 12, 75,
+        'Too hard? Use Swap before logging sets: Wall Push-Up. Ready for more: Push-Up. Swap applies to this workout only.'),
+      e('Pike Lean',      P['Pike Lean'],      3, 20, 40, 60, NOTE_PIKE_LEAN),
+      e('Side Plank',     P['Side Plank'],     2, 15, 30, 45, 'Hold time in seconds, per side. Drop your bottom knee to make it easier.'),
+      e('Reverse Crunch', P['Reverse Crunch'], 3,  8, 12, 45, 'Curl your hips up with control, without swinging.'),
+      e('Bird Dog',       P['Bird Dog'],       2,  6,  8, 45, 'Reps are per side.'),
+    ] },
+  { id: '50081b09-7f82-591c-842f-1792f2cb4b27', link_id: '279de6f6-2a95-5f6b-820a-769c8bb5519e',
+    session_key: 'lower_b', sort_order: 8, name: 'Lower Body B', exercises: [
+      e('Split Squat',                 P['Split Squat'],                 3,  6, 10, 75, 'Reps are per leg. Lower only as far as you can control.'),
+      e('Single-Leg Glute Bridge',     P['Single-Leg Glute Bridge'],     3,  8, 12, 60, 'Reps are per leg.'),
+      e('Lateral Lunge',               P['Lateral Lunge'],               2,  6,  8, 60, 'Reps are per leg. Sit back only as deep as is comfortable.'),
+      e('Superman',                    P['Superman'],                    3, 10, 12, 45, NOTE_SUPERMAN),
+      e('Kneeling Hip Flexor Stretch', P['Kneeling Hip Flexor Stretch'], 2, 30, 45, 30, 'Hold time in seconds, per side.'),
+    ] },
+  { id: '58d0f941-51e4-5485-831b-a99521bf9c14', link_id: 'b95ad56d-5cca-5a14-82de-832b87716f15',
+    session_key: 'mobility_recovery', sort_order: 9, name: 'Mobility & Recovery', exercises: [
+      e('Cat-Cow',                     P['Cat-Cow'],                     2, 45,  60, 15, 'Work time in seconds. Move slowly with your breath.'),
+      e('Quadruped Thoracic Rotation', P['Quadruped Thoracic Rotation'], 2, 30,  45, 15, 'Work time in seconds, per side.'),
+      e('90/90 Hip Rotation',          P['90/90 Hip Rotation'],          2, 30,  45, 15, 'Work time in seconds, per side.'),
+      e('Supine Hamstring Stretch',    P['Supine Hamstring Stretch'],    2, 30,  45, 15, 'Hold time in seconds, per side.'),
+      e('Supine Spinal Twist',         P['Supine Spinal Twist'],         2, 30,  45, 15, 'Hold time in seconds, per side.'),
+      e('Diaphragmatic Breathing',     P['Diaphragmatic Breathing'],     1, 60, 120, 15, 'Time in seconds. Slow, relaxed breaths.'),
+    ] },
+];
+const CP4D_KEYS = CP4D_ROUTINES.map((r) => r.session_key);
+
+/* SQL with comments, dollar-quoted payloads and string literals removed, so a
+ * statement scan sees executable SQL only. */
+const CP4D_CODE = CP4D_SQL
+  .replace(/--[^\n]*/g, '')
+  .replace(/\$(new|sn)\$[\s\S]*?\$\1\$/g, "''")
+  .replace(/'[^']*'/g, "''");
+const sqlArray = (name) => {
+  const m = CP4D_SQL.match(new RegExp('\\b' + name + ' CONSTANT uuid\\[\\] := ARRAY\\[([^\\]]*)\\]::uuid\\[\\];'));
+  assert.ok(m, name + ' is declared');
+  return m[1].split(',').map((s) => s.trim().replace(/^'|'$/g, ''));
+};
+const sqlKNew = () => {
+  const m = CP4D_SQL.match(/k_new CONSTANT jsonb := \$new\$([\s\S]*?)\$new\$::jsonb;/);
+  assert.ok(m, 'k_new is declared');
+  return JSON.parse(m[1]);
+};
+const sha256 = (b) => require('node:crypto').createHash('sha256').update(b).digest('hex');
+
+test('CP4d: the repository records byte-for-byte the statement stored in production', () => {
+  const raw = fs.readFileSync(path.join(__dirname, CP4D_FILE));
+  // sha256 of supabase_migrations.schema_migrations.statements[1] for version
+  // 20261003000515, read from production after the apply.
+  assert.equal(sha256(raw), '7341ef439ad0c40d411d85012b52eff2dc96edf65405e276b877607ba8786157');
+  assert.equal(raw.length, 33574);
+  // Supabase stores the reviewed file without its final newline. Putting it back
+  // must give the hash of the reviewed artifact that was approved and applied.
+  assert.ok(!raw.toString('utf8').endsWith('\n'));
+  assert.equal(sha256(Buffer.concat([raw, Buffer.from('\n')])),
+    'c2465305975c7c292f8cf8b6cf05cd100f2396b80d13c3f668c6bba65c983f48');
+  // The superseded draft lacked the catalog fingerprint guards; this file carries
+  // both constants, so it cannot be that draft.
+  assert.ok(CP4D_SQL.includes("k_pool_fp      CONSTANT text := 'a0afad4c9d6badf377a15afee96168ea';"));
+  assert.ok(CP4D_SQL.includes("k_forbidden_fp CONSTANT text := '4a50ecd4b343cb0a414bf1ede1b1ab83';"));
+});
+
+test('CP4d: both catalog fingerprints are checked before classification and again after the write', () => {
+  const at = (s) => CP4D_SQL.indexOf(s);
+  const lockIdx = at('PERFORM 1 FROM public.exercises WHERE id = ANY (k_pool || k_forbidden) ORDER BY id FOR SHARE;');
+  const classifyIdx = at('---------------------------------------------------------- CLASSIFY');
+  const writeIdx = at('------------------------------------------------------------- WRITE');
+  const postIdx = at('---------------------------------------------------- POSTCONDITIONS');
+  assert.ok(lockIdx > 0 && lockIdx < classifyIdx && classifyIdx < writeIdx && writeIdx < postIdx);
+  assert.match(CP4D_SQL, /IF v_n <> 52 OR cardinality\(k_pool \|\| k_forbidden\) <> 52 THEN/);
+  for (const k of ['k_pool_fp', 'k_forbidden_fp']) {
+    const uses = [];
+    let i = -1;
+    while ((i = CP4D_SQL.indexOf('IS DISTINCT FROM ' + k, i + 1)) !== -1) uses.push(i);
+    assert.equal(uses.length, 2, k + ' is compared exactly twice');
+    assert.ok(uses[0] > lockIdx && uses[0] < classifyIdx, k + ': checked after the lock, before classification');
+    assert.ok(uses[1] > postIdx, k + ': checked again in the postconditions');
+  }
+  // The 159-row count and id checksum guards remain alongside the fingerprints.
+  assert.match(CP4D_SQL, /k_cat_n {5}CONSTANT int {2}:= 159;/);
+  assert.match(CP4D_SQL, /k_cat_md5 {3}CONSTANT text := 'dec5ac379151ad7d0f6463820dc76dc8';/);
+});
+
+test('CP4d: the migration only inserts — no UPDATE, DELETE, DDL or schedule change', () => {
+  assert.equal((CP4D_CODE.match(/\bINSERT\s+INTO\b/gi) || []).length, 2);
+  assert.match(CP4D_CODE, /INSERT INTO public\.workout_templates\b/);
+  assert.match(CP4D_CODE, /INSERT INTO public\.program_routines\b/);
+  for (const kw of ['UPDATE', 'DELETE', 'DROP', 'ALTER', 'CREATE', 'TRUNCATE', 'GRANT', 'REVOKE', 'COMMENT ON', 'LOCK TABLE']) {
+    assert.ok(!new RegExp('\\b' + kw.replace(' ', '\\s+') + '\\b', 'i').test(CP4D_CODE), kw + ' is absent');
+  }
+  // Schedules live in schedules.js; the migration cannot and does not touch them.
+  assert.ok(!/schedule/i.test(CP4D_CODE));
+});
+
+test('CP4d: nothing is published — every new Routine is inserted private', () => {
+  const insert = CP4D_SQL.slice(CP4D_SQL.indexOf('INSERT INTO public.workout_templates'),
+    CP4D_SQL.indexOf('GET DIAGNOSTICS'));
+  assert.match(insert, /SELECT r\.id, v_owner, r\.name, r\.exercises, NULL, 0, NULL, 0,\s+NULL, 'muscle', NULL, '\{\}'::text\[\], true, 'private', NULL/);
+  assert.ok(!/published/.test(insert), 'the insert never writes published');
+  // Every 'published' literal is a read-side comparison against existing rows
+  // (`= 'published'` in a WHERE/FILTER), never an assignment or inserted value.
+  const lits = CP4D_SQL.match(/.{0,40}'published'/g) || [];
+  assert.ok(lits.length > 0);
+  lits.forEach((s) => assert.match(s, /(status|visibility) = 'published'$/, 'read-side only: ' + s));
+  // Owner and neutral metadata, as the exact-record predicate requires them.
+  assert.match(CP4D_SQL, /AND t\.is_platform AND t\.visibility = 'private' AND t\.goal = 'muscle'\n\s+AND t\.sort_order = 0 AND t\.tags = '\{\}'::text\[\] AND t\.times_used = 0\n\s+AND t\.description IS NULL AND t\.difficulty IS NULL AND t\.source_program_slug IS NULL\n\s+AND t\.source_workout_id IS NULL AND t\.last_used_at IS NULL;/);
+  // The owner is derived from Full Body A/B/C, never written as an account id.
+  assert.match(CP4D_SQL, /SELECT count\(DISTINCT user_id\), min\(user_id::text\)::uuid INTO v_n, v_owner\n\s+FROM public\.workout_templates WHERE id IN \(k_routine_a, k_routine_b, k_routine_c\);/);
+});
+
+test('CP4d: the migration records equal the repository mirror exactly', () => {
+  assert.deepStrictEqual(sqlKNew(), CP4D_ROUTINES);
+});
+
+test('CP4d: the mirror hashes exactly as production stores each new Routine', () => {
+  // md5(workout_templates.exercises::text), read from production after the apply.
+  const PROD = {
+    push_core_a: '1fd033cb535f92f49efb299694e9efc7',
+    lower_a: 'cc6c42773382618ddaf5948f3f637249',
+    conditioning_core: '4da538974f36e1dfc0ed7b1946a49ec6',
+    push_core_b: '1204717d06d7387b716e23d575b99c04',
+    lower_b: 'a8d01e5178027dd0fbe4e23574c072c2',
+    mobility_recovery: '4fab45bb31c74309b62cbba170cdd69c',
+  };
+  CP4D_ROUTINES.forEach((r) => assert.equal(pgMd5(r.exercises), PROD[r.session_key], r.name));
+});
+
+test('CP4d: ids, names, session keys and sort orders', () => {
+  assert.deepEqual(CP4D_ROUTINES.map((r) => [r.sort_order, r.session_key, r.name]), [
+    [4, 'push_core_a', 'Push & Core A'],
+    [5, 'lower_a', 'Lower Body A'],
+    [6, 'conditioning_core', 'Conditioning & Core'],
+    [7, 'push_core_b', 'Push & Core B'],
+    [8, 'lower_b', 'Lower Body B'],
+    [9, 'mobility_recovery', 'Mobility & Recovery'],
+  ]);
+  // Deterministic ids: UUIDv5 under the Program id, so a replay can never mint new ones.
+  const v5 = (name) => {
+    const ns = Buffer.from(PROGRAM.id.replace(/-/g, ''), 'hex');
+    const h = require('node:crypto').createHash('sha1').update(Buffer.concat([ns, Buffer.from(name)])).digest();
+    h[6] = (h[6] & 0x0f) | 0x50; h[8] = (h[8] & 0x3f) | 0x80;
+    const x = h.subarray(0, 16).toString('hex');
+    return [x.slice(0, 8), x.slice(8, 12), x.slice(12, 16), x.slice(16, 20), x.slice(20)].join('-');
+  };
+  CP4D_ROUTINES.forEach((r) => {
+    assert.equal(r.id, v5('mm:bodyweight_foundations:routine:' + r.session_key), r.name + ' routine id');
+    assert.equal(r.link_id, v5('mm:bodyweight_foundations:link:' + r.session_key), r.name + ' link id');
+  });
+  const ids = [PROGRAM.id].concat(ROUTINES.map((r) => r.id), LINKS.map((l) => l.id),
+    CP4D_ROUTINES.map((r) => r.id), CP4D_ROUTINES.map((r) => r.link_id));
+  assert.equal(new Set(ids).size, 19, 'every Program, Routine and link id is distinct');
+});
+
+test('CP4d: Bodyweight Foundations has exactly nine ordered links, A/B/C first', () => {
+  const nine = LINKS.map((l) => [l.sort_order, l.session_key])
+    .concat(CP4D_ROUTINES.map((r) => [r.sort_order, r.session_key]));
+  assert.deepEqual(nine.map((x) => x[0]), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  assert.deepEqual(nine.map((x) => x[1]),
+    ['full_a', 'full_b', 'full_c'].concat(CP4D_KEYS));
+  // The migration asserts the same order as a postcondition.
+  assert.ok(CP4D_SQL.includes("<> ARRAY['full_a','full_b','full_c'] || k_keys THEN"));
+  assert.deepEqual(sqlKNew().map((r) => r.sort_order), [4, 5, 6, 7, 8, 9]);
+});
+
+test('CP4d: A/B/C stay at 1–3, published and byte-identical to the CP4c state', () => {
+  // The migration refuses to run unless A/B/C hash as CP4c left them, published,
+  // and re-checks them after the insert. Those constants are the mirror's hashes.
+  assert.ok(CP4D_SQL.includes("k_md5_a     CONSTANT text := '" + pgMd5(ROUTINE_A.exercises) + "';"));
+  assert.ok(CP4D_SQL.includes("k_md5_b     CONSTANT text := '" + pgMd5(ROUTINE_B.exercises) + "';"));
+  assert.ok(CP4D_SQL.includes("k_md5_c     CONSTANT text := '" + pgMd5(ROUTINE_C.exercises) + "';"));
+  assert.match(CP4D_SQL, /WHERE is_platform AND visibility = 'published' AND \(\n\s+\(id = k_routine_a AND name = 'Full Body A'/);
+  LINKS.forEach((l) => {
+    assert.ok(CP4D_SQL.includes("(id = k_link_" + l.session_key.slice(-1) + " AND session_key = '" + l.session_key +
+      "' AND routine_id = k_routine_" + l.session_key.slice(-1) + " AND sort_order = " + l.sort_order + ')'), l.session_key);
+  });
+});
+
+test('CP4d: until CP4e, every frequency 2–6 resolves only A/B/C', () => {
+  const S = loadSchedules();
+  for (let d = 2; d <= 6; d++) {
+    const keys = S.getScheduleForDays('bodyweight_foundations', d);
+    assert.deepEqual(keys, ['full_a', 'full_b', 'full_c'], 'days=' + d);
+    assert.ok(!keys.some((k) => CP4D_KEYS.includes(k)), 'no draft at days=' + d);
+  }
+  assert.deepEqual(S.getAllSessionsForProgram('bodyweight_foundations'), ['full_a', 'full_b', 'full_c']);
+  // No new key has a session label yet, so nothing can name a draft on Home either.
+  CP4D_KEYS.filter((k) => k !== 'lower_a' && k !== 'lower_b')
+    .forEach((k) => assert.equal(S.SESSION_LABELS[k], undefined, k));
+});
+
+/* The content rules run on BOTH the repository mirror and the migration's own
+ * k_new, so a defect in the applied records fails a specific rule, not only the
+ * file hash and the mirror-equality test. */
+const CP4D_SOURCES = [['repository mirror', CP4D_ROUTINES], ['migration k_new', sqlKNew()]];
+
+for (const [source, routines] of CP4D_SOURCES) {
+  const entries = routines.reduce((a, r) => a.concat(r.exercises), []);
+
+  test('CP4d: 31 entries, every one from the reviewed equipment-free pool (' + source + ')', () => {
+    assert.deepEqual(routines.map((r) => r.exercises.length), [5, 5, 5, 5, 5, 6]);
+    assert.equal(entries.length, 31);
+    // The pool and exclusions in the repository are exactly the migration's.
+    assert.deepEqual(sqlArray('k_pool'), CP4D_POOL.map((x) => x[1]));
+    assert.deepEqual(sqlArray('k_forbidden'), CP4D_FORBIDDEN.map((x) => x[1]));
+    assert.equal(POOL_IDS.size, 38);
+    assert.equal(FORBIDDEN_IDS.size, 14);
+    CP4D_POOL.concat(CP4D_FORBIDDEN).forEach(([name, id]) => {
+      assert.ok(!(POOL_IDS.has(id) && FORBIDDEN_IDS.has(id)), name + ' is in only one list');
+      assert.equal(byId(id) && byId(id).name, name, name + ' has the reviewed id');
+    });
+    CP4D_POOL.forEach(([name, id]) => assert.equal(byId(id).equipment, 'Bodyweight', name));
+    entries.forEach((x) => {
+      assert.ok(POOL_IDS.has(x.exercise_id), x.name + ' is in the pool');
+      assert.ok(!FORBIDDEN_IDS.has(x.exercise_id), x.name + ' is not excluded');
+      assert.equal(byId(x.exercise_id).name, x.name, x.name + ' is its canonical name');
+      assert.deepEqual(rtNormalizeExercises([x]), [x], x.name + ' survives the normaliser');
+    });
+  });
+
+  test('CP4d: High Knees replaced Mountain Climber in Conditioning & Core (' + source + ')', () => {
+    const cond = routines.find((r) => r.session_key === 'conditioning_core');
+    assert.deepEqual(cond.exercises[2], {
+      name: 'High Knees', sets: 3, reps_low: 20, reps_high: 30, notes: NOTE_HIGH_KNEES,
+      rest_sec: 45, exercise_id: '6d50c3a6-0dde-46e4-bc3a-508c2f358803',
+    });
+    assert.equal(byId(cond.exercises[2].exercise_id).tracking_type, 'time', '20–30 is seconds');
+    entries.forEach((x) => {
+      assert.notEqual(x.exercise_id, EX.MOUNTAIN_CLIMBER, 'no Mountain Climber');
+      assert.notEqual(x.name, 'Mountain Climber');
+    });
+    // The migration refuses Mountain Climber on its own, by id.
+    assert.ok(CP4D_SQL.includes("k_climber   CONSTANT uuid := '" + EX.MOUNTAIN_CLIMBER + "';"));
+    assert.match(CP4D_SQL, /OR \(e->>'exercise_id'\)::uuid = k_climber/);
+  });
+
+  test('CP4d: Mobility & Recovery contains only the approved mobility work (' + source + ')', () => {
+    const mob = routines.find((r) => r.session_key === 'mobility_recovery');
+    assert.deepEqual(mob.exercises.map((x) => x.name), ['Cat-Cow', 'Quadruped Thoracic Rotation',
+      '90/90 Hip Rotation', 'Supine Hamstring Stretch', 'Supine Spinal Twist', 'Diaphragmatic Breathing']);
+    mob.exercises.forEach((x) => {
+      const row = byId(x.exercise_id);
+      assert.equal(row.movement_pattern, 'mobility', x.name);
+      assert.equal(row.tracking_type, 'time', x.name);
+    });
+  });
+
+  test('CP4d: timed work is prescribed in seconds and rep work in reps (' + source + ')', () => {
+    entries.forEach((x) => {
+      const row = byId(x.exercise_id);
+      assert.ok(['time', 'bodyweight_reps'].includes(row.tracking_type), x.name + ' has a supported tracking type');
+      if (row.tracking_type === 'time') {
+        assert.equal(row.default_unit, 'sec', x.name);
+        assert.match(x.notes, /seconds/, x.name + ' says its target is seconds');
+        assert.ok(!/\breps?\b/i.test(x.notes), x.name + ' never calls its target reps');
+      } else {
+        assert.ok(!/seconds/.test(x.notes), x.name + ' is not described in seconds');
+      }
+      if (row.is_unilateral) assert.match(x.notes, /per (leg|side)/, x.name + ' says per leg/side');
+      assert.ok(x.notes.length <= 140 && x.notes === x.notes.trim(), x.name + ' note shape');
+    });
+    // Bodyweight Squat keeps the CP4c rule: no guidance.
+    entries.filter((x) => x.exercise_id === EX.BODYWEIGHT_SQUAT)
+      .forEach((x) => assert.equal(x.notes, ''));
+  });
+
+  test('CP4d: no Pull day — Superman is posterior-chain work only (' + source + ')', () => {
+    routines.forEach((r) => {
+      assert.ok(!/pull/i.test(r.name + ' ' + r.session_key), r.name + ' does not describe a Pull session');
+    });
+    entries.forEach((x) => {
+      const row = byId(x.exercise_id);
+      assert.ok(!/pull/.test(row.movement_pattern), x.name + ' is not a pulling movement');
+      if (x.exercise_id !== EX.SUPERMAN) assert.ok(!/pull|\brows?\b/i.test(x.notes), x.name + ' note has no pull wording');
+    });
+    const supermen = entries.filter((x) => x.exercise_id === EX.SUPERMAN);
+    assert.equal(supermen.length, 1);
+    assert.equal(supermen[0].notes, NOTE_SUPERMAN, 'the only pull wording is the denial');
+    assert.equal(byId(EX.SUPERMAN).movement_pattern, 'hinge');
+    // Every forbidden pulling exercise stays out.
+    ['Inverted Row', 'Pull-Up', 'Chin-Up'].forEach((n) =>
+      assert.ok(!entries.some((x) => x.name === n), n + ' is absent'));
+  });
+}
+
+test('CP4d: the README documents the migration and its count matches the directory', () => {
+  const readme = read('supabase/README.md');
+  const files = fs.readdirSync(path.join(__dirname, 'supabase', 'migrations')).filter((f) => f.endsWith('.sql'));
+  assert.equal(files.length, 67);
+  assert.ok(files.includes(path.basename(CP4D_FILE)));
+  assert.match(readme, new RegExp('The ' + files.length + ' migrations applied to production'));
+  assert.match(readme, /`20261003000515` \(`phase_439b_cp4d_bodyweight_frequency_routines`\)/);
+  assert.match(readme, /eight migrations are guarded \*\*data\*\* migrations/);
+  assert.match(readme, /publishes nothing and changes\s+no schedule mapping/);
+});

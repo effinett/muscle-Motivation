@@ -1114,6 +1114,46 @@ test('CP4a containment: a future linked Routine stays hidden and unlaunchable', 
   noWrites(h, 'hidden future Routine');
 });
 
+/* Production after CP4d (migration 20261003000515): A/B/C plus six private
+ * drafts linked at 4–9. Until CP4e maps them, no frequency may show or launch
+ * any of them. Keys and names are the real ones the migration inserted. */
+const CP4D_LINKS = [
+  ['push_core_a', 4, 'Push & Core A'],
+  ['lower_a', 5, 'Lower Body A'],
+  ['conditioning_core', 6, 'Conditioning & Core'],
+  ['push_core_b', 7, 'Push & Core B'],
+  ['lower_b', 8, 'Lower Body B'],
+  ['mobility_recovery', 9, 'Mobility & Recovery'],
+].map(([k, s, n]) => ({
+  session_key: k, sort_order: s, programs: { slug: 'bodyweight_foundations' },
+  workout_templates: { id: 'r-' + k, name: n },
+}));
+
+for (const days of [2, 3, 4, 5, 6]) {
+  test('CP4d containment: with all nine production links, a ' + days + '-day user sees only A/B/C', async () => {
+    const h = authorized({ links: BWF_LINKS.concat(CP4D_LINKS), profile: { training_days: days } });
+    await h.run();
+
+    assert.deepEqual(h.shown(), ['programContent']);
+    const list = h.el('sessList').innerHTML;
+    assert.equal((list.match(/class="sched-row/g) || []).length, 3, 'exactly three rows');
+    for (const l of CP4D_LINKS) {
+      const n = l.workout_templates.name.replace('&', '(&|&amp;)');
+      assert.ok(!new RegExp(n + '|' + l.session_key).test(list), l.session_key + ' is hidden at days=' + days);
+    }
+    assert.ok(!SCHED_COPY.test(renderedText(h)), 'the extra links do not break the schedule');
+
+    const before = h.el('startBtn').href;
+    assert.match(before, /session=full_a&mode=optional$/);
+    for (const l of CP4D_LINKS) {
+      h.sandbox.selectSession(l.session_key);
+      assert.equal(h.sandbox.SELECTED, 'full_a', l.session_key + ' cannot be selected');
+      assert.equal(h.el('startBtn').href, before, l.session_key + ' cannot mint a Start URL');
+    }
+    noWrites(h, 'CP4d nine links, days=' + days);
+  });
+}
+
 test('CP4a containment: a missing key cannot be selected either', async () => {
   const h = authorized();
   await h.run();
