@@ -161,12 +161,18 @@ async function pgResolveSession(userId, activeSlug, trainingDays) {
   }
 
   var sessionKey = keys[pgSessionIndex(keys, idx)];
+  // The Routine's own name is the label (Phase 4.3.9B CP4e-2); the shared
+  // SESSION_LABELS map is only the fallback when it cannot be read.
+  var names = (typeof pcRoutineNames === 'function')
+    ? await pcRoutineNames([{ slug: activeSlug, key: sessionKey }]) : {};
+  var routineName = names[activeSlug + '|' + sessionKey];
   return {
     slug: activeSlug,
     name: meta.name,
     keys: keys,
     sessionKey: sessionKey,
-    sessionLabel: (typeof SESSION_LABELS !== 'undefined' && SESSION_LABELS[sessionKey]) || sessionKey,
+    sessionLabel: (typeof routineName === 'string' && routineName)
+      || (typeof SESSION_LABELS !== 'undefined' && SESSION_LABELS[sessionKey]) || sessionKey,
     href: pgSessionHref(activeSlug, sessionKey, true),
   };
 }

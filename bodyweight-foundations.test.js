@@ -336,14 +336,14 @@ function loadSchedules() {
   return sandbox;
 }
 
-test('every training frequency 2–6 runs all three sessions', () => {
+test('2 and 3 days run all three full-body sessions (CP4e-2 keeps them)', () => {
+  // Since CP4e-2 (Phase 4.3.9B) 4-6 days run the frequency Routines instead;
+  // their exact order is pinned in the CP4e-2 section below.
   const S = loadSchedules();
-  for (let d = 2; d <= 6; d++) {
+  for (const d of [2, 3]) {
     assert.deepEqual(S.getScheduleForDays('bodyweight_foundations', d),
       ['full_a', 'full_b', 'full_c'], `days=${d}`);
   }
-  assert.deepEqual(S.getAllSessionsForProgram('bodyweight_foundations'),
-    ['full_a', 'full_b', 'full_c']);
 });
 
 test('a two-day user still reaches session C by carrying current_index', () => {
@@ -949,17 +949,22 @@ test('CP4d: A/B/C stay at 1–3, published and byte-identical to the CP4c state'
   });
 });
 
-test('CP4d: until CP4e, every frequency 2–6 resolves only A/B/C', () => {
+test('CP4d: every CP4d key is scheduled only at 4-6 days, never at 2 or 3 (since CP4e-2)', () => {
+  // CP4d created these as unmapped drafts; CP4e-2 maps them, and only for 4-6.
   const S = loadSchedules();
-  for (let d = 2; d <= 6; d++) {
+  for (const d of [2, 3]) {
     const keys = S.getScheduleForDays('bodyweight_foundations', d);
-    assert.deepEqual(keys, ['full_a', 'full_b', 'full_c'], 'days=' + d);
-    assert.ok(!keys.some((k) => CP4D_KEYS.includes(k)), 'no draft at days=' + d);
+    assert.ok(!keys.some((k) => CP4D_KEYS.includes(k)), 'no CP4d key at days=' + d);
   }
-  assert.deepEqual(S.getAllSessionsForProgram('bodyweight_foundations'), ['full_a', 'full_b', 'full_c']);
-  // No new key has a session label yet, so nothing can name a draft on Home either.
-  CP4D_KEYS.filter((k) => k !== 'lower_a' && k !== 'lower_b')
-    .forEach((k) => assert.equal(S.SESSION_LABELS[k], undefined, k));
+  const mapped = new Set([4, 5, 6].flatMap((d) => S.getScheduleForDays('bodyweight_foundations', d)));
+  assert.deepEqual([...mapped].sort(), CP4D_KEYS.slice().sort(), 'all six, and nothing else, at 4-6');
+  // Fallback labels exist for the four keys no other Program uses, so a raw key
+  // never reaches the screen; they equal the Routine names. lower_a/lower_b keep
+  // their shared labels, used only when the Routine name cannot be read.
+  CP4D_ROUTINES.filter((r) => r.session_key !== 'lower_a' && r.session_key !== 'lower_b')
+    .forEach((r) => assert.equal(S.SESSION_LABELS[r.session_key], r.name, r.session_key));
+  assert.equal(S.SESSION_LABELS.lower_a, 'Lower A');
+  assert.equal(S.SESSION_LABELS.lower_b, 'Lower B');
 });
 
 /* The content rules run on BOTH the repository mirror and the migration's own
@@ -1188,10 +1193,14 @@ test('CP4e-1: the guards pin the same approved state CP4d left', () => {
   assert.match(CP4E1_SQL, /AND \(e->>'exercise_id' IS NULL OR NOT \(\(e->>'exercise_id'\)::uuid = ANY \(k_pool\)\)\);/);
 });
 
-test('CP4e-1: publishing activates no schedule — every frequency still resolves only A/B/C', () => {
+test('CP4e-1: only the six published Routines are activated at 4-6 days (CP4e-2)', () => {
+  // CP4e-1 published exactly the six; CP4e-2 maps exactly those six, so no
+  // schedule can reach a key the publish did not make readable.
   const S = loadSchedules();
-  for (let d = 2; d <= 6; d++) {
-    assert.deepEqual(S.getScheduleForDays('bodyweight_foundations', d), ['full_a', 'full_b', 'full_c'], 'days=' + d);
+  const published = cp4e1Six().map((r) => r.session_key);
+  for (const d of [4, 5, 6]) {
+    S.getScheduleForDays('bodyweight_foundations', d)
+      .forEach((k) => assert.ok(published.includes(k), k + ' at days=' + d + ' was published by CP4e-1'));
   }
 });
 

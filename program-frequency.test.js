@@ -528,16 +528,18 @@ for (const [file, slug] of CLASSIC) {
 const BW_IDS = ['sessList', 'sessSummary', 'stickyCta', 'startBtn', 'sessRetryBtn',
   'ctaSessionName'];
 
-/* The Program-linked rows the stub serves, in the shape loadSessions() reads them.
- * Same three sessions the harness previously seeded directly as SESSIONS. */
+/* The Program-linked rows the stub serves, in the shape loadSessions() reads them:
+ * production's nine links — Full Body A/B/C plus the six frequency Routines that
+ * CP4e-2 (Phase 4.3.9B) schedules at 4–6 days. */
 const BW_LINK_ROWS = [
-  { session_key: 'full_a', sort_order: 1, programs: { slug: 'bodyweight_foundations' },
-    workout_templates: { id: 'r-a', name: 'Full Body A' } },
-  { session_key: 'full_b', sort_order: 2, programs: { slug: 'bodyweight_foundations' },
-    workout_templates: { id: 'r-b', name: 'Full Body B' } },
-  { session_key: 'full_c', sort_order: 3, programs: { slug: 'bodyweight_foundations' },
-    workout_templates: { id: 'r-c', name: 'Full Body C' } },
-];
+  ['full_a', 1, 'Full Body A'], ['full_b', 2, 'Full Body B'], ['full_c', 3, 'Full Body C'],
+  ['push_core_a', 4, 'Push & Core A'], ['lower_a', 5, 'Lower Body A'],
+  ['conditioning_core', 6, 'Conditioning & Core'], ['push_core_b', 7, 'Push & Core B'],
+  ['lower_b', 8, 'Lower Body B'], ['mobility_recovery', 9, 'Mobility & Recovery'],
+].map(([k, o, n]) => ({
+  session_key: k, sort_order: o, programs: { slug: 'bodyweight_foundations' },
+  workout_templates: { id: 'r-' + k, name: n },
+}));
 
 function bwHarness(profile, opts) {
   const file = 'program-bodyweight.html';
@@ -753,9 +755,10 @@ test('the footer change alters no schedule behaviour on any page', async () => {
   }
   const bw = bwHarness({ training_days: 4 }, { up: { current_index: 1 } });
   assert.equal(await bw.run(), true);
-  assert.equal(bw.sandbox.SELECTED, 'full_b');
+  assert.equal(bw.sandbox.SELECTED, s.getScheduleForDays('bodyweight_foundations', 4)[1]);
+  assert.equal(bw.sandbox.SELECTED, 'lower_a');
   assert.match(bw.dom.els.startBtn.href,
-    /^workout\.html\?program=bodyweight_foundations&session=full_b&mode=optional$/);
+    /^workout\.html\?program=bodyweight_foundations&session=lower_a&mode=optional$/);
 });
 
 test('program-bodyweight.html: 0 and 1 never reach schedule selection', async () => {
@@ -777,13 +780,14 @@ test('program-bodyweight.html: 0 and 1 never reach schedule selection', async ()
 });
 
 test('program-bodyweight.html: a valid frequency still preselects and launches', async () => {
+  // 4 days runs the CP4e-2 frequency Routines; index 1 is Lower Body A.
   const h = bwHarness({ training_days: 4 }, { up: { current_index: 1 } });
   const ready = await h.run();
   assert.equal(ready, true);
-  assert.equal(h.sandbox.SELECTED, 'full_b', 'honours the progression index');
+  assert.equal(h.sandbox.SELECTED, 'lower_a', 'honours the progression index');
   assert.match(h.dom.els.startBtn.href,
-    /^workout\.html\?program=bodyweight_foundations&session=full_b&mode=optional$/);
-  assert.ok(h.dom.els.sessList.innerHTML.includes('Full Body B'));
+    /^workout\.html\?program=bodyweight_foundations&session=lower_a&mode=optional$/);
+  assert.ok(h.dom.els.sessList.innerHTML.includes('Lower Body A'), 'the Routine name, not "Lower A"');
   // The original assertion is preserved verbatim in substance: exactly ONE
   // progression read, and no write. CP4a adds the Program-linked session read to
   // preselect() (it moved there so frequency resolution always happens first), so
@@ -837,9 +841,12 @@ test('getProfile() itself is unchanged — 13 callers keep their behaviour', () 
 });
 
 test('schedules.js mappings are untouched by this fix', () => {
+  // This fix changed no mapping. Bodyweight Foundations' 4–6 day schedules were
+  // later activated by CP4e-2 (Phase 4.3.9B); 2 days still runs A/B/C.
   const s = loadSchedules();
   assert.deepEqual(s.getScheduleForDays('bodyweight_foundations', 2), ['full_a', 'full_b', 'full_c']);
-  assert.deepEqual(s.getScheduleForDays('bodyweight_foundations', 6), ['full_a', 'full_b', 'full_c']);
+  assert.deepEqual(s.getScheduleForDays('bodyweight_foundations', 6),
+    ['push_core_a', 'lower_a', 'conditioning_core', 'push_core_b', 'lower_b', 'mobility_recovery']);
   assert.deepEqual(s.getScheduleForDays('muscle_gain', 4), ['upper_a', 'lower_a', 'upper_b', 'lower_b']);
   assert.deepEqual(s.getScheduleForDays('glute_builder', 3),
     s.getScheduleForDays('glute_builder', 3));

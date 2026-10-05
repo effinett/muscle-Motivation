@@ -349,9 +349,10 @@ test('cutover: both Program consumers use the canonical Routine path', () => {
   const src = readCode('workout.html');
   assert.match(src, /async function loadProgramSession/);
   assert.match(src, /from\('program_routines'\)/);
-  // applyTemplateRanges and startProgramSession both go through the helper.
-  assert.strictEqual((src.match(/await loadProgramSession\(/g) || []).length, 2,
-    'applyTemplateRanges and startProgramSession, both via the helper');
+  // applyTemplateRanges, startProgramSession and (Phase 4.3.9B CP4e-2) the
+  // Train "Next up" label all go through the helper.
+  assert.strictEqual((src.match(/await loadProgramSession\(/g) || []).length, 3,
+    'applyTemplateRanges, startProgramSession and the Train label, all via the helper');
 });
 
 test('cutover: there is NO runtime fallback to legacy data', () => {
