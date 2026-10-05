@@ -46,6 +46,7 @@ const PAGE_FNS = [
   'resolvePickedId', 'libraryExerciseId', 'completedSetCount', 'beginAction', 'endAction',
 ];
 const BLOCKED_DECL = (PAGE.match(/var EQUIPMENT_FREE_BLOCKED = [^\n]*;/) || [])[0];
+const UNLOADED_DECL = (PAGE.match(/var EQUIPMENT_FREE_PROGRAMS_IF_UNLOADED = [^\n]*;/) || [])[0];
 
 const CUSTOMS = [{ id: 'u-1', name: 'Sled Push', category: 'Custom', equipment: null, user_created: true }];
 const byName = (n) => {
@@ -101,7 +102,7 @@ function harness(o) {
   };
   if (o.noFilters) delete sandbox.ExerciseFilters;
   vm.createContext(sandbox);
-  vm.runInContext(STUBS + '\n' + BLOCKED_DECL + '\n' + PAGE_FNS.map((n) => extractFn(PAGE, n)).join('\n'), sandbox);
+  vm.runInContext(STUBS + '\n' + BLOCKED_DECL + '\n' + UNLOADED_DECL + '\n' + PAGE_FNS.map((n) => extractFn(PAGE, n)).join('\n'), sandbox);
   vm.runInContext('currentWorkout = ' + JSON.stringify(o.workout === undefined ? null : o.workout) + ';', sandbox);
   return { s: sandbox, el: (id) => els[id] || { innerHTML: '', value: '' } };
 }
@@ -252,20 +253,58 @@ test('a manual Swap pick of an equipment exercise is blocked at the commit bound
   assert.equal(h.s.toasts.length, 1);
 });
 
-test('no fallback reintroduces equipment: without the shared module a Program session offers nothing', () => {
+/* ── Filter module unavailable (exercise-filters.js failed to load) ──────────
+ * Only an equipment-free session fails closed. Every other Program, and a
+ * manual workout, keeps the ORIGINAL fallback: a name/category substring match
+ * over the whole library, custom "+ Add" included. */
+
+// The pre-4.3.9B fallback, computed independently of the page.
+const originalFallback = (q) => {
+  const k = q.trim().toLowerCase();
+  return EXERCISE_CATALOG.concat(CUSTOMS)
+    .filter((e) => e.name.toLowerCase().includes(k) || (e.category || '').toLowerCase().includes(k))
+    .map((e) => e.name);
+};
+
+test('module unavailable: an equipment-free session exposes nothing', async () => {
   const h = harness({ workout: BWF, noFilters: true });
-  const r = pick(h, 'workout', '');
-  assert.deepStrictEqual(r.list, [], 'fails closed rather than open');
-  assert.equal(pick(h, 'workout', 'bench').add, '');
+  for (const q of ['', 'bench', 'push', 'pull']) {
+    assert.deepStrictEqual(pick(h, 'workout', q).list, [], 'no rows for "' + q + '"');
+  }
+  assert.equal(pick(h, 'workout', 'brand new thing').add, '', 'no "+ Add" row');
+  assert.deepStrictEqual(pick(h, 'swap', 'bench', { mode: 'workout', exIdx: 0, ref: {} }).list, []);
+  assert.deepStrictEqual(swapNames(h, 'Push-Up').names, [], 'Swap offers nothing it cannot prove');
+  // And nothing can be committed, not even an equipment-free exercise it cannot verify.
+  for (const n of ['Bench Press', 'Push-Up']) {
+    vm.runInContext('pickerMode = "workout";', h.s);
+    await h.s.selectExercise(n, byName(n).id);
+  }
+  assert.deepStrictEqual(plain(h.s.writes), []);
 });
 
-test('without the shared module, a manual workout keeps the original fallback list', () => {
-  // Fail-closed applies only where a Program could impose the rule. Any Program
-  // session is treated as restricted while the rule cannot be evaluated — a
-  // deliberate trade-off for a script-load failure, never a silent widening.
-  const manual = pick(harness({ workout: MANUAL, noFilters: true }), 'workout', 'bench');
-  assert.ok(manual.list.includes('Bench Press'));
-  assert.deepStrictEqual(pick(harness({ workout: FAT_LOSS, noFilters: true }), 'workout', 'bench').list, []);
+for (const [label, workout] of [['another Program', FAT_LOSS], ['a manual workout', MANUAL]]) {
+  test('module unavailable: ' + label + ' keeps the original fallback picker exactly', async () => {
+    const h = harness({ workout, noFilters: true });
+    for (const q of ['', 'bench', 'press', 'sled']) {
+      assert.deepStrictEqual(pick(h, 'workout', q).list, originalFallback(q), 'fallback for "' + q + '"');
+    }
+    assert.ok(pick(h, 'workout', 'bench').list.includes('Bench Press'));
+    assert.notEqual(pick(h, 'workout', 'brand new thing').add, '', '"+ Add" still offered');
+    assert.ok(swapNames(h, 'Push-Up').names.includes('Dumbbell Press'), 'Swap unrestricted');
+    vm.runInContext('pickerMode = "workout";', h.s);
+    await h.s.selectExercise('Bench Press', byName('Bench Press').id);
+    assert.equal(plain(h.s.writes)[0][0], 'insert', 'an equipment exercise still commits');
+    assert.deepStrictEqual(plain(h.s.toasts).filter((t) => /equipment-free/.test(t)), []);
+  });
+}
+
+test('the page fallback Program map is exactly the shared equipment-free Program list', () => {
+  const m = PAGE.match(/var EQUIPMENT_FREE_PROGRAMS_IF_UNLOADED = (\{[^}]*\});/);
+  assert.ok(m, 'the fallback map is declared');
+  const keys = Object.keys(vm.runInNewContext('(' + m[1] + ')'));
+  assert.deepStrictEqual(keys.slice().sort(), EF.EQUIPMENT_FREE_PROGRAM_SLUGS.slice().sort());
+  assert.ok(Object.isFrozen(EF.EQUIPMENT_FREE_PROGRAM_SLUGS));
+  EF.EQUIPMENT_FREE_PROGRAM_SLUGS.forEach((slug) => assert.equal(EF.isEquipmentFreeProgram(slug), true, slug));
 });
 
 /* ── Equipped and unrestricted contexts ─────────────────────────────────── */

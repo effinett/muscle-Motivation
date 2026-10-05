@@ -544,6 +544,7 @@
     shouldCollapseOnOutsideClick: shouldCollapseOnOutsideClick,
     // equipment-free Program context (Phase 4.3.9B)
     EQUIPMENT_FREE_EXERCISE_IDS: Object.freeze(EQUIPMENT_FREE_EXERCISE_IDS.slice()),
+    EQUIPMENT_FREE_PROGRAM_SLUGS: Object.freeze(Object.keys(EQUIPMENT_FREE_PROGRAMS)),
     isEquipmentFreeProgram: isEquipmentFreeProgram,
     isEquipmentFreeExercise: isEquipmentFreeExercise
   };

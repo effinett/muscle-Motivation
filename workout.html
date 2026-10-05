@@ -2811,12 +2811,18 @@
   //
   // Only a pick for the LIVE workout inherits its Program. A Routine draft
   // ('template') and a history review ('resolve') are never restricted.
+  // Read ONLY if exercise-filters.js failed to load, so an equipment-free
+  // session still fails closed while every other Program keeps the original
+  // fallback picker. Pinned by test to ExerciseFilters.EQUIPMENT_FREE_PROGRAM_SLUGS.
+  var EQUIPMENT_FREE_PROGRAMS_IF_UNLOADED = { bodyweight_foundations: true };
   function workoutEquipmentFree() {
     var slug = currentWorkout && currentWorkout.program_slug;
     if (!slug) return false;
-    // Fail closed: without the shared rule a Program session cannot prove an
-    // exercise is allowed, so it offers none rather than every one.
-    if (typeof ExerciseFilters === 'undefined' || typeof ExerciseFilters.isEquipmentFreeProgram !== 'function') return true;
+    if (typeof ExerciseFilters === 'undefined' || typeof ExerciseFilters.isEquipmentFreeProgram !== 'function') {
+      // Restricted, but nothing can be proven allowed (equipmentFreeRow is
+      // false without the module), so it offers none rather than every one.
+      return EQUIPMENT_FREE_PROGRAMS_IF_UNLOADED[slug] === true;
+    }
     return ExerciseFilters.isEquipmentFreeProgram(slug);
   }
   function pickTargetsWorkout() {
@@ -3313,7 +3319,7 @@
       if (!rows.length) emptyHtml = pickerEmptyHtml(q);
     } else {
       // Fallback: shared module unavailable — original substring filter, plus the
-      // equipment-free rule (which then fails closed for a Program session).
+      // equipment-free rule (which then fails closed for an equipment-free session).
       exerciseLibrary.filter(function(e) {
         if (equipmentFree && !equipmentFreeRow(e)) return false;   // never a back door
         return e.name.toLowerCase().includes(qKey) || (e.category || '').toLowerCase().includes(qKey);

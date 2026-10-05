@@ -485,9 +485,12 @@ loaded on `workout.html` AFTER `exercise-core.js` (reuses its `normalizeEquipmen
   equipmentFree })` and `findSubstitutions(ref, catalog, { candidateFilter })`
   consume it; `workout.html` applies it only to picks for the LIVE workout
   (never a Routine draft or history review), enforces it again at the commit
-  boundary, hides customs and the "+ Add" row, and fails closed if the module is
-  missing. Covered by `exercise-filters.test.js`, `exercise-substitution.test.js`
-  and `equipment-free-picks.test.js`.
+  boundary, and hides customs and the "+ Add" row. If the module fails to load, an
+  equipment-free session fails closed (offers nothing) while every other Program
+  keeps the original fallback picker; the page's one-entry fallback Program map is
+  pinned by test to `EQUIPMENT_FREE_PROGRAM_SLUGS`. Covered by
+  `exercise-filters.test.js`, `exercise-substitution.test.js` and
+  `equipment-free-picks.test.js`.
 - **Filter state is session-scoped, never persisted** (no DB, per the phase
   scope): reset each time the picker opens, preserved while it stays open.
 - **UI:** an inline collapsible filter panel beside the picker search (a "Filters"
