@@ -590,3 +590,115 @@ test('CP4b: the picker renders chips from the vocabulary into a wrapping contain
   assert.match(page, /items:\s*ExerciseFilters\.MOVEMENTS/);
   assert.ok(!/>Mobility</.test(page), 'the Mobility chip must not be hard-coded in workout.html');
 });
+
+/* ── Phase 4.3.9B — equipment-free Program context ─────────────────────────
+ * The ONE rule Swap and the manual picker share for Bodyweight Foundations
+ * sessions. The reviewed pool is pinned to the migration that applied it, and
+ * the catalog's own Bodyweight classification must agree with it. */
+
+const MIGRATION_CP4D = require('node:fs').readFileSync(require('node:path').join(__dirname,
+  'supabase/migrations/20261003000515_phase_439b_cp4d_bodyweight_frequency_routines.sql'), 'utf8');
+const sqlIds = (name) => {
+  const m = MIGRATION_CP4D.match(new RegExp('\\b' + name + ' CONSTANT uuid\\[\\] := ARRAY\\[([^\\]]*)\\]::uuid\\[\\];'));
+  assert.ok(m, name + ' is declared in the CP4d migration');
+  return m[1].split(',').map((s) => s.trim().replace(/^'|'$/g, ''));
+};
+const POOL = sqlIds('k_pool');
+const EXCLUDED = sqlIds('k_forbidden');
+
+test('4.3.9B: the equipment-free set is exactly the reviewed CP4d pool, in order', () => {
+  assert.deepEqual(EF.EQUIPMENT_FREE_EXERCISE_IDS, POOL);
+  assert.equal(POOL.length, 38);
+  assert.equal(EXCLUDED.length, 14);
+  assert.ok(!POOL.some((id) => EXCLUDED.includes(id)), 'pool and exclusions are disjoint');
+  // The exported list is read-only, so it cannot be used to change the rule.
+  assert.ok(Object.isFrozen(EF.EQUIPMENT_FREE_EXERCISE_IDS));
+  assert.throws(() => { 'use strict'; EF.EQUIPMENT_FREE_EXERCISE_IDS.push('not-an-id'); }, TypeError);
+  assert.equal(EF.EQUIPMENT_FREE_EXERCISE_IDS.length, 38);
+});
+
+test('4.3.9B: every Bodyweight-classified catalog row is either in the pool or a reviewed exclusion', () => {
+  // So a new Bodyweight exercise cannot slip in unreviewed: it would fail here.
+  const bodyweight = EXERCISE_CATALOG.filter((e) => EF.getExerciseEquipment(e) === 'bodyweight').map((e) => e.id);
+  assert.deepEqual(bodyweight.slice().sort(), POOL.concat(EXCLUDED).sort());
+});
+
+test('4.3.9B: isEquipmentFreeExercise admits the 38 and nothing else in the catalog', () => {
+  const admitted = EXERCISE_CATALOG.filter((e) => EF.isEquipmentFreeExercise(e)).map((e) => e.id);
+  assert.deepEqual(admitted.slice().sort(), POOL.slice().sort());
+  // Bodyweight-classified but needs a bar, bench or box: never admitted.
+  ['Pull-Up', 'Chin-Up', 'Dips', 'Bench Dip', 'Box Jump', 'Inverted Row', 'Hanging Knee Raise',
+   'Incline Push-Up', 'Decline Push-Up', 'Back Extension', 'Single-Leg Hip Thrust']
+    .forEach((n) => { assert.ok(ex(n), n + ' is in the catalog'); assert.equal(EF.isEquipmentFreeExercise(ex(n)), false, n); });
+  // Equipment exercises: never admitted.
+  ['Bench Press', 'Dumbbell Shoulder Press', 'Lat Pulldown', 'Leg Press', 'Assisted Pull-Up']
+    .forEach((n) => { assert.ok(ex(n), n + ' is in the catalog'); assert.equal(EF.isEquipmentFreeExercise(ex(n)), false, n); });
+});
+
+test('4.3.9B: a custom, an inactive row, a misclassified row or nothing is never admitted', () => {
+  const pushUp = ex('Push-Up');
+  assert.equal(EF.isEquipmentFreeExercise(pushUp), true);
+  assert.equal(EF.isEquipmentFreeExercise(Object.assign({}, pushUp, { is_active: false })), false);
+  assert.equal(EF.isEquipmentFreeExercise(Object.assign({}, pushUp, { user_created: true })), false);
+  // Pool membership alone is not enough — the catalog must still say Bodyweight.
+  assert.equal(EF.isEquipmentFreeExercise(Object.assign({}, pushUp, { equipment: 'Dumbbell', is_bodyweight: false })), false);
+  CUSTOMS.forEach((c) => assert.equal(EF.isEquipmentFreeExercise(c), false, c.name));
+  [null, undefined, {}, { id: null }].forEach((v) => assert.equal(EF.isEquipmentFreeExercise(v), false));
+});
+
+test('4.3.9B: only Bodyweight Foundations is an equipment-free Program', () => {
+  assert.equal(EF.isEquipmentFreeProgram('bodyweight_foundations'), true);
+  ['fat_loss_blueprint', 'muscle_gain', 'glute_builder', '', null, undefined, 'BODYWEIGHT_FOUNDATIONS', {}]
+    .forEach((s) => assert.equal(EF.isEquipmentFreeProgram(s), false, String(s)));
+});
+
+const efDisc = (o) => EF.runDiscovery(Object.assign({ index: idx, customs: CUSTOMS, limit: 400 }, o));
+
+test('4.3.9B discovery: the equipment-free browse list is exactly the pool, no customs', () => {
+  const r = efDisc({ equipmentFree: true });
+  assert.deepEqual(r.rows.map((x) => x.id).sort(), POOL.slice().sort());
+  assert.ok(!r.rows.some((x) => x.isCustom), 'no custom is offered');
+});
+
+test('4.3.9B discovery: equipment-free search keeps valid bodyweight matches and drops equipment', () => {
+  const push = rowNames(efDisc({ query: 'push up', equipmentFree: true }));
+  ['Push-Up', 'Knee Push-Up', 'Wall Push-Up'].forEach((n) => assert.ok(push.includes(n), n + ' is offered'));
+  ['Incline Push-Up', 'Decline Push-Up'].forEach((n) => assert.ok(!push.includes(n), n + ' needs a bench'));
+  // A search for equipment work offers only equipment-free rows, never the
+  // equipment exercise it names.
+  const bench = efDisc({ query: 'bench press', equipmentFree: true }).rows;
+  bench.forEach((x) => assert.ok(EF.isEquipmentFreeExercise(x.exercise), x.name));
+  ['Bench Press', 'Incline Bench Press', 'Close-Grip Bench Press', 'Smith Machine Bench Press', 'Bench Dip']
+    .forEach((n) => assert.ok(!bench.some((x) => x.name === n), n + ' is not offered'));
+  const pull = efDisc({ query: 'pull up', equipmentFree: true }).rows;
+  pull.forEach((x) => assert.ok(EF.isEquipmentFreeExercise(x.exercise), x.name));
+  ['Pull-Up', 'Assisted Pull-Up', 'Chin-Up', 'Lat Pulldown', 'Inverted Row']
+    .forEach((n) => assert.ok(!pull.some((x) => x.name === n), n + ' is not offered'));
+  const squat = rowNames(efDisc({ query: 'squat', equipmentFree: true }));
+  assert.ok(squat.includes('Bodyweight Squat') && squat.includes('Split Squat'));
+  assert.ok(!squat.some((n) => /Barbell|Goblet|Smith|Pistol/.test(n)), squat.join(', '));
+  efDisc({ query: 'squat', equipmentFree: true }).rows.forEach((x) =>
+    assert.ok(EF.isEquipmentFreeExercise(x.exercise), x.name));
+});
+
+test('4.3.9B discovery: an equipment filter cannot reintroduce equipment exercises', () => {
+  const barbell = EF.toggleFilter(EF.emptyFilters(), 'equipment', 'barbell');
+  assert.deepEqual(rowNames(efDisc({ filters: barbell, equipmentFree: true })), []);
+  assert.deepEqual(rowNames(efDisc({ query: 'press', filters: barbell, equipmentFree: true })), []);
+  const bw = EF.toggleFilter(EF.emptyFilters(), 'equipment', 'bodyweight');
+  efDisc({ filters: bw, equipmentFree: true }).rows.forEach((x) =>
+    assert.ok(POOL.includes(x.id), x.name + ' is in the pool'));
+});
+
+test('4.3.9B discovery: an equipped user is unaffected — the flag defaults off', () => {
+  // Same output as before the rule existed, for every shape of call.
+  [{}, { query: 'bench press' }, { query: 'pull up' }, { query: 'squat' },
+   { filters: EF.toggleFilter(EF.emptyFilters(), 'equipment', 'barbell') }].forEach((o) => {
+    assert.deepStrictEqual(efDisc(o), efDisc(Object.assign({ equipmentFree: false }, o)), JSON.stringify(o));
+  });
+  const all = efDisc({});
+  assert.equal(all.rows.filter((x) => !x.isCustom).length, EXERCISE_CATALOG.length, 'full catalog still offered');
+  assert.ok(all.rows.some((x) => x.isCustom), 'customs still offered');
+  assert.ok(rowNames(efDisc({ query: 'bench press' })).includes('Bench Press'));
+  assert.ok(rowNames(efDisc({ query: 'pull up' })).includes('Pull-Up'));
+});

@@ -447,3 +447,76 @@ test('CP4b: every pre-CP4b exercise keeps its swaps, except the approved Wall Pu
   ['Plank', 'Wall Sit', 'Mountain Climber', 'Side Plank', 'Treadmill Run', 'Incline Treadmill Walk']
     .forEach((n) => assert.deepStrictEqual(allNames(swapOf(n)), allNames(swapOf(n, prior)), n));
 });
+
+/* ── Phase 4.3.9B — equipment-free candidates (candidateFilter) ────────────
+ * A Bodyweight Foundations session ranks only equipment-free candidates. The
+ * rule is ExerciseFilters'; the engine only honours a caller's constraint. */
+
+const EFR = require('./exercise-filters.js');
+const freeOnly = { candidateFilter: EFR.isEquipmentFreeExercise };
+const swapFree = (n) => findSubstitutions(refFor(n), EXERCISE_CATALOG, freeOnly);
+const swapAll = (n) => findSubstitutions(refFor(n), EXERCISE_CATALOG);
+
+test('4.3.9B: every equipment-free candidate is in the reviewed pool, for every pool source', () => {
+  EFR.EQUIPMENT_FREE_EXERCISE_IDS.forEach((id) => {
+    const src = EXERCISE_CATALOG.find((e) => e.id === id);
+    const r = swapFree(src.name);
+    assert.strictEqual(r.supported, true, src.name);
+    r.best.concat(r.other).forEach((c) => {
+      const row = EXERCISE_CATALOG.find((e) => e.id === c.id);
+      assert.ok(EFR.isEquipmentFreeExercise(row), src.name + ' → ' + c.name + ' needs equipment');
+    });
+  });
+});
+
+test('4.3.9B: Push-Up keeps its equipment-free progressions and loses the bench and barbell', () => {
+  const free = allNames(swapFree('Push-Up'));
+  ['Knee Push-Up', 'Wall Push-Up'].forEach((n) => assert.ok(free.includes(n), n + ' is offered'));
+  // Each of these is offered today without the rule, so its absence is real.
+  const all = allNames(swapAll('Push-Up'));
+  ['Incline Push-Up', 'Decline Push-Up', 'Dumbbell Press', 'Cable Fly', 'Pec Deck'].forEach((n) => {
+    assert.ok(all.includes(n), n + ' is an unrestricted candidate');
+    assert.ok(!free.includes(n), n + ' is not offered');
+  });
+  assert.ok(all.some((n) => !free.includes(n)), 'the restriction actually removed something');
+});
+
+test('4.3.9B: the source is still found in the full catalog even when it is not equipment-free', () => {
+  // A row added before the rule existed must still get equipment-free suggestions.
+  const r = swapFree('Bench Press');
+  assert.strictEqual(r.supported, true);
+  assert.strictEqual(r.sourceName, 'Bench Press');
+  assert.ok(r.best.length + r.other.length > 0, 'equipment-free alternatives are offered');
+  r.best.concat(r.other).forEach((c) =>
+    assert.ok(EFR.EQUIPMENT_FREE_EXERCISE_IDS.includes(c.id), c.name));
+});
+
+test('4.3.9B: the constraint applies before limits, so it never starves a list', () => {
+  const big = { candidateFilter: EFR.isEquipmentFreeExercise, bestLimit: 99, otherLimit: 99 };
+  const full = findSubstitutions(refFor('Push-Up'), EXERCISE_CATALOG, big);
+  const r = swapFree('Push-Up');
+  assert.strictEqual(r.best.length, Math.min(5, full.best.length));
+  assert.strictEqual(r.other.length, Math.min(4, full.other.length));
+  assert.deepStrictEqual(names(r.best), names(full.best).slice(0, 5), 'ranking order unchanged');
+});
+
+test('4.3.9B: nothing compatible means the existing honest note — never an equipment fallback', () => {
+  // Pike Push-Up's only matches are equipment presses; restricted, none remain.
+  assert.ok(allNames(swapAll('Pike Push-Up')).length > 0);
+  const r = swapFree('Pike Push-Up');
+  assert.deepStrictEqual(allNames(r), []);
+  assert.strictEqual(r.note, 'No close alternatives in the library for this one.');
+});
+
+test('4.3.9B: no option, an empty option object or a non-function filter changes nothing', () => {
+  ['Push-Up', 'Bench Press', 'Pike Push-Up', 'Bodyweight Squat', 'Lat Pulldown'].forEach((n) => {
+    const base = swapAll(n);
+    assert.deepStrictEqual(findSubstitutions(refFor(n), EXERCISE_CATALOG, {}), base, n);
+    assert.deepStrictEqual(findSubstitutions(refFor(n), EXERCISE_CATALOG, { candidateFilter: 'yes' }), base, n);
+  });
+});
+
+test('4.3.9B: only a strict true admits a candidate', () => {
+  const truthy = findSubstitutions(refFor('Push-Up'), EXERCISE_CATALOG, { candidateFilter: () => 1 });
+  assert.deepStrictEqual(allNames(truthy), []);
+});

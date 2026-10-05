@@ -304,6 +304,9 @@
    *   query    — search text (may be blank).
    *   filters  — { splits, movements, equipment }.
    *   limit    — max rows (default 40).
+   *   equipmentFree — true for a pick inside an equipment-free Program session
+   *              (Phase 4.3.9B): only isEquipmentFreeExercise rows are eligible
+   *              and customs are excluded, exactly as under an active filter.
    *
    * Row shape: { id, name, exercise, category, equipment, movement, splits,
    *              matchType, matchedAlias, isCustom }.
@@ -349,7 +352,10 @@
     var limit = input.limit != null ? input.limit : 40;
     var hasQuery = normName(query).length > 0;
     var hasFilters = hasActiveFilters(filters);
-    var filtersOn = hasFilters; // customs are excluded whenever any filter is on
+    var equipmentFree = input.equipmentFree === true;
+    // Customs carry no taxonomy, so they are excluded whenever eligibility is
+    // constrained — by a metadata filter or by the equipment-free rule.
+    var filtersOn = hasFilters || equipmentFree;
 
     var records = index && Array.isArray(index.records) ? index.records : [];
     var rows = [];
@@ -360,6 +366,7 @@
       var n = normName(ex.name);
       if (shownNorm[n]) return;
       if (!exerciseMatchesFilters(ex, filters)) return;
+      if (equipmentFree && !isEquipmentFreeExercise(ex)) return;
       shownNorm[n] = 1;
       rows.push(canonicalRow(ex, matchType, matchedAlias));
     }
@@ -456,6 +463,60 @@
     return true;
   }
 
+  /* ── 6b. Equipment-free Program context (Phase 4.3.9B) ─────────────────────
+   * A Bodyweight Foundations session must not be able to pick up an exercise
+   * that needs equipment through Swap or the manual picker. This section is the
+   * ONE place that decides it; Swap and discovery both consume it.
+   *
+   * The catalog's own equipment classification is necessary but not sufficient:
+   * Pull-Up, Dips, Bench Dip, Box Jump and others are stored as Bodyweight yet
+   * need a bar, bench or box. So an exercise qualifies only when it is BOTH
+   * classified bodyweight by getExerciseEquipment AND in the reviewed
+   * equipment-free pool: the 38 exercises approved for Phase 4.3.9B CP4d and
+   * guarded by migration 20261003000515 (its k_pool, in the same order). Every
+   * other Bodyweight-classified row is one of that migration's 14 reviewed
+   * exclusions, and a new catalog row is never admitted without review. */
+  var EQUIPMENT_FREE_EXERCISE_IDS = [
+    '784a0508-84c3-42a6-98b1-c00cc780e5cd', 'a1bb3980-ae49-48ce-a0b5-91bffd5daeda',
+    'dfb48ed7-a1b9-4dc3-91c2-eabf52c821ac', 'c3d81925-04dc-4caf-b5ef-5b42740028e8',
+    'b1f4c7a2-3e58-4d91-9c26-7a0d8e5f1b34', 'c320bf46-9f16-4483-bd2f-9ae9e88b7ad5',
+    'be4abe1a-93fa-4e87-9250-2627fe45ad3c', '9c8998ab-9713-43f4-940b-5f8feec39d3c',
+    'd3b6e9c4-5a7a-4f13-9e48-2c0f1a7b3d56', 'a224a468-28c0-4ba2-b6f9-c8a3f45d2147',
+    '694c48ac-9251-4fa7-bb25-23353048963c', 'ed45d50d-5411-4e47-8309-97314b94adfb',
+    'e3f12784-cf40-4aa5-ae41-6770416c4d1f', '97501496-7f81-4552-82ab-d3f326b8ff06',
+    'd2812c92-d4c6-420c-b2d9-d2c5757871c9', 'a7942454-736c-4d84-980d-39b40298a1b2',
+    'eee8a605-10d6-41ad-9b79-65d626b598db', 'ff15ede3-a361-415a-8e20-6a7244bad0b3',
+    'da2d9535-6e82-4790-84c9-8e1a0d549718', 'c2a5d8b3-4f69-4e02-8d37-1b9e0f6a2c45',
+    '7948f9c4-2ec1-432b-ad79-7f27c5961577', '53c57e39-51e9-42e5-991a-3357bd610b4a',
+    '6962172b-18eb-4def-88d3-acc67c62f9ce', '7fae5cd2-712d-4df2-982d-850091d10329',
+    '1b836b2c-af56-40a6-9afe-023c3ccd5361', '41fe1cb7-ffc7-48a0-8ad4-c0b4d46c0fa5',
+    '6d50c3a6-0dde-46e4-bc3a-508c2f358803', 'ead731d6-bfdd-4119-bd0b-bb3092457e69',
+    '44ebe984-c8e9-4842-8617-7f54f1179d2b', 'b2168db4-fb33-4dd0-a8e2-ab5fa81677e4',
+    '4b0b5faa-4704-4959-a550-c01de705a540', 'fd10bcf3-a09f-41fe-aca5-7996972d496f',
+    '04429fae-c385-47dd-91ec-7e1fe3a4a83c', 'a3ffb069-e0ea-4d01-a038-f9f72b1dd7fe',
+    '0d28f8c9-7485-4b0a-9552-b56cf3c556bf', '0b519d3f-6a32-4883-955c-ad9c87f7385f',
+    'c84d3609-cca3-4652-a1ee-b119105aac1a', 'e4015387-bed0-43e2-9129-4ca3c2b67414'
+  ];
+  var EQUIPMENT_FREE_SET = Object.create(null);
+  EQUIPMENT_FREE_EXERCISE_IDS.forEach(function (id) { EQUIPMENT_FREE_SET[id] = true; });
+
+  // Programs whose sessions may only use equipment-free exercises.
+  var EQUIPMENT_FREE_PROGRAMS = { bodyweight_foundations: true };
+
+  // Does this Program impose the equipment-free rule? Anything else — another
+  // Program, a manual workout, a missing slug — is unrestricted.
+  function isEquipmentFreeProgram(programSlug) {
+    return typeof programSlug === 'string' && EQUIPMENT_FREE_PROGRAMS[programSlug] === true;
+  }
+
+  // May this catalog row be used in an equipment-free session? A custom (no
+  // taxonomy) or an inactive row never qualifies — it cannot be proven.
+  function isEquipmentFreeExercise(ex) {
+    if (!ex || ex.id == null || ex.user_created || ex.is_active === false) return false;
+    if (EQUIPMENT_FREE_SET[String(ex.id)] !== true) return false;
+    return getExerciseEquipment(ex) === 'bodyweight';
+  }
+
   /* ── 7. Public surface ─────────────────────────────────────────────────── */
 
   var ExerciseFilters = {
@@ -480,7 +541,11 @@
     runDiscovery: runDiscovery,
     // filter-panel interaction (Phase 4.2.1L)
     panelStaysOpenAfterFilterToggle: panelStaysOpenAfterFilterToggle,
-    shouldCollapseOnOutsideClick: shouldCollapseOnOutsideClick
+    shouldCollapseOnOutsideClick: shouldCollapseOnOutsideClick,
+    // equipment-free Program context (Phase 4.3.9B)
+    EQUIPMENT_FREE_EXERCISE_IDS: Object.freeze(EQUIPMENT_FREE_EXERCISE_IDS.slice()),
+    isEquipmentFreeProgram: isEquipmentFreeProgram,
+    isEquipmentFreeExercise: isEquipmentFreeExercise
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = ExerciseFilters;

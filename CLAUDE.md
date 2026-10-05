@@ -476,6 +476,18 @@ loaded on `workout.html` AFTER `exercise-core.js` (reuses its `normalizeEquipmen
   metadata filter — never assigned a fabricated split/movement/equipment. This
   never weakens the Phase 4.2.1H lifecycle/ownership rules (the caller passes only
   the user's ACTIVE customs; archived/foreign customs are simply absent).
+- **Equipment-free Program sessions (`Live`, Phase 4.3.9B).** `isEquipmentFreeProgram(slug)`
+  (Bodyweight Foundations only) and `isEquipmentFreeExercise(row)` are the ONE rule
+  Swap and the manual picker share: an exercise qualifies only when it is in the
+  reviewed 38-row pool (`EQUIPMENT_FREE_EXERCISE_IDS`, pinned to migration
+  `20261003000515`'s `k_pool`) AND the catalog classifies it Bodyweight —
+  classification alone would admit Pull-Up, Dips, Box Jump etc. `runDiscovery({
+  equipmentFree })` and `findSubstitutions(ref, catalog, { candidateFilter })`
+  consume it; `workout.html` applies it only to picks for the LIVE workout
+  (never a Routine draft or history review), enforces it again at the commit
+  boundary, hides customs and the "+ Add" row, and fails closed if the module is
+  missing. Covered by `exercise-filters.test.js`, `exercise-substitution.test.js`
+  and `equipment-free-picks.test.js`.
 - **Filter state is session-scoped, never persisted** (no DB, per the phase
   scope): reset each time the picker opens, preserved while it stays open.
 - **UI:** an inline collapsible filter panel beside the picker search (a "Filters"
