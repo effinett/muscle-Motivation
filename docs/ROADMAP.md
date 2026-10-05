@@ -836,7 +836,13 @@ question and ignoring the answer is not acceptable in a paid personalization pro
 
 - **4.3.9A — Catalog metadata correction.** Correct inaccurate `equipment_summary` and `difficulty` on the
   existing Programs. **Behaviour-changing, not bookkeeping** — it changes what real users are recommended.
-- **4.3.9B — Bodyweight / No-Equipment Program.**
+- **4.3.9B — Bodyweight / No-Equipment Program.** *In progress.* Checkpoint record:
+  `docs/ROADMAP-HISTORY.md`, 2026-10-04 entry. **CP4e** (owner-approved 2026-10-04) publishes the six
+  CP4d frequency Routines and activates the 4/5/6-day mapping: 4 days `push_core_a, lower_a,
+  push_core_b, lower_b`; 5 days `push_core_a, lower_a, conditioning_core, push_core_b, lower_b`; 6 days
+  the 5-day order plus `mobility_recovery`. 2- and 3-day schedules keep Full Body A/B/C, and Full Body C
+  stays reachable for a 2-day user. CP4e-1 (guarded publish, applied only on a separately approved hash)
+  precedes CP4e-2 (mapping, Routine-name display, tests); the mapping never ships first.
 - **4.3.9C — Women's Full Body + Glutes Program.**
 - **4.3.9D — Women's Bodyweight / No-Equipment Program.**
 - **4.3.9E — Glute Builder repositioning.** Preserve it as the glute-**specialization**, not the broad
