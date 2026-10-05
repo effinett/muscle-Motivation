@@ -1827,6 +1827,21 @@ stands.
 - **Exit criterion.** The 4.3.9-L Program-content integrity criterion (`docs/ROADMAP.md`, criterion B)
   applies, including day counts matching the advertised schedule and no automatic enrolment.
 
-**State at this record:** CP4e-1 migration drafted and under owner review; read-only preflight FRESH;
-**not applied**. CP4e-2 has not started. Following the CP4d workflow, the migration file and its tests
-enter `supabase/migrations/` only after production apply, under the version Supabase assigns.
+### CP4e-1 — publication applied and verified (2026-10-05)
+
+Production migration **`20261005041336`** (`phase_439b_cp4e_publish_bodyweight_frequency_routines`),
+applied once on the owner-approved artifact hash `bfcbb6e7…` after a FRESH read-only preflight. Its single
+write changed `visibility` from `private` to `published` on exactly the six CP4d Routines; nothing else on
+them changed. Platform Routines went from 57/50/7 to **57/56/1** (total/published/private); links stayed
+**56**. The one remaining private platform Routine is the unrelated CP6 validation Routine.
+
+Afterwards, the six's own fingerprint with `visibility` removed was unchanged, as were the fingerprints of
+every other platform Routine and every link. The Program row, Full Body A/B/C, all nine links in order, the
+equipment-free pool fingerprint and the 159-row catalog were all unchanged. Only the six carry the
+transaction's write stamp. The migration is recorded byte-identically in `supabase/migrations/` with
+regression tests in `bodyweight-foundations.test.js`; 68 migrations.
+
+**State at this record:** CP4e-1 is applied and verified. **CP4e-2 has not started**: no frequency maps the
+six yet, so every frequency still runs Full Body A/B/C, and the Program page still lists only A/B/C. Until
+CP4e-2 ships, a published but unmapped session can still be opened by direct URL. The owner accepted this
+gap temporarily for this sequencing step.

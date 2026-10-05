@@ -1059,10 +1059,150 @@ for (const [source, routines] of CP4D_SOURCES) {
 test('CP4d: the README documents the migration and its count matches the directory', () => {
   const readme = read('supabase/README.md');
   const files = fs.readdirSync(path.join(__dirname, 'supabase', 'migrations')).filter((f) => f.endsWith('.sql'));
-  assert.equal(files.length, 67);
+  // The exact directory count and guarded-migration count are pinned by the
+  // NEWEST migration record (CP4e-1 below), since each new migration moves them.
   assert.ok(files.includes(path.basename(CP4D_FILE)));
   assert.match(readme, new RegExp('The ' + files.length + ' migrations applied to production'));
   assert.match(readme, /`20261003000515` \(`phase_439b_cp4d_bodyweight_frequency_routines`\)/);
-  assert.match(readme, /eight migrations are guarded \*\*data\*\* migrations/);
+  assert.match(readme, /guarded \*\*data\*\* migrations[\s\S]*?`20261003000515`[\s\S]*?\n\n/);
   assert.match(readme, /publishes nothing and changes\s+no schedule mapping/);
+});
+
+/* ── Phase 4.3.9B CP4e-1 — publish the six frequency Routines (migration 20261005041336)
+ * The ONLY change is visibility 'private' -> 'published' on the six CP4d Routines.
+ * No schedule maps them yet (CP4e-2), so every frequency still runs A/B/C. */
+
+const CP4E1_FILE = 'supabase/migrations/20261005041336_phase_439b_cp4e_publish_bodyweight_frequency_routines.sql';
+const CP4E1_SQL = read(CP4E1_FILE);
+const CP6_VALIDATION_ROUTINE = '07548bd8-bb30-4a31-93fe-eb66ba6ff187';
+// Executable SQL only: comments, the $six$ payload and string literals removed.
+const CP4E1_CODE = CP4E1_SQL
+  .replace(/--[^\n]*/g, '')
+  .replace(/\$six\$[\s\S]*?\$six\$/g, "''")
+  .replace(/'[^']*'/g, "''");
+const cp4e1Six = () => {
+  const m = CP4E1_SQL.match(/k_six CONSTANT jsonb := \$six\$([\s\S]*?)\$six\$::jsonb;/);
+  assert.ok(m, 'k_six is declared');
+  return JSON.parse(m[1]);
+};
+const cp4e1Pool = () => {
+  const m = CP4E1_SQL.match(/\bk_pool {6}CONSTANT uuid\[\] := ARRAY\[([^\]]*)\]::uuid\[\];/);
+  assert.ok(m, 'k_pool is declared');
+  return m[1].split(',').map((x) => x.trim().replace(/^'|'$/g, ''));
+};
+
+test('CP4e-1: the repository records byte-for-byte the statement stored in production', () => {
+  const raw = fs.readFileSync(path.join(__dirname, CP4E1_FILE));
+  // sha256 of supabase_migrations.schema_migrations.statements[1] for version
+  // 20261005041336, read from production after the apply.
+  assert.equal(sha256(raw), 'fd29293cc480325692792a73526fe7d9a53a4412412af00adefa063444970432');
+  assert.equal(raw.length, 19058);
+  // Supabase stores the reviewed file without its final newline; restoring it
+  // gives the hash of the artifact the owner approved before the apply.
+  assert.ok(!raw.toString('utf8').endsWith('\n'));
+  assert.equal(sha256(Buffer.concat([raw, Buffer.from('\n')])),
+    'bfcbb6e734b04eac2d2ca4e8d72bd6dac134be43438d89a0096eba17f5a10576');
+});
+
+test('CP4e-1: it targets exactly the six CP4d Routines, with their production content hashes', () => {
+  // Each record is the CP4d mirror's identity plus md5(exercises::text), so a
+  // wrong id, key, sort slot or content fingerprint cannot be published.
+  assert.deepStrictEqual(cp4e1Six(), CP4D_ROUTINES.map((r) => ({
+    id: r.id, link_id: r.link_id, session_key: r.session_key, sort_order: r.sort_order,
+    name: r.name, md5: pgMd5(r.exercises),
+  })));
+  assert.equal(new Set(cp4e1Six().map((r) => r.id)).size, 6);
+  // The unrelated private CP6 validation Routine is never named, so it cannot be targeted.
+  assert.ok(!CP4E1_SQL.includes(CP6_VALIDATION_ROUTINE));
+  // Neither are Full Body A/B/C as write targets: they appear only as read-side guards.
+  ROUTINES.forEach((r) => assert.ok(!cp4e1Six().some((x) => x.id === r.id), r.name + ' is not targeted'));
+});
+
+test('CP4e-1: the only write is one UPDATE that sets visibility to published on the six', () => {
+  const updates = CP4E1_CODE.match(/\bUPDATE\s+public\.\w+[\s\S]*?;/gi) || [];
+  assert.equal(updates.length, 1, 'exactly one UPDATE statement');
+  // Read from the raw SQL so the literals are visible.
+  const upd = CP4E1_SQL.match(/UPDATE public\.workout_templates SET ([^\n]*)\n\s+WHERE ([^;]*);/);
+  assert.ok(upd, 'the UPDATE targets workout_templates');
+  assert.equal(upd[1], "visibility = 'published'", 'it sets visibility and nothing else');
+  assert.match(upd[2], /^id IN \(SELECT \(r->>'id'\)::uuid FROM jsonb_array_elements\(k_six\) r\)\n\s+AND is_platform AND visibility = 'private'$/);
+  assert.match(CP4E1_SQL, /GET DIAGNOSTICS v_upd = ROW_COUNT;\n\s+IF v_upd <> 6 THEN/);
+  // The only other UPDATE keyword is the row lock on the same six.
+  assert.equal((CP4E1_CODE.match(/\bFOR\s+UPDATE\b/gi) || []).length, 1);
+  assert.equal((CP4E1_CODE.match(/\bUPDATE\b/gi) || []).length, 2);
+});
+
+test('CP4e-1: no INSERT, DELETE, DDL, link write or schedule change', () => {
+  for (const kw of ['INSERT', 'DELETE', 'DROP', 'ALTER', 'CREATE', 'TRUNCATE', 'GRANT', 'REVOKE', 'COMMENT ON', 'LOCK TABLE']) {
+    assert.ok(!new RegExp('\\b' + kw.replace(' ', '\\s+') + '\\b', 'i').test(CP4E1_CODE), kw + ' is absent');
+  }
+  assert.ok(!/UPDATE\s+public\.(program_routines|programs|exercises)\b/i.test(CP4E1_CODE), 'no link, Program or catalog write');
+  assert.ok(!/updated_at\s*=/i.test(CP4E1_CODE), 'no updated_at write');
+  assert.ok(!/schedule/i.test(CP4E1_CODE));
+});
+
+test('CP4e-1: FRESH publishes, REPLAY is a verified no-op, anything else aborts', () => {
+  assert.match(CP4E1_SQL, /IF v_exact = 6 AND v_priv6 = 6 AND v_plat = 57 AND v_pub = 50 AND v_priv = 7 AND v_links = 56 THEN\n\s+v_state := 'FRESH';/);
+  assert.match(CP4E1_SQL, /ELSIF v_exact = 6 AND v_pub6 = 6 AND v_plat = 57 AND v_pub = 56 AND v_priv = 1 AND v_links = 56 THEN\n\s+v_state := 'REPLAY';/);
+  assert.match(CP4E1_SQL, /ELSE\n\s+RAISE EXCEPTION 'cp4e aborted \(DIVERGED\)/);
+  assert.match(CP4E1_SQL, /IF v_state = 'FRESH' THEN\n\s+UPDATE public\.workout_templates/, 'only FRESH writes');
+  assert.match(CP4E1_SQL, /IF v_plat <> 57 OR v_pub <> 56 OR v_priv <> 1 OR v_links <> 56 THEN/, 'post totals');
+});
+
+test('CP4e-1: unrelated Routines, links and every non-visibility field are fingerprinted', () => {
+  const at = (x) => CP4E1_SQL.indexOf(x);
+  const writeIdx = at('------------------------------------------------------------- WRITE');
+  const postIdx = at('---------------------------------------------------- POSTCONDITIONS');
+  assert.ok(writeIdx > 0 && postIdx > writeIdx);
+  // Every other platform Routine (including the private CP6 validation one).
+  assert.match(CP4E1_SQL, /INTO b_other_fp\n\s+FROM public\.workout_templates t\n\s+WHERE t\.is_platform AND t\.id NOT IN \(SELECT \(r->>'id'\)::uuid FROM jsonb_array_elements\(k_six\) r\);/);
+  // Every link.
+  assert.match(CP4E1_SQL, /INTO b_links_fp\n\s+FROM public\.program_routines l;/);
+  // The six themselves with only visibility removed.
+  assert.match(CP4E1_SQL, /md5\(string_agg\(\(to_jsonb\(t\) - 'visibility'\)::text, '\|' ORDER BY t\.id::text COLLATE "C"\)\) INTO b_six_fp/);
+  for (const fp of ['b_other_fp', 'b_links_fp', 'b_six_fp']) {
+    const i = CP4E1_SQL.indexOf('IS DISTINCT FROM ' + fp);
+    assert.ok(i > postIdx, fp + ' is re-checked after the write');
+  }
+  // Write scope: only the six carry this transaction's xmin; no other table is touched.
+  assert.match(CP4E1_SQL, /IF v_state = 'FRESH' THEN v_m := 6; ELSE v_m := 0; END IF;/);
+  ['programs', 'program_routines', 'exercises', 'user_programs', 'workouts', 'workout_exercises',
+   'workout_sets', 'personal_records', 'purchases', 'profiles'].forEach((t) =>
+    assert.ok(CP4E1_SQL.includes('FROM public.' + t + ' WHERE xmin = v_xid'), t + ' write-scope checked'));
+});
+
+test('CP4e-1: the guards pin the same approved state CP4d left', () => {
+  // Same pool, same pool fingerprint, same catalog, same Program row and A/B/C content.
+  assert.deepStrictEqual(cp4e1Pool(), CP4D_POOL.map((x) => x[1]));
+  assert.ok(CP4E1_SQL.includes("k_pool_fp   CONSTANT text := 'a0afad4c9d6badf377a15afee96168ea';"));
+  assert.match(CP4E1_SQL, /k_cat_n {5}CONSTANT int {2}:= 159;/);
+  assert.ok(CP4E1_SQL.includes("k_cat_md5   CONSTANT text := 'dec5ac379151ad7d0f6463820dc76dc8';"));
+  assert.ok(CP4E1_SQL.includes("k_program_md5 CONSTANT text := '54f16021713151bdf654eeed5ac76115';"));
+  assert.ok(CP4E1_SQL.includes("k_md5_a     CONSTANT text := '" + pgMd5(ROUTINE_A.exercises) + "';"));
+  assert.ok(CP4E1_SQL.includes("k_md5_b     CONSTANT text := '" + pgMd5(ROUTINE_B.exercises) + "';"));
+  assert.ok(CP4E1_SQL.includes("k_md5_c     CONSTANT text := '" + pgMd5(ROUTINE_C.exercises) + "';"));
+  // All nine links, in order, must exist before anything is published.
+  assert.ok(CP4E1_SQL.includes("k_keys      CONSTANT text[] := ARRAY['full_a','full_b','full_c'," +
+    CP4D_KEYS.map((k) => "'" + k + "'").join(',') + '];'));
+  // And every exercise the six prescribe must be in the pool.
+  assert.match(CP4E1_SQL, /AND \(e->>'exercise_id' IS NULL OR NOT \(\(e->>'exercise_id'\)::uuid = ANY \(k_pool\)\)\);/);
+});
+
+test('CP4e-1: publishing activates no schedule — every frequency still resolves only A/B/C', () => {
+  const S = loadSchedules();
+  for (let d = 2; d <= 6; d++) {
+    assert.deepEqual(S.getScheduleForDays('bodyweight_foundations', d), ['full_a', 'full_b', 'full_c'], 'days=' + d);
+  }
+});
+
+test('CP4e-1: the README records the migration and the current counts', () => {
+  const readme = read('supabase/README.md');
+  const files = fs.readdirSync(path.join(__dirname, 'supabase', 'migrations')).filter((f) => f.endsWith('.sql'));
+  assert.equal(files.length, 68);
+  assert.ok(files.includes(path.basename(CP4E1_FILE)));
+  assert.match(readme, new RegExp('The ' + files.length + ' migrations applied to production'));
+  assert.match(readme, /nine migrations are guarded \*\*data\*\* migrations/);
+  assert.match(readme, /`20261003000515`, `20261005041336`\./);
+  assert.match(readme, /`20261005041336` \(`phase_439b_cp4e_publish_bodyweight_frequency_routines`\) publishes exactly/);
+  assert.match(readme, /changes no schedule mapping/);
 });
