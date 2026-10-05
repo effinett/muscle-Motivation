@@ -72,6 +72,32 @@ const BWF_LINKS = [
     workout_templates: { id: 'r-c', name: 'Full Body C' } },
 ];
 
+/* The six frequency Routines CP4d linked at 4–9 (migration 20261003000515) and
+ * CP4e-1 published (20261005041336). Keys and names are the real ones. */
+const CP4D_LINKS = [
+  ['push_core_a', 4, 'Push & Core A'],
+  ['lower_a', 5, 'Lower Body A'],
+  ['conditioning_core', 6, 'Conditioning & Core'],
+  ['push_core_b', 7, 'Push & Core B'],
+  ['lower_b', 8, 'Lower Body B'],
+  ['mobility_recovery', 9, 'Mobility & Recovery'],
+].map(([k, s, n]) => ({
+  session_key: k, sort_order: s, programs: { slug: 'bodyweight_foundations' },
+  workout_templates: { id: 'r-' + k, name: n },
+}));
+// Production's nine Bodyweight Foundations links.
+const PROD_LINKS = BWF_LINKS.concat(CP4D_LINKS);
+const NAME_OF = Object.fromEntries(PROD_LINKS.map((l) => [l.session_key, l.workout_templates.name]));
+// The owner-approved schedule (Phase 4.3.9B CP4e-2), written out independently
+// of schedules.js so a change to either side fails here.
+const CP4E_SCHEDULE = {
+  2: ['full_a', 'full_b', 'full_c'],
+  3: ['full_a', 'full_b', 'full_c'],
+  4: ['push_core_a', 'lower_a', 'push_core_b', 'lower_b'],
+  5: ['push_core_a', 'lower_a', 'conditioning_core', 'push_core_b', 'lower_b'],
+  6: ['push_core_a', 'lower_a', 'conditioning_core', 'push_core_b', 'lower_b', 'mobility_recovery'],
+};
+
 const MEMBERSHIP = [{ product: 'ai_membership', status: 'active' }];
 const STANDALONE_BWF = [{ product: 'bodyweight_foundations', status: 'active' }];
 const NO_PURCHASES = [];
@@ -692,13 +718,15 @@ test('frequency: the intro renders identically for every VALID profile frequency
   // The schedulable domain is 2–6 (owner ruling 2026-09-29): exactly the
   // frequencies PROGRAM_SCHEDULES maps. 0 and 1 are covered below.
   for (const training_days of [2, 3, 4, 5, 6]) {
-    const h = authorized({ profile: { training_days } });
+    // Production's nine links: every frequency has the Routines it needs.
+    const h = authorized({ links: PROD_LINKS, profile: { training_days } });
     await h.run();
     assert.deepEqual(h.shown(), ['programContent'], 'days=' + training_days);
     assert.equal(flat(h.el('sessSummary').innerHTML || ''), '',
       'the intro is untouched — the real value is static markup');
     // And the page still selects a legitimate session for each frequency.
-    assert.match(h.el('startBtn').href, /session=full_[abc]/, 'days=' + training_days);
+    const m = h.el('startBtn').href.match(/session=(\w+)&/);
+    assert.ok(m && CP4E_SCHEDULE[training_days].includes(m[1]), 'days=' + training_days);
     assert.equal(h.el('stickyCta').style.display, 'block', 'Start is offered');
   }
 });
@@ -1003,11 +1031,12 @@ const SCHEDULES = (() => {
   return s;
 })();
 
-for (const days of [2, 3, 4, 5, 6]) {
+for (const days of [2, 3]) {
   test('CP4a parity: a ' + days + '-day user still sees exactly Full Body A/B/C', async () => {
-    // Guard the premise: this parity only holds while the mapping is unactivated.
+    // Guard the premise: 2 and 3 days keep A/B/C after CP4e-2; 4–6 are pinned
+    // by the CP4e-2 tests below.
     assert.deepEqual(SCHEDULES.getScheduleForDays('bodyweight_foundations', days), ABC,
-      'CP4a must run against the pre-CP4e mapping');
+      'CP4e-2 keeps A/B/C at 2 and 3 days');
 
     const h = authorized({ profile: { training_days: days } });
     await h.run();
@@ -1114,43 +1143,46 @@ test('CP4a containment: a future linked Routine stays hidden and unlaunchable', 
   noWrites(h, 'hidden future Routine');
 });
 
-/* Production after CP4d (migration 20261003000515): A/B/C plus six private
- * drafts linked at 4–9. Until CP4e maps them, no frequency may show or launch
- * any of them. Keys and names are the real ones the migration inserted. */
-const CP4D_LINKS = [
-  ['push_core_a', 4, 'Push & Core A'],
-  ['lower_a', 5, 'Lower Body A'],
-  ['conditioning_core', 6, 'Conditioning & Core'],
-  ['push_core_b', 7, 'Push & Core B'],
-  ['lower_b', 8, 'Lower Body B'],
-  ['mobility_recovery', 9, 'Mobility & Recovery'],
-].map(([k, s, n]) => ({
-  session_key: k, sort_order: s, programs: { slug: 'bodyweight_foundations' },
-  workout_templates: { id: 'r-' + k, name: n },
-}));
+const shownName = (n) => n.replace(/&/g, '&amp;');
 
 for (const days of [2, 3, 4, 5, 6]) {
-  test('CP4d containment: with all nine production links, a ' + days + '-day user sees only A/B/C', async () => {
-    const h = authorized({ links: BWF_LINKS.concat(CP4D_LINKS), profile: { training_days: days } });
+  test('CP4e-2: with all nine production links, a ' + days + '-day user sees exactly the approved sessions', async () => {
+    const want = CP4E_SCHEDULE[days];
+    assert.deepEqual(SCHEDULES.getScheduleForDays('bodyweight_foundations', days), want, 'schedules.js agrees');
+    const h = authorized({ links: PROD_LINKS, profile: { training_days: days } });
     await h.run();
 
     assert.deepEqual(h.shown(), ['programContent']);
+    assert.ok(!SCHED_COPY.test(renderedText(h)), 'the schedule resolves');
     const list = h.el('sessList').innerHTML;
-    assert.equal((list.match(/class="sched-row/g) || []).length, 3, 'exactly three rows');
-    for (const l of CP4D_LINKS) {
-      const n = l.workout_templates.name.replace('&', '(&|&amp;)');
-      assert.ok(!new RegExp(n + '|' + l.session_key).test(list), l.session_key + ' is hidden at days=' + days);
+    assert.equal((list.match(/class="sched-row/g) || []).length, want.length, 'one row per scheduled session');
+    // Routine names, in the approved order — never a raw key.
+    let at = -1;
+    for (const k of want) {
+      const i = list.indexOf(shownName(NAME_OF[k]));
+      assert.ok(i > at, NAME_OF[k] + ' appears, in order, at days=' + days);
+      at = i;
+      assert.ok(!new RegExp('>\\s*' + k + '\\s*<').test(list), 'raw key ' + k + ' is never rendered');
     }
-    assert.ok(!SCHED_COPY.test(renderedText(h)), 'the extra links do not break the schedule');
-
+    // The first scheduled session is preselected.
+    assert.equal(h.el('ctaSessionName').textContent, NAME_OF[want[0]]);
     const before = h.el('startBtn').href;
-    assert.match(before, /session=full_a&mode=optional$/);
-    for (const l of CP4D_LINKS) {
+    assert.ok(before.endsWith('session=' + want[0] + '&mode=optional'), before);
+    // Everything outside this frequency is hidden and cannot be selected.
+    for (const l of PROD_LINKS.filter((x) => !want.includes(x.session_key))) {
+      assert.ok(!list.includes(shownName(l.workout_templates.name)), l.session_key + ' is hidden at days=' + days);
       h.sandbox.selectSession(l.session_key);
-      assert.equal(h.sandbox.SELECTED, 'full_a', l.session_key + ' cannot be selected');
+      assert.equal(h.sandbox.SELECTED, want[0], l.session_key + ' cannot be selected');
       assert.equal(h.el('startBtn').href, before, l.session_key + ' cannot mint a Start URL');
     }
-    noWrites(h, 'CP4d nine links, days=' + days);
+    // Every scheduled session can be selected and gets its own Start URL.
+    for (const k of want) {
+      h.sandbox.selectSession(k);
+      assert.equal(h.sandbox.SELECTED, k);
+      assert.equal(h.el('ctaSessionName').textContent, NAME_OF[k]);
+      assert.ok(h.el('startBtn').href.endsWith('session=' + k + '&mode=optional'), k);
+    }
+    noWrites(h, 'CP4e-2 nine links, days=' + days);
   });
 }
 

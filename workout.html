@@ -4557,7 +4557,11 @@
     var keys = (up && up.schedule_keys && up.schedule_keys.length)
       ? up.schedule_keys : getScheduleForDays(slug, profile.training_days);
     var idx = up ? (up.current_index || 0) : 0;
-    renderRecommended(slug, keys[idx % keys.length]);
+    var key = keys[idx % keys.length];
+    // The Routine's own name is the label (Phase 4.3.9B CP4e-2), read through
+    // the same Program-scoped session loader the launch uses.
+    var sess = await loadProgramSession(slug, key);
+    renderRecommended(slug, key, sess && sess.session_name);
     return true;
   }
 
@@ -4641,9 +4645,10 @@
     }
   }
 
-  function renderRecommended(slug, key) {
+  function renderRecommended(slug, key, routineName) {
     var pname = (typeof programName === 'function' && programName(slug)) || slug;
-    var sname = (typeof sessionLabel === 'function') ? sessionLabel(key) : key;
+    var sname = (typeof routineName === 'string' && routineName) ? routineName
+      : ((typeof sessionLabel === 'function') ? sessionLabel(key) : key);
     document.getElementById('recommendedWrap').innerHTML =
       '<div class="tpl-card">' +
         '<div class="tpl-info">' +
@@ -5063,9 +5068,15 @@
         return;
       }
 
-      var keys = (up.schedule_keys && up.schedule_keys.length)
-        ? up.schedule_keys
-        : getScheduleForDays(programSlug, 3);
+      // A row without stored keys falls back to the user's ACTUAL frequency
+      // (Phase 4.3.9B CP4e-2), never an assumed 3 days. getScheduleForDays
+      // normalizes a missing or invalid value exactly as it always has.
+      var keys = up.schedule_keys;
+      if (!keys || !keys.length) {
+        var { data: profDays } = await supabaseClient
+          .from('profiles').select('training_days').eq('id', currentUser.id).maybeSingle();
+        keys = getScheduleForDays(programSlug, profDays && profDays.training_days);
+      }
       var doneIdx = completedKey ? keys.indexOf(completedKey) : -1;
       var next;
       if (doneIdx >= 0) {

@@ -1845,3 +1845,48 @@ regression tests in `bodyweight-foundations.test.js`; 68 migrations.
 six yet, so every frequency still runs Full Body A/B/C, and the Program page still lists only A/B/C. Until
 CP4e-2 ships, a published but unmapped session can still be opened by direct URL. The owner accepted this
 gap temporarily for this sequencing step.
+
+---
+
+## 2026-10-05 — Phase 4.3.9B CP4e-2 — Bodyweight Foundations frequency activation
+
+**Status: Phase 4.3.9B OPEN. A code checkpoint, not a phase closure.** No database change: the six
+Routines were already published by CP4e-1 (`20261005041336`); their records and links are untouched.
+
+**Mapping (`schedules.js`), exactly as approved:**
+
+| Training days | Sessions, in order |
+|---|---|
+| 2 | Full Body A/B/C — unchanged; C stays reachable through the rotation |
+| 3 | Full Body A/B/C — unchanged |
+| 4 | Push & Core A, Lower Body A, Push & Core B, Lower Body B |
+| 5 | Push & Core A, Lower Body A, Conditioning & Core, Push & Core B, Lower Body B |
+| 6 | the 5-day order, then Mobility & Recovery |
+
+The Program page, Home "Today's Plan", Train "Next up", the Completion "Next" card and progression all resolve
+the same schedule. No other Program's schedule changed, and `recommended_days_per_week` stays **3**.
+
+**Owner decisions recorded (2026-10-05):**
+
+- **A — Routine names are authoritative.** Each session is labelled with its Routine's own name on the Program
+  page and at launch (both unchanged), and now on Home (one name read), Train (reusing
+  `loadProgramSession`), the Completion card (the Routine read it already makes) and History (one batched
+  read per load, `pcRoutineNames` in `program-catalog.js`). `SESSION_LABELS` remains the fallback when a
+  name cannot be read; it gained labels for the four keys no other Program uses, so a raw key never reaches
+  the screen. `lower_a`/`lower_b` keep their shared "Lower A/B" only as that fallback. `schedules.js`
+  stays a pure data module.
+- **B — Direct launch stays allowed.** An entitled member may launch any readable Routine of a Program they
+  own, in or out of their schedule, as with every other Program. The schedule decides what is offered and how
+  progression advances; it is not an entitlement boundary. Entitlement checks are unchanged.
+- **C — Fallbacks use the actual frequency.** The Completion "Next" card and progression (a stored row with no
+  schedule keys) now resolve the fallback schedule from the user's `training_days` through
+  `getScheduleForDays` and its existing normalization, for every Program, instead of assuming 3 days.
+
+**Pre-existing defect fixed in passing.** `workout-complete.html` declared its Program-session helpers inside
+`loadAll()`, so `renderNext()` could not reach them: its call threw a swallowed `ReferenceError` and the
+card's "Focus" line never rendered. The helpers are now top-level, which is also how the Completion label reads
+the Routine name without a new request.
+
+**Not claimed:** Phase 4.3.9B's exit criteria (`docs/ROADMAP.md`, criterion B) are not asserted complete by
+this record. No enrolment is created by any surface CP4e-2 touches; the first progression finish still creates
+the `user_programs` row, as before.

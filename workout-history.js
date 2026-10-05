@@ -10,12 +10,16 @@
  *   - currentUser      ({ id })
  *   - showToast(msg)
  *   - programName(slug) + sessionLabel(key)  (schedules.js)
+ *   - pcRoutineNames(pairs)                  (program-catalog.js, optional)
  *
  * The host page must contain an element matching opts.targetId (default
  * "historyList") and include the history-card CSS classes.
  * ────────────────────────────────────────────────────────────────────────── */
 
 var workoutHistory  = [];
+// Routine names for the listed Program sessions, keyed 'slug|session_key'
+// (Phase 4.3.9B CP4e-2). One batched read per history load; {} on any failure.
+var _histRoutineNames = {};
 var _histTargetId   = 'historyList';
 var _histEmptyText  = 'No workouts yet — start your first session above.';
 
@@ -82,6 +86,12 @@ async function loadHistory(opts) {
     return;
   }
   workoutHistory = data.map(function(w) { return Object.assign({ _editing: false }, w); });
+  // The Routine's own name labels a Program session; resolve every listed one
+  // in a single query. A failure leaves the existing label as the fallback.
+  _histRoutineNames = (typeof pcRoutineNames === 'function')
+    ? await pcRoutineNames(workoutHistory.filter(function(w) { return w.program_slug && w.session_key; })
+        .map(function(w) { return { slug: w.program_slug, key: w.session_key }; }))
+    : {};
   renderHistory();
 }
 
@@ -97,7 +107,9 @@ function renderHistory() {
 
     // Program + session sub-line (only when stored on the workout)
     var progName = (w.program_slug && typeof programName === 'function') ? programName(w.program_slug) : '';
-    var sessName = (w.session_key  && typeof sessionLabel === 'function') ? sessionLabel(w.session_key)  : '';
+    var routineName = (w.program_slug && w.session_key) ? _histRoutineNames[w.program_slug + '|' + w.session_key] : null;
+    var sessName = (typeof routineName === 'string' && routineName) ? routineName
+      : ((w.session_key && typeof sessionLabel === 'function') ? sessionLabel(w.session_key) : '');
     var subParts = [];
     if (progName) subParts.push(progName);
     if (sessName) subParts.push(sessName);

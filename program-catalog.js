@@ -197,9 +197,48 @@ function programName(slug) {
   return pcProgramName(pcCached() || [], slug);
 }
 
+/* ── Program session names (Phase 4.3.9B CP4e-2) ─────────────────────────
+ * A Program session's label is its Routine's OWN name. SESSION_LABELS (in
+ * schedules.js) is keyed by session_key alone and shared across Programs, so
+ * Bodyweight Foundations' `lower_a` would read "Lower A" there although its
+ * Routine is "Lower Body A". Surfaces that do not already hold the Routine row
+ * resolve names here, in ONE query for any number of (slug, session_key)
+ * pairs, through the same Program-scoped relationship and RLS as the Program
+ * session read. Any failure yields {} so the caller keeps its existing label. */
+function pcSessionNameKey(slug, sessionKey) { return slug + '|' + sessionKey; }
+
+async function pcRoutineNames(pairs) {
+  var slugs = {}, keys = {}, any = false;
+  (pairs || []).forEach(function (p) {
+    if (!p || typeof p.slug !== 'string' || !p.slug || typeof p.key !== 'string' || !p.key) return;
+    slugs[p.slug] = true; keys[p.key] = true; any = true;
+  });
+  if (!any || typeof supabaseClient === 'undefined') return {};
+  try {
+    var res = await supabaseClient
+      .from('program_routines')
+      .select('session_key, programs!inner(slug), workout_templates!inner(name)')
+      .in('session_key', Object.keys(keys))
+      .in('programs.slug', Object.keys(slugs));
+    if (res.error || !Array.isArray(res.data)) return {};
+    var out = {};
+    res.data.forEach(function (r) {
+      var slug = r && r.programs && r.programs.slug;
+      var name = r && r.workout_templates && r.workout_templates.name;
+      if (typeof slug === 'string' && typeof r.session_key === 'string' && typeof name === 'string' && name) {
+        out[pcSessionNameKey(slug, r.session_key)] = name;
+      }
+    });
+    return out;
+  } catch (e) {
+    return {};
+  }
+}
+
 /* Node: export the PURE parts only (no fetchers — they need supabaseClient). */
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
+    pcSessionNameKey: pcSessionNameKey,
     PC_CACHE_KEY: PC_CACHE_KEY,
     pcNormalizeProgram: pcNormalizeProgram,
     pcNormalizeCatalog: pcNormalizeCatalog,

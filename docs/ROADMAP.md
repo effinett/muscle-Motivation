@@ -843,7 +843,8 @@ question and ignoring the answer is not acceptable in a paid personalization pro
   the 5-day order plus `mobility_recovery`. 2- and 3-day schedules keep Full Body A/B/C, and Full Body C
   stays reachable for a 2-day user. CP4e-1 (guarded publish, applied only on a separately approved hash)
   precedes CP4e-2 (mapping, Routine-name display, tests); the mapping never ships first. **CP4e-1 applied
-  and verified 2026-10-05** (migration `20261005041336`); **CP4e-2 pending.**
+  and verified 2026-10-05** (migration `20261005041336`). **CP4e-2** (code only) activates the mapping
+  and labels every Program session with its Routine's own name; see the 2026-10-05 history entry.
 - **4.3.9C — Women's Full Body + Glutes Program.**
 - **4.3.9D — Women's Bodyweight / No-Equipment Program.**
 - **4.3.9E — Glute Builder repositioning.** Preserve it as the glute-**specialization**, not the broad

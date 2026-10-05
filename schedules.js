@@ -24,18 +24,17 @@ var PROGRAM_SCHEDULES = {
     5: ['push_a', 'pull_a', 'legs_a', 'upper_b', 'lower_b'],
     6: ['push_a', 'pull_a', 'legs_a', 'push_b', 'pull_b', 'legs_b'],
   },
-  // Bodyweight Foundations runs the SAME three full-body sessions at every
-  // frequency — no session is dropped for a lower training day count, so a
-  // 2-day user still reaches C by carrying `current_index` forward across
-  // weeks (A,B → C,A → B,C). This mapping is behaviourally identical to the
-  // unmapped-slug fallback below; it is written out so the intent is explicit
-  // and survives any future change to that fallback.
+  // Bodyweight Foundations (Phase 4.3.9B CP4e-2, owner-approved order).
+  // 2 and 3 days run the three full-body sessions — no session is dropped for
+  // the 2-day user, who still reaches C by carrying `current_index` forward
+  // across weeks (A,B → C,A → B,C). 4–6 days run the CP4d frequency Routines;
+  // there is no Pull session because the Program is equipment-free.
   bodyweight_foundations: {
     2: ['full_a', 'full_b', 'full_c'],
     3: ['full_a', 'full_b', 'full_c'],
-    4: ['full_a', 'full_b', 'full_c'],
-    5: ['full_a', 'full_b', 'full_c'],
-    6: ['full_a', 'full_b', 'full_c'],
+    4: ['push_core_a', 'lower_a', 'push_core_b', 'lower_b'],
+    5: ['push_core_a', 'lower_a', 'conditioning_core', 'push_core_b', 'lower_b'],
+    6: ['push_core_a', 'lower_a', 'conditioning_core', 'push_core_b', 'lower_b', 'mobility_recovery'],
   },
   glute_builder: {
     2: ['glute_a', 'glute_b'],
@@ -62,6 +61,12 @@ var SESSION_LABELS = {
   glute_lower_a: 'Glute & Lower A', glute_lower_b: 'Glute & Lower B',
   upper_push_a: 'Upper Push',       upper_pull_a: 'Upper Pull',
   glute_pump: 'Glute Pump',         full_body_glute: 'Full Body Glute',
+  // Fallbacks only: a Program session's Routine name is authoritative wherever
+  // it can be read (pcRoutineNames). These keep a raw key off screen when it
+  // cannot. lower_a/lower_b keep their existing shared labels.
+  push_core_a: 'Push & Core A',     push_core_b: 'Push & Core B',
+  conditioning_core: 'Conditioning & Core',
+  mobility_recovery: 'Mobility & Recovery',
 };
 
 /* Normalize any training_days value into a supported bucket (2–6).

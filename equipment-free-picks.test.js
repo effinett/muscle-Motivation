@@ -356,3 +356,21 @@ test('both flows read the one shared rule, not a page-local copy', () => {
   // No exercise id list lives in the page.
   EF.EQUIPMENT_FREE_EXERCISE_IDS.forEach((id) => assert.ok(!PAGE.includes(id), id + ' is not hard-coded'));
 });
+
+/* ── Phase 4.3.9B CP4e-2 — the six activated frequency sessions ─────────── */
+
+for (const key of ['push_core_a', 'lower_a', 'conditioning_core', 'push_core_b', 'lower_b', 'mobility_recovery']) {
+  test('CP4e-2: a ' + key + ' session keeps the equipment-free Swap and picker', async () => {
+    // The rule keys on the Program, so every activated session inherits it.
+    const h = harness({ workout: { id: 'w-' + key, program_slug: 'bodyweight_foundations', session_key: key } });
+    const browse = pick(h, 'workout', '');
+    assert.equal(browse.list.length, EF.EQUIPMENT_FREE_EXERCISE_IDS.length, 'only the equipment-free pool');
+    browse.list.forEach((n) => assert.ok(isFree(n), n));
+    assert.equal(pick(h, 'workout', 'bench press').add, '', 'no "+ Add" escape');
+    pick(h, 'workout', 'bench press').list.forEach((n) => assert.ok(isFree(n), n));
+    swapNames(h, 'Push-Up').names.forEach((n) => assert.ok(isFree(n), 'Swap → ' + n));
+    vm.runInContext('pickerMode = "workout";', h.s);
+    await h.s.selectExercise('Bench Press', byName('Bench Press').id);
+    assert.deepStrictEqual(plain(h.s.writes), [], 'an equipment exercise cannot be added');
+  });
+}

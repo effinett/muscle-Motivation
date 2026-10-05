@@ -402,6 +402,32 @@
     }
   })(); });
 
+  // Top-level so renderNext() can reach them too: declared inside loadAll() they
+  // were invisible to it, and its Next-card call silently threw (fixed in CP4e-2).
+  /* CP8b: Program prescriptions come from the canonical Routine via
+     program_routines. program_workouts is frozen rollback data and is no
+     longer read at runtime. RLS gates both tables, so an unentitled caller
+     simply gets nothing. Read-only display, so the stored canonical shape is
+     used as-is. */
+  // One Program-scoped Routine read: its own name (the session label, Phase
+  // 4.3.9B CP4e-2) and its prescription. Never throws; a miss is { name: null, exercises: [] }.
+  async function programSession(slug, key){
+    var none = { name: null, exercises: [] };
+    if(!slug || !key) return none;
+    try {
+      var res = await supabaseClient
+        .from('program_routines')
+        .select('programs!inner(slug), workout_templates!inner(name, exercises)')
+        .eq('session_key', key).eq('programs.slug', slug).maybeSingle();
+      if(res.error || !res.data || !res.data.workout_templates) return none;
+      var t = res.data.workout_templates;
+      return { name: (typeof t.name === 'string' && t.name) ? t.name : null, exercises: t.exercises || [] };
+    } catch(e){ return none; }
+  }
+  async function programSessionExercises(slug, key){
+    return (await programSession(slug, key)).exercises;
+  }
+
   async function loadAll(workoutId){
     // Current workout + its exercises + sets (RLS scopes to this user).
     var { data: w } = await supabaseClient
@@ -423,23 +449,6 @@
     // (Phase 4.2.1K): a canonical exercise and a same-name custom never share a
     // trend; two same-name customs stay separate; legacy name-only rows fold in
     // only when the current exercise has no stable id.
-    /* CP8b: Program prescriptions come from the canonical Routine via
-       program_routines. program_workouts is frozen rollback data and is no
-       longer read at runtime. RLS gates both tables, so an unentitled caller
-       simply gets nothing. Read-only display, so the stored canonical shape is
-       used as-is. */
-    async function programSessionExercises(slug, key){
-      if(!slug || !key) return [];
-      try {
-        var res = await supabaseClient
-          .from('program_routines')
-          .select('programs!inner(slug), workout_templates!inner(exercises)')
-          .eq('session_key', key).eq('programs.slug', slug).maybeSingle();
-        if(res.error || !res.data || !res.data.workout_templates) return [];
-        return res.data.workout_templates.exercises || [];
-      } catch(e){ return []; }
-    }
-
     if(exs.length) await loadHistory(exs, workoutId);
 
     // Optional: programmed rep ranges for the session (for progression text).
@@ -693,21 +702,29 @@
     try {
       var { data: up } = await supabaseClient.from('user_programs')
         .select('schedule_keys,current_index').eq('user_id', user.id).eq('program_slug', w.program_slug).maybeSingle();
-      var keys = (up && up.schedule_keys && up.schedule_keys.length) ? up.schedule_keys : (typeof getScheduleForDays==='function' ? getScheduleForDays(w.program_slug, 3) : []);
+      var keys = (up && up.schedule_keys && up.schedule_keys.length) ? up.schedule_keys : null;
+      if(!keys){
+        // No stored schedule: use the user's ACTUAL frequency (Phase 4.3.9B
+        // CP4e-2), never an assumed 3 days. getScheduleForDays normalizes a
+        // missing or invalid value exactly as it always has.
+        var { data: prof } = await supabaseClient.from('profiles')
+          .select('training_days').eq('id', user.id).maybeSingle();
+        keys = typeof getScheduleForDays==='function' ? getScheduleForDays(w.program_slug, prof && prof.training_days) : [];
+      }
       var idx = up ? (up.current_index||0) : 0;
       var nextKey = keys.length ? keys[idx % keys.length] : null;
-      var label = nextKey && typeof sessionLabel==='function' ? sessionLabel(nextKey) : (nextKey||'');
       var prog = typeof programName==='function' ? programName(w.program_slug) : '';
 
+      // One read gives both the Routine's own name (the label) and its focus.
       var focus = '';
+      var nextSess = { name: null, exercises: [] };
       if(nextKey){
-        try {
-          var nextEx = await programSessionExercises(w.program_slug, nextKey);
-          if(nextEx.length){
-            focus = nextEx.slice(0,3).map(function(x){ return x.name; }).join(' · ');
-          }
-        } catch(e){}
+        try { nextSess = await programSession(w.program_slug, nextKey); } catch(e){}
+        if(nextSess.exercises.length){
+          focus = nextSess.exercises.slice(0,3).map(function(x){ return x.name; }).join(' · ');
+        }
       }
+      var label = nextSess.name || (nextKey && typeof sessionLabel==='function' ? sessionLabel(nextKey) : (nextKey||''));
       el.innerHTML =
         '<div class="next-label">'+esc(prog || 'Next session')+'</div>'+
         '<div class="next-name">'+esc(label || 'Next Workout')+'</div>'+

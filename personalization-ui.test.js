@@ -178,7 +178,10 @@ test('Train suggests only when nothing is already recommended', () => {
   assert.ok(/if \(!shown\) await renderSuggestedProgram\(profile\)/.test(TRAIN_CODE));
   // The pre-existing active-program path still runs first and unchanged.
   assert.ok(/shown = await renderActiveProgramSession\(profile\)/.test(TRAIN_CODE));
-  assert.ok(/renderRecommended\(slug, keys\[idx % keys\.length\]\)/.test(TRAIN_CODE));
+  // Phase 4.3.9B CP4e-2: the same scheduled key, now labelled with its Routine's
+  // own name read through loadProgramSession.
+  assert.ok(/var key = keys\[idx % keys\.length\];/.test(TRAIN_CODE));
+  assert.ok(/renderRecommended\(slug, key, sess && sess\.session_name\)/.test(TRAIN_CODE));
 });
 
 test('Home stays minimal: no carbs or fat added to its nutrition snapshot', () => {
