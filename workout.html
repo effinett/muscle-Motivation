@@ -2802,6 +2802,46 @@
     return exerciseLibrary.filter(function (e) { return !e.user_created; });
   }
 
+  // ── Equipment-free Program sessions (Phase 4.3.9B) ────────────────────
+  // A Bodyweight Foundations session must not pick up an exercise that needs
+  // equipment through Swap or the manual picker. The rule itself lives in
+  // ExerciseFilters (one definition); these helpers only decide WHEN it applies
+  // and enforce it at every boundary: Swap ranking, picker rows, shortcuts, the
+  // custom "+ Add" row, and the commit paths (selectExercise / applySwap).
+  //
+  // Only a pick for the LIVE workout inherits its Program. A Routine draft
+  // ('template') and a history review ('resolve') are never restricted.
+  // Read ONLY if exercise-filters.js failed to load, so an equipment-free
+  // session still fails closed while every other Program keeps the original
+  // fallback picker. Pinned by test to ExerciseFilters.EQUIPMENT_FREE_PROGRAM_SLUGS.
+  var EQUIPMENT_FREE_PROGRAMS_IF_UNLOADED = { bodyweight_foundations: true };
+  function workoutEquipmentFree() {
+    var slug = currentWorkout && currentWorkout.program_slug;
+    if (!slug) return false;
+    if (typeof ExerciseFilters === 'undefined' || typeof ExerciseFilters.isEquipmentFreeProgram !== 'function') {
+      // Restricted, but nothing can be proven allowed (equipmentFreeRow is
+      // false without the module), so it offers none rather than every one.
+      return EQUIPMENT_FREE_PROGRAMS_IF_UNLOADED[slug] === true;
+    }
+    return ExerciseFilters.isEquipmentFreeProgram(slug);
+  }
+  function pickTargetsWorkout() {
+    return pickerMode === 'workout' || (pickerMode === 'swap' && !!swapCtx && swapCtx.mode === 'workout');
+  }
+  function pickerEquipmentFree() { return pickTargetsWorkout() && workoutEquipmentFree(); }
+  function equipmentFreeRow(row) {
+    return typeof ExerciseFilters !== 'undefined' && typeof ExerciseFilters.isEquipmentFreeExercise === 'function'
+      && ExerciseFilters.isEquipmentFreeExercise(row);
+  }
+  // By canonical id, resolved against the loaded catalog. A custom or unknown
+  // id has no metadata to prove, so it is never allowed.
+  function equipmentFreeId(canonicalId) {
+    if (canonicalId == null || canonicalId === '') return false;
+    var row = exerciseLibrary.find(function (e) { return !e.user_created && String(e.id) === String(canonicalId); });
+    return !!row && equipmentFreeRow(row);
+  }
+  var EQUIPMENT_FREE_BLOCKED = 'This is an equipment-free workout — choose an exercise from the list.';
+
   // §16 — completed work is never silently reattributed to a different exercise.
   function completedSetCount(ex) {
     if (!ex || !ex.sets) return 0;
@@ -2840,7 +2880,11 @@
     if (!ctx || typeof ExerciseSubstitution === 'undefined') return;
     swapCtx = ctx;
     // Computed synchronously over the in-memory catalog — no request, no await.
-    var result = ExerciseSubstitution.findSubstitutions(ctx.ref, canonicalCatalog());
+    // In an equipment-free session only equipment-free candidates are ranked;
+    // the source itself is still found in the full catalog.
+    var opts = (ctx.mode === 'workout' && workoutEquipmentFree())
+      ? { candidateFilter: equipmentFreeRow } : undefined;
+    var result = ExerciseSubstitution.findSubstitutions(ctx.ref, canonicalCatalog(), opts);
     renderExerciseSwap(ctx, result);
     MMSheet.open(document.getElementById('exerciseSwapModal'), {
       variant: 'sheet',
@@ -2906,6 +2950,11 @@
     if (!ctx) return;
     swapCtx = null;
     closeExerciseSwap();
+    // Commit-boundary check for both a ranked candidate and a manual pick.
+    if (ctx.mode === 'workout' && workoutEquipmentFree() && !equipmentFreeId(resolvePickedId(name, canonicalId))) {
+      showToast(EQUIPMENT_FREE_BLOCKED);
+      return;
+    }
 
     if (ctx.mode === 'template') {
       var t = editingTemplate && editingTemplate.exercises ? editingTemplate.exercises[ctx.exIdx] : null;
@@ -3185,6 +3234,16 @@
     var cats = prefsCatalogs();
     var favs = ExercisePrefs.buildFavorites(favoriteRows, cats);
     var recents = ExercisePrefs.buildRecents(recentUsages, cats);
+    // Phase 4.3.9B — an equipment-free session shows only equipment-free
+    // shortcuts. A section the rule empties is omitted rather than shown with
+    // its "nothing saved yet" copy, which would be untrue.
+    if (pickerEquipmentFree()) {
+      var allowed = function (it) { return equipmentFreeId(it.exerciseId); };
+      favs = favs.filter(allowed);
+      recents = recents.filter(allowed);
+      return (favs.length ? shortcutSectionHtml('Favorites', favs, '') : '') +
+             (recents.length ? shortcutSectionHtml('Recent', recents, '') : '');
+    }
     // Nothing to shortcut and nothing to explain — show the plain browse list
     // rather than two empty boxes on a first-ever picker open.
     if (!favs.length && !recents.length) return '';
@@ -3228,6 +3287,7 @@
     var shownNames = {}; // lowercased names already listed (dedupe + add-row check)
     var hint = '';
     var emptyHtml = '';
+    var equipmentFree = pickerEquipmentFree();   // Phase 4.3.9B
 
     if (typeof ExerciseFilters !== 'undefined' && exerciseIndex) {
       // Shared discovery (Phase 4.2.1I): the SAME ranked search (exercise-core
@@ -3238,7 +3298,8 @@
       // auto-selection happens (the user still taps a row).
       var activeCustoms = exerciseLibrary.filter(function(e) { return e.user_created; });
       var disc = ExerciseFilters.runDiscovery({
-        index: exerciseIndex, customs: activeCustoms, query: query, filters: pickerFilters, limit: 40
+        index: exerciseIndex, customs: activeCustoms, query: query, filters: pickerFilters, limit: 40,
+        equipmentFree: equipmentFree
       });
       disc.rows.forEach(function(r) {
         shownNames[r.name.toLowerCase()] = 1;
@@ -3257,8 +3318,10 @@
       }
       if (!rows.length) emptyHtml = pickerEmptyHtml(q);
     } else {
-      // Fallback: shared module unavailable — original substring filter, unchanged.
+      // Fallback: shared module unavailable — original substring filter, plus the
+      // equipment-free rule (which then fails closed for an equipment-free session).
       exerciseLibrary.filter(function(e) {
+        if (equipmentFree && !equipmentFreeRow(e)) return false;   // never a back door
         return e.name.toLowerCase().includes(qKey) || (e.category || '').toLowerCase().includes(qKey);
       }).forEach(function(e) {
         shownNames[e.name.toLowerCase()] = 1;
@@ -3273,7 +3336,9 @@
     // always offered (even with filters active) since it's an explicit action,
     // not a filtered search result.
     var addRow = '';
-    if (q && !shownNames[qKey] && !exerciseLibrary.find(function(e) { return e.name.toLowerCase() === qKey; })) {
+    // An equipment-free session never offers to create a custom: it carries no
+    // equipment metadata, so it could not be proven equipment-free.
+    if (q && !equipmentFree && !shownNames[qKey] && !exerciseLibrary.find(function(e) { return e.name.toLowerCase() === qKey; })) {
       addRow = '<button type="button" class="picker-item" data-name="' + esc(q) + '" data-id="" onclick="selectExercise(this.dataset.name, this.dataset.id)">' +
         '<div class="picker-item-text"><div class="picker-item-name">+ Add “' + esc(q) + '”</div>' +
         '<div class="picker-item-cat">Custom exercise</div></div>' +
@@ -3445,8 +3510,14 @@
       // clears an abandoned swap context. Reading it afterwards would always see
       // null and silently turn a manual swap into a no-op.
       var pendingSwap = (pickerMode === 'swap') ? swapCtx : null;
+      // Also read before closePicker(), which clears an abandoned swap context.
+      var equipmentFreePick = pickerEquipmentFree();
       closePicker();
       var canonicalId = resolvePickedId(name, pickedId);
+      // Phase 4.3.9B commit boundary: in an equipment-free session nothing that
+      // is not a proven equipment-free catalog exercise is added — including a
+      // typed name that resolves to a canonical exercise, and any custom.
+      if (equipmentFreePick && !equipmentFreeId(canonicalId)) { showToast(EQUIPMENT_FREE_BLOCKED); return; }
       // Save any brand-new (non-library) exercise to the user's library so it's
       // reusable later. Dedupes internally — global/known names are no-ops.
       await saveUserExercise(name);

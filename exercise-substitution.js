@@ -249,7 +249,12 @@
   /* ── Public: find substitutions ───────────────────────────────────────────
    * ref     — { name, exerciseId, customId } (the shared reference shape).
    * catalog — canonical `exercises` rows. Injected, never owned.
-   * options — { bestLimit, otherLimit }.
+   * options — { bestLimit, otherLimit, candidateFilter }.
+   *   candidateFilter(row) → boolean: an extra eligibility constraint the
+   *   caller owns (e.g. the equipment-free Program rule). Only candidates are
+   *   constrained — the SOURCE is still looked up in the full catalog — and it
+   *   applies before ranking and limits, so it never empties a list that has
+   *   eligible rows further down.
    *
    * Returns:
    *   { kind, sourceId, sourceName, supported, best[], other[], note }
@@ -270,6 +275,7 @@
     var opts = options || {};
     var bestLimit = opts.bestLimit != null ? opts.bestLimit : DEFAULTS.bestLimit;
     var otherLimit = opts.otherLimit != null ? opts.otherLimit : DEFAULTS.otherLimit;
+    var candidateFilter = typeof opts.candidateFilter === 'function' ? opts.candidateFilter : null;
 
     var kind = identityType(ref);
     var out = {
@@ -301,6 +307,7 @@
     for (var j = 0; j < list.length; j++) {
       var cand = list[j];
       if (eligibility(source, cand)) continue;
+      if (candidateFilter && candidateFilter(cand) !== true) continue;
       var key = String(cand.id);
       if (seen[key]) continue;                 // duplicate ids collapse
       seen[key] = 1;
