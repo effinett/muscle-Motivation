@@ -1759,3 +1759,89 @@ criterion tracked in §10.13 — including VD-C unless its canonical acceptance 
 satisfied. This decision neither closes nor weakens 4.3.5. 4.3.6 and 4.3.7 remain closed, and all 4.3.7
 functionality is untouched. **4.3.8, 4.3.9, 4.4 and 4.5 have NOT started** — no tour, Coach, paywall,
 Stripe, Program content or voice work was built.
+
+---
+
+## 2026-10-04 — Phase 4.3.9B checkpoint record — frequency Routines and the CP4e definition
+
+**Status: Phase 4.3.9B OPEN — in progress. This is a checkpoint record, not a phase closure.** It exists
+so the CP4d → CP4e decisions no longer depend on conversation history. Earlier 4.3.9B checkpoints are
+evidenced by their own commits, migrations and tests — for example PRs #57, #58, #63, #66, #67, #68
+and #70, and the `phase_439b_cp4b_…` and `phase_439b_cp4c_…` migrations. Per-checkpoint narrative
+for them is **historical detail not reconstructed** here.
+
+### CP4d — six private frequency Routines (complete)
+
+Production migration **`20261003000515`** (`phase_439b_cp4d_bodyweight_frequency_routines`), recorded
+byte-identically in the repository by **PR #71** (squash `4e9bbfd`). It inserted six platform Routines,
+all `visibility='private'`, and six Bodyweight Foundations links:
+
+| Sort | Session key | Routine |
+|---:|---|---|
+| 4 | `push_core_a` | Push & Core A |
+| 5 | `lower_a` | Lower Body A |
+| 6 | `conditioning_core` | Conditioning & Core |
+| 7 | `push_core_b` | Push & Core B |
+| 8 | `lower_b` | Lower Body B |
+| 9 | `mobility_recovery` | Mobility & Recovery |
+
+Nothing was published and no schedule changed: every frequency 2–6 still runs Full Body A/B/C, and the
+CP4a containment keeps the unmapped drafts off the Program page. Every prescribed exercise is in the
+reviewed 38-row equipment-free pool; the 14 reviewed exclusions are never used.
+
+### Equipment-free Swap + manual picker (complete)
+
+**PR #72** (squash `6730dc5`), the owner-required prerequisite before CP4e. In a Bodyweight Foundations
+session, Swap and the manual picker offer only equipment-free exercises: the reviewed CP4d pool AND the
+catalog's Bodyweight classification, one shared rule in `exercise-filters.js`. Customs and the "+ Add" row
+are hidden there, both commit paths re-check it, and if the filter module fails to load only an
+equipment-free session fails closed. Other Programs, manual workouts, Routine drafts and history review
+are unchanged.
+
+### CP4e — definition (owner decisions, 2026-10-04)
+
+**CP4e is the controlled publication of the six CP4d Routines plus activation of the 4/5/6-day
+Bodyweight Foundations mapping.**
+
+| Training days | Sessions, in order |
+|---|---|
+| 2 | Full Body A/B/C — unchanged; Full Body C stays reachable through the rotation |
+| 3 | Full Body A/B/C — unchanged |
+| 4 | `push_core_a`, `lower_a`, `push_core_b`, `lower_b` |
+| 5 | `push_core_a`, `lower_a`, `conditioning_core`, `push_core_b`, `lower_b` |
+| 6 | `push_core_a`, `lower_a`, `conditioning_core`, `push_core_b`, `lower_b`, `mobility_recovery` |
+
+An earlier idea to reduce 2 days to Full Body A/B only is **superseded**; the 2-day rotation requirement
+stands.
+
+- **Two steps, in this order.** **CP4e-1:** a guarded data migration publishing exactly the six Routines,
+  applied to production only on a separately approved hash. **CP4e-2:** the mapping, Routine-name display
+  and tests, only after the publish is applied and verified. The mapping must never ship first, or 4–6 day
+  users would hit the schedule-unavailable state.
+- **Session labels.** Where the Routine is available, its own name is the display label, so a surface
+  never shows "Lower A" for "Lower Body A" or a raw key such as `push_core_a`. This is no broad labeling
+  refactor, and existing fallbacks stay where Routine data is genuinely unavailable.
+- **Program metadata unchanged.** `recommended_days_per_week` stays **3**, and "At a Glance" keeps its
+  3-day recommendation, unless implementation shows the UI presents it as a hard maximum, in which case
+  that conflict comes back to the owner.
+- **Exit criterion.** The 4.3.9-L Program-content integrity criterion (`docs/ROADMAP.md`, criterion B)
+  applies, including day counts matching the advertised schedule and no automatic enrolment.
+
+### CP4e-1 — publication applied and verified (2026-10-05)
+
+Production migration **`20261005041336`** (`phase_439b_cp4e_publish_bodyweight_frequency_routines`),
+applied once on the owner-approved artifact hash `bfcbb6e7…` after a FRESH read-only preflight. Its single
+write changed `visibility` from `private` to `published` on exactly the six CP4d Routines; nothing else on
+them changed. Platform Routines went from 57/50/7 to **57/56/1** (total/published/private); links stayed
+**56**. The one remaining private platform Routine is the unrelated CP6 validation Routine.
+
+Afterwards, the six's own fingerprint with `visibility` removed was unchanged, as were the fingerprints of
+every other platform Routine and every link. The Program row, Full Body A/B/C, all nine links in order, the
+equipment-free pool fingerprint and the 159-row catalog were all unchanged. Only the six carry the
+transaction's write stamp. The migration is recorded byte-identically in `supabase/migrations/` with
+regression tests in `bodyweight-foundations.test.js`; 68 migrations.
+
+**State at this record:** CP4e-1 is applied and verified. **CP4e-2 has not started**: no frequency maps the
+six yet, so every frequency still runs Full Body A/B/C, and the Program page still lists only A/B/C. Until
+CP4e-2 ships, a published but unmapped session can still be opened by direct URL. The owner accepted this
+gap temporarily for this sequencing step.
