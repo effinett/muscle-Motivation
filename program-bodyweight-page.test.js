@@ -541,7 +541,9 @@ test('responsive and accessibility primitives are present', () => {
   assert.match(PAGE, /body\s*\{[^}]*overflow-x:\s*hidden/, 'no horizontal scrolling');
   assert.match(PAGE, /@media \(max-width: 360px\)[\s\S]*grid-template-columns: 1fr/,
     'facts collapse to one column on the narrowest phones');
-  assert.match(PAGE, /padding: 28px 16px 120px/, 'content clears the sticky CTA');
+  // CP4f: the bottom reserve is the sticky bar's measured height + safe area,
+  // not a fixed 120px (pinned in detail by the CP4f section below).
+  assert.match(PAGE, /padding: 28px 16px calc\(var\(--sticky-cta-h, calc\(110px \+ env\(safe-area-inset-bottom, 0px\)\)\) \+ 24px\);/, 'content clears the sticky CTA and the safe area');
   assert.match(PAGE, /safe-area\.css/, 'safe-area handling');
   // Semantics + focus + reduced motion.
   assert.match(PAGE_CODE, /<button type="button" class="sched-row/, 'sessions are buttons');
@@ -1333,4 +1335,122 @@ test('CP4a state 3: sessions are read only after frequency resolution, in source
   const boot = PAGE.slice(PAGE.indexOf("addEventListener('load'"));
   assert.ok(!/LINKED_SESSIONS = await loadSessions\(\)/.test(boot.slice(0, boot.indexOf('preselect('))),
     'boot does not load sessions before preselect');
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * Phase 4.3.9B CP4f — sticky Start bar clearance
+ * Owner-reported on a physical iPhone 14 Plus: the fixed Start bar could cover
+ * the last session row. The page now reserves the bar's MEASURED height (which
+ * includes the home-indicator inset) at its bottom, instead of a fixed 120px
+ * that ignored the safe area. Real-browser geometry at 320/390/430 px is
+ * recorded in the PR; these tests pin the mechanism.
+ * ══════════════════════════════════════════════════════════════════════ */
+
+const cssRule = (sel) => (PAGE.match(new RegExp('\\n\\s*' + sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\{[^}]*\\}')) || [''])[0];
+
+test('CP4f: the bar clears the home indicator and the content reserves the bar', () => {
+  const bar = cssRule('.sticky-cta');
+  assert.match(bar, /position: fixed; bottom: 0;/, 'the bar stays fixed to the bottom');
+  assert.match(bar, /padding: 14px 20px calc\(18px \+ env\(safe-area-inset-bottom, 0px\)\);/,
+    'the bar adds the home-indicator inset to its own bottom padding');
+  assert.ok(!/visibility:\s*hidden|transform|bottom:\s*-|opacity:\s*0/.test(bar), 'the bar is not hidden or pushed off-screen');
+  const cont = cssRule('.container');
+  assert.match(cont, /calc\(var\(--sticky-cta-h, calc\(110px \+ env\(safe-area-inset-bottom, 0px\)\)\) \+ 24px\)/,
+    'reserve = measured bar height (else bar + inset) + 24px');
+  assert.ok(!/120px/.test(cont), 'the old fixed reserve is gone');
+  // The 110px fallback covers the bar as rendered today (109px, measured in a
+  // real browser at 320/390/430 px) before the inset is added.
+});
+
+function reserveHarness(o) {
+  o = o || {};
+  const props = {};
+  const listeners = [];
+  const observed = [];
+  const bar = o.noBar ? null : { getBoundingClientRect: () => ({ height: o.height === undefined ? 109 : o.height }) };
+  const sandbox = {
+    SESSIONS: o.sessions || [],
+    document: {
+      getElementById: (id) => (id === 'stickyCta' ? bar : null),
+      documentElement: o.noRoot ? undefined : { style: {
+        setProperty: (k, v) => { props[k] = v; },
+        removeProperty: (k) => { delete props[k]; },
+      } },
+    },
+    window: { addEventListener: (ev, fn) => listeners.push([ev, fn]) },
+    ResizeObserver: o.noRO ? undefined : function (fn) { this.observe = (el) => observed.push([el, fn]); },
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(extractPageFn(PAGE, 'syncStickyReserve') + '\n' + extractPageFn(PAGE, 'watchStickyReserve'), sandbox);
+  return { sandbox, props, listeners, observed, bar };
+}
+
+for (const n of [3, 4, 5, 6]) {
+  test('CP4f: with ' + n + ' sessions the reserve equals the bar height, whatever the count', () => {
+    const sessions = Array.from({ length: n }, (_, i) => ({ session_key: 'k' + i, name: 'S' + i }));
+    for (const height of [109, 143, 167.4]) {   // today; + 34px inset; + a wrapped name
+      const h = reserveHarness({ sessions, height });
+      h.sandbox.syncStickyReserve();
+      assert.equal(h.props['--sticky-cta-h'], Math.ceil(height) + 'px', n + ' sessions, bar ' + height);
+    }
+  });
+}
+
+test('CP4f: the reserve follows the bar as it appears, resizes and hides', () => {
+  const h = reserveHarness({ height: 0 });
+  h.sandbox.watchStickyReserve();
+  assert.equal(h.props['--sticky-cta-h'], undefined, 'a hidden bar leaves the CSS fallback');
+  assert.equal(h.observed.length, 1, 'the bar itself is observed');
+  assert.strictEqual(h.observed[0][0], h.bar);
+  assert.deepEqual(h.listeners.map((l) => l[0]), ['resize']);
+  // Shown with a two-line name on a phone with a home indicator.
+  h.bar.getBoundingClientRect = () => ({ height: 167 });
+  h.observed[0][1]();
+  assert.equal(h.props['--sticky-cta-h'], '167px');
+  h.bar.getBoundingClientRect = () => ({ height: 0 });
+  h.listeners[0][1]();
+  assert.equal(h.props['--sticky-cta-h'], undefined, 'hidden again → fallback');
+});
+
+test('CP4f: the reserve code can never break the page', () => {
+  for (const o of [{ noBar: true }, { noRoot: true }, { noRO: true }]) {
+    const h = reserveHarness(o);
+    assert.doesNotThrow(() => h.sandbox.watchStickyReserve(), JSON.stringify(o));
+  }
+  const noRO = reserveHarness({ noRO: true });
+  noRO.sandbox.watchStickyReserve();
+  assert.equal(noRO.props['--sticky-cta-h'], '109px', 'without ResizeObserver it still measures once');
+  assert.deepEqual(noRO.listeners.map((l) => l[0]), ['resize'], 'and on every resize');
+});
+
+test('CP4f: the reserve depends on the bar alone, never on sessions or a particular row', () => {
+  const fns = extractPageFn(PAGE, 'syncStickyReserve') + extractPageFn(PAGE, 'watchStickyReserve');
+  assert.ok(!/SESSIONS|LINKED_SESSIONS|sessList|sched-row|full_c|Full Body C|length/.test(fns), fns);
+  assert.match(PAGE, /\n  watchStickyReserve\(\);\n/, 'installed once at start-up');
+});
+
+test('CP4f: the bar is still shown on every ready path, and touch, focus and motion rules hold', () => {
+  assert.equal((PAGE_CODE.match(/if \(ready\) document\.getElementById\('stickyCta'\)\.style\.display = 'block';/g) || []).length, 3);
+  assert.match(cssRule('.sticky-cta-btn'), /min-height: 44px;/);
+  assert.match(cssRule('.sched-row'), /min-height: 44px/);
+  assert.match(PAGE, /\.sticky-cta-btn:focus-visible \{ outline: 2px solid #fff; outline-offset: 2px; \}/);
+  assert.match(PAGE, /\.sched-row:focus-visible \{ outline: 2px solid var\(--red\); outline-offset: 2px; \}/);
+  assert.match(PAGE, /@media \(prefers-reduced-motion: reduce\)/);
+  // No bottom navigation is loaded on this page, so only the bar needs clearing.
+  assert.ok(!/app-nav\.js|app-shell\.css/.test(PAGE));
+});
+
+test('CP4f: every frequency still lists, orders and launches every session (bar shown)', async () => {
+  for (const days of [2, 3, 4, 5, 6]) {
+    const want = CP4E_SCHEDULE[days];
+    const h = authorized({ links: PROD_LINKS, profile: { training_days: days } });
+    await h.run();
+    assert.equal(h.el('stickyCta').style.display, 'block', 'the bar is visible at days=' + days);
+    const list = h.el('sessList').innerHTML;
+    assert.equal((list.match(/class="sched-row/g) || []).length, want.length, 'no row hidden or removed');
+    const last = want[want.length - 1];
+    h.sandbox.selectSession(last);
+    assert.equal(h.sandbox.SELECTED, last, 'the last row is selectable at days=' + days);
+    assert.ok(h.el('startBtn').href.endsWith('session=' + last + '&mode=optional'), 'unchanged Start URL');
+  }
 });
