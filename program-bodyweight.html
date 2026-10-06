@@ -103,7 +103,12 @@
     /* Container */
     .container {
       max-width: 760px; margin: 0 auto;
-      padding: 28px 16px 120px;
+      /* Bottom reserve = the fixed Start bar's RENDERED height (which already
+         includes the home-indicator inset) + 24px breathing room, so the last
+         row and card always scroll fully clear of it whatever the session
+         count. --sticky-cta-h is measured by syncStickyReserve(); until it is
+         (or if it cannot be) the fallback covers the bar plus the inset. */
+      padding: 28px 16px calc(var(--sticky-cta-h, calc(110px + env(safe-area-inset-bottom, 0px))) + 24px);
       position: relative; z-index: 1;
     }
 
@@ -203,7 +208,9 @@
     .sticky-cta {
       display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
       background: rgba(5,5,5,0.97); backdrop-filter: blur(12px);
-      border-top: 1px solid var(--border); padding: 14px 20px 18px;
+      border-top: 1px solid var(--border);
+      /* The bar sits on the home indicator: its content clears the inset. */
+      padding: 14px 20px calc(18px + env(safe-area-inset-bottom, 0px));
     }
     .sticky-cta-inner {
       max-width: 760px; margin: 0 auto;
@@ -379,6 +386,35 @@
   var LINKED_SESSIONS = []; // everything this Program links, as loaded
   var SESSIONS = [];        // [{ session_key, name, sort_order }] — THIS user's week
   var SELECTED = null;      // session_key the CTA will launch
+
+  /* ── Sticky Start bar clearance (Phase 4.3.9B CP4f) ─────────────────────
+     The page reserves exactly the bar's rendered height at its bottom (the
+     .container padding reads --sticky-cta-h), so nothing ever stays hidden
+     behind the fixed bar once scrolled to the end. The height is measured, not
+     assumed: it includes the home-indicator inset and any wrapped session
+     name, and it does not depend on how many sessions are listed. A hidden bar
+     (0 height) clears the value and the CSS fallback applies. */
+  // Never allowed to break the page: without a measurable bar or a styleable
+  // root it does nothing, and the CSS fallback reserve stays in force.
+  function syncStickyReserve() {
+    var bar = document.getElementById('stickyCta');
+    var root = document.documentElement;
+    if (!root || !root.style || typeof root.style.setProperty !== 'function') return;
+    var h = (bar && typeof bar.getBoundingClientRect === 'function') ? bar.getBoundingClientRect().height : 0;
+    if (h > 0) root.style.setProperty('--sticky-cta-h', Math.ceil(h) + 'px');
+    else root.style.removeProperty('--sticky-cta-h');
+  }
+  function watchStickyReserve() {
+    var bar = document.getElementById('stickyCta');
+    if (!bar) return;
+    // Fires when the bar is shown, hidden, or changes size (a longer name).
+    if (typeof ResizeObserver === 'function') new ResizeObserver(syncStickyReserve).observe(bar);
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('resize', syncStickyReserve);
+    }
+    syncStickyReserve();
+  }
+  watchStickyReserve();
 
   function showOnly(id) {
     ['authGate', 'unavailableState', 'lockedState', 'programContent'].forEach(function (el) {
