@@ -16,3 +16,6 @@ reports/nutrition-evaluation/
 # Claude Code local machine settings
 .claude/settings.local.json
 .claude/settings.local.json.backup-*
+
+# Codex local config — holds a GitHub token, never commit
+.codex/
