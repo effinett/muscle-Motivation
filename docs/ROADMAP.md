@@ -845,6 +845,9 @@ question and ignoring the answer is not acceptable in a paid personalization pro
   precedes CP4e-2 (mapping, Routine-name display, tests); the mapping never ships first. **CP4e-1 applied
   and verified 2026-10-05** (migration `20261005041336`). **CP4e-2** (code only) activates the mapping
   and labels every Program session with its Routine's own name; see the 2026-10-05 history entry.
+  **CP4f** (PR #75) fixed the Start bar's clearance. The 2026-10-19 criterion B audit passes every content
+  item; the one open item is a real-device run that starts and completes a representative workout (see the
+  2026-10-19 history entry).
 - **4.3.9C — Women's Full Body + Glutes Program.**
 - **4.3.9D — Women's Bodyweight / No-Equipment Program.**
 - **4.3.9E — Glute Builder repositioning.** Preserve it as the glute-**specialization**, not the broad

@@ -1890,3 +1890,46 @@ the Routine name without a new request.
 **Not claimed:** Phase 4.3.9B's exit criteria (`docs/ROADMAP.md`, criterion B) are not asserted complete by
 this record. No enrolment is created by any surface CP4e-2 touches; the first progression finish still creates
 the `user_programs` row, as before.
+
+---
+
+## 2026-10-19 — Phase 4.3.9B CP4f record and criterion B audit
+
+**Status: Phase 4.3.9B OPEN. A record and an audit, not a phase closure.** One criterion B item remains
+unproven (below). No code, data or schema changed in this entry.
+
+### CP4f — Start bar clearance (complete, PR #75, squash `24749a8`)
+
+Owner validation of the Program page on a physical iPhone 14 Plus found that the fixed Start bar could
+cover the last session row. The page reserved a fixed 120px that ignored the home-indicator inset, and the
+bar's 18px bottom padding put the Start button partly inside the indicator zone. The bar now adds
+`env(safe-area-inset-bottom)` to its padding. The content's bottom reserve is the bar's measured height
+(`--sticky-cta-h`, kept current by a `ResizeObserver`) plus 24px, with a CSS fallback of 110px plus the
+inset, so it no longer depends on session count. `program-bodyweight.html` and
+`program-bodyweight-page.test.js` only. No schedule, data, workout, entitlement or progression change.
+
+### Criterion B audit (`docs/ROADMAP.md` §4.3.9-L, Program-content integrity)
+
+Production was read (read-only SQL, project `MM1`) on 2026-10-19 and compared with the repository.
+
+| Criterion B item | Result | Evidence |
+|---|---|---|
+| Complete Program metadata | Pass | `bodyweight_foundations`: published, goal `muscle`, Beginner – Intermediate, 8 weeks, 3 days recommended, `equipment_summary = 'Bodyweight'`, membership-included, not standalone, `program-bodyweight.html` |
+| Complete duration and weekly schedule | Pass | 2–6 day mapping in `schedules.js`; `bodyweight-frequency-activation.test.js` |
+| Every required Routine exists | Pass | 9 links in order (A/B/C at 1–3, CP4d six at 4–9); all 9 Routines platform-owned and published |
+| Every Routine contains valid canonical exercises | Pass | 42 prescription slots; 0 missing references, 0 inactive, 0 name mismatches against the 159-row catalog |
+| Valid prescribed sets, reps, rest and notes | Pass | 0 invalid rows (sets ≥ 1, 1 ≤ `reps_low` ≤ `reps_high`, `rest_sec` ≥ 0); timed work is `time/sec`. Four entries (Bodyweight Squat ×2, Glute Bridge ×2) carry no note by approved design (CP4c) |
+| Equipment matches the promise; no unavailable equipment without substitution | Pass | Every slot is `is_bodyweight` with equipment `Bodyweight`, from the reviewed 38-row pool; Swap and the picker are equipment-free in this Program (PR #72) |
+| Day counts match the advertised schedule | Pass | Mapping tests; `recommended_days_per_week` stays 3 by owner decision |
+| Open, back and start-session flows | Partly evidenced | Unit and page tests; owner device check of the Program page during CP4f. No recorded end-to-end device pass after the fix |
+| A user can begin and complete a representative workout | **Not proven** | Launch and progression are covered by mocked tests only. Production holds **0** workouts with `program_slug = 'bodyweight_foundations'` |
+| Entitlement behaviour unchanged | Pass | `program-access.test.js`; `bodyweight-frequency-activation.test.js` |
+| No automatic enrolment | Pass | Production holds **0** `user_programs` rows for the Program |
+| No source Routine or Program silently mutated | Pass | Program row last updated 2026-09-20; Routines and links last updated at CP4d; last migration `20261005041336`, 68 migrations, matching `supabase/migrations/` |
+| `npm run verify` green | Pass | 2966/2966 tests; nutrition eval 286/286 scored; food bench 116 pass / 0 fail; exercise bench strict pass |
+
+**To close 4.3.9B:** a member account starts a Bodyweight Foundations session from the Program page on a
+real device, logs it and finishes it, with Program open and back checked on the way. That run must
+reach the Completion card showing the correct "Next" session. That finish creates the first
+`user_programs` row, which is the expected enrolment-on-first-finish behaviour, not automatic enrolment.
+Criterion A (recommendation honesty) belongs to the whole 4.3.9-L track and is not assessed here.
