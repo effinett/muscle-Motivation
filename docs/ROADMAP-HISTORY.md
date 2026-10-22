@@ -1896,7 +1896,7 @@ the `user_programs` row, as before.
 ## 2026-10-19 — Phase 4.3.9B CP4f record and criterion B audit
 
 **Status: Phase 4.3.9B OPEN. A record and an audit, not a phase closure.** One criterion B item remains
-unproven (below). No code, data or schema changed in this entry.
+unproven (below). No data or schema changed; the only code change is the At a Glance label (below).
 
 ### CP4f — Start bar clearance (complete, PR #75, squash `24749a8`)
 
@@ -1921,15 +1921,42 @@ Production was read (read-only SQL, project `MM1`) on 2026-10-19 and compared wi
 | Valid prescribed sets, reps, rest and notes | Pass | 0 invalid rows (sets ≥ 1, 1 ≤ `reps_low` ≤ `reps_high`, `rest_sec` ≥ 0); timed work is `time/sec`. Four entries (Bodyweight Squat ×2, Glute Bridge ×2) carry no note by approved design (CP4c) |
 | Equipment matches the promise; no unavailable equipment without substitution | Pass | Every slot is `is_bodyweight` with equipment `Bodyweight`, from the reviewed 38-row pool; Swap and the picker are equipment-free in this Program (PR #72) |
 | Day counts match the advertised schedule | Pass | Mapping tests; `recommended_days_per_week` stays 3 by owner decision |
-| Open, back and start-session flows | Partly evidenced | Unit and page tests; owner device check of the Program page during CP4f. No recorded end-to-end device pass after the fix |
+| Open, back and start-session flows | Partly evidenced | Unit and page tests; owner iPhone results below. Not yet checked with Bodyweight Foundations as the active Program |
 | A user can begin and complete a representative workout | **Not proven** | Launch and progression are covered by mocked tests only. Production holds **0** workouts with `program_slug = 'bodyweight_foundations'` |
 | Entitlement behaviour unchanged | Pass | `program-access.test.js`; `bodyweight-frequency-activation.test.js` |
 | No automatic enrolment | Pass | Production holds **0** `user_programs` rows for the Program |
 | No source Routine or Program silently mutated | Pass | Program row last updated 2026-09-20; Routines and links last updated at CP4d; last migration `20261005041336`, 68 migrations, matching `supabase/migrations/` |
 | `npm run verify` green | Pass | 2966/2966 tests; nutrition eval 286/286 scored; food bench 116 pass / 0 fail; exercise bench strict pass |
 
-**To close 4.3.9B:** a member account starts a Bodyweight Foundations session from the Program page on a
-real device, logs it and finishes it, with Program open and back checked on the way. That run must
-reach the Completion card showing the correct "Next" session. That finish creates the first
-`user_programs` row, which is the expected enrolment-on-first-finish behaviour, not automatic enrolment.
-Criterion A (recommendation honesty) belongs to the whole 4.3.9-L track and is not assessed here.
+### Owner device validation (iPhone 14 Plus) — as reported by the owner
+
+**Passed, before Bodyweight Foundations was the active Program:**
+
+- Program-page schedule at every frequency, in the approved order: 2 and 3 days Full Body A/B/C (2 days
+  keeps the rotation); 4 days Push & Core A, Lower Body A, Push & Core B, Lower Body B; 5 days adds
+  Conditioning & Core third; 6 days adds Mobility & Recovery last.
+- Program session selection.
+- Bottom-of-page content reachable; the fixed Start bar clears the home-indicator safe area (CP4f).
+- Equipment-free Swap, and the equipment-free manual picker (no dumbbell results).
+
+**Diagnosed, not a defect:** Home and Train showed Muscle Gain while the owner browsed Bodyweight
+Foundations. Home and Train follow `profiles.active_program`, which was Muscle Gain; browsing a Program
+does not activate it. The owner has since made Bodyweight Foundations active (confirmed read-only
+2026-10-22: active, 6 training days, 0 Bodyweight workouts, no Bodyweight `user_programs` row).
+
+**Pending, with Bodyweight Foundations active:** at 6, 5, 4, 3 and 2 days, Home and Train both reference
+Bodyweight Foundations with matching session labels, the Program page shows that frequency's schedule,
+changing frequency never switches the active Program, and viewing creates no workout or progression.
+Then one owner-approved representative workout, started and finished.
+
+### At a Glance copy (owner-approved 2026-10-22)
+
+"Per week — 3 days" read as a cap for users training 4–6 days. It now reads **"Recommended — 3
+days/week"**. `recommended_days_per_week` stays **3**; only the label changed (`program-bodyweight.html`
+and its page tests).
+
+**To close 4.3.9B:** the pending Bodyweight-active checks above pass on the device, then one representative
+workout is started and finished and reaches the Completion card showing the correct "Next" session. That
+finish creates the first Bodyweight `user_programs` row, which is the expected enrolment-on-first-finish
+behaviour, not automatic enrolment. Production is then re-read to confirm it. Criterion A (recommendation
+honesty) belongs to the whole 4.3.9-L track and is not assessed here.
