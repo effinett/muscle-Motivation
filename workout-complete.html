@@ -335,7 +335,7 @@
                                    .filter(function(x){ return x!=null; }))];
     if(!ids.length) return { byId:{}, failed:false };
     try {
-      var res = await supabaseClient.from('exercises').select('id,tracking_type').in('id', ids);
+      var res = await supabaseClient.from('exercises').select('id,tracking_type,is_bodyweight').in('id', ids);
       if(res.error || !res.data) return { byId:{}, failed:true };
       var byId = {};
       res.data.forEach(function(r){ byId[r.id] = r; });
@@ -539,6 +539,23 @@
       return recapUnitFor(row ? row.tracking_type : null, !!row);
     }
 
+    // Coaching-note metadata (Phase 4.3.9B), the same rule as workout.html: the
+    // tracking type gives the note its unit, and only a catalog-confirmed
+    // equipment-free exercise with no saved weight is treated as no-load.
+    // Unresolved rows pass nothing, so their note keeps the historical wording.
+    function noteMetaFor(e, hist){
+      if(tracking.failed || !e || e.exercise_id == null) return {};
+      var row = tracking.byId[e.exercise_id];
+      if(!row || !row.tracking_type) return {};
+      var meta = { trackingType: row.tracking_type };
+      var noLoadType = row.tracking_type === 'bodyweight_reps' || row.tracking_type === 'time';
+      var weighted = (hist||[]).some(function(sess){
+        return (sess.sets||[]).some(function(s){ return s.weight != null; });
+      });
+      if(row.is_bodyweight === true && noLoadType && !weighted) meta.equipment = 'bodyweight';
+      return meta;
+    }
+
     // Hero meta + stats
     var dt = new Date(w.created_at || w.date);
     var dateStr = dt.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
@@ -653,7 +670,8 @@
         var tmpl = ranges[e.name.toLowerCase()] || {};
         var hist = [{ date:w.created_at, sets: e.sets.map(mapSet) }]
                    .concat(sessions.map(function(s){ return { date:s.date, sets:s.sets.map(mapSet) }; }));
-        var rec = Progression.analyze({ exerciseName:e.name, repsLow:tmpl.reps_low, repsHigh:tmpl.reps_high, targetSets:tmpl.sets, history:hist });
+        var rec = Progression.analyze(Object.assign({ exerciseName:e.name, repsLow:tmpl.reps_low, repsHigh:tmpl.reps_high, targetSets:tmpl.sets, history:hist },
+                                                    noteMetaFor(e, hist)));
         progItems.push('<div class="prog-item"><div class="prog-ex">'+esc(e.name)+'</div><div class="prog-note">'+esc(rec.coachNote)+'</div></div>');
       }
     });

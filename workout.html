@@ -361,6 +361,8 @@
       display: grid; grid-template-columns: 28px 1fr 1fr 42px 28px;
       gap: 6px; margin-bottom: 6px; align-items: center; transition: opacity 0.2s;
     }
+    /* Equipment-free exercises have no weight column: # | reps-or-sec | check | delete */
+    .sets-header.no-load, .set-row.no-load { grid-template-columns: 28px 1fr 42px 28px; }
     .set-row.done { opacity: 0.45; }
     .set-num { font-size: 13px; font-weight: 700; color: var(--text-muted); text-align: center; }
     .set-input {
@@ -2210,13 +2212,42 @@
      legacy name-only row, or an id missing from the catalog — is UNKNOWN, never
      "reps". Unknown is the honest answer, and it is what keeps a 45-second hold
      from being recorded as 45 reps. */
-  function trackingTypeForExercise(ex) {
+  function catalogRowForExercise(ex) {
     if (!ex || ex.exercise_id == null) return null;      // custom / legacy / none
     var lib = (typeof exerciseLibrary !== 'undefined' && exerciseLibrary) ? exerciseLibrary : [];
     for (var i = 0; i < lib.length; i++) {
-      if (lib[i] && lib[i].id === ex.exercise_id) return lib[i].tracking_type || null;
+      if (lib[i] && lib[i].id === ex.exercise_id) return lib[i];
     }
     return null;                                          // not in the catalog
+  }
+
+  function trackingTypeForExercise(ex) {
+    var row = catalogRowForExercise(ex);
+    return row ? (row.tracking_type || null) : null;
+  }
+
+  /* ── External load (Phase 4.3.9B) ───────────────────────────────────────
+     An exercise takes NO external load only when the catalog itself says so:
+     a bodyweight row tracked as bodyweight reps or as a timed hold. Weighted
+     bodyweight work (dips, pull-ups), every equipment exercise, customs,
+     legacy and unresolved rows still take load. So does any exercise that
+     already has a weight saved, in this workout or its history — existing data
+     is never hidden, and its progression keeps today's behaviour exactly. */
+  var NO_LOAD_TRACKING = { bodyweight_reps: true, time: true };
+
+  function hasSavedWeight(ex) {
+    var saved = function (w) { return w != null && w !== ''; };
+    var inSets = (ex.sets || []).some(function (s) { return saved(s.weight_lbs); });
+    var inHistory = (ex.history || []).some(function (sess) {
+      return (sess.sets || []).some(function (s) { return saved(s.weight); });
+    });
+    return inSets || inHistory;
+  }
+
+  function isNoLoadExercise(ex) {
+    var row = catalogRowForExercise(ex);
+    if (!row || row.is_bodyweight !== true || !NO_LOAD_TRACKING[row.tracking_type]) return false;
+    return !hasSavedWeight(ex);
   }
 
   function unitForExercise(ex) {
@@ -2248,7 +2279,10 @@
       programmedReps: ex.programmed_reps,
       // Already resolved here, so an unresolvable exercise stays neutral rather
       // than falling back to the evaluator's legacy rep wording.
-      unit: unitForExercise(ex)
+      unit: unitForExercise(ex),
+      // The catalog, not the name, decides an equipment-free exercise. Anything
+      // else leaves equipment unset so its weight progression is unchanged.
+      equipment: isNoLoadExercise(ex) ? 'bodyweight' : undefined
     });
   }
 
@@ -2499,10 +2533,12 @@
     var setsHtml = '';
     // Derived per render, so a reload or a swap re-resolves automatically.
     var unit = unitForExercise(ex);
+    var noLoad = isNoLoadExercise(ex);
+    var gridCls = noLoad ? ' no-load' : '';
     if (ex.sets.length > 0) {
-      setsHtml += '<div class="sets-header">' +
+      setsHtml += '<div class="sets-header' + gridCls + '">' +
         '<div class="set-col-label">#</div>' +
-        '<div class="set-col-label">Weight</div>' +
+        (noLoad ? '' : '<div class="set-col-label">Weight</div>') +
         '<div class="set-col-label">' + unitColumnLabel(unit) + '</div>' +
         '<div></div><div></div></div>';
       ex.sets.forEach(function(s, si) {
@@ -2511,11 +2547,12 @@
         var ic = s.completed ? ' is-done' : '';
         var dis = s.completed ? ' disabled' : '';
         setsHtml +=
-          '<div class="set-row' + dc + '" id="sr-' + s.id + '">' +
+          '<div class="set-row' + dc + gridCls + '" id="sr-' + s.id + '">' +
             '<div class="set-num">' + s.set_number + '</div>' +
+            (noLoad ? '' :
             '<input class="set-input' + ic + '" type="number" min="0" max="9999" step="2.5"' +
               ' value="' + (s.weight_lbs != null ? s.weight_lbs : '') + '" placeholder="lbs"' + dis +
-              ' onchange="updateSet(\'' + s.id + '\',' + exIdx + ',' + si + ',\'weight_lbs\',this.value)">' +
+              ' onchange="updateSet(\'' + s.id + '\',' + exIdx + ',' + si + ',\'weight_lbs\',this.value)">') +
             '<input class="set-input' + ic + '" type="number" min="0" max="999" step="1"' +
               ' value="' + (s.reps != null ? s.reps : '') + '" placeholder="' + unitPlaceholder(unit) + '"' + dis +
               ' onchange="updateSet(\'' + s.id + '\',' + exIdx + ',' + si + ',\'reps\',this.value)">' +

@@ -440,7 +440,7 @@ general product analytics. Browser global `MMAnalytics`; loaded by `index.html`,
 
 - `metrics.js`, `snapshot.js` — dashboard snapshot/metrics.
 - `weight.js`, `weight-history.html` — weight tracking + trend.
-- `progression.js` (spec: `docs/progression-spec.md`) — progressive-overload logic; `schedules.js`, `workout-history.js` — workout support. `analyze()` now accepts optional `equipment`/`mechanics` exercise metadata (Phase 4.2.1E seam), name-regex inference as fallback — exact parity when omitted.
+- `progression.js` (spec: `docs/progression-spec.md`) — progressive-overload logic; `schedules.js`, `workout-history.js` — workout support. `analyze()` now accepts optional `equipment`/`mechanics` exercise metadata (Phase 4.2.1E seam), name-regex inference as fallback — exact parity when omitted. **Phase 4.3.9B:** when a caller passes tracking metadata (`unit` or `trackingType`), `coachNote` and the Last/Today displays read in seconds for a timed exercise, and an `equipment: 'bodyweight'` exercise is never told to pick, add or increase weight; numbers and actions are unchanged, and a caller passing neither keeps the historical wording byte-for-byte. `workout.html` (`isNoLoadExercise`) and `workout-complete.html` (`noteMetaFor`) pass `equipment: 'bodyweight'` only for a catalog `is_bodyweight` row tracked as `bodyweight_reps` or `time` with no saved weight, and `workout.html` hides the weight input on exactly those exercises. Weighted bodyweight, equipment, custom, unresolved and already-weighted exercises are unchanged (`bodyweight-logging-units.test.js`).
 
 ### Shared Exercise-Intelligence Core — `exercise-core.js` (`Live`, Phase 4.2.1E)
 
