@@ -2227,12 +2227,18 @@
   }
 
   /* ── External load (Phase 4.3.9B) ───────────────────────────────────────
-     An exercise takes NO external load only when the catalog itself says so:
-     a bodyweight row tracked as bodyweight reps or as a timed hold. Weighted
-     bodyweight work (dips, pull-ups), every equipment exercise, customs,
-     legacy and unresolved rows still take load. So does any exercise that
-     already has a weight saved, in this workout or its history — existing data
-     is never hidden, and its progression keeps today's behaviour exactly. */
+     The weight input and weight advice are dropped ONLY inside an
+     equipment-free Program session (workoutEquipmentFree(): Bodyweight
+     Foundations, active or optional). `is_bodyweight` means "can be done
+     without equipment", not "never loaded" — gym users load Reverse Lunge and
+     Push-Up — so every other workout keeps its weight input whatever the
+     catalog, history or a failed history read says.
+
+     Inside that session, the catalog must still confirm a bodyweight row
+     tracked as bodyweight reps or a timed hold. Weighted bodyweight work (dips,
+     pull-ups), customs, legacy and unresolved rows keep the input, and so does
+     any exercise that already has a weight saved in this workout or its
+     history — existing data is never hidden. */
   var NO_LOAD_TRACKING = { bodyweight_reps: true, time: true };
 
   function hasSavedWeight(ex) {
@@ -2245,6 +2251,7 @@
   }
 
   function isNoLoadExercise(ex) {
+    if (!workoutEquipmentFree()) return false;
     var row = catalogRowForExercise(ex);
     if (!row || row.is_bodyweight !== true || !NO_LOAD_TRACKING[row.tracking_type]) return false;
     return !hasSavedWeight(ex);
@@ -2280,8 +2287,9 @@
       // Already resolved here, so an unresolvable exercise stays neutral rather
       // than falling back to the evaluator's legacy rep wording.
       unit: unitForExercise(ex),
-      // The catalog, not the name, decides an equipment-free exercise. Anything
-      // else leaves equipment unset so its weight progression is unchanged.
+      // In an equipment-free session the catalog, not the name, decides a
+      // no-load exercise. Everywhere else equipment stays unset, so the weight
+      // advice and weight progression are exactly as before.
       equipment: isNoLoadExercise(ex) ? 'bodyweight' : undefined
     });
   }

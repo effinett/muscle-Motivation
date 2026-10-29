@@ -22,6 +22,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const Progression = require('./progression.js');
+const ExerciseFilters = require('./exercise-filters.js');
 
 const WORKOUT = fs.readFileSync(path.join(__dirname, 'workout.html'), 'utf8');
 const COMPLETE = fs.readFileSync(path.join(__dirname, 'workout-complete.html'), 'utf8');
@@ -48,6 +49,8 @@ const LIB = [
   { id: 'split',   name: 'Split Squat',      tracking_type: 'bodyweight_reps',     is_bodyweight: true  },
   { id: 'deadbug', name: 'Dead Bug',         tracking_type: 'bodyweight_reps',     is_bodyweight: true  },
   { id: 'hkr',     name: 'Hanging Knee Raise', tracking_type: 'bodyweight_reps',   is_bodyweight: true  },
+  { id: 'rlunge',  name: 'Reverse Lunge',    tracking_type: 'bodyweight_reps',     is_bodyweight: true  },
+  { id: 'pushup',  name: 'Push-Up',          tracking_type: 'bodyweight_reps',     is_bodyweight: true  },
   { id: 'dips',    name: 'Dips',             tracking_type: 'weighted_bodyweight', is_bodyweight: true  },
   { id: 'pullup',  name: 'Pull-Up',          tracking_type: 'weighted_bodyweight', is_bodyweight: true  },
   { id: 'bench',   name: 'Bench Press',      tracking_type: 'weight_reps',         is_bodyweight: false },
@@ -57,24 +60,36 @@ const LIB = [
 
 const FNS = ['catalogRowForExercise', 'trackingTypeForExercise', 'unitForExercise',
   'unitColumnLabel', 'unitPlaceholder', 'hasSavedWeight', 'isNoLoadExercise',
-  'recForExercise', 'buildRecBlock', 'buildExCard'];
+  'workoutEquipmentFree', 'recForExercise', 'buildRecBlock', 'buildExCard'];
+const VARS = [/var NO_LOAD_TRACKING = \{[^}]*\};/, /var EQUIPMENT_FREE_PROGRAMS_IF_UNLOADED = \{[^}]*\};/];
 
-function workoutSandbox(library) {
-  const varLine = WORKOUT.match(/var NO_LOAD_TRACKING = \{[^}]*\};/);
-  assert.ok(varLine, 'workout.html declares NO_LOAD_TRACKING');
+const BWF = 'bodyweight_foundations';
+const GYM = ['muscle_gain', 'fat_loss_blueprint', 'glute_builder'];
+
+/* opts.slug: the live workout's program_slug (null = manual workout).
+ * opts.mode: 'program' | 'optional'. opts.noFilters: exercise-filters.js failed to load. */
+function workoutSandbox(opts) {
+  const o = opts || {};
+  const vars = VARS.map((re) => {
+    const m = WORKOUT.match(re);
+    assert.ok(m, 'workout.html declares ' + re);
+    return m[0];
+  });
   const sandbox = {
     Progression,
-    exerciseLibrary: library === undefined ? LIB : library,
+    exerciseLibrary: o.library === undefined ? LIB : o.library,
+    currentWorkout: { id: 'w1', program_slug: o.slug === undefined ? BWF : o.slug, mode: o.mode || 'program' },
     esc: (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
   };
+  if (!o.noFilters) sandbox.ExerciseFilters = ExerciseFilters;
   vm.createContext(sandbox);
-  vm.runInContext(varLine[0] + '\n' + FNS.map((n) => extractFn(WORKOUT, n)).join('\n') +
+  vm.runInContext(vars.join('\n') + '\n' + FNS.map((n) => extractFn(WORKOUT, n)).join('\n') +
     '\nthis.__fns = {' + FNS.join(',') + '};', sandbox);
   return sandbox.__fns;
 }
 
-const W = workoutSandbox();
+const W = workoutSandbox();   // a Bodyweight Foundations session
 
 let nextId = 1;
 function ex(id, opts) {
@@ -139,7 +154,7 @@ test('equipment exercises keep the weight input, including a timed machine exerc
 test('custom, legacy and unresolved exercises keep the weight input', () => {
   assert.ok(hasWeightInput(card(ex('pike', { custom: true, name: 'My Hold' }))), 'custom');
   assert.ok(hasWeightInput(card(ex('ghost', { name: 'Not In Catalog' }))), 'missing row');
-  const noCatalog = workoutSandbox([]);
+  const noCatalog = workoutSandbox({ library: [] });
   assert.ok(hasWeightInput(noCatalog.buildExCard(ex('plank'), 0)), 'catalog not loaded');
 });
 
@@ -305,17 +320,99 @@ test('saving a set is untouched: a blank weight is still stored as "no external 
   assert.deepEqual(ExerciseLog.sanitizeSetField('reps', '30'), { value: 30, valid: true });
 });
 
-/* ── 6 · Other programs: representative published exercises ─────────────── */
+/* ── 6 · Program context: only Bodyweight Foundations drops the weight ──── */
 
-test('Plank, Dead Bug and Hanging Knee Raise (Fat Loss, Muscle Gain, Glute Builder) get the fix too', () => {
-  [['plank', 20, 40, 'sec'], ['deadbug', 8, 10, 'reps'], ['hkr', 10, 15, 'reps']].forEach(([id, lo, hi, u]) => {
-    const e = ex(id, { low: lo, high: hi });
-    const html = card(e);
-    assert.ok(!hasWeightInput(html), id);
-    const rec = W.recForExercise(e);
-    assert.ok(rec.coachNote.includes(lo + '–' + hi + ' ' + u), id + ': ' + rec.coachNote);
-    assert.ok(!NO_WEIGHT_TALK.test(rec.coachNote), id);
+// Production (2026-10-29): Reverse Lunge 51/55 logged sets carry load across 5
+// users; Push-Up 32/67. is_bodyweight means "can be done without equipment".
+const GYM_LOADED = ['rlunge', 'pushup', 'split', 'bridge', 'plank', 'deadbug', 'hkr', 'pike'];
+
+test('gym programs keep the weight input on every bodyweight-capable exercise', () => {
+  GYM.forEach((slug) => {
+    const G = workoutSandbox({ slug });
+    GYM_LOADED.forEach((id) => {
+      const html = G.buildExCard(ex(id), 0);
+      assert.ok(hasWeightInput(html), slug + ' ' + id + ': weight input kept');
+      assert.ok(hasWeightHeader(html), slug + ' ' + id);
+      assert.ok(!/no-load/.test(html), slug + ' ' + id);
+    });
   });
+});
+
+test('manual workouts and launched routines (no program) keep the weight input', () => {
+  const M = workoutSandbox({ slug: null, mode: 'optional' });
+  GYM_LOADED.forEach((id) => assert.ok(hasWeightInput(M.buildExCard(ex(id), 0)), id));
+});
+
+test('gym programs keep their weight advice exactly as before', () => {
+  GYM.concat([null]).forEach((slug) => {
+    const G = workoutSandbox({ slug });
+    [['rlunge', 'Reverse Lunge'], ['split', 'Split Squat'], ['pushup', 'Push-Up']].forEach(([id, name]) => {
+      const rec = G.recForExercise(ex(id));
+      const legacy = Progression.analyze({ exerciseName: name, repsLow: 8, repsHigh: 12, targetSets: 1, history: [] });
+      assert.equal(rec.equipment, legacy.equipment, slug + ' ' + name + ' equipment unchanged');
+      assert.equal(rec.coachNote, legacy.coachNote, slug + ' ' + name + ' note unchanged');
+    });
+    assert.match(G.recForExercise(ex('rlunge')).coachNote, /Pick a weight you can do for 8–12 reps/);
+  });
+});
+
+test('a loaded Push-Up or Plank in a gym program keeps its weight advice in every branch', () => {
+  const loaded = (reps) => reps.map((r) => ({ weight: 25, reps: r, completed: true }));
+  const histories = [[{ sets: loaded([12, 12]) }], [{ sets: loaded([9, 9]) }], [{ sets: loaded([10, 9]) }],
+    [{ sets: loaded([12, 9]) }], [{ sets: loaded([5, 5]) }], [{ sets: loaded([10]) }]];
+  GYM.forEach((slug) => {
+    const G = workoutSandbox({ slug });
+    histories.forEach((history, i) => {
+      const e = ex('pushup', { history, targetSets: 2, sets: [{}, {}] });
+      const legacy = Progression.analyze({ exerciseName: 'Push-Up', repsLow: 8, repsHigh: 12, targetSets: 2, history });
+      assert.equal(G.recForExercise(e).coachNote, legacy.coachNote, slug + ' Push-Up case ' + i);
+    });
+    const plank = G.recForExercise(ex('plank', { low: 20, high: 40, targetSets: 2, sets: [{}, {}],
+      history: [{ sets: [{ weight: 25, reps: 40, completed: true }, { weight: 25, reps: 40, completed: true }] }] }));
+    assert.match(plank.coachNote, /add load/, slug + ' weighted plank keeps "add load"');
+    assert.ok(!/\breps?\b/.test(plank.coachNote), slug + ' but reads in seconds: ' + plank.coachNote);
+  });
+});
+
+test('a failed or empty history read never removes the weight input outside Bodyweight Foundations', () => {
+  GYM.forEach((slug) => {
+    const G = workoutSandbox({ slug });
+    const e = ex('rlunge');
+    e.history = [];                                  // what loadExerciseHistory leaves on failure
+    assert.ok(hasWeightInput(G.buildExCard(e, 0)), slug);
+  });
+});
+
+test('timed exercises read in seconds in every program, with the weight input kept outside BWF', () => {
+  GYM.concat([null]).forEach((slug) => {
+    const G = workoutSandbox({ slug });
+    const e = ex('plank', { low: 20, high: 40 });
+    const rec = G.recForExercise(e);
+    assert.equal(rec.goalRange.display, '20–40 sec', String(slug));
+    assert.ok(rec.coachNote.includes('20–40 sec'), slug + ': ' + rec.coachNote);
+    assert.ok(!/\breps?\b/i.test(rec.coachNote), slug + ': ' + rec.coachNote);
+    const html = G.buildExCard(e, 0);
+    assert.match(html, />Sec</);
+    assert.ok(hasWeightInput(html), String(slug));
+  });
+});
+
+test('an optional Bodyweight Foundations workout is equipment-free too', () => {
+  const O = workoutSandbox({ slug: BWF, mode: 'optional' });
+  ['pike', 'rlunge', 'pushup'].forEach((id) => assert.ok(!hasWeightInput(O.buildExCard(ex(id), 0)), id));
+});
+
+test('if exercise-filters.js fails to load, BWF still hides the input and gym programs keep it', () => {
+  assert.ok(!hasWeightInput(workoutSandbox({ noFilters: true }).buildExCard(ex('pike'), 0)), 'BWF');
+  GYM.forEach((slug) => {
+    assert.ok(hasWeightInput(workoutSandbox({ slug, noFilters: true }).buildExCard(ex('pike'), 0)), slug);
+  });
+});
+
+test('the context rule is the existing workoutEquipmentFree(), not a new slug check', () => {
+  assert.match(extractFn(WORKOUT, 'isNoLoadExercise'), /if \(!workoutEquipmentFree\(\)\) return false;/);
+  assert.deepEqual(GYM.map((s) => workoutSandbox({ slug: s }).workoutEquipmentFree()), [false, false, false]);
+  assert.equal(W.workoutEquipmentFree(), true);
 });
 
 /* ── 7 · Completion page uses the same rule ─────────────────────────────── */
@@ -323,10 +420,12 @@ test('Plank, Dead Bug and Hanging Knee Raise (Fat Loss, Muscle Gain, Glute Build
 test('the completion page reads is_bodyweight and passes tracking metadata into its note', () => {
   assert.match(COMPLETE, /select\('id,tracking_type,is_bodyweight'\)/);
   const src = extractFn(COMPLETE, 'noteMetaFor');
-  const make = (tracking) => {
-    const box = { tracking };
+  const progLine = COMPLETE.match(/var EQUIPMENT_FREE_PROGRAMS = \{[^}]*\};/);
+  assert.ok(progLine, 'workout-complete.html declares EQUIPMENT_FREE_PROGRAMS');
+  const make = (tracking, slug) => {
+    const box = { tracking, w: { program_slug: slug === undefined ? BWF : slug } };
     vm.createContext(box);
-    vm.runInContext(src + '\nthis.f = noteMetaFor;', box);
+    vm.runInContext(progLine[0] + '\n' + src + '\nthis.f = noteMetaFor;', box);
     return box.f;
   };
   const byId = {
@@ -343,4 +442,15 @@ test('the completion page reads is_bodyweight and passes tracking metadata into 
   assert.deepEqual(f({ exercise_id: null }, noWeight), {}, 'custom keeps legacy wording');
   assert.deepEqual(f({ exercise_id: 'gone' }, noWeight), {}, 'missing row keeps legacy wording');
   assert.deepEqual(make({ byId, failed: true })({ exercise_id: 'pike' }, noWeight), {}, 'failed read');
+  // Gym and manual workouts: the unit still applies, the no-load rule never does.
+  GYM.concat([null]).forEach((slug) => {
+    assert.deepEqual(make({ byId, failed: false }, slug)({ exercise_id: 'pike' }, noWeight),
+      { trackingType: 'time' }, String(slug));
+  });
+});
+
+test('the completion page\'s equipment-free Programs match ExerciseFilters exactly', () => {
+  const m = COMPLETE.match(/var EQUIPMENT_FREE_PROGRAMS = (\{[^}]*\});/);
+  const local = Object.keys(vm.runInNewContext('(' + m[1] + ')')).sort();
+  assert.deepEqual(local, ExerciseFilters.EQUIPMENT_FREE_PROGRAM_SLUGS.slice().sort());
 });

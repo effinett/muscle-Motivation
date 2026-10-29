@@ -372,7 +372,10 @@
                     hasTrackingMeta(input, 'trackingType');
     var timed  = unitAware && goalUnit === TRACKING_UNIT.SECONDS;
     var noun   = timed ? ' sec' : ' reps';
-    var noLoad = unitAware && equip === 'bodyweight';
+    // No-load wording needs the caller to SAY bodyweight. A name-inferred
+    // "bodyweight" (Push-Up, Plank) can still be loaded in a gym workout, so it
+    // keeps the weight-oriented wording.
+    var noLoad = unitAware && hasTrackingMeta(input, 'equipment') && equip === 'bodyweight';
     var withUnit = function (display) { return timed && display ? display + ' sec' : display; };
 
     // ── No history → empty state, lean on programmed targets if present ──────

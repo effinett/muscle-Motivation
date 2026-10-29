@@ -306,6 +306,9 @@
    * test pins both entries to the resolver's UNKNOWN unit so the coupling is
    * enforced rather than assumed. */
   var RECAP_NEUTRAL_TYPES = { distance:true, time_distance:true };
+  // Equipment-free Programs (Phase 4.3.9B). This page does not load
+  // exercise-filters.js; a test pins this to ExerciseFilters.EQUIPMENT_FREE_PROGRAM_SLUGS.
+  var EQUIPMENT_FREE_PROGRAMS = { bodyweight_foundations:true };
   var RECAP_UNIT = { REPS:'reps', SECONDS:'sec', NEUTRAL:'neutral', UNRESOLVED:'unresolved' };
 
   function recapUnitFor(trackingType, rowFound){
@@ -539,15 +542,18 @@
       return recapUnitFor(row ? row.tracking_type : null, !!row);
     }
 
-    // Coaching-note metadata (Phase 4.3.9B), the same rule as workout.html: the
-    // tracking type gives the note its unit, and only a catalog-confirmed
-    // equipment-free exercise with no saved weight is treated as no-load.
-    // Unresolved rows pass nothing, so their note keeps the historical wording.
+    // Coaching-note metadata (Phase 4.3.9B), the same rule as workout.html. The
+    // tracking type gives every note its unit, in any workout. Only inside an
+    // equipment-free Program session (the workout's own program_slug) is a
+    // catalog-confirmed bodyweight exercise with no saved weight treated as
+    // no-load; gym and manual workouts keep their weight advice. Unresolved
+    // rows pass nothing, so their note keeps the historical wording.
     function noteMetaFor(e, hist){
       if(tracking.failed || !e || e.exercise_id == null) return {};
       var row = tracking.byId[e.exercise_id];
       if(!row || !row.tracking_type) return {};
       var meta = { trackingType: row.tracking_type };
+      if(EQUIPMENT_FREE_PROGRAMS[w.program_slug] !== true) return meta;
       var noLoadType = row.tracking_type === 'bodyweight_reps' || row.tracking_type === 'time';
       var weighted = (hist||[]).some(function(sess){
         return (sess.sets||[]).some(function(s){ return s.weight != null; });
