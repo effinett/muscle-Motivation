@@ -161,7 +161,7 @@ const LIB = [
   { id: 'ex-blank', name: 'No Metadata', tracking_type: null },
 ];
 
-const DISPLAY_FNS = ['trackingTypeForExercise', 'unitForExercise',
+const DISPLAY_FNS = ['catalogRowForExercise', 'trackingTypeForExercise', 'unitForExercise',
   'unitColumnLabel', 'unitPlaceholder'];
 
 function makeSandbox(opts) {

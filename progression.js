@@ -363,6 +363,21 @@
       display: low + '–' + high + goalSuffix
     };
 
+    // Unit- and load-aware coaching copy (Phase 4.3.9B). Only a caller that
+    // supplied tracking metadata gets it; one that omits it keeps the historical
+    // wording byte-for-byte. The numbers and actions never change — only the
+    // words: a timed target reads in seconds, and an equipment-free exercise is
+    // never told to pick, add or increase weight.
+    var unitAware = (typeof input.unit === 'string' && !!input.unit) ||
+                    hasTrackingMeta(input, 'trackingType');
+    var timed  = unitAware && goalUnit === TRACKING_UNIT.SECONDS;
+    var noun   = timed ? ' sec' : ' reps';
+    // No-load wording needs the caller to SAY bodyweight. A name-inferred
+    // "bodyweight" (Push-Up, Plank) can still be loaded in a gym workout, so it
+    // keeps the weight-oriented wording.
+    var noLoad = unitAware && hasTrackingMeta(input, 'equipment') && equip === 'bodyweight';
+    var withUnit = function (display) { return timed && display ? display + ' sec' : display; };
+
     // ── No history → empty state, lean on programmed targets if present ──────
     if (!lastWorking.length) {
       var pw = num(input.programmedWeight);
@@ -372,11 +387,11 @@
       var startWeight = pw !== null ? roundWeight(pw, equip) : null;
       var note;
       if (startWeight !== null) {
-        note = 'Start around ' + fmtNum(startWeight) + ' lb and aim for ' + low + '–' + high + ' reps.';
+        note = 'Start around ' + fmtNum(startWeight) + ' lb and aim for ' + low + '–' + high + noun + '.';
       } else if (equip === 'bodyweight') {
-        note = 'Log your sets — aim for ' + low + '–' + high + ' reps and we\'ll guide you next time.';
+        note = 'Log your sets — aim for ' + low + '–' + high + noun + ' and we\'ll guide you next time.';
       } else {
-        note = 'Pick a weight you can do for ' + low + '–' + high + ' reps. We\'ll guide your progression next time.';
+        note = 'Pick a weight you can do for ' + low + '–' + high + noun + '. We\'ll guide your progression next time.';
       }
       return {
         hasHistory: false,
@@ -386,7 +401,7 @@
         recommendedWeight: startWeight,
         recommendedReps: recReps,
         recommendedSets: recSets,
-        recommendedDisplay: formatRecommendation(startWeight, recReps, recSets),
+        recommendedDisplay: withUnit(formatRecommendation(startWeight, recReps, recSets)),
         action: 'start',
         plateau: false,
         deloadSuggested: false,
@@ -423,17 +438,18 @@
         hasHistory: true,
         equipment: equip,
         goalRange: goalRange,
-        lastPerformance: { weight: base, reps: repsArr, display: formatPerformance(lastWorking) },
+        lastPerformance: { weight: base, reps: repsArr, display: withUnit(formatPerformance(lastWorking)) },
         recommendedWeight: recWeight,
         recommendedReps: recReps,
         recommendedSets: targetSets,
-        recommendedDisplay: formatRecommendation(recWeight, recReps, targetSets),
+        recommendedDisplay: withUnit(formatRecommendation(recWeight, recReps, targetSets)),
         action: 'incomplete',
         plateau: false,
         deloadSuggested: false,
         deloadWeight: null,
         deloadReason: null,
-        coachNote: 'Complete all target sets before increasing weight.'
+        coachNote: noLoad ? 'Complete all target sets before progressing.'
+                          : 'Complete all target sets before increasing weight.'
       };
     }
 
@@ -447,12 +463,18 @@
       if (base === null || equip === 'bodyweight' || inc === 0) {
         recWeight = base; // bodyweight — can't add load
         recReps = high;
-        note = 'You topped the rep range. Add reps beyond ' + high + ', add load, or move to a harder variation.';
+        if (noLoad) {
+          note = 'You topped the range. Keep adding ' + (timed ? 'time' : 'reps') + ' beyond ' + high + noun +
+                 ', or move to a harder variation.';
+        } else {
+          note = 'You topped the ' + (timed ? 'range' : 'rep range') + '. Add ' + (timed ? 'time' : 'reps') +
+                 ' beyond ' + high + (timed ? ' sec' : '') + ', add load, or move to a harder variation.';
+        }
       } else {
         recWeight = roundWeight(base + inc, equip);
         if (recWeight <= base) recWeight = base + inc; // guard rounding that doesn't move
         recReps = low;
-        note = 'Strong — you hit the top of the range on every set. Move up to ' + fmtNum(recWeight) + ' lb and build back from ' + low + ' reps.';
+        note = 'Strong — you hit the top of the range on every set. Move up to ' + fmtNum(recWeight) + ' lb and build back from ' + low + noun + '.';
       }
     } else if (minReps >= low) {
       // In range → hold weight, push reps toward the top.
@@ -460,14 +482,16 @@
       recWeight = base;
       if (minReps === maxReps && maxReps < high) {
         recReps = Math.min(high, maxReps + 1);
-        note = 'Add 1 rep before increasing weight — aim for ' + recReps + ' on every set.';
+        note = 'Add 1 ' + (timed ? 'sec' : 'rep') + (noLoad ? '' : ' before increasing weight') +
+               ' — aim for ' + recReps + (timed ? ' sec' : '') + ' on every set.';
       } else if (maxReps < high) {
         recReps = maxReps; // bring the lagging sets up to your top set first
-        note = 'Match your top set (' + maxReps + ' reps) on every set, then keep adding reps toward ' + high + '.';
+        note = 'Match your top set (' + maxReps + noun + ') on every set, then keep adding ' +
+               (timed ? 'time' : 'reps') + ' toward ' + high + (timed ? ' sec' : '') + '.';
       } else {
         // Top set already at the ceiling but a lagging set held it back.
         recReps = high;
-        note = 'Bring every set up to ' + high + ' reps, then add weight next time.';
+        note = 'Bring every set up to ' + high + noun + (noLoad ? '.' : ', then add weight next time.');
       }
     } else {
       // Below the bottom of the range → HOLD. Weight is never auto-lowered after
@@ -476,7 +500,8 @@
       action = 'hold';
       recWeight = base;
       recReps = low;
-      note = 'Stay at this weight until you hit at least ' + low + ' reps on every set.';
+      note = noLoad ? 'Build up to at least ' + low + noun + ' on every set.'
+                    : 'Stay at this weight until you hit at least ' + low + noun + ' on every set.';
     }
 
     // ── Deload detection (advisory only — never lowers recommendedWeight) ────
@@ -534,12 +559,12 @@
       lastPerformance: {
         weight: base,
         reps: repsArr,
-        display: formatPerformance(lastWorking)
+        display: withUnit(formatPerformance(lastWorking))
       },
       recommendedWeight: recWeight,
       recommendedReps: recReps,
       recommendedSets: targetSets,
-      recommendedDisplay: formatRecommendation(recWeight, recReps, targetSets),
+      recommendedDisplay: withUnit(formatRecommendation(recWeight, recReps, targetSets)),
       action: action,
       plateau: plat.plateau,
       deloadSuggested: deloadSuggested,

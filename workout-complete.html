@@ -306,6 +306,9 @@
    * test pins both entries to the resolver's UNKNOWN unit so the coupling is
    * enforced rather than assumed. */
   var RECAP_NEUTRAL_TYPES = { distance:true, time_distance:true };
+  // Equipment-free Programs (Phase 4.3.9B). This page does not load
+  // exercise-filters.js; a test pins this to ExerciseFilters.EQUIPMENT_FREE_PROGRAM_SLUGS.
+  var EQUIPMENT_FREE_PROGRAMS = { bodyweight_foundations:true };
   var RECAP_UNIT = { REPS:'reps', SECONDS:'sec', NEUTRAL:'neutral', UNRESOLVED:'unresolved' };
 
   function recapUnitFor(trackingType, rowFound){
@@ -335,7 +338,7 @@
                                    .filter(function(x){ return x!=null; }))];
     if(!ids.length) return { byId:{}, failed:false };
     try {
-      var res = await supabaseClient.from('exercises').select('id,tracking_type').in('id', ids);
+      var res = await supabaseClient.from('exercises').select('id,tracking_type,is_bodyweight').in('id', ids);
       if(res.error || !res.data) return { byId:{}, failed:true };
       var byId = {};
       res.data.forEach(function(r){ byId[r.id] = r; });
@@ -539,6 +542,26 @@
       return recapUnitFor(row ? row.tracking_type : null, !!row);
     }
 
+    // Coaching-note metadata (Phase 4.3.9B), the same rule as workout.html. The
+    // tracking type gives every note its unit, in any workout. Only inside an
+    // equipment-free Program session (the workout's own program_slug) is a
+    // catalog-confirmed bodyweight exercise with no saved weight treated as
+    // no-load; gym and manual workouts keep their weight advice. Unresolved
+    // rows pass nothing, so their note keeps the historical wording.
+    function noteMetaFor(e, hist){
+      if(tracking.failed || !e || e.exercise_id == null) return {};
+      var row = tracking.byId[e.exercise_id];
+      if(!row || !row.tracking_type) return {};
+      var meta = { trackingType: row.tracking_type };
+      if(EQUIPMENT_FREE_PROGRAMS[w.program_slug] !== true) return meta;
+      var noLoadType = row.tracking_type === 'bodyweight_reps' || row.tracking_type === 'time';
+      var weighted = (hist||[]).some(function(sess){
+        return (sess.sets||[]).some(function(s){ return s.weight != null; });
+      });
+      if(row.is_bodyweight === true && noLoadType && !weighted) meta.equipment = 'bodyweight';
+      return meta;
+    }
+
     // Hero meta + stats
     var dt = new Date(w.created_at || w.date);
     var dateStr = dt.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
@@ -653,7 +676,8 @@
         var tmpl = ranges[e.name.toLowerCase()] || {};
         var hist = [{ date:w.created_at, sets: e.sets.map(mapSet) }]
                    .concat(sessions.map(function(s){ return { date:s.date, sets:s.sets.map(mapSet) }; }));
-        var rec = Progression.analyze({ exerciseName:e.name, repsLow:tmpl.reps_low, repsHigh:tmpl.reps_high, targetSets:tmpl.sets, history:hist });
+        var rec = Progression.analyze(Object.assign({ exerciseName:e.name, repsLow:tmpl.reps_low, repsHigh:tmpl.reps_high, targetSets:tmpl.sets, history:hist },
+                                                    noteMetaFor(e, hist)));
         progItems.push('<div class="prog-item"><div class="prog-ex">'+esc(e.name)+'</div><div class="prog-note">'+esc(rec.coachNote)+'</div></div>');
       }
     });
