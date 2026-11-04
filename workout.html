@@ -2163,7 +2163,7 @@
       if (!wexs.length) return;
       var ids = [...new Set(wexs.map(function(w) { return w.workout_id; }))];
       var { data: ws } = await supabaseClient
-        .from('workouts').select('id, created_at')
+        .from('workouts').select('id, created_at, program_slug')
         .eq('user_id', currentUser.id).eq('completed', true)
         .in('id', ids)
         .order('date', { ascending: false })
@@ -2188,6 +2188,8 @@
         var wexId = wexByWorkout[w.id];
         return {
           date: w.created_at,
+          // Logged inside Bodyweight Foundations: never a weighted baseline.
+          equipmentFree: equipmentFreeSlug(w.program_slug),
           sets: (byWex[wexId] || []).map(function(s) {
             return { weight: s.weight_lbs, reps: s.reps, completed: s.completed, is_warmup: s.is_warmup };
           })
@@ -2236,18 +2238,29 @@
 
      Inside that session, the catalog must still confirm a bodyweight row
      tracked as bodyweight reps or a timed hold. Weighted bodyweight work (dips,
-     pull-ups), customs, legacy and unresolved rows keep the input, and so does
-     any exercise that already has a weight saved in this workout or its
-     history — existing data is never hidden. */
+     pull-ups), customs, legacy and unresolved rows keep the input. Weighted
+     HISTORY no longer keeps it: the Program is equipment-free, and that
+     history stays the baseline for the next gym workout (Progression load
+     policy). Only a weight already entered in THIS workout keeps the input, so
+     a value about to be saved is never hidden. */
   var NO_LOAD_TRACKING = { bodyweight_reps: true, time: true };
 
   function hasSavedWeight(ex) {
-    var saved = function (w) { return w != null && w !== ''; };
-    var inSets = (ex.sets || []).some(function (s) { return saved(s.weight_lbs); });
-    var inHistory = (ex.history || []).some(function (sess) {
-      return (sess.sets || []).some(function (s) { return saved(s.weight); });
+    return (ex.sets || []).some(function (s) {
+      var w = s.weight_lbs;
+      return w != null && w !== '' && Number(w) > 0;
     });
-    return inSets || inHistory;
+  }
+
+  // Which past sessions may set this exercise's baseline (progression.js).
+  function loadPolicyForExercise(ex) {
+    if (typeof Progression === 'undefined' || !Progression.loadPolicy) return undefined;
+    var row = catalogRowForExercise(ex);
+    return Progression.loadPolicy({
+      noLoad: isNoLoadExercise(ex),
+      isBodyweight: row ? row.is_bodyweight : undefined,
+      trackingType: row ? row.tracking_type : undefined
+    });
   }
 
   function isNoLoadExercise(ex) {
@@ -2290,7 +2303,10 @@
       // In an equipment-free session the catalog, not the name, decides a
       // no-load exercise. Everywhere else equipment stays unset, so the weight
       // advice and weight progression are exactly as before.
-      equipment: isNoLoadExercise(ex) ? 'bodyweight' : undefined
+      equipment: isNoLoadExercise(ex) ? 'bodyweight' : undefined,
+      // A bodyweight session, blank weights or a skipped exercise never
+      // replace the weighted baseline a gym workout progresses from.
+      load: loadPolicyForExercise(ex)
     });
   }
 
@@ -2861,7 +2877,11 @@
   // fallback picker. Pinned by test to ExerciseFilters.EQUIPMENT_FREE_PROGRAM_SLUGS.
   var EQUIPMENT_FREE_PROGRAMS_IF_UNLOADED = { bodyweight_foundations: true };
   function workoutEquipmentFree() {
-    var slug = currentWorkout && currentWorkout.program_slug;
+    return equipmentFreeSlug(currentWorkout && currentWorkout.program_slug);
+  }
+  // Same rule for any workout's slug — also used to mark past sessions that
+  // were logged inside an equipment-free Program (progression history).
+  function equipmentFreeSlug(slug) {
     if (!slug) return false;
     if (typeof ExerciseFilters === 'undefined' || typeof ExerciseFilters.isEquipmentFreeProgram !== 'function') {
       // Restricted, but nothing can be proven allowed (equipmentFreeRow is

@@ -60,7 +60,8 @@ const LIB = [
 
 const FNS = ['catalogRowForExercise', 'trackingTypeForExercise', 'unitForExercise',
   'unitColumnLabel', 'unitPlaceholder', 'hasSavedWeight', 'isNoLoadExercise',
-  'workoutEquipmentFree', 'recForExercise', 'buildRecBlock', 'buildExCard'];
+  'workoutEquipmentFree', 'equipmentFreeSlug', 'loadPolicyForExercise', 'recForExercise',
+  'buildRecBlock', 'buildExCard'];
 const VARS = [/var NO_LOAD_TRACKING = \{[^}]*\};/, /var EQUIPMENT_FREE_PROGRAMS_IF_UNLOADED = \{[^}]*\};/];
 
 const BWF = 'bodyweight_foundations';
@@ -164,13 +165,20 @@ test('a weight already saved on a set keeps the input and shows the value', () =
   assert.match(html, /value="20"/);
 });
 
-test('a weight in the exercise history keeps the input', () => {
+// Owner decision (2026-11-03): Bodyweight Foundations is truly equipment-free.
+// Weighted history no longer brings the input back there; it stays the
+// baseline for the next gym workout instead (progression-load-baseline.test.js).
+test('weighted history does not bring the weight input back inside Bodyweight Foundations', () => {
   const history = [{ date: '2026-10-01', sets: [{ weight: 15, reps: 10, completed: true }] }];
-  assert.ok(hasWeightInput(card(ex('bridge', { history }))));
+  const e = ex('bridge', { history });
+  assert.ok(!hasWeightInput(card(e)));
+  const rec = W.recForExercise(e);
+  assert.equal(rec.recommendedWeight, null, 'no weight suggested');
+  assert.ok(!NO_WEIGHT_TALK.test(rec.coachNote), rec.coachNote);
 });
 
-test('a set with weight 0 counts as saved weight and keeps the input', () => {
-  assert.ok(hasWeightInput(card(ex('bridge', { sets: [{ weight_lbs: 0, reps: 10 }] }))));
+test('a 0 lb set is no external load, so it does not keep the input', () => {
+  assert.ok(!hasWeightInput(card(ex('bridge', { sets: [{ weight_lbs: 0, reps: 10 }] }))));
 });
 
 /* ── 2 · Defect 2: "Pick a weight" ──────────────────────────────────────── */
@@ -192,8 +200,8 @@ test('the defect reproduces from the name alone, proving the catalog is what fix
 
 test('weighted, custom and saved-weight exercises pass no equipment (weight jumps unchanged)', () => {
   const history = [{ date: '2026-10-01', sets: [{ weight: 20, reps: 10, completed: true }] }];
-  [ex('bench'), ex('bss'), ex('dips'), ex('pike', { custom: true, name: 'Pike Lean' }),
-   ex('split', { history })].forEach((e) => {
+  [ex('bench'), ex('bss'), ex('dips', { history }), ex('pike', { custom: true, name: 'Pike Lean' }),
+   ex('split', { sets: [{ weight_lbs: 20, reps: 10 }] })].forEach((e) => {
     const rec = W.recForExercise(e);
     const legacyEquip = Progression.inferEquipment(e.name);
     assert.equal(rec.equipment, legacyEquip, e.name + ' keeps name-based equipment');
@@ -423,7 +431,8 @@ test('the completion page reads is_bodyweight and passes tracking metadata into 
   const progLine = COMPLETE.match(/var EQUIPMENT_FREE_PROGRAMS = \{[^}]*\};/);
   assert.ok(progLine, 'workout-complete.html declares EQUIPMENT_FREE_PROGRAMS');
   const make = (tracking, slug) => {
-    const box = { tracking, w: { program_slug: slug === undefined ? BWF : slug } };
+    const box = { tracking, Progression, num: (v) => (v === '' || v == null || isNaN(parseFloat(v)) ? null : parseFloat(v)),
+      w: { program_slug: slug === undefined ? BWF : slug } };
     vm.createContext(box);
     vm.runInContext(progLine[0] + '\n' + src + '\nthis.f = noteMetaFor;', box);
     return box.f;
@@ -435,17 +444,22 @@ test('the completion page reads is_bodyweight and passes tracking metadata into 
   };
   const f = make({ byId, failed: false });
   const noWeight = [{ sets: [{ weight: null, reps: 30 }] }];
-  assert.deepEqual(f({ exercise_id: 'pike' }, noWeight), { trackingType: 'time', equipment: 'bodyweight' });
-  assert.deepEqual(f({ exercise_id: 'pike' }, [{ sets: [{ weight: 10, reps: 30 }] }]), { trackingType: 'time' });
-  assert.deepEqual(f({ exercise_id: 'bench' }, noWeight), { trackingType: 'weight_reps' });
-  assert.deepEqual(f({ exercise_id: 'dips' }, noWeight), { trackingType: 'weighted_bodyweight' });
-  assert.deepEqual(f({ exercise_id: null }, noWeight), {}, 'custom keeps legacy wording');
-  assert.deepEqual(f({ exercise_id: 'gone' }, noWeight), {}, 'missing row keeps legacy wording');
-  assert.deepEqual(make({ byId, failed: true })({ exercise_id: 'pike' }, noWeight), {}, 'failed read');
+  const today = (w) => ({ exercise_id: 'pike', sets: [{ weight_lbs: w, reps: 30 }] });
+  assert.deepEqual(f({ exercise_id: 'pike' }, noWeight), { trackingType: 'time', equipment: 'bodyweight', load: 'none' });
+  // Weighted HISTORY no longer matters inside BWF; a weight entered TODAY does.
+  assert.deepEqual(f({ exercise_id: 'pike' }, [{ sets: [{ weight: 10, reps: 30 }] }]),
+    { trackingType: 'time', equipment: 'bodyweight', load: 'none' });
+  assert.deepEqual(f(today(10), noWeight), { trackingType: 'time', load: 'optional' });
+  assert.deepEqual(f(today(0), noWeight), { trackingType: 'time', equipment: 'bodyweight', load: 'none' });
+  assert.deepEqual(f({ exercise_id: 'bench' }, noWeight), { trackingType: 'weight_reps', load: 'required' });
+  assert.deepEqual(f({ exercise_id: 'dips' }, noWeight), { trackingType: 'weighted_bodyweight', load: 'optional' });
+  assert.deepEqual(f({ exercise_id: null }, noWeight), { load: 'unknown' }, 'custom keeps legacy wording');
+  assert.deepEqual(f({ exercise_id: 'gone' }, noWeight), { load: 'unknown' }, 'missing row keeps legacy wording');
+  assert.deepEqual(make({ byId, failed: true })({ exercise_id: 'pike' }, noWeight), { load: 'unknown' }, 'failed read');
   // Gym and manual workouts: the unit still applies, the no-load rule never does.
   GYM.concat([null]).forEach((slug) => {
     assert.deepEqual(make({ byId, failed: false }, slug)({ exercise_id: 'pike' }, noWeight),
-      { trackingType: 'time' }, String(slug));
+      { trackingType: 'time', load: 'optional' }, String(slug));
   });
 });
 

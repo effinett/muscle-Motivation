@@ -332,6 +332,73 @@
   }
 
   // ── Main engine ────────────────────────────────────────────────────────────
+  /* ── Load policy & reference history (Phase 4.3.9B) ───────────────────────
+   * Which past sessions may set the next recommendation. Without a policy the
+   * newest session always wins — so one bodyweight session, one set of blank
+   * weights or one skipped exercise used to erase a weighted baseline. A caller
+   * that passes `load` gets a filtered history instead; one that omits it keeps
+   * the historical behaviour exactly.
+   *
+   *   none      an equipment-free Program exercise. Only sessions without
+   *             external load count, and 0 lb reads as bodyweight.
+   *   required  a catalog weight_reps lift that is not bodyweight-capable.
+   *             Only sessions with a recorded weight count (0 lb is a real,
+   *             recorded value here); blank weights never make it bodyweight.
+   *   optional  bodyweight-capable (catalog is_bodyweight). Sessions with a
+   *             recorded weight win over blank ones; 0 lb reads as bodyweight,
+   *             so it never earns a "+5 lb" jump.
+   *   unknown   custom, legacy or unresolved. Like optional, but 0 lb keeps
+   *             its stored meaning because the exercise cannot be vouched for.
+   *
+   * Every policy ignores a session with no working sets (a skipped exercise),
+   * and every policy except `none` ignores sessions logged inside an
+   * equipment-free Program (`session.equipmentFree`), so Bodyweight Foundations
+   * never replaces the baseline a gym workout progresses from. */
+  var LOAD_POLICY = { NONE: 'none', REQUIRED: 'required', OPTIONAL: 'optional', UNKNOWN: 'unknown' };
+
+  // Derive the policy from catalog metadata — never from the exercise name.
+  // meta: { noLoad, isBodyweight, trackingType }; a missing catalog row is unknown.
+  function loadPolicy(meta) {
+    meta = meta || {};
+    if (meta.noLoad === true) return LOAD_POLICY.NONE;
+    if (meta.isBodyweight === true) return LOAD_POLICY.OPTIONAL;
+    if (meta.isBodyweight === false && meta.trackingType === 'weight_reps') return LOAD_POLICY.REQUIRED;
+    return LOAD_POLICY.UNKNOWN;
+  }
+
+  function hasRecordedWeight(session) {
+    return workingSets(session).some(function (s) { return num(s.weight) !== null; });
+  }
+  function hasExternalLoad(session) {
+    return workingSets(session).some(function (s) { var w = num(s.weight); return w !== null && w > 0; });
+  }
+  // A copy of the session with 0 lb read as "no external load". Stored data is
+  // never touched.
+  function zeroAsBodyweight(session) {
+    var copy = {};
+    Object.keys(session).forEach(function (k) { copy[k] = session[k]; });
+    copy.sets = (session.sets || []).map(function (s) {
+      var w = num(s.weight);
+      if (w === null || w > 0) return s;
+      var c = {};
+      Object.keys(s).forEach(function (k) { c[k] = s[k]; });
+      c.weight = null;
+      return c;
+    });
+    return copy;
+  }
+
+  function referenceHistory(history, policy) {
+    var sessions = history.filter(function (s) { return workingSets(s).length > 0; });
+    if (policy === LOAD_POLICY.NONE) {
+      return sessions.filter(function (s) { return !hasExternalLoad(s); }).map(zeroAsBodyweight);
+    }
+    sessions = sessions.filter(function (s) { return !(s && s.equipmentFree === true); });
+    var recorded = sessions.filter(hasRecordedWeight);
+    if (policy === LOAD_POLICY.REQUIRED || recorded.length) sessions = recorded;
+    return policy === LOAD_POLICY.OPTIONAL ? sessions.map(zeroAsBodyweight) : sessions;
+  }
+
   function analyze(input) {
     input = input || {};
     var name = input.exerciseName || '';
@@ -342,6 +409,11 @@
     if (low === null || high === null || low > high) { low = DEFAULT_LOW; high = DEFAULT_HIGH; }
 
     var history = Array.isArray(input.history) ? input.history : [];
+    var policy = input.load;
+    if (policy === LOAD_POLICY.NONE || policy === LOAD_POLICY.REQUIRED ||
+        policy === LOAD_POLICY.OPTIONAL || policy === LOAD_POLICY.UNKNOWN) {
+      history = referenceHistory(history, policy);
+    }
     var last = history.length ? history[0] : null;
     var lastWorking = workingSets(last);
 
@@ -672,6 +744,10 @@
     TRACKING_UNIT: TRACKING_UNIT,
     trackingUnit: trackingUnit,
     isRepTracked: isRepTracked,
+    // Load-policy seam (Phase 4.3.9B) — which past sessions set the baseline.
+    LOAD_POLICY: LOAD_POLICY,
+    loadPolicy: loadPolicy,
+    referenceHistory: referenceHistory,
     // Exercise classification / target-set seam (extend in future phases)
     classifyExercise: classifyExercise,
     defaultTargetSets: defaultTargetSets,

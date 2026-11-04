@@ -487,8 +487,9 @@
       if(!wexs.length) return;
       var ids = [...new Set(wexs.map(function(x){return x.workout_id;}))];
       var { data: ws } = await supabaseClient
-        .from('workouts').select('id,created_at').eq('user_id', user.id).eq('completed', true).in('id', ids);
-      var when = {}; (ws||[]).forEach(function(x){ when[x.id]=x.created_at; });
+        .from('workouts').select('id,created_at,program_slug').eq('user_id', user.id).eq('completed', true).in('id', ids);
+      var when = {}, freeW = {};
+      (ws||[]).forEach(function(x){ when[x.id]=x.created_at; freeW[x.id]=EQUIPMENT_FREE_PROGRAMS[x.program_slug]===true; });
       var valid = wexs.filter(function(x){ return when[x.workout_id] && x.workout_id !== excludeWorkoutId; });
       var wexIds = valid.map(function(x){ return x.id; });
       if(!wexIds.length) return;
@@ -503,7 +504,7 @@
         matches.forEach(function(x){
           var ss = (byWex[x.id]||[]).slice().sort(function(a,b){ return (a.set_number||0)-(b.set_number||0); });
           if(!ss.length) return;
-          e.history.push({ date:when[x.workout_id], sets:ss });
+          e.history.push({ date:when[x.workout_id], equipmentFree:freeW[x.workout_id], sets:ss });
         });
         e.history.sort(function(a,b){ return new Date(b.date)-new Date(a.date); });
       });
@@ -548,17 +549,26 @@
     // catalog-confirmed bodyweight exercise with no saved weight treated as
     // no-load; gym and manual workouts keep their weight advice. Unresolved
     // rows pass nothing, so their note keeps the historical wording.
+    // Same rule as workout.html: inside an equipment-free Program a bodyweight
+    // rep or timed row is no-load unless a weight was entered TODAY. `load`
+    // (progression.js) picks which past sessions set the baseline, so the
+    // "next time" note matches what the workout screen will show.
     function noteMetaFor(e, hist){
-      if(tracking.failed || !e || e.exercise_id == null) return {};
-      var row = tracking.byId[e.exercise_id];
-      if(!row || !row.tracking_type) return {};
+      var row = (!tracking.failed && e && e.exercise_id != null) ? tracking.byId[e.exercise_id] : null;
+      var policy = function(noLoad){
+        return (typeof Progression!=='undefined' && Progression.loadPolicy)
+          ? Progression.loadPolicy({ noLoad:noLoad, isBodyweight: row ? row.is_bodyweight : undefined,
+                                     trackingType: row ? row.tracking_type : undefined })
+          : undefined;
+      };
+      if(!row || !row.tracking_type) return { load: policy(false) };
       var meta = { trackingType: row.tracking_type };
-      if(EQUIPMENT_FREE_PROGRAMS[w.program_slug] !== true) return meta;
       var noLoadType = row.tracking_type === 'bodyweight_reps' || row.tracking_type === 'time';
-      var weighted = (hist||[]).some(function(sess){
-        return (sess.sets||[]).some(function(s){ return s.weight != null; });
-      });
-      if(row.is_bodyweight === true && noLoadType && !weighted) meta.equipment = 'bodyweight';
+      var weightedToday = (e.sets||[]).some(function(s){ var x = num(s.weight_lbs); return x != null && x > 0; });
+      var noLoad = EQUIPMENT_FREE_PROGRAMS[w.program_slug] === true &&
+                   row.is_bodyweight === true && noLoadType && !weightedToday;
+      if(noLoad) meta.equipment = 'bodyweight';
+      meta.load = policy(noLoad);
       return meta;
     }
 
@@ -674,7 +684,7 @@
       // ---- progression recommendation (reflects today) ----
       if(ws.length && typeof Progression!=='undefined' && Progression.analyze){
         var tmpl = ranges[e.name.toLowerCase()] || {};
-        var hist = [{ date:w.created_at, sets: e.sets.map(mapSet) }]
+        var hist = [{ date:w.created_at, equipmentFree: EQUIPMENT_FREE_PROGRAMS[w.program_slug]===true, sets: e.sets.map(mapSet) }]
                    .concat(sessions.map(function(s){ return { date:s.date, sets:s.sets.map(mapSet) }; }));
         var rec = Progression.analyze(Object.assign({ exerciseName:e.name, repsLow:tmpl.reps_low, repsHigh:tmpl.reps_high, targetSets:tmpl.sets, history:hist },
                                                     noteMetaFor(e, hist)));
