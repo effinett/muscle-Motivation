@@ -2156,48 +2156,80 @@
   // Loads the last few COMPLETED sessions of this exercise (newest first) and
   // attaches them to ex.history so progression.js can recommend the next move.
   // Read-only and non-fatal — a failure just falls back to the empty state.
+  //
+  // Deeper baseline (Phase 4.3.9B): when none of those sessions can anchor the
+  // exercise's load policy — say a weighted Reverse Lunge followed by seven
+  // Bodyweight Foundations sessions — ONE extra read scans older sessions
+  // (bounded by HISTORY_BASELINE_LOOKBACK, reps-bearing sets only) and appends
+  // the newest one that can. The recent window, and so plateau/deload, is
+  // unchanged; the extra read never happens when the window already has one.
+  var HISTORY_BASELINE_LOOKBACK = 120;
+
   async function loadExerciseHistory(ex, limitSessions) {
     ex.history = [];
     try {
       var wexs = await loadLoggedMatches(ex);
       if (!wexs.length) return;
       var ids = [...new Set(wexs.map(function(w) { return w.workout_id; }))];
+      // Metadata only (id, date, Program) — cheap even at the lookback bound.
       var { data: ws } = await supabaseClient
         .from('workouts').select('id, created_at, program_slug')
         .eq('user_id', currentUser.id).eq('completed', true)
         .in('id', ids)
         .order('date', { ascending: false })
         .order('created_at', { ascending: false })
-        .limit(limitSessions || 6);
+        .limit(HISTORY_BASELINE_LOOKBACK);
       if (!ws || ws.length === 0) return;
       // Map each completed workout to its workout_exercise id for this exercise.
       var wexByWorkout = {};
       wexs.forEach(function(w) { wexByWorkout[w.workout_id] = w.id; });
-      var wexIds = ws.map(function(w) { return wexByWorkout[w.id]; }).filter(Boolean);
-      if (!wexIds.length) return;
-      var { data: sets } = await supabaseClient
-        .from('workout_sets')
-        .select('workout_exercise_id, set_number, weight_lbs, reps, completed, is_warmup')
-        .in('workout_exercise_id', wexIds)
-        .order('set_number');
-      var byWex = {};
-      (sets || []).forEach(function(s) {
-        (byWex[s.workout_exercise_id] = byWex[s.workout_exercise_id] || []).push(s);
-      });
-      ex.history = ws.map(function(w) {
-        var wexId = wexByWorkout[w.id];
-        return {
-          date: w.created_at,
-          // Logged inside Bodyweight Foundations: never a weighted baseline.
-          equipmentFree: equipmentFreeSlug(w.program_slug),
-          sets: (byWex[wexId] || []).map(function(s) {
-            return { weight: s.weight_lbs, reps: s.reps, completed: s.completed, is_warmup: s.is_warmup };
-          })
-        };
-      }).filter(function(sess) { return sess.sets.length > 0; });
+      var windowSize = limitSessions || 6;
+      ex.history = await loadHistorySessions(ws.slice(0, windowSize), wexByWorkout, false);
+
+      var policy = loadPolicyForExercise(ex);
+      if (ws.length > windowSize && typeof Progression !== 'undefined' && Progression.needsDeeperBaseline &&
+          Progression.needsDeeperBaseline(ex.history, policy)) {
+        var older = ws.slice(windowSize);
+        // A gym baseline never comes from an equipment-free Program session.
+        if (policy !== Progression.LOAD_POLICY.NONE) {
+          older = older.filter(function(w) { return !equipmentFreeSlug(w.program_slug); });
+        }
+        var baseline = Progression.findBaseline(
+          await loadHistorySessions(older, wexByWorkout, true), policy);
+        if (baseline) ex.history.push(baseline);
+      }
     } catch (e) {
       // Non-fatal — recommendations gracefully fall back to the empty state.
     }
+  }
+
+  // Sessions (newest first) for these workouts. `repsOnly` skips sets without
+  // reps, which no progression rule reads, to keep the deeper scan small.
+  async function loadHistorySessions(ws, wexByWorkout, repsOnly) {
+    var wexIds = ws.map(function(w) { return wexByWorkout[w.id]; }).filter(Boolean);
+    if (!wexIds.length) return [];
+    var q = supabaseClient
+      .from('workout_sets')
+      .select('workout_exercise_id, set_number, weight_lbs, reps, completed, is_warmup')
+      .in('workout_exercise_id', wexIds);
+    if (repsOnly) q = q.not('reps', 'is', null);
+    var { data: sets } = await q.order('set_number');
+    var byWex = {};
+    (sets || []).forEach(function(s) {
+      (byWex[s.workout_exercise_id] = byWex[s.workout_exercise_id] || []).push(s);
+    });
+    return ws.map(function(w) {
+      var wexId = wexByWorkout[w.id];
+      return {
+        date: w.created_at,
+        // Logged inside Bodyweight Foundations: never a weighted baseline.
+        equipmentFree: equipmentFreeSlug(w.program_slug),
+        sets: (byWex[wexId] || []).map(function(s) {
+          return { weight: s.weight_lbs, reps: s.reps, completed: s.completed, is_warmup: s.is_warmup };
+        })
+      };
+    }).filter(function(sess) { return sess.sets.length > 0; });
+  }
   }
 
   // Build the recommendation block HTML for an exercise card. Pure render —

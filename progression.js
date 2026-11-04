@@ -355,6 +355,7 @@
    * equipment-free Program (`session.equipmentFree`), so Bodyweight Foundations
    * never replaces the baseline a gym workout progresses from. */
   var LOAD_POLICY = { NONE: 'none', REQUIRED: 'required', OPTIONAL: 'optional', UNKNOWN: 'unknown' };
+  var LOAD_POLICY_SET = { none: true, required: true, optional: true, unknown: true };
 
   // Derive the policy from catalog metadata — never from the exercise name.
   // meta: { noLoad, isBodyweight, trackingType }; a missing catalog row is unknown.
@@ -399,6 +400,31 @@
     return policy === LOAD_POLICY.OPTIONAL ? sessions.map(zeroAsBodyweight) : sessions;
   }
 
+  /* Deeper baseline (Phase 4.3.9B). The workout screen loads only its newest
+   * sessions. When none of them can anchor the policy — e.g. seven Bodyweight
+   * Foundations sessions in a row on top of a weighted one — the caller scans
+   * older sessions and appends the newest one that can. Both helpers are pure;
+   * the caller owns the (bounded) reads. */
+  function isAnchor(session, policy) {
+    if (!workingSets(session).length) return false;
+    if (policy === LOAD_POLICY.NONE) return !hasExternalLoad(session);
+    return !(session && session.equipmentFree === true) && hasRecordedWeight(session);
+  }
+
+  // True when a known policy has no anchor session in `history`.
+  function needsDeeperBaseline(history, policy) {
+    if (!LOAD_POLICY_SET[policy]) return false;
+    return !(history || []).some(function (s) { return isAnchor(s, policy); });
+  }
+
+  // The newest anchor among older sessions (newest first), or null.
+  function findBaseline(sessions, policy) {
+    if (!LOAD_POLICY_SET[policy]) return null;
+    var list = sessions || [];
+    for (var i = 0; i < list.length; i++) if (isAnchor(list[i], policy)) return list[i];
+    return null;
+  }
+
   function analyze(input) {
     input = input || {};
     var name = input.exerciseName || '';
@@ -409,11 +435,7 @@
     if (low === null || high === null || low > high) { low = DEFAULT_LOW; high = DEFAULT_HIGH; }
 
     var history = Array.isArray(input.history) ? input.history : [];
-    var policy = input.load;
-    if (policy === LOAD_POLICY.NONE || policy === LOAD_POLICY.REQUIRED ||
-        policy === LOAD_POLICY.OPTIONAL || policy === LOAD_POLICY.UNKNOWN) {
-      history = referenceHistory(history, policy);
-    }
+    if (LOAD_POLICY_SET[input.load] === true) history = referenceHistory(history, input.load);
     var last = history.length ? history[0] : null;
     var lastWorking = workingSets(last);
 
@@ -748,6 +770,8 @@
     LOAD_POLICY: LOAD_POLICY,
     loadPolicy: loadPolicy,
     referenceHistory: referenceHistory,
+    needsDeeperBaseline: needsDeeperBaseline,
+    findBaseline: findBaseline,
     // Exercise classification / target-set seam (extend in future phases)
     classifyExercise: classifyExercise,
     defaultTargetSets: defaultTargetSets,

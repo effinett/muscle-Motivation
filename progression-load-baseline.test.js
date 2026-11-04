@@ -309,10 +309,145 @@ test('referenceHistory never mutates the stored sessions', () => {
 
 /* ── Wiring: both screens mark Bodyweight Foundations sessions ──────────── */
 
-test('workout.html tags each history session with its Program context', () => {
+/* ── Deeper baseline: the real loader against a fake database ───────────── */
+
+// A tiny PostgREST stand-in for the three tables loadExerciseHistory reads.
+// Workouts are stored newest first, which is the order the real query asks for.
+function fakeDb(workouts) {
+  const calls = [];
+  const rows = {
+    workouts: workouts.map((w) => ({ id: w.id, created_at: w.date, program_slug: w.slug || null, completed: true })),
+    workout_sets: [],
+  };
+  workouts.forEach((w) => w.sets.forEach((st, i) => rows.workout_sets.push(Object.assign(
+    { workout_exercise_id: 'wex-' + w.id, set_number: i + 1, is_warmup: false }, st))));
+  const from = (table) => {
+    const q = { table, ins: {}, nots: [], limit: null };
+    const b = {
+      select: () => b, eq: () => b, order: () => b,
+      in: (c, v) => { q.ins[c] = v; return b; },
+      not: (c) => { q.nots.push(c); return b; },
+      limit: (n) => { q.limit = n; return b; },
+      then: (resolve) => {
+        calls.push(q);
+        let data = rows[table].filter((r) => Object.keys(q.ins).every((c) => q.ins[c].includes(r[c])));
+        data = data.filter((r) => q.nots.every((c) => r[c] != null));
+        if (q.limit != null) data = data.slice(0, q.limit);
+        resolve({ data });
+      },
+    };
+    return b;
+  };
+  return { supabaseClient: { from }, calls, wexs: workouts.map((w) => ({ id: 'wex-' + w.id, workout_id: w.id })) };
+}
+
+function loaderSandbox(slug, db) {
+  const sandbox = {
+    Progression, ExerciseFilters, exerciseLibrary: LIB, supabaseClient: db.supabaseClient,
+    currentUser: { id: 'u1' }, currentWorkout: { id: 'live', program_slug: slug, mode: 'program' },
+    loadLoggedMatches: async () => db.wexs,
+    esc: (x) => String(x),
+  };
+  vm.createContext(sandbox);
+  const vars = VARS.map((re) => WORKOUT.match(re)[0]).concat([WORKOUT.match(/var HISTORY_BASELINE_LOOKBACK = \d+;/)[0]]);
+  const asyncFns = ['loadHistorySessions', 'loadExerciseHistory'];
+  vm.runInContext(vars.join('\n') + '\n' + FNS.map((n) => extractFn(WORKOUT, n)).join('\n') + '\n' +
+    asyncFns.map((n) => 'async ' + extractFn(WORKOUT, n)).join('\n') +
+    '\nthis.__fns = {' + FNS.concat(asyncFns).join(',') + '};', sandbox);
+  return sandbox.__fns;
+}
+
+let day = 100;
+const W_ = (sets, slug) => ({ id: 'w' + (day--), date: '2026-0' + 1 + '-01T00:00:' + String(day).padStart(3, '0'), slug, sets });
+const done = (w, reps) => reps.map((r) => ({ weight_lbs: w, reps: r, completed: true }));
+const skippedSets = () => [1, 2, 3].map(() => ({ weight_lbs: 30, reps: null, completed: false }));
+
+test('deeper baseline: weighted session + 7 ineligible newer ones → the gym workout keeps 25 lb → 30 lb', async () => {
+  // Newest first: 4 BWF sessions, 1 blank gym session, 1 skipped, 1 BWF 0 lb, then the weighted one.
+  const workouts = [
+    W_(done(null, [12, 12, 12]), 'bodyweight_foundations'),
+    W_(done(null, [12, 12, 12]), 'bodyweight_foundations'),
+    W_(done(null, [11, 11, 11]), 'bodyweight_foundations'),
+    W_(done(null, [10, 10, 10]), 'bodyweight_foundations'),
+    W_(done(null, [12, 12, 12]), 'muscle_gain'),
+    W_(skippedSets(), 'muscle_gain'),
+    W_(done(0, [10, 10, 10]), 'bodyweight_foundations'),
+    W_(done(25, [12, 12, 12]), 'muscle_gain'),
+  ];
+  const db = fakeDb(workouts);
+  const G = loaderSandbox('muscle_gain', db);
+  const e = ex('rlunge', []);
+  await G.loadExerciseHistory(e);
+
+  assert.equal(e.history[e.history.length - 1].sets[0].weight, 25, 'baseline appended after the window');
+  const rec = G.recForExercise(e);
+  assert.equal(rec.lastPerformance.weight, 25);
+  assert.equal(rec.action, 'increase');
+  assert.equal(rec.recommendedWeight, 30, 'progression continues from the weighted baseline');
+
+  // Bounded: one metadata read at the lookback cap, one window read, one deeper read (reps-bearing sets only).
+  const ws = db.calls.filter((c) => c.table === 'workouts');
+  assert.equal(ws.length, 1);
+  assert.equal(ws[0].limit, 120);
+  const setReads = db.calls.filter((c) => c.table === 'workout_sets');
+  assert.equal(setReads.length, 2);
+  assert.deepEqual(setReads[1].nots, ['reps']);
+  assert.ok(!setReads[1].ins.workout_exercise_id.includes('wex-' + workouts[6].id), 'BWF sessions are not even read');
+
+  // Without the deeper read the 6-session window alone would lose it.
+  const windowOnly = Object.assign({}, e, { history: e.history.slice(0, -1) });
+  assert.equal(G.recForExercise(windowOnly).recommendedWeight, null);
+});
+
+test('deeper baseline: no extra read when the recent window already has an anchor', async () => {
+  const workouts = [W_(done(30, [10, 10, 10]), 'muscle_gain')]
+    .concat([1, 2, 3, 4, 5, 6, 7].map(() => W_(done(null, [12, 12, 12]), 'bodyweight_foundations')));
+  const db = fakeDb(workouts);
+  const e = ex('rlunge', []);
+  await loaderSandbox('muscle_gain', db).loadExerciseHistory(e);
+  assert.equal(db.calls.filter((c) => c.table === 'workout_sets').length, 1);
+  assert.equal(e.history.length, 6, 'window unchanged');
+});
+
+test('deeper baseline: Bodyweight Foundations finds an older bodyweight session behind 7 gym ones', async () => {
+  const workouts = [1, 2, 3, 4, 5, 6, 7].map(() => W_(done(25, [12, 12, 12]), 'muscle_gain'))
+    .concat([W_(done(null, [14, 14, 14]), 'bodyweight_foundations')]);
+  const db = fakeDb(workouts);
+  const B = loaderSandbox('bodyweight_foundations', db);
+  const e = ex('rlunge', []);
+  await B.loadExerciseHistory(e);
+  const rec = B.recForExercise(e);
+  assert.deepEqual(rec.lastPerformance.reps, [14, 14, 14]);
+  assert.equal(rec.recommendedWeight, null);
+});
+
+test('deeper baseline: nothing eligible anywhere → the window is returned as-is (blank-only Push-Up user)', async () => {
+  const workouts = [1, 2, 3, 4, 5, 6, 7, 8].map(() => W_(done(null, [12, 12, 12]), 'muscle_gain'));
+  const db = fakeDb(workouts);
+  const G = loaderSandbox('muscle_gain', db);
+  const e = ex('pushup', []);
+  await G.loadExerciseHistory(e);
+  assert.equal(e.history.length, 6);
+  assert.deepEqual(G.recForExercise(e).lastPerformance.reps, [12, 12, 12]);
+});
+
+test('needsDeeperBaseline / findBaseline follow the same rules as referenceHistory', () => {
+  const P = Progression;
+  assert.equal(P.needsDeeperBaseline([bwf([12, 12, 12])], 'optional'), true);
+  assert.equal(P.needsDeeperBaseline([session(25, [12])], 'optional'), false);
+  assert.equal(P.needsDeeperBaseline([session(0, [12])], 'required'), false, 'a recorded 0 anchors a weighted lift');
+  assert.equal(P.needsDeeperBaseline([session(25, [12])], 'none'), true);
+  assert.equal(P.needsDeeperBaseline([], undefined), false, 'no policy → never reads more');
+  assert.equal(P.findBaseline([bwf([12]), session(null, [12]), session(40, [8])], 'required').sets[0].weight, 40);
+  assert.equal(P.findBaseline([session(25, [12]), bwf([9])], 'none').sets[0].reps, 9);
+  assert.equal(P.findBaseline([session(null, [12])], 'optional'), null);
+});
+
+test('workout.html wiring: Program tag, policy, bounded deeper read', () => {
+  assert.match(extractFn(WORKOUT, 'loadHistorySessions'), /equipmentFree: equipmentFreeSlug\(w\.program_slug\)/);
   const src = extractFn(WORKOUT, 'loadExerciseHistory');
   assert.match(src, /select\('id, created_at, program_slug'\)/);
-  assert.match(src, /equipmentFree: equipmentFreeSlug\(w\.program_slug\)/);
+  assert.match(src, /\.limit\(HISTORY_BASELINE_LOOKBACK\)/);
   assert.match(extractFn(WORKOUT, 'recForExercise'), /load: loadPolicyForExercise\(ex\)/);
 });
 

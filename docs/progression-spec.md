@@ -126,6 +126,15 @@ Program (`session.equipmentFree`). Plateau, deload and established set count
 read the same filtered sessions, so they compare like with like. **No `load` →
 byte-identical to before.**
 
+**Deeper baseline.** `workout.html` keeps its 6-session window (what plateau,
+deload and set count read). When no session in it can anchor the policy
+(`Progression.needsDeeperBaseline`), one extra read scans older sessions —
+bounded by `HISTORY_BASELINE_LOOKBACK` (120 sessions of metadata; reps-bearing
+sets only; equipment-free Program sessions skipped for gym policies) — and
+appends the newest anchor (`Progression.findBaseline`). No extra read happens
+when the window already has an anchor. `workout-complete.html` already reads
+all prior sessions.
+
 ---
 
 ## 6. Edge cases
