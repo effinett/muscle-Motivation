@@ -82,7 +82,7 @@ function snWeekAdherence(completed, trainingDays) {
 }
 
 /* ── calendar week (pure) ───────────────────────────────────────────────────
- * The Monday–Sunday week containing `today`. This is the ONE definition that
+ * The Sunday–Saturday week containing `today`. This is the ONE definition that
  * powers both the day strip and the completed/target metric — they must never
  * disagree, which is why both read the same structure.
  *
@@ -96,14 +96,14 @@ function snWeekAdherence(completed, trainingDays) {
  * one would fabricate data. */
 function snWeekStart(todayIso) {
   var d = wlParseDate(todayIso);
-  // getDay(): 0=Sun … 6=Sat. Shift so Monday is the first day of the week.
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  // getDay(): 0=Sun … 6=Sat. Sunday is the first day of the week.
+  d.setDate(d.getDate() - d.getDay());
   d.setHours(0, 0, 0, 0);
   return d;
 }
 
-var SN_DAY_LABELS   = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-var SN_DAY_WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+var SN_DAY_LABELS   = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+var SN_DAY_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 // workoutDates: ISO date strings of COMPLETED workouts (duplicates tolerated —
 // a day counts once, matching a target expressed in training DAYS per week).
@@ -230,7 +230,7 @@ function snComputeSnapshot(inputs) {
       // Rolling 7-day figures — PRESERVED for existing consumers.
       thisWeekCount: thisWeekCount,
       weekAdherence: snWeekAdherence(thisWeekCount, p.training_days),
-      // Calendar Monday–Sunday week — the definition new surfaces should use.
+      // Calendar Sunday–Saturday week — the definition new surfaces should use.
       week: snCalendarWeek(dates, today, p.training_days),
       lastWorkout: last ? { name: last.name || 'Workout', date: last.date } : null,
     },

@@ -1,6 +1,6 @@
 // calendar-week.test.js — Phase 4.3.4 V3.
 //
-// The Monday–Sunday calendar week that powers BOTH the day strip and the
+// The Sunday–Saturday calendar week that powers BOTH the day strip and the
 // completed/target metric. The binding rules: one definition drives both, the
 // existing rolling-7-day fields keep working, and no "scheduled" state is ever
 // invented — the product stores a weekly training COUNT, not a weekday plan.
@@ -17,35 +17,38 @@ const { snCalendarWeek, snWeekStart, snComputeSnapshot } = SN;
 
 const dates = (...d) => d;
 
-/* ── Monday–Sunday boundaries ───────────────────────────────────────────── */
+/* ── Sunday–Saturday boundaries ─────────────────────────────────────────── */
 
-test('week start: every day of a week resolves to the same Monday', () => {
-  // 2026-08-10 is a Monday; 2026-08-16 is the Sunday that closes that week.
+test('week start: every day of a week resolves to the same Sunday', () => {
+  // 2026-08-09 is a Sunday; 2026-08-15 is the Saturday that closes that week.
   const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-  for (const day of ['2026-08-10', '2026-08-11', '2026-08-12', '2026-08-13',
-    '2026-08-14', '2026-08-15', '2026-08-16']) {
-    assert.strictEqual(iso(snWeekStart(day)), '2026-08-10', `${day} → Monday 2026-08-10`);
+  for (const day of ['2026-08-09', '2026-08-10', '2026-08-11', '2026-08-12',
+    '2026-08-13', '2026-08-14', '2026-08-15']) {
+    assert.strictEqual(iso(snWeekStart(day)), '2026-08-09', `${day} → Sunday 2026-08-09`);
   }
   // The next day starts a NEW week.
-  assert.strictEqual(iso(snWeekStart('2026-08-17')), '2026-08-17');
+  assert.strictEqual(iso(snWeekStart('2026-08-16')), '2026-08-16');
 });
 
-test('week: Sunday belongs to the week that began the previous Monday', () => {
-  const w = snCalendarWeek([], '2026-08-16', 3); // a Sunday
-  assert.strictEqual(w.start, '2026-08-10');
-  assert.strictEqual(w.end, '2026-08-16');
+test('week: Saturday closes the week; Sunday opens the next one', () => {
+  const w = snCalendarWeek([], '2026-08-15', 3); // a Saturday
+  assert.strictEqual(w.start, '2026-08-09');
+  assert.strictEqual(w.end, '2026-08-15');
   assert.strictEqual(w.days.length, 7);
-  assert.strictEqual(w.days[6].isToday, true, 'Sunday is the 7th cell, not the 1st');
+  assert.strictEqual(w.days[6].isToday, true, 'Saturday is the 7th cell');
+  const sun = snCalendarWeek([], '2026-08-16', 3); // a Sunday
+  assert.strictEqual(sun.start, '2026-08-16');
+  assert.strictEqual(sun.days[0].isToday, true, 'Sunday is the 1st cell, not the 7th');
 });
 
-test('week: day cells are labelled Monday-first', () => {
+test('week: day cells are labelled Sunday-first', () => {
   const w = snCalendarWeek([], '2026-08-12', 3);
-  assert.deepStrictEqual(w.days.map((d) => d.label), ['M', 'T', 'W', 'T', 'F', 'S', 'S']);
+  assert.deepStrictEqual(w.days.map((d) => d.label), ['S', 'M', 'T', 'W', 'T', 'F', 'S']);
   assert.deepStrictEqual(w.days.map((d) => d.weekday),
-    ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
+    ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
   assert.deepStrictEqual(w.days.map((d) => d.date), [
-    '2026-08-10', '2026-08-11', '2026-08-12', '2026-08-13',
-    '2026-08-14', '2026-08-15', '2026-08-16']);
+    '2026-08-09', '2026-08-10', '2026-08-11', '2026-08-12',
+    '2026-08-13', '2026-08-14', '2026-08-15']);
 });
 
 /* ── Current-day identification ─────────────────────────────────────────── */
@@ -53,9 +56,9 @@ test('week: day cells are labelled Monday-first', () => {
 test('week: exactly one day is today, and future days are marked', () => {
   const w = snCalendarWeek([], '2026-08-13', 4); // Thursday
   assert.strictEqual(w.days.filter((d) => d.isToday).length, 1);
-  assert.strictEqual(w.days[3].isToday, true, 'Thursday is the 4th cell');
+  assert.strictEqual(w.days[4].isToday, true, 'Thursday is the 5th cell');
   assert.deepStrictEqual(w.days.map((d) => d.isFuture),
-    [false, false, false, false, true, true, true]);
+    [false, false, false, false, false, true, true]);
 });
 
 /* ── Completion counting ────────────────────────────────────────────────── */
@@ -63,7 +66,7 @@ test('week: exactly one day is today, and future days are marked', () => {
 test('week: completed days are flagged and counted', () => {
   const w = snCalendarWeek(dates('2026-08-10', '2026-08-12'), '2026-08-13', 4);
   assert.deepStrictEqual(w.days.map((d) => d.completed),
-    [true, false, true, false, false, false, false]);
+    [false, true, false, true, false, false, false]);
   assert.strictEqual(w.completed, 2);
 });
 
@@ -72,11 +75,11 @@ test('week: multiple workouts on one day count once', () => {
   // one completed day — not two.
   const w = snCalendarWeek(dates('2026-08-11', '2026-08-11', '2026-08-11'), '2026-08-13', 4);
   assert.strictEqual(w.completed, 1);
-  assert.strictEqual(w.days[1].completed, true);
+  assert.strictEqual(w.days[2].completed, true);
 });
 
 test('week: workouts outside the current week never leak in', () => {
-  const w = snCalendarWeek(dates('2026-08-09', '2026-08-17', '2026-07-30'), '2026-08-13', 4);
+  const w = snCalendarWeek(dates('2026-08-08', '2026-08-16', '2026-07-30'), '2026-08-13', 4);
   assert.strictEqual(w.completed, 0, 'last week and next week are excluded');
   assert.ok(w.days.every((d) => d.completed === false));
 });
@@ -122,30 +125,30 @@ test('week: meeting or exceeding the target reads as met', () => {
 /* ── Month / year boundaries ────────────────────────────────────────────── */
 
 test('week: spans a month boundary correctly', () => {
-  // 2026-09-28 is a Monday; that week runs into October.
+  // 2026-09-27 is a Sunday; that week runs into October.
   const w = snCalendarWeek(dates('2026-09-30', '2026-10-02'), '2026-10-01', 3);
-  assert.strictEqual(w.start, '2026-09-28');
-  assert.strictEqual(w.end, '2026-10-04');
+  assert.strictEqual(w.start, '2026-09-27');
+  assert.strictEqual(w.end, '2026-10-03');
   assert.strictEqual(w.completed, 2);
-  assert.strictEqual(w.days[2].date, '2026-09-30');
-  assert.strictEqual(w.days[4].date, '2026-10-02');
+  assert.strictEqual(w.days[3].date, '2026-09-30');
+  assert.strictEqual(w.days[5].date, '2026-10-02');
 });
 
 test('week: spans a year boundary correctly', () => {
-  // 2026-12-28 is a Monday; that week ends 2027-01-03.
+  // 2026-12-27 is a Sunday; that week ends 2027-01-02.
   const w = snCalendarWeek(dates('2026-12-31', '2027-01-02'), '2027-01-01', 4);
-  assert.strictEqual(w.start, '2026-12-28');
-  assert.strictEqual(w.end, '2027-01-03');
+  assert.strictEqual(w.start, '2026-12-27');
+  assert.strictEqual(w.end, '2027-01-02');
   assert.strictEqual(w.completed, 2);
-  assert.strictEqual(w.days[6].date, '2027-01-03');
+  assert.strictEqual(w.days[6].date, '2027-01-02');
 });
 
 test('week: handles a leap day without drifting', () => {
-  // 2028-02-28 is a Monday; 2028 is a leap year, so the week includes Feb 29.
+  // 2028-02-27 is a Sunday; 2028 is a leap year, so the week includes Feb 29.
   const w = snCalendarWeek(dates('2028-02-29'), '2028-03-01', 3);
-  assert.strictEqual(w.start, '2028-02-28');
-  assert.strictEqual(w.days[1].date, '2028-02-29');
-  assert.strictEqual(w.days[2].date, '2028-03-01');
+  assert.strictEqual(w.start, '2028-02-27');
+  assert.strictEqual(w.days[2].date, '2028-02-29');
+  assert.strictEqual(w.days[3].date, '2028-03-01');
   assert.strictEqual(w.completed, 1);
 });
 
@@ -183,24 +186,24 @@ test('snapshot: existing fields are preserved alongside the new week', () => {
     assert.ok(k in s.training, `existing training.${k} still present`);
   }
   assert.ok(s.training.week, 'training.week added');
-  assert.strictEqual(s.training.week.start, '2026-08-10');
+  assert.strictEqual(s.training.week.start, '2026-08-09');
   assert.strictEqual(s.training.week.completed, 2);
   assert.strictEqual(s.training.week.planned, 4);
 });
 
 test('snapshot: the rolling window and the calendar week are both intact', () => {
-  // Sunday 2026-08-16. Rolling 7 days reaches back to Monday 2026-08-10.
-  // A workout on Sunday 2026-08-09 is INSIDE neither (rolling starts the 10th),
-  // while one on 2026-08-10 is inside both — the two measures are allowed to
+  // Saturday 2026-08-15. Rolling 7 days reaches back to Sunday 2026-08-09.
+  // A workout on Saturday 2026-08-08 is INSIDE neither (rolling starts the 9th),
+  // while one on 2026-08-09 is inside both — the two measures are allowed to
   // differ, which is exactly why new surfaces must read training.week.
   const s = snComputeSnapshot({
     profile: { training_days: 3 },
     weightLogs: [], bfLogs: [], msLogs: [], foodRows: [],
-    workouts: [{ date: '2026-08-09' }, { date: '2026-08-10' }],
-    today: '2026-08-16',
+    workouts: [{ date: '2026-08-08' }, { date: '2026-08-09' }],
+    today: '2026-08-15',
   });
-  assert.strictEqual(s.training.week.start, '2026-08-10', 'calendar week starts Monday');
-  assert.strictEqual(s.training.week.completed, 1, 'only the 10th falls in this week');
+  assert.strictEqual(s.training.week.start, '2026-08-09', 'calendar week starts Sunday');
+  assert.strictEqual(s.training.week.completed, 1, 'only the 9th falls in this week');
   assert.strictEqual(typeof s.training.thisWeekCount, 'number', 'rolling count still produced');
   assert.strictEqual(s.training.weekAdherence.completed, s.training.thisWeekCount,
     'the legacy pairing is unchanged');

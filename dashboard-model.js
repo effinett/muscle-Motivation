@@ -95,7 +95,7 @@
   }
 
   /* ── B · THIS WEEK ──────────────────────────────────────────────────────
-   * completed / planned over the Monday–Sunday CALENDAR week, plus the seven
+   * completed / planned over the Sunday–Saturday CALENDAR week, plus the seven
    * day states the strip renders. Both read the SAME snapshot.training.week
    * structure, so the strip and the metric can never disagree.
    *
