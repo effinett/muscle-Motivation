@@ -353,7 +353,8 @@ test('published + membership renders the canonical Program facts', async () => {
   assert.match(facts, /Muscle Gain/);                 // goal via shared vocabulary
   assert.match(facts, /Bodyweight/);                  // equipment
   assert.match(facts, /8 weeks/);                     // duration
-  assert.match(facts, /3 days/);                      // per week
+  assert.match(facts, /Recommended<\/div><div class="fact-val">3 days\/week/); // a recommendation, not a cap
+  assert.doesNotMatch(facts, /Per week/);
   assert.match(facts, /Beginner – Intermediate/);     // level
   assert.match(facts, /Included with membership/);
   assert.equal(h.el('stickyCta').style.display, 'block');
@@ -676,9 +677,9 @@ test('frequency: no rendered path claims a personal training frequency', () => {
   assert.ok(!/You train/.test(PAGE_CODE), 'the "You train N days" claim must be gone');
   assert.ok(!/days a week/.test(PAGE_CODE), 'no script path may assert a weekly frequency');
   // The only remaining "days" string is the At a Glance Program fact.
-  const perWeek = PAGE_CODE.match(/\['Per week',[^\]]*\]/);
-  assert.ok(perWeek, 'the At a Glance Per week fact still exists');
-  assert.match(perWeek[0], /recommendedDaysPerWeek/, 'it is Program metadata, not profile data');
+  const recommended = PAGE_CODE.match(/\['Recommended',[^\]]*\]/);
+  assert.ok(recommended, 'the At a Glance Recommended fact still exists');
+  assert.match(recommended[0], /recommendedDaysPerWeek/, 'it is Program metadata, not profile data');
 });
 
 test('frequency: the session intro is static markup on every rendering path', () => {
@@ -794,8 +795,8 @@ test('At a Glance still shows the Program recommendation of 3 days', async () =>
   const h = authorized();
   await h.run();
   const facts = h.el('progFacts').innerHTML;
-  assert.match(facts, /Per week/);
-  assert.match(facts, /3 days/, 'the Program recommendation stays visible');
+  assert.match(facts, /Recommended/);
+  assert.match(facts, /3 days\/week/, 'the Program recommendation stays visible');
 });
 
 /* ── Pulling limitation: entitled Program content only ──────────────────── */

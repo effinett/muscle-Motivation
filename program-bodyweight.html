@@ -492,7 +492,7 @@
       ['Goal', goalLabel],
       ['Equipment', program.equipmentSummary],
       ['Duration', program.durationWeeks ? program.durationWeeks + ' weeks' : null],
-      ['Per week', program.recommendedDaysPerWeek ? program.recommendedDaysPerWeek + ' days' : null],
+      ['Recommended', program.recommendedDaysPerWeek ? program.recommendedDaysPerWeek + ' days/week' : null],
       ['Level', program.difficulty],
       ['Access', program.includedWithMembership ? 'Included with membership' : null],
     ].filter(function (f) { return f[1]; });   // a missing value shows no row

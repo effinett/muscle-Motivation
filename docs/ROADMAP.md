@@ -845,6 +845,9 @@ question and ignoring the answer is not acceptable in a paid personalization pro
   precedes CP4e-2 (mapping, Routine-name display, tests); the mapping never ships first. **CP4e-1 applied
   and verified 2026-10-05** (migration `20261005041336`). **CP4e-2** (code only) activates the mapping
   and labels every Program session with its Routine's own name; see the 2026-10-05 history entry.
+  **CP4f** (PR #75) fixed the Start bar's clearance. The 2026-10-19 criterion B audit passes every content
+  item. Still open: Bodyweight-active device checks at 6–2 days and one real-device run that starts and
+  completes a representative workout (see the 2026-10-19 history entry).
 - **4.3.9C — Women's Full Body + Glutes Program.**
 - **4.3.9D — Women's Bodyweight / No-Equipment Program.**
 - **4.3.9E — Glute Builder repositioning.** Preserve it as the glute-**specialization**, not the broad
@@ -887,6 +890,13 @@ question and ignoring the answer is not acceptable in a paid personalization pro
 
 - **4.3.9X.1 — Home Strength Program.**
 - **4.3.9X.2 — Full Gym Strength Program.**
+- **4.3.9X.3 — Equipment-aware pulling (owner-approved 2026-10-22; after 4.3.9B closes).** Let a user
+  declare simple pulling equipment (a pull-up bar, resistance bands, a suitable row setup) and let
+  equipment-aware programming prescribe real pulling work when that equipment is available. **Binding:**
+  Bodyweight Foundations stays genuinely equipment-free. Pull-ups, inverted rows, band rows and any other
+  equipment-dependent exercise are never added to its reviewed equipment-free pool or to equipment-free
+  Swap or picker results. Pulling content belongs to a Program or variant that requires the declared
+  equipment.
 
 These are intended to **deepen an already-served catalog**, in contrast to 4.3.9-L which closes coverage
 failures. **That premise is not yet proven.** Current Program equipment metadata is known to be inaccurate
