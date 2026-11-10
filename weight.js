@@ -208,7 +208,12 @@ function wlChartSVG(logs, opts) {
   });
   if (pts.length < 2) return '';
 
-  var xs = pts.map(function (p) { return wlParseDate(p.logged_on).getTime(); });
+  // x is a CALENDAR-day position. Date.UTC has no DST, so a span that crosses
+  // a clock change stays whole days; local midnights there are 23h/25h apart.
+  var xs = pts.map(function (p) {
+    var d = wlParseDate(p.logged_on);
+    return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  });
   var ys = pts.map(function (p) { return +p[yField]; });
   var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
   var minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);

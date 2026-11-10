@@ -150,6 +150,25 @@ test('chart: intermediate points keep their REAL proportional spacing', () => {
   assert.notDeepStrictEqual(xs, even, 'unevenly dated ones must not');
 });
 
+test('chart: spacing ignores daylight-saving clock changes', () => {
+  // 2026-11-01 is the US fall-back date. Local midnights either side are 25h
+  // apart, which used to pull the midpoint off centre (149.8 instead of 150).
+  const prevTZ = process.env.TZ;
+  process.env.TZ = 'America/New_York';
+  try {
+    const span = RIGHT - LEFT;
+    const rows = [
+      { logged_on: '2026-10-22', weight_lbs: 200 },
+      { logged_on: '2026-11-01', weight_lbs: 199 },
+      { logged_on: '2026-11-11', weight_lbs: 198 },
+    ];
+    assert.deepStrictEqual(xsOf(chart(rows)), [LEFT, LEFT + span / 2, RIGHT],
+      'ten days either side of the clock change land evenly');
+  } finally {
+    if (prevTZ === undefined) delete process.env.TZ; else process.env.TZ = prevTZ;
+  }
+});
+
 test('chart: identical dates degrade safely, with no invalid geometry', () => {
   // body_weight_logs is unique on (user_id, logged_on) so this cannot arise in
   // production, but the geometry must never emit NaN or Infinity regardless.
