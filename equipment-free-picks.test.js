@@ -39,7 +39,7 @@ function extractFn(src, name) {
 }
 
 const PAGE_FNS = [
-  'canonicalCatalog', 'workoutEquipmentFree', 'pickTargetsWorkout', 'pickerEquipmentFree',
+  'canonicalCatalog', 'workoutEquipmentFree', 'equipmentFreeSlug', 'pickTargetsWorkout', 'pickerEquipmentFree',
   'equipmentFreeRow', 'equipmentFreeId',
   'filterPicker', 'pickerRowHtml', 'pickerEmptyHtml', 'shortcutsHtml', 'shortcutSectionHtml', 'prefsCatalogs',
   'openExerciseSwap', 'renderExerciseSwap', 'applySwap', 'selectExercise',

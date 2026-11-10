@@ -107,6 +107,34 @@ the user entered, including blanks.
 - Pre-filled-but-untouched sets (weight present, reps blank) never enter history
   or PRs.
 
+**Reference session — load policy (Phase 4.3.9B, 2026-11-03).** A caller may
+pass `load` (`Progression.loadPolicy({ noLoad, isBodyweight, trackingType })`,
+from catalog metadata, never the name). analyze() then progresses from the
+newest *valid* session instead of always `history[0]`
+(`Progression.referenceHistory`; the stored history is never modified):
+
+| Policy | When | Valid reference sessions | 0 lb means |
+|---|---|---|---|
+| `none` | equipment-free Program exercise (Bodyweight Foundations) | sessions with no external load | bodyweight |
+| `required` | catalog `weight_reps`, not bodyweight-capable | sessions with a recorded weight (blank never counts) | a recorded 0 (legitimate, e.g. calf raises) |
+| `optional` | catalog `is_bodyweight` | recorded-weight sessions beat blank ones; all-blank history still counts | bodyweight (no "+5 lb") |
+| `unknown` | custom / legacy / unresolved | as `optional` | its stored value |
+
+Every policy skips a session with no working sets (a skipped exercise), and
+every policy except `none` skips sessions logged inside an equipment-free
+Program (`session.equipmentFree`). Plateau, deload and established set count
+read the same filtered sessions, so they compare like with like. **No `load` →
+byte-identical to before.**
+
+**Deeper baseline.** `workout.html` keeps its 6-session window (what plateau,
+deload and set count read). When no session in it can anchor the policy
+(`Progression.needsDeeperBaseline`), one extra read scans older sessions —
+bounded by `HISTORY_BASELINE_LOOKBACK` (120 sessions of metadata; reps-bearing
+sets only; equipment-free Program sessions skipped for gym policies) — and
+appends the newest anchor (`Progression.findBaseline`). No extra read happens
+when the window already has an anchor. `workout-complete.html` already reads
+all prior sessions.
+
 ---
 
 ## 6. Edge cases
@@ -125,6 +153,10 @@ the user entered, including blanks.
 | Edit Set 1 weight | Sets 2–3 unchanged |
 | Reps entered then cleared on a completed set | Set reverts to incomplete |
 | Program exercise with no stored weight | First-time → blank |
+| Bodyweight Foundations session of a gym exercise | Gym workouts keep progressing from the last weighted session |
+| Blank weight on a `weight_reps` lift | Ignored as a reference; no weighted history → first-time state, never "BW" |
+| Exercise skipped (sets created, nothing logged) | Ignored; previous guidance stays |
+| 0 lb on a bodyweight-capable exercise | Treated as bodyweight; never "+5 lb" |
 
 ---
 
