@@ -189,6 +189,30 @@
     .ai-log-btn:hover { opacity: 0.85; }
     .ai-log-btn:disabled { opacity: 0.5; cursor: default; }
     .ai-log-hint { font-size: 12px; color: var(--text-muted); padding: 0 2px 8px; }
+    /* As-you-type suggestions under the Quick Log field: the user's own foods
+       (instant, local) and a jump into food search with the text carried over. */
+    .ai-suggest { display: flex; flex-direction: column; gap: 6px; }
+    .ai-suggest:not(:empty) { margin: 2px 0 8px; }
+    .ai-suggest-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      width: 100%; min-height: 44px; padding: 9px 14px; text-align: left; cursor: pointer;
+      background: var(--surface-2); border: 1px solid var(--border-2); border-radius: 10px;
+      color: var(--text); font-family: 'Barlow', sans-serif; font-size: 14px; font-weight: 600;
+      transition: border-color .2s;
+    }
+    .ai-suggest-row:hover { border-color: var(--red-border); }
+    .ai-suggest-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ai-suggest-meta { flex-shrink: 0; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--text-muted); }
+    .ai-suggest-search { color: var(--text-2); border-style: dashed; }
+    .log-actions { display: flex; gap: 8px; margin: 0 0 4px; }
+    .log-action {
+      flex: 1 1 0; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      background: transparent; border: 1px solid var(--border-2); border-radius: 10px;
+      color: var(--text-2); cursor: pointer;
+      font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: .5px;
+      transition: border-color .2s, color .2s;
+    }
+    .log-action:hover { border-color: var(--red-border); color: var(--text); }
     /* review sheet — sits UNDER the food modal (z 200) so "Add manually" stacks */
     #aiSheet { z-index: 190; }
     .ai-sheet-src { font-size: 12px; color: var(--text-muted); font-style: italic; margin: -10px 0 14px; }
@@ -691,21 +715,29 @@
       <button class="date-nav" id="dateNext" onclick="shiftDate(1)" title="Next day"><i data-lucide="chevron-right"></i></button>
     </div>
 
-    <!-- Daily totals -->
-    <div class="section-label">Daily Totals</div>
-    <div id="totalsWrap"></div>
-
-    <!-- Copy Yesterday (rendered only when today is empty + yesterday has food) -->
-    <div id="copyYdayWrap"></div>
-
-    <!-- Quick Log (Phase 4.2): plain-English entry → AI split → USDA-verified review -->
+    <!-- Quick Log (Phase 4.2): plain-English entry → AI split → USDA-verified review.
+         First on the page: logging is the most frequent action here. The one
+         field takes a sentence (Log), and as you type it offers your own foods
+         and a jump into food search; search and barcode scan sit beside it. -->
     <div class="section-label">Quick Log</div>
     <form class="ai-log-row" onsubmit="aiQuickLog(event)">
       <input type="text" id="aiLogInput" maxlength="300" autocomplete="off"
              placeholder="Describe what you ate&hellip;">
       <button type="submit" class="ai-log-btn" id="aiLogBtn">Log</button>
     </form>
+    <div class="ai-suggest" id="aiSuggest"></div>
     <div class="ai-log-hint" id="aiLogHint">e.g. &ldquo;2 eggs, toast with peanut butter&rdquo;</div>
+    <div class="log-actions">
+      <button type="button" class="log-action" onclick="openFoodSearch()"><svg class="nu-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><span>Search foods</span></button>
+      <button type="button" class="log-action" onclick="openFoodScan()"><svg class="nu-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M8 7v10"/><path d="M12 7v10"/><path d="M16 7v10"/></svg><span>Scan barcode</span></button>
+    </div>
+
+    <!-- Daily totals -->
+    <div class="section-label">Daily Totals</div>
+    <div id="totalsWrap"></div>
+
+    <!-- Copy Yesterday (rendered only when today is empty + yesterday has food) -->
+    <div id="copyYdayWrap"></div>
 
     <!-- Quick add: saved meals + favorited + recently logged foods.
          Meals first — the highest-intent shortcut gets the top row. -->
@@ -1166,6 +1198,70 @@
     }
   }
 
+  /* ── Log-first entry points (roadmap 5.4 logging UI) ─────────────────
+   * Search and scan open the EXISTING Add Food modal (suggested meal, current
+   * date). As the user types in Quick Log, their own matching foods appear
+   * under the field (shared nuMatchOwnFoods — local, no request) with a row
+   * that carries the text into food search. Enter / Log is unchanged: it still
+   * sends the sentence through AI Quick Log. */
+  var aiSuggestItems = [];
+
+  function openFoodSearch(text) {
+    nuOpenModal({ meal: suggestMeal(), date: currentDate });
+    var q = (typeof text === 'string') ? text.trim() : '';
+    if (!q) return;
+    var input = document.getElementById('nuUsdaInput');
+    if (!input) return;
+    input.value = q.slice(0, 80);
+    nuUsdaInputChanged();
+  }
+
+  function openFoodScan() {
+    nuOpenModal({ meal: suggestMeal(), date: currentDate });
+    nuOpenScanner();
+  }
+
+  function renderAiSuggest() {
+    var box = document.getElementById('aiSuggest');
+    var input = document.getElementById('aiLogInput');
+    if (!box || !input) return;
+    var text = (input.value || '').trim();
+    if (text.length < 2) { aiSuggestItems = []; box.innerHTML = ''; return; }
+    var pool = (typeof nu_ownFoods !== 'undefined' && nu_ownFoods) ? nu_ownFoods : [];
+    aiSuggestItems = nuMatchOwnFoods(nuOwnQueryText(text), pool, 3);
+    box.innerHTML = aiSuggestItems.map(function (it, i) {
+      var cl = FoodDisplay.fdCompactLabel({ name: it.name, brand: it.brand, usda_fdc_id: it.usda_fdc_id });
+      return '<button type="button" class="ai-suggest-row" onclick="pickAiSuggest(' + i + ')" title="' + nuEsc(it.name) + '">' +
+          '<span class="ai-suggest-name">' + nuEsc(cl.name) + '</span>' +
+          '<span class="ai-suggest-meta">' + (it.own === 'favorite' ? 'Favorite' : 'Recent') + '</span>' +
+        '</button>';
+    }).join('') +
+      '<button type="button" class="ai-suggest-row ai-suggest-search" onclick="searchFromQuickLog()">' +
+        '<span class="ai-suggest-name">Search foods for &ldquo;' + nuEsc(text.slice(0, 40)) + '&rdquo;</span>' +
+      '</button>';
+  }
+
+  function clearQuickLogText() {
+    var input = document.getElementById('aiLogInput');
+    if (input) input.value = '';
+    renderAiSuggest();
+    if (typeof MMDirty !== 'undefined') MMDirty.refresh();
+  }
+
+  function pickAiSuggest(i) {
+    var item = aiSuggestItems[i];
+    if (!item) return;
+    clearQuickLogText();
+    nuOpenModalWithFood(item, { date: currentDate, meal: suggestMeal() });
+  }
+
+  function searchFromQuickLog() {
+    var input = document.getElementById('aiLogInput');
+    var text = input ? (input.value || '').trim() : '';
+    clearQuickLogText();
+    openFoodSearch(text);
+  }
+
   /* ── Quick Log (Phase 4.2): AI parse → USDA match → confirm sheet ── */
   var aiItems = [];    // resolved items shown in the review sheet
   var aiBusy = false;
@@ -1193,6 +1289,7 @@
       renderAiSheet();
       MMSheet.open(document.getElementById('aiSheet'), { onClose: function () { aiItems = []; } });
       input.value = '';
+      renderAiSuggest();
       if (parsed.remaining <= 5) {
         document.getElementById('aiLogHint').textContent =
           parsed.remaining + ' AI ' + (parsed.remaining === 1 ? 'log' : 'logs') + ' left today.';
@@ -1480,6 +1577,7 @@
   window.onFoodSaved = async function () {
     await refresh();
     loadRecentChips();
+    nuLoadOwnFoods(true).then(renderAiSuggest);   // suggestions include what was just logged
   };
 
   // ── Unsaved-work contract (Phase 4.3.5G) ──────────────────────────────
@@ -1526,6 +1624,10 @@
         lucide.createIcons();
         focusQuickLogFromHash();
         registerQuickLogDirty();
+        // As-you-type suggestions: load the user's own foods once, then match locally.
+        var qlInput = document.getElementById('aiLogInput');
+        if (qlInput) qlInput.addEventListener('input', renderAiSuggest);
+        nuLoadOwnFoods().then(renderAiSuggest);
       } catch (err) {
         console.error('Nutrition page error:', err);
         window.location.href = 'auth.html';

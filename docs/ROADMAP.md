@@ -1497,6 +1497,10 @@ any of this is pulled ahead of the locked critical path (§13) is Effi's decisio
 
 **Logging UI** *(5.4, with 5.0 gesture polish)*
 - One entry point: a single search field that handles a food name, a sentence (AI Quick Log) and barcode.
+  *Shipped 2026-11-10 (first cut):* Quick Log moved to the top of the Nutrition page (form and ids
+  unchanged); as-you-type own-food suggestions under it plus a "Search foods for …" hand-off; Search
+  and Scan buttons beside it. *Open:* Saved Meals / Favorites / Recent chip sections are still separate
+  (removing or merging them is an owner decision); a database result list directly under the field.
 - One-tap add of the default serving from a result row. *Shipped 2026-11-10 in the Add Food search* (the +
   opens the same card path and calls the same `nuSave`; never logs an unapplied typed unit; hidden while
   editing). Barcode scan moved inside the search field; injected modal markup is emoji-free (§13).
