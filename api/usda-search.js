@@ -246,6 +246,38 @@ async function responseCachePut(cacheKey, body) {
   return true;
 }
 
+/* ── USDA quota visibility ────────────────────────────────────────────────────
+ * api.data.gov reports the key's hourly allowance on every response
+ * (X-RateLimit-Limit / X-RateLimit-Remaining). The key itself is a Vercel
+ * sensitive variable nobody can read back, so the function logs the allowance
+ * instead: the limit once per warm instance (and again if it changes), and a
+ * warning — at most every five minutes — when under 10% is left. Logging only:
+ * it never changes a response and never throws. Read it in Vercel runtime logs
+ * (search "usda-search quota"). */
+const QUOTA_LOW_FRACTION = 0.1;
+const QUOTA_WARN_EVERY_MS = 5 * 60 * 1000;
+const quotaState = { limit: null, warnedAt: 0 };
+function noteQuota(res, log) {
+  try {
+    const out = log || console;
+    const h = res && res.headers;
+    if (!h || typeof h.get !== 'function') return null;
+    const limit = parseInt(h.get('x-ratelimit-limit'), 10);
+    const remaining = parseInt(h.get('x-ratelimit-remaining'), 10);
+    if (!(limit > 0) || !(remaining >= 0)) return null;
+    if (quotaState.limit !== limit) {
+      quotaState.limit = limit;
+      out.log('usda-search quota: limit ' + limit + ' requests/hour, ' + remaining + ' remaining');
+    }
+    const now = Date.now();
+    if (remaining <= limit * QUOTA_LOW_FRACTION && now - quotaState.warnedAt >= QUOTA_WARN_EVERY_MS) {
+      quotaState.warnedAt = now;
+      out.warn('usda-search quota LOW: ' + remaining + ' of ' + limit + ' requests left this hour');
+    }
+    return { limit: limit, remaining: remaining };
+  } catch (e) { return null; }
+}
+
 // Merge a supplemental pool into the primary one (dedupe by fdcId).
 function mergeGeneric(primary, supplement) {
   const seen = new Set(primary.map(function (f) { return f.fdcId; }));
@@ -290,6 +322,7 @@ async function searchFoods(q, _retried, opts) {
       const key = [dataType, pageSize, requireAll ? 1 : 0, query].join('|');
       return cachedPool(key, async function () {
         const r = await fetch(typeUrl(query, dataType, pageSize, requireAll));
+        noteQuota(r);                       // before the ok check, so a 429 is logged with its numbers
         if (!r.ok) { const e = new Error('upstream'); e.status = r.status; throw e; }
         const d = await r.json();
         return Array.isArray(d.foods) ? d.foods.map(trimFood) : [];
@@ -547,6 +580,7 @@ module.exports = async (req, res) => {
 module.exports._internals = {
   trimFood, buildResponse, mergeGeneric, searchFoods,
   cachedPool, poolCache, POOL_CACHE_TTL_MS, POOL_CACHE_MAX,
+  noteQuota, quotaState,
   responseCacheKey, responseCacheGet, responseCachePut, responseCacheable, RANKING_FINGERPRINT,
   RESPONSE_CACHE_TTL_MS, RESPONSE_CACHE_MAX_BYTES,
   loadPersistentCorrections, buildCorrectionSignal, buildMealSignal,
