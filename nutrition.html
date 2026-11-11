@@ -321,7 +321,7 @@
     .nu-fav.on { color: var(--red); }
     .modal-close {
       background: none; border: none; color: var(--text-muted);
-      font-size: 18px; cursor: pointer; padding: 4px 8px; transition: color 0.2s;
+      font-size: 18px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 4px 8px; transition: color 0.2s;
     }
     .modal-close:hover { color: var(--text); }
     .field-group { margin-bottom: 14px; }
@@ -427,14 +427,38 @@
     .nu-usda-list.is-stale { opacity: .45; transition: opacity .12s ease; }
     .nu-qty-hint { font-family: 'Barlow', sans-serif; font-size: 12px; font-weight: 600; color: var(--text-2); margin: 8px 2px 10px; }
     .nu-own-list { display: flex; flex-direction: column; gap: 7px; }
-    .nu-own-list:not(:empty) { margin: 12px 0 4px; }
+    .nu-own-list:not(:empty) { margin: 12px 0 10px; }
+    /* A result row = the food (opens the card) + a one-tap add button. */
     .nu-usda-row {
-      display: flex; align-items: center; justify-content: space-between; gap: 12px;
-      width: 100%; text-align: left; cursor: pointer;
+      display: flex; align-items: stretch; width: 100%;
       background: var(--surface-2); border: 1px solid var(--border-2);
-      border-radius: 10px; padding: 11px 14px; transition: border-color .2s;
+      border-radius: 10px; overflow: hidden; transition: border-color .2s;
     }
     .nu-usda-row:hover { border-color: var(--red-border); }
+    .nu-usda-open {
+      flex: 1 1 auto; min-width: 0;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      text-align: left; cursor: pointer; color: inherit; font: inherit;
+      background: none; border: none; padding: 11px 14px;
+    }
+    .nu-usda-add {
+      flex: 0 0 48px; min-height: 48px;
+      display: flex; align-items: center; justify-content: center;
+      background: none; border: none; border-left: 1px solid var(--border-2);
+      color: var(--text-2); cursor: pointer; transition: color .2s, background .2s;
+    }
+    .nu-usda-add:hover, .nu-usda-add:focus-visible { color: var(--text); background: var(--surface-3); }
+    .nu-usda-add:active { background: var(--red); color: var(--text); }
+    .nu-ico { display: block; }
+    /* Search field with the barcode scan button inside it. */
+    .nu-search-wrap { position: relative; margin-bottom: 4px; }
+    .nu-search-wrap .nu-search-input { margin-bottom: 0; padding-right: 52px; min-height: 46px; }
+    .nu-scan-ico {
+      position: absolute; top: 0; right: 0; width: 48px; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      background: none; border: none; color: var(--text-2); cursor: pointer; transition: color .2s;
+    }
+    .nu-scan-ico:hover, .nu-scan-ico:focus-visible { color: var(--text); }
     .nu-usda-main { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
     .nu-usda-name {
       font-family: 'Barlow', sans-serif; font-size: 14px; font-weight: 600; color: var(--text);
@@ -708,7 +732,7 @@
   <div class="modal-box" style="max-width: 380px;">
     <div class="modal-header">
       <div class="modal-title">Save Meal</div>
-      <button class="modal-close" onclick="closeSaveMeal()">✕</button>
+      <button class="modal-close" onclick="closeSaveMeal()" aria-label="Close"><svg class="nu-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
     </div>
     <div class="field-group">
       <label class="field-label" for="saveMealName">Meal name</label>
@@ -725,7 +749,7 @@
   <div class="modal-box" style="max-width: 420px;">
     <div class="modal-header">
       <div class="modal-title" id="mealSheetTitle">Meal</div>
-      <button class="modal-close" onclick="closeMealSheet()">✕</button>
+      <button class="modal-close" onclick="closeMealSheet()" aria-label="Close"><svg class="nu-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
     </div>
     <div class="sm-list" id="mealSheetItems"></div>
     <div class="sm-totals" id="mealSheetTotals"></div>
@@ -748,7 +772,7 @@
   <div class="modal-box">
     <div class="modal-header">
       <div class="modal-title">Review &amp; Add</div>
-      <button class="modal-close" onclick="closeAiSheet()">✕</button>
+      <button class="modal-close" onclick="closeAiSheet()" aria-label="Close"><svg class="nu-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
     </div>
     <div class="ai-sheet-src" id="aiSheetSrc"></div>
     <div class="sm-list" id="aiSheetItems"></div>

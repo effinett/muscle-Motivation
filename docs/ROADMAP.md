@@ -1497,7 +1497,9 @@ any of this is pulled ahead of the locked critical path (§13) is Effi's decisio
 
 **Logging UI** *(5.4, with 5.0 gesture polish)*
 - One entry point: a single search field that handles a food name, a sentence (AI Quick Log) and barcode.
-- One-tap add of the default serving from a result row.
+- One-tap add of the default serving from a result row. *Shipped 2026-11-10 in the Add Food search* (the +
+  opens the same card path and calls the same `nuSave`; never logs an unapplied typed unit; hidden while
+  editing). Barcode scan moved inside the search field; injected modal markup is emoji-free (§13).
 
 ## PHASE 5.5 — ADAPTIVE AI COACHING
 
