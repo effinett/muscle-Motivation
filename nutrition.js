@@ -1003,8 +1003,10 @@ function nuServingChanged(key) {
  * food opens with that amount already set. Serving choice is the SAME shared
  * rule AI Quick Log uses (nuAiChooseServing) — nothing is decided here:
  *   • a stated weight            → custom grams, quantity 1
- *   • a volume on a liquid       → custom ml, quantity 1
  *   • a unit the food can express→ that serving, quantity ÷ the label's count
+ *   • another volume unit        → converted (shared nuVolumeAmount): ml for a
+ *                                  liquid, or grams through one of the food's
+ *                                  own gram-weighted cup/spoon servings
  *   • a bare count               → the default serving × the count
  *   • a unit the food can NOT express → nothing is applied (never a guess)
  * The user still sees and confirms the card before anything is saved. */
@@ -1055,14 +1057,23 @@ function nuApplySearchQuantity(f) {
 
   if (per100 && +pq.grams > 0 && !f.is_liquid && hasKey('custom')) {
     key = 'custom'; custom = +pq.grams;
-  } else if (per100 && f.is_liquid && (pq.unit === 'ml' || pq.unit === 'l') && hasKey('custom')) {
-    key = 'custom'; custom = Math.round(qty * (pq.unit === 'l' ? 1000 : 1));
   } else if (pq.unit) {
-    var sv = nuAiChooseServing(f, nu_servingOptions, (f.raw && f.raw.portions) || nu_detailCache[f.usda_fdc_id] || [],
-      { quantity: qty, unit: pq.unit, grams: null, text: '' });
-    if (!sv || !sv.matchedUnit || !sv.key || sv.custom || !hasKey(sv.key)) return false;   // retried when portions load
-    key = sv.key;
-    servings = qty / (sv.unitCount > 0 ? sv.unitCount : 1);
+    // (1) the food's own serving in that unit ("1 cup (158 g)", "2 tbsp (32 g)")…
+    var sv = (pq.unit === 'ml' || pq.unit === 'l' || pq.unit === 'fl oz') ? null
+      : nuAiChooseServing(f, nu_servingOptions, (f.raw && f.raw.portions) || nu_detailCache[f.usda_fdc_id] || [],
+          { quantity: qty, unit: pq.unit, grams: null, text: '' });
+    if (sv && sv.matchedUnit && sv.key && !sv.custom && hasKey(sv.key)) {
+      key = sv.key;
+      servings = qty / (sv.unitCount > 0 ? sv.unitCount : 1);
+    } else {
+      // (2) …else a volume converted through a verified anchor (shared
+      // nuVolumeAmount): ml for a liquid, or grams via one of this food's own
+      // gram-weighted volume servings. No anchor → nothing applied; retried
+      // when household portions load.
+      var vol = per100 && hasKey('custom') ? nuVolumeAmount(f, nu_servingOptions, qty, pq.unit) : null;
+      if (!vol) return false;
+      key = 'custom'; custom = (vol.ml != null) ? vol.ml : vol.grams;
+    }
   } else {
     key = sel.value;                 // bare count × the default serving
     servings = qty;
