@@ -485,3 +485,199 @@ test('route: correction lookup runs alongside the USDA fetches, not ahead of the
   assert.strictEqual(res.headers['Cache-Control'], 'private, max-age=60', 'no memory → plain cacheable response');
   assert.ok(res.body.foods.some((f) => f.fdcId === 501));
 });
+
+/* ── durable response cache (public.usda_search_cache) ─────────────────────
+ * No network: Supabase REST and USDA are both stubbed. The route is loaded as
+ * a FRESH module with a real-looking USDA key, because a DEMO_KEY response is
+ * never stored. */
+function freshRoute() {
+  const saved = { usda: process.env.USDA_API_KEY, url: process.env.SUPABASE_URL, svc: process.env.SUPABASE_SERVICE_ROLE_KEY };
+  process.env.USDA_API_KEY = 'test-usda-key';
+  process.env.SUPABASE_URL = 'https://sb.test';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'svc-key';
+  const id = require.resolve('./api/usda-search.js');
+  const prior = require.cache[id];
+  delete require.cache[id];
+  const route = require('./api/usda-search.js');
+  require.cache[id] = prior;                       // other tests keep their instance
+  const restore = () => {
+    for (const [k, env] of [['usda', 'USDA_API_KEY'], ['url', 'SUPABASE_URL'], ['svc', 'SUPABASE_SERVICE_ROLE_KEY']]) {
+      if (saved[k] === undefined) delete process.env[env]; else process.env[env] = saved[k];
+    }
+  };
+  return { route, restore };
+}
+function mockRes() {
+  return { headers: {}, setHeader(k, v) { this.headers[k] = v; }, status(c) { this.code = c; return this; }, json(b) { this.body = b; return this; } };
+}
+// One stub for everything the route talks to. `opts`: cachedBody, corrections,
+// authOk, usdaFail (dataType substring that should 503).
+function world(opts) {
+  const o = opts || {};
+  const log = { usda: 0, cacheReads: [], cacheWrites: [], prunes: 0 };
+  const impl = async (url, init) => {
+    const s = String(url);
+    const method = (init && init.method) || 'GET';
+    if (s.includes('/auth/v1/user')) return o.authOk === false ? { ok: false, json: async () => ({}) } : { ok: true, json: async () => ({ id: 'u1' }) };
+    if (s.includes('/rest/v1/food_corrections')) return { ok: true, json: async () => (o.corrections || []) };
+    if (s.includes('/rest/v1/usda_search_cache')) {
+      if (method === 'GET') {
+        log.cacheReads.push({ url: s, auth: init.headers.Authorization });
+        return { ok: true, json: async () => (o.cachedBody ? [{ body: o.cachedBody }] : []) };
+      }
+      if (method === 'POST') { log.cacheWrites.push({ url: s, row: JSON.parse(init.body), prefer: init.headers.Prefer, auth: init.headers.Authorization }); return { ok: true }; }
+      if (method === 'DELETE') { log.prunes++; return { ok: true }; }
+    }
+    log.usda++;
+    const u = new URL(s);
+    if (o.usdaFail && u.searchParams.get('dataType').includes(o.usdaFail)) return { ok: false, status: 503, json: async () => ({}) };
+    return { ok: true, json: async () => ({ foods: u.searchParams.get('dataType') === 'Branded' ? [] : rawBanana() }) };
+  };
+  return { impl, log };
+}
+const call = (route, q, headers) => {
+  const res = mockRes();
+  return route({ method: 'GET', headers: Object.assign({ authorization: 'Bearer tok' }, headers || {}), query: { q } }, res).then(() => res);
+};
+
+test('response cache key: ranking fingerprint + normalized text; bounded', () => {
+  const { responseCacheKey, RANKING_FINGERPRINT } = _internals;
+  assert.match(RANKING_FINGERPRINT, /^[0-9a-f]{12}$/, 'derived from the ranking source');
+  assert.strictEqual(responseCacheKey('  Chicken   BREAST '), RANKING_FINGERPRINT + '|chicken breast');
+  assert.strictEqual(responseCacheKey('a'), null);
+  assert.strictEqual(responseCacheKey('x'.repeat(81)), null);
+  assert.strictEqual(responseCacheKey(null), null);
+});
+
+test('response cache: a miss searches USDA, then stores the body with the service key', async () => {
+  const { route, restore } = freshRoute();
+  const w = world({});
+  try {
+    const res = await withFetch(w.impl, () => call(route, 'Banana'));
+    assert.strictEqual(res.code, 200);
+    assert.ok(w.log.usda >= 2, 'USDA was queried');
+    assert.strictEqual(w.log.cacheReads.length, 1);
+    assert.match(w.log.cacheReads[0].url, /cache_key=eq\.[0-9a-f]{12}%7Cbanana&created_at=gte\./, 'keyed read, 24h window');
+    assert.strictEqual(w.log.cacheReads[0].auth, 'Bearer svc-key', 'server credential, never the user token');
+    assert.strictEqual(w.log.cacheWrites.length, 1);
+    const wr = w.log.cacheWrites[0];
+    assert.match(wr.prefer, /resolution=merge-duplicates/);
+    assert.match(wr.row.cache_key, /\|banana$/);
+    assert.deepEqual(wr.row.body, res.body, 'exactly what the user received');
+    assert.strictEqual(res.headers['X-Food-Cache'], undefined);
+  } finally { restore(); }
+});
+
+test('response cache: a hit returns the stored body with zero USDA requests', async () => {
+  const { route, restore } = freshRoute();
+  const stored = { foods: [{ fdcId: 501, description: 'Bananas, raw', score: 91 }] };
+  const w = world({ cachedBody: stored });
+  try {
+    const res = await withFetch(w.impl, () => call(route, 'banana'));
+    assert.strictEqual(res.code, 200);
+    assert.deepEqual(res.body, stored);
+    assert.strictEqual(w.log.usda, 0, 'no USDA request at all');
+    assert.strictEqual(w.log.cacheWrites.length, 0);
+    assert.strictEqual(res.headers['X-Food-Cache'], 'hit');
+    assert.strictEqual(res.headers['Cache-Control'], 'private, max-age=60');
+  } finally { restore(); }
+});
+
+test('response cache: never served without auth, never read without a token', async () => {
+  const { route, restore } = freshRoute();
+  const stored = { foods: [{ fdcId: 501, description: 'Bananas, raw' }] };
+  try {
+    const bad = world({ cachedBody: stored, authOk: false });
+    const res = await withFetch(bad.impl, () => call(route, 'banana'));
+    assert.strictEqual(res.code, 401);
+    assert.ok(!res.body.foods, 'a rejected token gets no cached data');
+
+    const anon = world({ cachedBody: stored });
+    const res2 = mockRes();
+    await withFetch(anon.impl, () => route({ method: 'GET', headers: {}, query: { q: 'banana' } }, res2));
+    assert.strictEqual(anon.log.cacheReads.length, 0, 'no token → no cache read');
+  } finally { restore(); }
+});
+
+test('response cache: contextual requests bypass it in both directions', async () => {
+  const { route, restore } = freshRoute();
+  const stored = { foods: [{ fdcId: 501, description: 'Bananas, raw' }] };
+  try {
+    // meal context (AI Quick Log item resolution): no read, no write
+    const mx = require('./food-meal.js').nuSerializeMealContext({ v: 1, beverage: true, cookedExpected: false,
+      animal: null, commodity: false, companionCats: ['carb'], role: 'beverage', mealType: null });
+    assert.ok(route._internals.buildMealSignal({ headers: { 'x-meal-context': mx } }), 'the header really carries meal context');
+    const m = world({ cachedBody: stored });
+    const r = await withFetch(m.impl, () => call(route, 'banana', { 'x-meal-context': mx }));
+    assert.strictEqual(r.code, 200);
+    assert.strictEqual(m.log.cacheReads.length, 0);
+    assert.strictEqual(m.log.cacheWrites.length, 0);
+    assert.ok(m.log.usda >= 2);
+    // a user correction for this query: the cached plain ranking must not be served or overwritten
+    route._internals.poolCache.clear();              // (the meal-context call above warmed the pools)
+    const [milk, bar] = fairlifePool();
+    const c = world({ cachedBody: stored, corrections: [Object.assign({ status: 'active' }, correction('banana', bar, milk))] });
+    const r2 = await withFetch(c.impl, () => call(route, 'banana'));
+    assert.strictEqual(r2.code, 200);
+    assert.strictEqual(r2.headers['Cache-Control'], 'private, no-store', 'the correction makes this request contextual');
+    assert.ok(c.log.usda >= 2, 'contextual → fresh pools, not the stored body');
+    assert.strictEqual(r2.headers['X-Food-Cache'], undefined);
+    assert.notDeepEqual(r2.body, stored);
+    assert.strictEqual(c.log.cacheWrites.length, 0, 'a personalised ranking is never stored');
+  } finally { restore(); }
+});
+
+test('response cache: degraded, empty and oversized responses are never stored', async () => {
+  const { route, restore } = freshRoute();
+  try {
+    const partial = world({ usdaFail: 'Branded' });       // one pool fails → partial answer
+    const res = await withFetch(partial.impl, () => call(route, 'banana'));
+    assert.strictEqual(res.code, 200, 'still served once');
+    assert.strictEqual(partial.log.cacheWrites.length, 0, 'but not stored');
+  } finally { restore(); }
+  const { responseCacheable } = _internals;
+  const ok = { status: 200, body: { foods: [{ fdcId: 1 }] } };
+  assert.strictEqual(responseCacheable(Object.assign({}, ok, { degraded: true }), false), false);
+  assert.strictEqual(responseCacheable(ok, true), false, 'contextual');
+  assert.strictEqual(responseCacheable({ status: 200, body: { foods: [] } }, false), false, 'empty');
+  assert.strictEqual(responseCacheable({ status: 502, body: {} }, false), false);
+});
+
+test('response cache: off without the service key; slow or failing storage is just a miss', async () => {
+  const { responseCacheGet, responseCachePut, RESPONSE_CACHE_MAX_BYTES } = _internals;
+  const savedKey = process.env.SUPABASE_SERVICE_ROLE_KEY, savedUrl = process.env.SUPABASE_URL;
+  try {
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    let touched = 0;
+    await withFetch(async () => { touched++; return { ok: true, json: async () => [] }; }, async () => {
+      assert.strictEqual(await responseCacheGet('k|banana'), null);
+      assert.strictEqual(await responseCachePut('k|banana', { foods: [{}] }), false);
+    });
+    assert.strictEqual(touched, 0, 'no key → no request');
+
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'svc'; process.env.SUPABASE_URL = 'https://sb.test';
+    await withFetch(async () => ({ ok: false, status: 500, json: async () => ({}) }), async () => {
+      assert.strictEqual(await responseCacheGet('k|banana'), null, 'error → miss');
+    });
+    await withFetch(async () => { throw new Error('network'); }, async () => {
+      assert.strictEqual(await responseCacheGet('k|banana'), null, 'throw → miss');
+      assert.strictEqual(await responseCachePut('k|banana', { foods: [{}] }), true, 'a failed write never throws');
+    });
+    const t0 = Date.now();
+    await withFetch(() => new Promise(() => {}), async () => {
+      assert.strictEqual(await responseCacheGet('k|banana'), null, 'hung read → miss');
+    });
+    assert.ok(Date.now() - t0 < 1500, 'and search is not held up by it');
+    await withFetch(async () => ({ ok: true, json: async () => [{ body: { foods: [] } }] }), async () => {
+      assert.strictEqual(await responseCacheGet('k|banana'), null, 'an empty stored body is not a hit');
+    });
+    let wrote = 0;
+    await withFetch(async () => { wrote++; return { ok: true }; }, async () => {
+      assert.strictEqual(await responseCachePut('k|banana', { foods: [{ x: 'y'.repeat(RESPONSE_CACHE_MAX_BYTES) }] }), false);
+    });
+    assert.strictEqual(wrote, 0, 'oversized bodies are not written');
+  } finally {
+    if (savedKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = savedKey;
+    if (savedUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = savedUrl;
+  }
+});

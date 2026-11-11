@@ -404,6 +404,11 @@ CREATE TABLE public."saved_meals" (
   "created_at" timestamp with time zone DEFAULT now() NOT NULL,
   "updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
+CREATE TABLE public."usda_search_cache" (
+  "cache_key" text NOT NULL,
+  "body" jsonb NOT NULL,
+  "created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
 CREATE TABLE public."user_exercise_favorites" (
   "id" uuid DEFAULT gen_random_uuid() NOT NULL,
   "user_id" uuid NOT NULL,
@@ -556,6 +561,7 @@ ALTER TABLE public."purchases" ADD CONSTRAINT "purchases_product_check" CHECK ((
 ALTER TABLE public."purchases" ADD CONSTRAINT "purchases_status_check" CHECK ((status = ANY (ARRAY['active'::text, 'canceled'::text, 'refunded'::text, 'past_due'::text])));
 ALTER TABLE public."saved_meals" ADD CONSTRAINT "saved_meals_pkey" PRIMARY KEY (id);
 ALTER TABLE public."saved_meals" ADD CONSTRAINT "saved_meals_user_name_key" UNIQUE (user_id, name);
+ALTER TABLE public."usda_search_cache" ADD CONSTRAINT "usda_search_cache_pkey" PRIMARY KEY (cache_key);
 ALTER TABLE public."user_exercise_favorites" ADD CONSTRAINT "user_exercise_favorites_pkey" PRIMARY KEY (id);
 ALTER TABLE public."user_exercise_favorites" ADD CONSTRAINT "user_exercise_favorites_canonical_uq" UNIQUE (user_id, exercise_id);
 ALTER TABLE public."user_exercise_favorites" ADD CONSTRAINT "user_exercise_favorites_custom_uq" UNIQUE (user_id, user_exercise_id);
@@ -595,6 +601,7 @@ CREATE INDEX purchases_payment_intent_idx ON public.purchases USING btree (strip
 CREATE UNIQUE INDEX purchases_stripe_session_id_uniq ON public.purchases USING btree (stripe_session_id);
 CREATE INDEX purchases_stripe_subscription_id_idx ON public.purchases USING btree (stripe_subscription_id) WHERE (stripe_subscription_id IS NOT NULL);
 CREATE INDEX purchases_user_id_idx ON public.purchases USING btree (user_id);
+CREATE INDEX usda_search_cache_created_idx ON public.usda_search_cache USING btree (created_at);
 CREATE INDEX user_exercise_favorites_user_created_idx ON public.user_exercise_favorites USING btree (user_id, created_at DESC);
 CREATE UNIQUE INDEX user_exercises_active_norm_uidx ON public.user_exercises USING btree (user_id, normalized_name) WHERE (archived_at IS NULL);
 CREATE INDEX user_exercises_user_norm_idx ON public.user_exercises USING btree (user_id, normalized_name);
@@ -739,6 +746,11 @@ REVOKE ALL ON TABLE public."saved_meals" FROM PUBLIC, anon, authenticated, servi
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public."saved_meals" TO "anon";
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public."saved_meals" TO "authenticated";
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public."saved_meals" TO "service_role";
+ALTER TABLE public."usda_search_cache" ENABLE ROW LEVEL SECURITY;
+COMMENT ON TABLE public."usda_search_cache" IS 'Durable cache of ranked /api/usda-search responses for plain searches. Public USDA-derived data only; no user data. Server-only: RLS enabled with no policies, privileges revoked from anon and authenticated. Rows valid 24h, pruned by the writer.';
+COMMENT ON COLUMN public."usda_search_cache"."cache_key" IS 'Ranking-code fingerprint + normalized search text.';
+REVOKE ALL ON TABLE public."usda_search_cache" FROM PUBLIC, anon, authenticated, service_role;
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public."usda_search_cache" TO "service_role";
 ALTER TABLE public."user_exercise_favorites" ENABLE ROW LEVEL SECURITY;
 COMMENT ON TABLE public."user_exercise_favorites" IS 'Phase 4.3.6J. Explicit per-user exercise favorites, keyed by stable identity (canonical exercises.id XOR user_exercises.id). Private: owner-scoped RLS plus a same-user ownership trigger for custom references. Recents are derived from workout history and are deliberately NOT stored here.';
 REVOKE ALL ON TABLE public."user_exercise_favorites" FROM PUBLIC, anon, authenticated, service_role;

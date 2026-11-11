@@ -1207,7 +1207,7 @@ test('CP4e-1: only the six published Routines are activated at 4-6 days (CP4e-2)
 test('CP4e-1: the README records the migration and the current counts', () => {
   const readme = read('supabase/README.md');
   const files = fs.readdirSync(path.join(__dirname, 'supabase', 'migrations')).filter((f) => f.endsWith('.sql'));
-  assert.equal(files.length, 69);   // + 20261111111733_food_search_events
+  assert.equal(files.length, 70);   // + 20261111111733_food_search_events, 20261111112151_usda_search_cache
   assert.ok(files.includes(path.basename(CP4E1_FILE)));
   assert.match(readme, new RegExp('The ' + files.length + ' migrations applied to production'));
   assert.match(readme, /nine migrations are guarded \*\*data\*\* migrations/);
