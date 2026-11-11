@@ -41,6 +41,12 @@ const EFFECTIVE_KEY = USDA_API_KEY || 'DEMO_KEY';
 const USING_DEMO    = !USDA_API_KEY;
 
 const USDA_ENDPOINT = 'https://api.nal.usda.gov/fdc/v1/foods/search';
+// FNDDS survey foods (composed dishes). Multi-word queries require every word,
+// so "chicken caesar salad" is not flooded with every chicken row. Ranking of
+// these rows (dish vs single food) is owned by food-ranking.js.
+const SURVEY_DATA_TYPE = ranking.SURVEY_DATA_TYPE;
+const SURVEY_PAGE_SIZE = 50;
+const SURVEY_COMPONENT_RE = /\bas ingredient in\b/i;
 
 // USDA nutrient ids we care about (search results key nutrients by id).
 // Energy has a few variants; we try them in order of preference.
@@ -329,6 +335,28 @@ async function searchFoods(q, _retried, opts) {
       });
     }
 
+    // FNDDS survey foods go through POST: USDA's GET search answers a survey
+    // query with a spurious 400 about half the time (measured 2026-11-11:
+    // 11/24 GET calls failed, 0/24 POST calls), while Branded/SR GETs never do.
+    function fetchSurvey(query, pageSize, requireAll) {
+      const key = ['POST', SURVEY_DATA_TYPE, pageSize, requireAll ? 1 : 0, query].join('|');
+      return cachedPool(key, async function () {
+        const body = { query: query, dataType: [SURVEY_DATA_TYPE], pageSize: pageSize, pageNumber: 1 };
+        if (requireAll) body.requireAllWords = true;
+        const r = await fetch(`${USDA_ENDPOINT}?api_key=${encodeURIComponent(EFFECTIVE_KEY)}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        });
+        noteQuota(r);
+        if (!r.ok) { const e = new Error('upstream'); e.status = r.status; throw e; }
+        const d = await r.json();
+        // FNDDS also lists recipe COMPONENTS ("Tomatoes as ingredient in
+        // omelet") — parts of a survey recipe, never a food anyone logs.
+        return Array.isArray(d.foods)
+          ? d.foods.filter(function (f) { return !SURVEY_COMPONENT_RE.test(f.description || ''); }).map(trimFood)
+          : [];
+      });
+    }
+
     // Branded pulls a WIDE pool (USDA max 200). USDA's own relevance buries the
     // right product deep — e.g. "kirkland peanut butter" wouldn't surface Kirkland's
     // organic PB inside the top 50 — so we cast a wide net and let the shared
@@ -342,7 +370,7 @@ async function searchFoods(q, _retried, opts) {
     const supQ = ranking.supplementFor(effQuery);
     const brandSupQ = ranking.brandSupplementQuery(effQuery);
     const multiWord = effQuery.indexOf(' ') >= 0;
-    const [brandedRes, genericRes, supRes, brandSupRes, allWordsRes] = await Promise.allSettled([
+    const [brandedRes, genericRes, supRes, brandSupRes, allWordsRes, surveyRes] = await Promise.allSettled([
       fetchType(effQuery, 'Branded', 200),
       // 50 (not 15): USDA's own relevance buries staple cuts — "chicken" didn't
       // surface breast, "rice" didn't surface plain cooked rice, inside the top 25.
@@ -353,6 +381,10 @@ async function searchFoods(q, _retried, opts) {
       // generic pool with single-word hits; requireAllWords recovers the items
       // that actually contain every query word (any multi-word food, no list).
       multiWord ? fetchType(effQuery, 'Foundation,SR Legacy', 25, true) : Promise.resolve([]),
+      // Composed dishes (roadmap 5.4.11): USDA's FNDDS survey foods are the
+      // verified source for "cheese pizza", "chicken burrito", "caesar salad" —
+      // dishes Foundation/SR Legacy barely cover. Generic data, same ranker.
+      fetchSurvey(effQuery, SURVEY_PAGE_SIZE, multiWord),
     ]);
 
     // If BOTH calls failed, surface the error (mirror the old single-call behavior).
@@ -374,9 +406,11 @@ async function searchFoods(q, _retried, opts) {
       brandSupRes.status === 'fulfilled' ? brandSupRes.value : []);
     let generic = mergeGeneric(
       mergeGeneric(
-        genericRes.status === 'fulfilled' ? genericRes.value : [],
-        allWordsRes.status === 'fulfilled' ? allWordsRes.value : []),
-      supRes.status === 'fulfilled' ? supRes.value : []);
+        mergeGeneric(
+          genericRes.status === 'fulfilled' ? genericRes.value : [],
+          allWordsRes.status === 'fulfilled' ? allWordsRes.value : []),
+        supRes.status === 'fulfilled' ? supRes.value : []),
+      surveyRes.status === 'fulfilled' ? surveyRes.value : []);
 
     // Zero-result recovery ladder — runs ONLY when the exact query found
     // nothing, so legitimate words are never hijacked by correction:
@@ -581,6 +615,7 @@ module.exports._internals = {
   trimFood, buildResponse, mergeGeneric, searchFoods,
   cachedPool, poolCache, POOL_CACHE_TTL_MS, POOL_CACHE_MAX,
   noteQuota, quotaState,
+  SURVEY_DATA_TYPE, SURVEY_PAGE_SIZE, SURVEY_COMPONENT_RE,
   responseCacheKey, responseCacheGet, responseCachePut, responseCacheable, RANKING_FINGERPRINT,
   RESPONSE_CACHE_TTL_MS, RESPONSE_CACHE_MAX_BYTES,
   loadPersistentCorrections, buildCorrectionSignal, buildMealSignal,

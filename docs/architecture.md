@@ -40,6 +40,13 @@ The pure candidate-reranking intelligence behind every food search — extracted
   benchmarks run the exact production ranking offline.
 - All score contributions are named weights in `RANK_WEIGHTS`; ranking behavior is tuned by
   editing that table and the config term lists (brands, categories, food intents), not code.
+- **USDA FNDDS survey foods (`Live`, roadmap 5.4.11).** `/api/usda-search` also fetches
+  `Survey (FNDDS)` — by **POST**, because USDA's GET search answers survey queries with a spurious 400
+  about half the time — and merges it into the generic pool; recipe components ("X as ingredient in
+  Y") are dropped at fetch. In the ranker, a survey row in a dish category (`SURVEY_DISH_CATEGORIES`,
+  plus any category containing "sandwich") competes at full strength; any other survey row takes
+  `RANK_WEIGHTS.surveyNonDish` so the Foundation/SR record stays the canonical single food. `nfs`
+  ("not further specified") is a canonical-positive term. Non-survey rows are unaffected.
 - **Extension seam:** `options.signals` — pure `(candidate, features, ctx) → number` passes.
   Phases 4.2.3+ (confidence, correction memory, portion compatibility, meal context,
   preferences) plug in there without touching candidate acquisition or creating a second

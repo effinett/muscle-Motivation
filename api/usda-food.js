@@ -42,9 +42,13 @@ function portionLabel(p) {
   let unitName = p.measureUnit && p.measureUnit.name;
   if (unitName === 'RACC') unitName = 'serving';   // USDA jargon (Reference Amount Customarily Consumed)
   const unit = (unitName && unitName !== 'undetermined') ? unitName : '';
-  const mod = (p.modifier || '').trim();
+  // FNDDS portions carry a bare numeric code in `modifier` ("90000" = quantity
+  // not specified) — a code, never a measure, so it must not reach the label.
+  const modRaw = (p.modifier || '').trim();
+  const mod = /^\d+$/.test(modRaw) ? '' : modRaw;
   const label = (String(amt) + (unit ? ' ' + unit : '') + (mod ? (unit ? ', ' : ' ') + mod : '')).trim();
-  return label || (String(amt) + ' serving');
+  // A label with no word at all ("1") says nothing — call it a serving.
+  return /[a-z]/i.test(label) ? label : (String(amt) + ' serving');
 }
 
 // How "natural" a household portion is as the DEFAULT serving. The client

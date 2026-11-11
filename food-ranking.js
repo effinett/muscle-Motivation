@@ -50,6 +50,10 @@ const RANK_WEIGHTS = {
   usdaProgramEntry: -400,     // "(Includes foods for USDA…)" institutional twins
   emptyMacroPanel: -1500,     // no kcal/protein/carbs/fat at all — useless to log
   researchParenthetical: -250,// "(Hopi)", "(shoyu)" research entries — tie-break down
+  surveyNonDish: -2000,       // FNDDS survey row that is NOT a composed dish: SR/Foundation
+                              //   stays the canonical single food (FNDDS names it the way
+                              //   people type — "Chicken breast, baked" — and would win
+                              //   on name match alone). Dish rows compete at full strength.
 
   // phrase / token match quality
   phraseMatch: 1000,          // whole query phrase in brand+description (either word order)
@@ -184,6 +188,27 @@ const WHOLE_FOOD_CATEGORIES = new Set([
   'fast foods',
 ]);
 
+// USDA FNDDS (Survey) food categories that ARE composed dishes — the data FNDDS
+// adds that Foundation/SR Legacy barely cover (roadmap 5.4.11). FNDDS rows in any
+// other category (single foods: "Chicken, whole pieces", "Yeast breads", "Nuts and
+// seeds") take RANK_WEIGHTS.surveyNonDish so the SR/Foundation record stays the
+// canonical single food. Names are USDA WWEIA categories, lowercase. Any category
+// containing "sandwich" counts. Extend this list, not the code.
+const SURVEY_DATA_TYPE = 'Survey (FNDDS)';
+const SURVEY_DISH_CATEGORIES = new Set([
+  'pizza', 'burritos and tacos', 'nachos', 'other mexican mixed dishes', 'burgers',
+  'soups', 'fried rice and lo/chow mein', 'stir-fry and soy-based sauce mixtures',
+  'egg rolls, dumplings, sushi', 'pasta mixed dishes, excludes macaroni and cheese',
+  'macaroni and cheese', 'rice mixed dishes', 'meat mixed dishes', 'poultry mixed dishes',
+  'seafood mixed dishes', 'bean, pea, legume dishes', 'turnovers and other grain-based items',
+  'lettuce and lettuce salads', 'pancakes, waffles, french toast',
+  'chicken patties, nuggets and tenders',
+]);
+function isSurveyDish(f) {
+  const c = (f.foodCategory || '').toLowerCase();
+  return SURVEY_DISH_CATEGORIES.has(c) || c.indexOf('sandwich') >= 0;
+}
+
 // Canonical food preference. For a base-food search, reward the normal base food
 // (raw/cooked/whole cuts) and penalize compound/processed/recipe foods that merely
 // contain the word. INTENT-AWARE: a term is only applied when the user did NOT
@@ -194,6 +219,9 @@ const POSITIVE_TERMS = [
   'fresh', 'with skin', 'boneless', 'skinless', 'breast', 'ground', 'fillet',
   'white rice', 'brown rice', 'jasmine', 'basmati', 'rolled oats', 'steel cut oats',
   'old fashioned oats', 'brewed',
+  // FNDDS "not further specified" — the survey's own canonical generic dish
+  // ("Pancakes, NFS" over "Pancakes, whole grain", "Taco, NFS" over "Taco, fish").
+  'nfs',
 ];
 // Derivative / processed / recipe descriptors. A food carrying one of these (that
 // the user did NOT type) ranks below the base food — egg salad, apple pie, waffle
@@ -1246,6 +1274,9 @@ function scoreDataSanity(f) {
   // foods but carry institutional portion data (bulk cup weights) — rank the
   // consumer entry first.
   if (/includes foods for usda/i.test(f.description || '')) s += RANK_WEIGHTS.usdaProgramEntry;
+  // FNDDS survey rows are dish data: a single-food survey row ranks below the
+  // SR/Foundation record of the same food (see SURVEY_DISH_CATEGORIES).
+  if (f.dataType === SURVEY_DATA_TYPE && !isSurveyDish(f)) s += RANK_WEIGHTS.surveyNonDish;
   return s;
 }
 
@@ -1693,6 +1724,9 @@ if (typeof module !== 'undefined' && module.exports) {
     // primary contract
     rankFoodCandidates: rankFoodCandidates,
     RANK_WEIGHTS: RANK_WEIGHTS,
+    SURVEY_DATA_TYPE: SURVEY_DATA_TYPE,
+    SURVEY_DISH_CATEGORIES: SURVEY_DISH_CATEGORIES,
+    isSurveyDish: isSurveyDish,
     // query pipeline (consumed by api/usda-search.js fetch orchestration)
     expandQuery: expandQuery,
     parseQueryQuantity: parseQueryQuantity,
