@@ -1483,8 +1483,9 @@ any of this is pulled ahead of the locked critical path (§13) is Effi's decisio
 - *Open — data-source decision under §2.4:* a barcode fallback source; lookup is USDA Branded only.
 
 **Smarter**
-- **5.4.1 / 5.4.2 refinement:** the user's own foods (favorites, recents, saved meals) appear inside
-  database search, ahead of the network result.
+- **5.4.1 / 5.4.2 refinement:** the user's own foods appear inside database search, ahead of the network
+  result. *Shipped 2026-11-10 for favorites and recently logged foods* (shared `nuMatchOwnFoods` in
+  `food-core.js`; local, no request). *Open:* saved meals in the same list.
 - **5.4.12:** quantity typed in the search box ("200g chicken", "2 eggs") pre-fills the serving.
 
 **Logging UI** *(5.4, with 5.0 gesture polish)*
