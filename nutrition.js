@@ -1098,6 +1098,9 @@ var nu_servingTouched = false;   // true once the user changes the serving selec
 var nu_detailCache = {};         // fdcId → trimmed portions[] (session cache)
 
 // Render the serving <select> from nu_servingOptions, selecting `selectedKey`.
+// The <select> stays the single source of truth for the chosen serving (every
+// reader uses its value); it is visually replaced by a row of tappable chips —
+// one tap to switch between grams, cups and pieces instead of tap-scroll-tap.
 function nuRenderServingSelect(selectedKey) {
   var sel = document.getElementById('nuServingSelect');
   if (!sel) return;
@@ -1105,6 +1108,62 @@ function nuRenderServingSelect(selectedKey) {
     return '<option value="' + o.key + '">' + nuEsc(o.label) + '</option>';
   }).join('');
   if (selectedKey != null) sel.value = selectedKey;
+  var chips = document.getElementById('nuServingChips');
+  if (chips) {
+    // Long lists fold: the first few servings and Custom stay visible, the rest
+    // sit behind "More" so the card never grows past a few rows. The selected
+    // serving is always shown (nuSyncServingChips un-folds it).
+    var fold = nu_servingOptions.length > NU_SERVING_CHIPS_MAX;
+    var extras = 0;
+    chips.innerHTML = nu_servingOptions.map(function (o, i) {
+      var extra = fold && !o.custom && i >= NU_SERVING_CHIPS_LEAD;
+      if (extra) extras++;
+      return '<button type="button" class="nu-serving-chip' + (extra ? ' is-extra' : '') + '" role="radio" aria-checked="false"' +
+        ' data-key="' + nuEsc(o.key) + '" onclick="nuPickServing(' + i + ')">' + nuEsc(nuServingChipLabel(o)) + '</button>';
+    }).join('') + (extras
+      ? '<button type="button" class="nu-serving-more" onclick="nuExpandServings()">More (' + extras + ')</button>'
+      : '');
+    if (chips.classList) chips.classList.toggle('is-expanded', !!nu_servingExpanded);
+  }
+  nuSyncServingChips();
+}
+var NU_SERVING_CHIPS_MAX  = 6;   // more options than this → fold
+var NU_SERVING_CHIPS_LEAD = 4;   // servings kept visible ahead of the fold
+var nu_servingExpanded = false;  // reset each time a card opens
+function nuExpandServings() {
+  nu_servingExpanded = true;
+  var chips = document.getElementById('nuServingChips');
+  if (chips && chips.classList) chips.classList.add('is-expanded');
+}
+// Chip text: the option's own label, with the custom entry named by its unit.
+function nuServingChipLabel(o) {
+  if (o.custom) return (nu_pendingSource && nu_pendingSource.is_liquid) ? 'Custom ml' : 'Custom grams';
+  return o.label;
+}
+// Mirror the select's value onto the chips (called after every serving change,
+// including programmatic ones — typed amounts, late-arriving portions).
+function nuSyncServingChips() {
+  var sel = document.getElementById('nuServingSelect');
+  var chips = document.getElementById('nuServingChips');
+  if (!sel || !chips || !chips.querySelectorAll) return;
+  var list = chips.querySelectorAll('.nu-serving-chip');
+  for (var i = 0; i < list.length; i++) {
+    var on = list[i].getAttribute('data-key') === sel.value;
+    list[i].setAttribute('aria-checked', on ? 'true' : 'false');
+    list[i].classList.toggle('is-on', on);
+    if (on) list[i].classList.remove('is-extra');     // the chosen serving is never folded away
+  }
+}
+function nuPickServing(i) {
+  var o = nu_servingOptions[i];
+  var sel = document.getElementById('nuServingSelect');
+  if (!o || !sel) return;
+  sel.value = o.key;
+  nuServingChanged(o.key);
+  if (o.custom) {
+    var customEl = document.getElementById('nuCustomGrams');
+    if (customEl) customEl.focus();
+  }
 }
 
 // User changed the serving — mark it touched so a late portions fetch won't override.
@@ -1217,6 +1276,7 @@ function nuPickUsda(i) {
 // Open the selected-food card for a normalized USDA food — the one card path
 // for a tapped search row AND a tapped "Your foods" row.
 function nuOpenUsdaCard(f, searchQty) {
+  nu_servingExpanded = false;
   nu_cardQty = searchQty ? { pq: searchQty, applied: false } : null;
   nu_pendingSource = f;
   nu_servingTouched = false;
@@ -1248,7 +1308,11 @@ function nuOpenUsdaCard(f, searchQty) {
   nuShowForm(true);                    // switches the form into USDA-card mode
   nuApplyServing(def);                 // fills hidden inputs + readout for the default serving
   nuApplySearchQuantity(f);            // "200g chicken" → opens already set to 200 g
-  setTimeout(function () { document.getElementById('nuServingSelect').focus(); }, 60);
+  setTimeout(function () {
+    var chips = document.getElementById('nuServingChips');
+    var on = chips && chips.querySelector && chips.querySelector('.nu-serving-chip.is-on');
+    if (on) on.focus();
+  }, 60);
 
   // Non-blocking: enrich the dropdown with real household servings when they arrive.
   if (f.usda_fdc_id != null && !cachedPortions) nuLoadPortions(f);
@@ -1844,6 +1908,7 @@ function nuApplyServing(key) {
   nu_pendingSource.serving_unit = unit;
   nu_pendingSource.serving_description = desc;
 
+  nuSyncServingChips();
   nuUpdateTotalPreview();
 }
 
@@ -2079,10 +2144,12 @@ function nuModalMarkup() {
           '<label class="field-label">Food</label>' +
           '<input type="text" id="nuName" maxlength="80" placeholder="e.g. Chicken breast, 6 oz" oninput="nuNameEdited()">' +
         '</div>' +
-        // USDA pick only — serving-size dropdown (+ optional custom grams)
+        // USDA pick only — serving chips (+ optional custom grams). The select
+        // holds the value; the chips are what the user taps.
         '<div class="field-group" id="nuServingRow" style="display:none;">' +
-          '<label class="field-label">Serving</label>' +
-          '<select id="nuServingSelect" onchange="nuServingChanged(this.value)"></select>' +
+          '<label class="field-label" id="nuServingLabel">Serving</label>' +
+          '<div class="nu-serving-chips" id="nuServingChips" role="radiogroup" aria-labelledby="nuServingLabel"></div>' +
+          '<select id="nuServingSelect" class="nu-serving-native" tabindex="-1" aria-hidden="true" onchange="nuServingChanged(this.value)"></select>' +
           '<input type="number" id="nuCustomGrams" class="nu-custom-grams" style="display:none;" inputmode="decimal" step="1" min="1" placeholder="grams" oninput="nuApplyServing(\'custom\')">' +
         '</div>' +
         // common — meal + quantity stepper
