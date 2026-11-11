@@ -511,6 +511,151 @@ function nuRenderSearchList(q) {
 
 // Chip labels use the shared FoodDisplay.fdCompactLabel (food-display.js).
 
+/* ── Your foods inside search (roadmap 5.4.1 / 5.4.2 refinement) ─────────────
+ * Favorites + recently logged foods, matched locally as the user types and
+ * shown above the database results — no request, so they appear instantly.
+ * Matching is the shared nuMatchOwnFoods (food-core.js); a tapped row opens the
+ * same card / form a Favorites or Recent chip opens, inside the modal that is
+ * already open (the chosen meal and date are kept). */
+var NU_OWN_LIMIT_TYPING = 4;   // rows while a query is typed (database list stays in view)
+var NU_OWN_LIMIT_IDLE   = 6;   // rows on an empty search box
+var nu_ownFoods   = null;      // merged pool (favorites first, then recents); null until loaded
+var nu_ownLoading = null;      // in-flight load promise
+var nu_ownMatches = [];        // rows currently rendered, index-aligned with nuPickOwn
+
+// A user_food_favorites row → the per-serving item shape nuOpenModalWithFood takes.
+function nuFavToItem(f) {
+  return {
+    name: f.food_name,
+    calories: +f.calories  || 0, protein: +f.protein_g || 0,
+    carbs:    +f.carbs_g   || 0, fat:     +f.fat_g     || 0,
+    raw_food: f.raw_food || null,
+    // USDA identity — keeps the star on 'usda:<fdcId>' even when the
+    // favorite has no raw payload and opens the plain form.
+    usda_fdc_id: f.fdc_id != null ? f.fdc_id : null,
+    brand: f.brand_name || null, gtin_upc: f.gtin_upc || null,
+    serving_unit: f.serving_unit || null,
+    serving_amount: f.serving_qty != null ? f.serving_qty : null,
+  };
+}
+
+// Favorites first, then recents, one row per food identity (nuFoodKey).
+function nuMergeOwnFoods(favorites, recents) {
+  var seen = {}, out = [];
+  (favorites || []).forEach(function (f) {
+    var it = nuFavToItem(f);
+    var key = f.food_key || nuFoodKey({ usda_fdc_id: it.usda_fdc_id, name: it.name });
+    if (!key || seen[key]) return;
+    seen[key] = true; it.food_key = key; it.own = 'favorite'; out.push(it);
+  });
+  (recents || []).forEach(function (r) {
+    var key = r.food_key || nuFoodKey({ usda_fdc_id: r.usda_fdc_id, name: r.name });
+    if (!key || seen[key]) return;
+    seen[key] = true;
+    out.push(Object.assign({}, r, { food_key: key, own: 'recent' }));
+  });
+  return out;
+}
+
+// Load (or refresh) the pool. Never throws; a failure leaves the last pool.
+function nuLoadOwnFoods(force) {
+  if (nu_ownFoods && !force) return Promise.resolve(nu_ownFoods);
+  if (nu_ownLoading) return nu_ownLoading;
+  nu_ownLoading = (async function () {
+    try {
+      var s = await supabaseClient.auth.getSession();
+      var uid = s.data.session && s.data.session.user && s.data.session.user.id;
+      if (!uid) { nu_ownFoods = []; return nu_ownFoods; }
+      var parts = await Promise.all([nuLoadFavorites(), nuFetchRecentLogged(uid, 30)]);
+      nu_ownFoods = nuMergeOwnFoods(parts[0], parts[1]);
+    } catch (e) {
+      console.error('nuLoadOwnFoods error:', e);
+      nu_ownFoods = nu_ownFoods || [];
+    }
+    return nu_ownFoods;
+  })();
+  nu_ownLoading.then(function () { nu_ownLoading = null; }, function () { nu_ownLoading = null; });
+  return nu_ownLoading;
+}
+
+// USDA ids shown under "Your foods" — the database list omits these rows so a
+// food never appears twice on one screen.
+function nuOwnShownFdcIds() {
+  var ids = {};
+  nu_ownMatches.forEach(function (it) { if (it.usda_fdc_id != null) ids[String(it.usda_fdc_id)] = true; });
+  return ids;
+}
+
+function nuRenderOwnResults(q) {
+  var el = document.getElementById('nuOwnResults');
+  if (!el) return;
+  if (!nu_ownFoods) {
+    el.innerHTML = '';
+    nuLoadOwnFoods().then(function () {
+      var input = document.getElementById('nuUsdaInput');
+      if (nu_ownFoods && input) nuRenderOwnResults(input.value);
+    });
+    return;
+  }
+  var query = String(q || '').trim();
+  var before = Object.keys(nuOwnShownFdcIds()).join(',');
+  nu_ownMatches = nuMatchOwnFoods(query, nu_ownFoods, query ? NU_OWN_LIMIT_TYPING : NU_OWN_LIMIT_IDLE);
+  el.innerHTML = !nu_ownMatches.length ? '' :
+    '<div class="nu-usda-group">Your foods</div>' +
+    nu_ownMatches.map(function (it, i) {
+      var dm = FoodDisplay.buildFoodDisplay(it);
+      var meta = [it.own === 'favorite' ? 'Favorite' : 'Recent'].concat(dm.secondaryParts.map(nuEsc));
+      return '<button type="button" class="nu-usda-row" onclick="nuPickOwn(' + i + ')" title="' + nuEsc(dm.fullName) + '">' +
+          '<span class="nu-usda-main">' +
+            '<span class="nu-usda-name" aria-label="' + nuEsc(dm.fullName) + '">' + nuEsc(dm.name) + '</span>' +
+            '<span class="nu-usda-sub">' + meta.join(' · ') + '</span>' +
+          '</span>' +
+          '<span class="nu-usda-cals">' + nuRound(it.calories) + '<small>kcal</small></span>' +
+        '</button>';
+    }).join('');
+  // Keep the database list in step when the set of foods shown here changed.
+  if (nu_usdaResults.length && Object.keys(nuOwnShownFdcIds()).join(',') !== before) nuRenderUsdaResults();
+}
+
+// Tap on a "Your foods" row. A stored USDA payload opens the full serving card
+// (same normalize → card path as a search result); anything else opens the
+// form prefilled with the per-serving macros. Meal and date are untouched.
+function nuPickOwn(i) {
+  var item = nu_ownMatches[i];
+  if (!item) return;
+  if (nu_usdaAbort) { try { nu_usdaAbort.abort(); } catch (e) {} nu_usdaAbort = null; }
+  if (nu_usdaTimer) { clearTimeout(nu_usdaTimer); nu_usdaTimer = null; }
+  var raw = item.raw_food;
+  if (raw && raw.fdcId != null) {
+    if (raw.portions && raw.portions.length && !nu_detailCache[raw.fdcId]) {
+      nu_detailCache[raw.fdcId] = raw.portions;
+    }
+    nuOpenUsdaCard(nuNormalizeUsdaFood(raw));
+    return;
+  }
+  nu_pendingSource = null;
+  // Same identity rule as nuOpenModalWithFood: a USDA food without a raw
+  // payload keeps its 'usda:<fdcId>' favorite key.
+  if (item.usda_fdc_id != null) {
+    nu_editSource = {
+      log_id: null, name: item.name || '',
+      usda_fdc_id: item.usda_fdc_id, brand: item.brand || null,
+      gtin_upc: item.gtin_upc || null, serving_unit: item.serving_unit || null,
+      serving_amount: item.serving_amount != null ? item.serving_amount : null,
+    };
+  }
+  document.getElementById('nuName').value     = item.name || '';
+  document.getElementById('nuCalories').value = item.calories != null ? item.calories : '';
+  document.getElementById('nuProtein').value  = item.protein  != null ? item.protein  : '';
+  document.getElementById('nuCarbs').value    = item.carbs    != null ? item.carbs    : '';
+  document.getElementById('nuFat').value       = item.fat      != null ? item.fat      : '';
+  document.getElementById('nuServings').value = 1;
+  document.getElementById('nuRecentWrap').style.display = 'none';
+  nu_formBackTo = 'search';
+  nuShowForm(true);
+  setTimeout(function () { document.getElementById('nuServings').focus(); }, 60);
+}
+
 /* ── USDA FoodData Central search ──────────────────────────────────────────
  * The page never sees the USDA key — it calls the /api/usda-search proxy with
  * the user's Supabase token. Normalization (per-100g → per-serving) lives here
@@ -660,6 +805,14 @@ function nuShowUsdaSearch(isRoot, preserve) {
     nu_usdaResults = [];
     document.getElementById('nuUsdaResults').innerHTML = '';
     nuUsdaSetStatus('Search the food database to auto-fill calories & macros.');
+    // Show the current pool at once, then refresh it in the background so a
+    // food logged or starred since the last open is included.
+    nuRenderOwnResults('');
+    nuLoadOwnFoods(true).then(function () {
+      var input = document.getElementById('nuUsdaInput');
+      var view = document.getElementById('nuUsdaView');
+      if (input && view && view.style.display !== 'none') nuRenderOwnResults(input.value);
+    });
   }
   nuSyncFavBtn();
   setTimeout(function () { document.getElementById('nuUsdaInput').focus(); }, 60);
@@ -720,6 +873,7 @@ function nuUsdaSetStatus(msg, kind) {
 function nuUsdaInputChanged() {
   var q = document.getElementById('nuUsdaInput').value.trim();
   if (nu_usdaTimer) clearTimeout(nu_usdaTimer);
+  nuRenderOwnResults(q);          // local + instant, independent of the database request
 
   if (q.length < 2) {
     if (nu_usdaAbort) { try { nu_usdaAbort.abort(); } catch (e) {} nu_usdaAbort = null; }
@@ -787,7 +941,9 @@ function nuRenderUsdaResults() {
   // twice), the sub-line is USDA badge · brand · clean serving, and calories
   // live ONLY in the right column (no duplicate kcal in the macro line).
   var lastGroup = null;
+  var shownAbove = nuOwnShownFdcIds();   // already listed under "Your foods"
   list.innerHTML = nu_usdaResults.map(function (f, i) {
+    if (f.usda_fdc_id != null && shownAbove[String(f.usda_fdc_id)]) return '';
     var header = '';
     var group = f.group || 'generic';
     if (group !== lastGroup) {
@@ -836,6 +992,12 @@ function nuServingChanged(key) {
 function nuPickUsda(i) {
   var f = nu_usdaResults[i];
   if (!f) return;
+  nuOpenUsdaCard(f);
+}
+
+// Open the selected-food card for a normalized USDA food — the one card path
+// for a tapped search row AND a tapped "Your foods" row.
+function nuOpenUsdaCard(f) {
   nu_pendingSource = f;
   nu_servingTouched = false;
   document.getElementById('nuName').value = f.name;      // logged name keeps the brand suffix
@@ -1768,6 +1930,7 @@ function nuModalMarkup() {
           '<span class="nu-dbsearch-ico">📷</span>' +
           '<span>Scan a barcode</span>' +
         '</button>' +
+        '<div class="nu-own-list" id="nuOwnResults"></div>' +
         '<div class="nu-usda-status" id="nuUsdaStatus"></div>' +
         '<div class="nu-usda-list" id="nuUsdaResults"></div>' +
         '<button type="button" class="nu-usda-manual" onclick="nuManualEntry()">Can\'t find it? Enter food manually →</button>' +

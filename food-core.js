@@ -1533,6 +1533,46 @@ function nuAiTotals(items) {
   }, { calories: 0, protein: 0 });
 }
 
+
+/* ── Personal food matching (roadmap 5.4.1 / 5.4.2 refinement) ────────────────
+ * Which of the user's OWN foods (favorites, recently logged) match what they
+ * are typing — the instant, no-network half of food search. Pure and shared so
+ * every surface that offers "your foods" matches the same way.
+ *   • every query word must begin some word of the food's name or brand
+ *     ("chi bre" → "Chicken Breast"); a trailing plural "s" is ignored on both
+ *     sides ("eggs" ↔ "Egg, whole");
+ *   • an empty query returns the leading items unchanged (the caller's order —
+ *     favorites, then most recent — is the ranking);
+ *   • a food whose name BEGINS with the query sorts ahead; otherwise the
+ *     caller's order is preserved (stable).
+ * This selects among foods the user already chose; it never ranks database
+ * candidates — rankFoodCandidates stays the only ranking authority. */
+function nuOwnWords(text) {
+  return String(text == null ? '' : text).toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ').trim().split(' ')
+    .filter(Boolean)
+    .map(function (w) { return (w.length > 3 && w.charAt(w.length - 1) === 's') ? w.slice(0, -1) : w; });
+}
+function nuMatchOwnFoods(query, items, limit) {
+  var list = Array.isArray(items) ? items : [];
+  var max = (+limit > 0) ? +limit : 5;
+  var qWords = nuOwnWords(query);
+  if (!qWords.length) return list.slice(0, max);
+  var lead = [], rest = [];
+  for (var i = 0; i < list.length; i++) {
+    var it = list[i];
+    if (!it || !it.name) continue;
+    var nameWords = nuOwnWords(it.name);
+    var words = nameWords.concat(nuOwnWords(it.brand));
+    var all = qWords.every(function (q) {
+      return words.some(function (w) { return w.indexOf(q) === 0; });
+    });
+    if (!all) continue;
+    (nameWords.join(' ').indexOf(qWords.join(' ')) === 0 ? lead : rest).push(it);
+  }
+  return lead.concat(rest).slice(0, max);
+}
+
 /* ── Node exports (guarded — browsers ignore this block) ───────────────── */
 // Pure resolution logic only: no UI, no persistence, no fetch wrappers.
 if (typeof module !== 'undefined' && module.exports) {
@@ -1572,6 +1612,7 @@ if (typeof module !== 'undefined' && module.exports) {
     nuAiDedupeChoices: nuAiDedupeChoices,
     nuCreateResolver: nuCreateResolver,
     nuFoodKey: nuFoodKey,
+    nuMatchOwnFoods: nuMatchOwnFoods,
     nuBuildSaveSrc: nuBuildSaveSrc,
     nuNameSingular: nuNameSingular,
     nuTitleCase: nuTitleCase,
