@@ -252,6 +252,13 @@ function nuAiCupServing(f, parsed) {
  * for 8 fl oz), which keeps the scaling factor small.
  * Returns { grams, anchor } | { ml } | null. Pure. */
 var NU_VOLUME_UNIT_ML = { tsp: 5, tbsp: 15, 'fl oz': 29.5735, cup: 240, ml: 1, l: 1000 };
+// Spellings of a volume unit as a parser or a person writes them (singular;
+// callers strip a trailing "s" first) → the canonical key above.
+var NU_VOLUME_UNIT_ALIASES = {
+  tsp: 'tsp', teaspoon: 'tsp', tbsp: 'tbsp', tablespoon: 'tbsp', cup: 'cup',
+  'fl oz': 'fl oz', floz: 'fl oz', 'fluid ounce': 'fl oz', 'fluid oz': 'fl oz',
+  ml: 'ml', milliliter: 'ml', millilitre: 'ml', l: 'l', liter: 'l', litre: 'l',
+};
 var NU_VOLUME_LABEL_RE = /^\s*(\d+\s*\/\s*\d+|\d+(?:\.\d+)?)\s*(cups?|tbsp|tablespoons?|tsp|teaspoons?|fl\.?\s*oz|fluid\s+ounces?)\b/i;
 function nuVolumeLabelUnit(word) {
   var w = String(word).toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ');
@@ -382,6 +389,12 @@ function nuVaguePortionServing(f, per100, parsed) {
 //      quantifier recovered from the raw phrase when the parser dropped it) —
 //      category-aware estimate, correction override, range/confidence/provenance
 //   4. liquids: tsp/tbsp volume conversion
+//   4b. any other explicit VOLUME unit (cup / tbsp / tsp / fl oz / ml / l) the
+//      food has no serving label for — converted through a verified anchor by
+//      nuVolumeAmount (the food's own gram-weighted volume serving, or plain
+//      unit conversion for a food measured in ml). No anchor → falls through;
+//      a density is never guessed. A fluid ounce tries its own label, then this
+//      conversion, before the legacy "oz" label match in (2).
 //   5. the card's own default (nuDefaultServingKey — portion/serving/100 g)
 function nuAiChooseServing(f, opts, portions, parsed) {
   var per100 = f.raw && f.raw.nutrients ? f.raw.nutrients : null;
@@ -397,12 +410,26 @@ function nuAiChooseServing(f, opts, portions, parsed) {
   // real USDA serving/portion label always wins over a vague estimate, so this
   // runs before the vague branch.
   var u = null;
+  var volUnit = null;                       // canonical volume unit, when the stated unit is one
   if (parsed.unit) {
     var uFull = String(parsed.unit).toLowerCase().trim().replace(/s$/, '');
     // ≥2 chars so a bare 'g' can't substring-match every label. A matched
     // option carries unitCount so the resolver can divide the user's quantity by
     // the label's own count ("1/2 cup" serving ≠ half of it).
     u = uFull.split(' ').pop();
+    volUnit = NU_VOLUME_UNIT_ALIASES[uFull.replace(/\./g, '')] || null;
+    // A fluid ounce is a volume. Prefer, in order: the food's own "fl oz"
+    // label, then a verified-anchor conversion; only when neither exists does
+    // it fall back to the long-standing "oz" label match below (unchanged).
+    if (volUnit === 'fl oz') {
+      for (var k = 0; k < opts.length; k++) {
+        if (!opts[k].custom && /\bfl\.?\s*oz\b/i.test(String(opts[k].label || ''))) {
+          return Object.assign({ unitCount: nuAiLabelCount(opts[k]), matchedUnit: true }, opts[k]);
+        }
+      }
+      var flConv = nuVolumeServing(f, opts, per100, parsed, volUnit);
+      if (flConv) return flConv;
+    }
     if (u.length >= 2) {
       for (var i = 0; i < opts.length; i++) {
         if (opts[i].custom) continue;
@@ -431,7 +458,27 @@ function nuAiChooseServing(f, opts, portions, parsed) {
                description: '1 ' + u + ' (' + ml + ' ml)', matchedUnit: true };
     }
   }
+  // (4b) Explicit volume the food has no serving label for → verified-anchor
+  // conversion. The amount is the TOTAL stated volume, so wholeQuantity keeps
+  // the resolver from multiplying by quantity again (same rule as branch 1).
+  var conv = volUnit ? nuVolumeServing(f, opts, per100, parsed, volUnit) : null;
+  if (conv) return conv;
   return nuDefaultChosenServing(f, opts, portions);
+}
+
+// A chosen-serving record for an explicit volume, or null when the food has no
+// verified anchor (nuVolumeAmount). TOTAL amount + wholeQuantity, like branch 1.
+function nuVolumeServing(f, opts, per100, parsed, volUnit) {
+  if (!per100) return null;
+  var vq = (+parsed.quantity > 0) ? +parsed.quantity : 1;
+  var vol = nuVolumeAmount(f, opts, vq, volUnit);
+  if (!vol) return null;
+  var isMl = vol.ml != null;
+  var amt = isMl ? vol.ml : vol.grams;
+  return { perUnit: nuScalePer100(per100, amt), grams: isMl ? null : amt, amount: amt, unit: isMl ? 'ml' : 'g',
+           description: (Math.round(vq * 100) / 100) + ' ' + volUnit + ' (' + amt + (isMl ? ' ml)' : ' g)'),
+           wholeQuantity: true, matchedUnit: true, converted: true,
+           conversionAnchor: vol.anchor || null };
 }
 
 /* ── confidence & chooser ──────────────────────────────────────────────── */
@@ -1663,6 +1710,7 @@ if (typeof module !== 'undefined' && module.exports) {
     nuFoodKey: nuFoodKey,
     nuMatchOwnFoods: nuMatchOwnFoods,
     NU_VOLUME_UNIT_ML: NU_VOLUME_UNIT_ML,
+    NU_VOLUME_UNIT_ALIASES: NU_VOLUME_UNIT_ALIASES,
     nuVolumeAmount: nuVolumeAmount,
     nuBuildSaveSrc: nuBuildSaveSrc,
     nuNameSingular: nuNameSingular,
