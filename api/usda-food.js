@@ -65,6 +65,9 @@ function naturalScore(label, grams, amount) {
   // prepared/altered forms are poor defaults (cup mashed, sliced, packed…)
   if (/\b(mashed|sliced|chopped|diced|cubed|shredded|grated|melted|crumbled|pureed|packed|drained)\b/.test(l)) s -= 30;
   if (/\bnlea\b/.test(l)) s -= 5;                      // fine as fallback, not first
+  // FNDDS "Guideline amount per hot dog / per cup of french fries" rows are
+  // condiment guidance (how much chili goes ON a hot dog), never a serving.
+  if (/\bguideline amount\b/.test(l)) s -= 60;
   // common single-item sizes; medium/large tie → USDA sequence decides (egg: large
   // listed first; produce: medium listed before large)
   if (/\bmedium\b/.test(l)) s += 24;
