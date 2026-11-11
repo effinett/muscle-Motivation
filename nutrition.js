@@ -288,9 +288,13 @@ function nuOpenModal(prefill) {
 // Show the add/detail form. `withBack` controls the header back arrow (used when
 // the form was reached from the search results so the user can return to search).
 function nuShowForm(withBack) {
-  document.getElementById('nuSearchView').style.display = 'none';
-  document.getElementById('nuUsdaView').style.display   = 'none';
-  document.getElementById('nuAddView').style.display    = 'block';
+  // One-tap add prepares the card WITHOUT showing it (nu_quickSilent): the same
+  // code fills the form, but the user stays on the search list.
+  if (!nu_quickSilent) {
+    document.getElementById('nuSearchView').style.display = 'none';
+    document.getElementById('nuUsdaView').style.display   = 'none';
+    document.getElementById('nuAddView').style.display    = 'block';
+  }
   var editing = !!document.getElementById('nuFoodId').value;
   // USDA pick → polished selected-food card; manual/edit → plain editable form.
   var isUsda = !!(nu_pendingSource && nu_pendingSource.usda_fdc_id);
@@ -329,7 +333,10 @@ function nuOpenFoodModal() {
 }
 function nuCloseModal() { MMSheet.close(document.getElementById('foodModal')); }
 
-async function nuSave() {
+// opts.keepOpen (one-tap add): after a successful save the modal stays on a
+// fresh search so the next food of the meal can be added straight away.
+async function nuSave(opts) {
+  var keepOpen = !!(opts && opts.keepOpen);
   var name = document.getElementById('nuName').value.trim();
   var meal = document.getElementById('nuMeal').value;
   var servings = parseFloat(document.getElementById('nuServings').value);
@@ -362,8 +369,14 @@ async function nuSave() {
       src: src,
     });
     if (res.error) throw res.error;
-    nuCloseModal();
-    showToast('Food logged!');
+    if (keepOpen) {
+      nu_pendingSource = null; nu_editSource = null; nu_cardQty = null;
+      nuShowUsdaSearch(nu_usdaIsRoot, false);       // cleared box + Your foods, ready for the next one
+      showToast('Added to ' + (NU_MEAL_LABELS[meal] || 'your log') + '.');
+    } else {
+      nuCloseModal();
+      showToast('Food logged!');
+    }
     // PWA install onboarding (Phase 4.3.3): emit only AFTER a confirmed food_logs
     // write. Narrow signal — no logged food content is included.
     try { window.dispatchEvent(new CustomEvent('mm:pwa-value', { detail: { type: 'loggedFood' } })); } catch (e) {}
@@ -371,6 +384,7 @@ async function nuSave() {
   } catch (err) {
     console.error('nuSave error:', err);
     showToast('Error saving — try again.');
+    return false;
   } finally {
     btn.disabled = false;
   }
@@ -536,9 +550,11 @@ var NU_ICON_BARCODE = '<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 
  *   • a generic food waits for its real household serving first, so one tap
  *     logs what the row shows (1 large egg), never a silent 100 g fallback;
  *   • if the user typed an amount with a unit and this food cannot express it,
- *     nothing is logged — the card stays open so they choose a serving;
+ *     nothing is logged — the card opens so they choose a serving;
+ *   • on success the search stays open (cleared) for the next food of the meal;
  *   • hidden while EDITING an existing entry (a tap there would overwrite it). */
 var nu_quickAdding = false;
+var nu_quickSilent = false;    // true only while one-tap add prepares the card off-screen
 
 function nuAddButton(kind, i, fullName) {
   var fid = document.getElementById('nuFoodId');
@@ -561,19 +577,23 @@ async function nuQuickAdd(kind, i) {
       try { await nuFetchUsdaDetail(fdcId); } catch (e) { /* card falls back to its base options */ }
     }
     var typed = nu_searchQty;
-    if (own) nuPickOwn(i); else nuPickUsda(i);
+    nu_quickSilent = true;                           // fill the card, stay on the list
+    try { if (own) nuPickOwn(i); else nuPickUsda(i); } finally { nu_quickSilent = false; }
     // A typed unit/weight that could not be applied must never log silently as
-    // "1 default serving" — leave the card open for the user to choose.
+    // "1 default serving" — show the card so the user chooses.
     if (typed && (typed.unit || typed.grams) && nu_pendingSource && !(nu_cardQty && nu_cardQty.applied)) {
+      nuShowForm(true);
       showToast('Pick a serving for ' + nuQtyLabel(typed) + '.');
       return;
     }
     if (typed && typed.unit && !nu_pendingSource) {   // custom food + a unit it has no data for
+      nuShowForm(true);
       showToast('Pick an amount for this food.');
       return;
     }
-    await nuSave();
+    await nuSave({ keepOpen: true });
   } finally {
+    nu_quickSilent = false;
     nu_quickAdding = false;
   }
 }

@@ -198,13 +198,16 @@ test('cp5: meal context survives open → manual entry → save, for every meal'
 });
 
 test('cp5: a failed save can never look successful', () => {
-  const save = (NUTRITION_JS.match(/async function nuSave\(\)[\s\S]*?\n\}/) || [''])[0];
+  const save = (NUTRITION_JS.match(/async function nuSave\((?:opts)?\)[\s\S]*?\n\}/) || [''])[0];
   assert.ok(save.length, 'located nuSave');
   // The success toast/refresh sit AFTER the error throw, so a rejected insert
   // cannot fall through to "Food logged!".
   const throwAt = save.indexOf('if (res.error) throw res.error;');
   const toastAt = save.indexOf("showToast('Food logged!')");
   assert.ok(throwAt > -1 && toastAt > throwAt, 'errors throw before the success toast');
+  // The one-tap variant (keepOpen) has its own success toast — same rule.
+  const addedAt = save.indexOf("showToast('Added to '");
+  assert.ok(addedAt > throwAt, 'errors also throw before the one-tap success toast');
   assert.match(save, /catch \(err\)[\s\S]{0,160}showToast\('Error saving/,
     'a rejected insert surfaces an error toast');
 });
