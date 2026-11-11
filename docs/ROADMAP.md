@@ -1466,8 +1466,12 @@ any of this is pulled ahead of the locked critical path (§13) is Effi's decisio
 - *Shipped (2026-11-10, no schema or config change):* correction-memory lookup runs concurrently with the
   USDA fetches; warm-instance USDA pool cache in `/api/usda-search`; client session query cache; the result
   list keeps its previous rows while a new search loads.
-- *Open — needs approval:* a **durable** cross-instance USDA cache (Supabase table or Vercel store —
-  migration / config). One search fans out to 3–5 USDA calls plus one detail call per generic row.
+- *Shipped 2026-11-11 (owner-approved):* a **durable** cross-instance cache of the ranked response for
+  plain searches — `public.usda_search_cache` (migration `20261111112151`; server-only, service role),
+  24h validity, keyed by a ranking-code fingerprint + the search text. A hit costs zero USDA requests.
+  Contextual requests (correction memory, meal context), degraded, empty and DEMO_KEY responses are
+  never stored. *Open:* the per-food detail call (`/api/usda-food`) is not cached durably; hit rate is
+  not yet measured.
 - *Open — launch risk, verify under 4.5 cost/quotas:* the production `USDA_API_KEY` hourly request limit
   against that fan-out. Discovered dependency for G5 / 4.5-A.
 - *Open:* token verification is a Supabase round-trip on every search; local JWT verification would remove

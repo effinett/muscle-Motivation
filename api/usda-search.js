@@ -142,6 +142,110 @@ function cachedPool(key, load) {
   return promise.then(clonePool);
 }
 
+/* ── Durable response cache (public.usda_search_cache) ────────────────────────
+ * The warm-instance pool cache above dies with the instance and is not shared
+ * between instances. This one is: the ranked response for a PLAIN search (no
+ * correction memory, no meal context) is stored in Supabase for 24 hours, so a
+ * repeat of that search — by anyone, on any instance — costs zero USDA requests.
+ *   • Server-only: read and written with the service-role key; the table has no
+ *     RLS policies and no anon/authenticated privileges. Without the key the
+ *     cache is simply off.
+ *   • The key embeds a fingerprint of the ranking code, so a ranking change
+ *     starts a fresh cache instead of serving an old ordering.
+ *   • Only complete, non-empty, non-contextual, real-key responses are stored —
+ *     never a degraded result (a USDA pool failed), an empty one (could be a
+ *     transient upstream failure) or a DEMO_KEY one.
+ *   • Every failure or timeout is a cache miss; search never waits on it for
+ *     more than a moment and never fails because of it.
+ * It holds public USDA-derived data only — nothing about any user. */
+const RESPONSE_CACHE_TTL_MS   = 24 * 60 * 60 * 1000;
+const RESPONSE_CACHE_READ_MS  = 350;     // a slower read is a miss
+const RESPONSE_CACHE_WRITE_MS = 150;     // wait this long for the write to leave, then respond
+const RESPONSE_CACHE_MAX_BYTES = 200 * 1024;
+const RESPONSE_CACHE_PRUNE_ONE_IN = 25;
+
+// Fingerprint of everything that decides a plain response: the ranking modules
+// and this file. Falls back to the deployment commit; with neither, no cache.
+const RANKING_FINGERPRINT = (function () {
+  try {
+    const fs = require('fs');
+    const h = require('crypto').createHash('sha1');
+    ['../food-ranking.js', '../food-memory.js', '../food-meal.js'].forEach(function (f) {
+      h.update(fs.readFileSync(require.resolve(f)));
+    });
+    h.update(fs.readFileSync(__filename));
+    return h.digest('hex').slice(0, 12);
+  } catch (e) {
+    const sha = process.env.VERCEL_GIT_COMMIT_SHA;
+    return sha ? String(sha).slice(0, 12) : null;
+  }
+})();
+
+function responseCacheKey(q) {
+  const norm = String(q == null ? '' : q).toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!RANKING_FINGERPRINT || norm.length < 2 || norm.length > 80) return null;
+  return RANKING_FINGERPRINT + '|' + norm;
+}
+
+function responseCacheConfig() {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = process.env.SUPABASE_URL;
+  return (key && url) ? { url: url, key: key } : null;
+}
+
+function withTimeout(promise, ms) {
+  let timer;
+  const timeout = new Promise(function (resolve) { timer = setTimeout(function () { resolve(undefined); }, ms); });
+  return Promise.race([promise, timeout]).then(
+    function (v) { clearTimeout(timer); return v; },
+    function () { clearTimeout(timer); return undefined; });
+}
+
+// → the cached body, or null (miss, expired, off, slow, or any error).
+async function responseCacheGet(cacheKey) {
+  const cfg = responseCacheConfig();
+  if (!cfg || !cacheKey) return null;
+  const since = new Date(Date.now() - RESPONSE_CACHE_TTL_MS).toISOString();
+  const url = cfg.url + '/rest/v1/usda_search_cache?select=body' +
+    '&cache_key=eq.' + encodeURIComponent(cacheKey) +
+    '&created_at=gte.' + encodeURIComponent(since) + '&limit=1';
+  const rows = await withTimeout((async function () {
+    const r = await fetch(url, { headers: { apikey: cfg.key, Authorization: 'Bearer ' + cfg.key } });
+    if (!r.ok) return null;
+    return await r.json();
+  })(), RESPONSE_CACHE_READ_MS);
+  const body = Array.isArray(rows) && rows[0] && rows[0].body;
+  return (body && Array.isArray(body.foods) && body.foods.length) ? body : null;
+}
+
+function responseCacheable(out, contextual) {
+  return !!(out && out.status === 200 && !out.degraded && !contextual && !USING_DEMO &&
+    out.body && Array.isArray(out.body.foods) && out.body.foods.length && !out.body.warning);
+}
+
+// Best effort. Resolves once the write has had time to leave (or finished).
+async function responseCachePut(cacheKey, body) {
+  const cfg = responseCacheConfig();
+  if (!cfg || !cacheKey) return false;
+  let payload;
+  try { payload = JSON.stringify({ cache_key: cacheKey, body: body, created_at: new Date().toISOString() }); }
+  catch (e) { return false; }
+  if (payload.length > RESPONSE_CACHE_MAX_BYTES) return false;
+  const headers = { apikey: cfg.key, Authorization: 'Bearer ' + cfg.key, 'Content-Type': 'application/json' };
+  const jobs = [fetch(cfg.url + '/rest/v1/usda_search_cache?on_conflict=cache_key', {
+    method: 'POST', body: payload,
+    headers: Object.assign({ Prefer: 'resolution=merge-duplicates,return=minimal' }, headers),
+  })];
+  if (Math.floor(Math.random() * RESPONSE_CACHE_PRUNE_ONE_IN) === 0) {
+    const cutoff = new Date(Date.now() - RESPONSE_CACHE_TTL_MS).toISOString();
+    jobs.push(fetch(cfg.url + '/rest/v1/usda_search_cache?created_at=lt.' + encodeURIComponent(cutoff), {
+      method: 'DELETE', headers: Object.assign({ Prefer: 'return=minimal' }, headers),
+    }));
+  }
+  await withTimeout(Promise.allSettled(jobs), RESPONSE_CACHE_WRITE_MS);
+  return true;
+}
+
 // Merge a supplemental pool into the primary one (dedupe by fdcId).
 function mergeGeneric(primary, supplement) {
   const seen = new Set(primary.map(function (f) { return f.fdcId; }));
@@ -300,7 +404,11 @@ async function searchFoods(q, _retried, opts) {
 
     if (eq.expanded) body.expandedQuery = effQuery;   // transparency for the client/debugging
     if (USING_DEMO) body.warning = 'Using DEMO_KEY (rate-limited, dev only).';
-    return { status: 200, body };
+    // `degraded` (not part of the HTTP body): a USDA pool failed, so this is a
+    // partial answer — fine to serve once, never to store.
+    const degraded = [brandedRes, genericRes, supRes, brandSupRes, allWordsRes]
+      .some(function (r) { return r.status === 'rejected'; });
+    return { status: 200, body, degraded };
 }
 
 /* ── Correction memory (Phase 4.2.4) ─────────────────────────────────────────
@@ -370,6 +478,18 @@ module.exports = async (req, res) => {
   try {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+    // The durable-cache read rides alongside the auth check (both are Supabase
+    // round-trips), so a miss adds no latency. Nothing is returned from it until
+    // auth has passed; a request with no token or with meal context never reads.
+    const q = (req.query.q || '').toString().trim();
+    let mealSignal = null;
+    try { mealSignal = buildMealSignal(req); } catch (e) { mealSignal = null; }
+    const cacheKey = (token && !mealSignal) ? responseCacheKey(q) : null;
+    const cachedPromise = cacheKey
+      ? responseCacheGet(cacheKey).catch(function () { return null; })
+      : Promise.resolve(null);
+
     const user = await getUserFromToken(token);
     if (!user || !user.id) return res.status(401).json({ error: 'Not authenticated' });
 
@@ -379,7 +499,6 @@ module.exports = async (req, res) => {
         '(rate-limited, not for production). Set USDA_API_KEY in the environment.');
     }
 
-    const q = (req.query.q || '').toString().trim();
     if (q.length < 2) return res.status(200).json({ foods: [] }); // mirror client guard
 
     // Best-effort ranking signals — never block resolution. Both feed the SAME
@@ -389,15 +508,25 @@ module.exports = async (req, res) => {
     // The correction lookup is a Supabase round-trip that only matters at
     // ranking time, so it runs CONCURRENTLY with the USDA fetches rather than
     // ahead of them. The promise never rejects (failure → no signal).
-    let mealSignal = null;
-    try { mealSignal = buildMealSignal(req); } catch (e) { mealSignal = null; }
     const signalsPromise = Promise.resolve()
       .then(function () { return buildCorrectionSignal(q, req, token); })
       .catch(function () { return null; })
       .then(function (correctionSignal) { return [correctionSignal, mealSignal].filter(Boolean); });
 
+    // Durable-cache hit: served only when this request carries no context (a
+    // user correction for this query must still re-rank from fresh pools).
+    const cached = await cachedPromise;
+    if (cached && (await signalsPromise).length === 0) {
+      res.setHeader('Cache-Control', 'private, max-age=60');
+      res.setHeader('X-Food-Cache', 'hit');
+      return res.status(200).json(cached);
+    }
+
     const out = await searchFoods(q, undefined, { signals: signalsPromise });
     const contextual = (await signalsPromise).length > 0;
+    if (cacheKey && responseCacheable(out, contextual)) {
+      try { await responseCachePut(cacheKey, out.body); } catch (e) { /* best effort */ }
+    }
     if (out.status === 200) {
       // A context-influenced response is request-specific (user corrections and/or
       // this meal), so it must never be served from a URL-keyed cache to a later,
@@ -418,6 +547,8 @@ module.exports = async (req, res) => {
 module.exports._internals = {
   trimFood, buildResponse, mergeGeneric, searchFoods,
   cachedPool, poolCache, POOL_CACHE_TTL_MS, POOL_CACHE_MAX,
+  responseCacheKey, responseCacheGet, responseCachePut, responseCacheable, RANKING_FINGERPRINT,
+  RESPONSE_CACHE_TTL_MS, RESPONSE_CACHE_MAX_BYTES,
   loadPersistentCorrections, buildCorrectionSignal, buildMealSignal,
   expandQuery: ranking.expandQuery,
   supplementFor: ranking.supplementFor,
