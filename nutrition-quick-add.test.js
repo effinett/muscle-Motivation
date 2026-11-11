@@ -38,8 +38,11 @@ global.showToast = (m) => { toasts.push(m); };
 nu_favorites = []; nu_favKeys = {}; nu_ownFoods = [];
 
 // Capture what the ONE save path would persist, at the moment it is called.
+const realSave = nuSave;
 const saved = [];
-nuSave = async function () {
+const saveOpts = [];
+nuSave = async function (opts) {
+  saveOpts.push(opts || null);
   saved.push({
     name: el('nuName').value, meal: el('nuMeal').value, servings: +el('nuServings').value,
     calories: +el('nuCalories').value, serving: el('nuServingSelect').value,
@@ -57,7 +60,7 @@ const bar = () => ({ fdcId: 30, description: 'PROTEIN BAR', dataType: 'Branded',
 function search(text, raws) {
   nuResetModalState();
   for (const k of Object.keys(nu_detailCache)) delete nu_detailCache[k];
-  saved.length = 0; toasts.length = 0;
+  saved.length = 0; toasts.length = 0; saveOpts.length = 0;
   el('nuFoodId').value = '';
   el('nuMeal').value = 'lunch';
   el('nuUsdaInput').value = text;
@@ -81,6 +84,44 @@ test('+ on a branded food logs its label serving to the chosen meal through nuSa
   await nuQuickAdd('usda', 0);
   assert.strictEqual(saved.length, 1);
   assert.deepStrictEqual(saved[0], { name: saved[0].name, meal: 'lunch', servings: 1, calories: 210, serving: 'serving', grams: 60, fdc: '30' });
+});
+
+test('+ prepares the card off-screen and asks the save to keep search open', async () => {
+  search('protein bar', [bar()]);
+  el('nuUsdaView').style.display = 'block'; el('nuAddView').style.display = 'none';
+  await nuQuickAdd('usda', 0);
+  assert.deepStrictEqual(saveOpts, [{ keepOpen: true }]);
+  assert.strictEqual(el('nuAddView').style.display, 'none', 'the card never flashed on screen');
+  assert.strictEqual(el('nuUsdaView').style.display, 'block', 'the user stayed on the search list');
+  assert.strictEqual(nu_quickSilent, false, 'the silent flag never outlives the tap');
+});
+
+test('a successful one-tap save leaves the modal open on a fresh search', async () => {
+  search('protein bar', [bar()]);
+  let closed = 0, logged = null;
+  const origClose = nuCloseModal, origLog = nuSaveLog, origStub = nuSave;
+  nuCloseModal = () => { closed++; };
+  nuSaveLog = async (uid, entry) => { logged = entry; return { error: null }; };
+  nuSave = realSave;
+  try {
+    await nuQuickAdd('usda', 0);
+  } finally { nuCloseModal = origClose; nuSaveLog = origLog; nuSave = origStub; }
+  assert.ok(logged, 'the entry went through the real save path');
+  assert.strictEqual(logged.meal, 'lunch');
+  assert.strictEqual(logged.calories, 210);
+  assert.ok(logged.src && String(logged.src.usda_fdc_id) === '30', 'USDA provenance travels with it');
+  assert.strictEqual(closed, 0, 'the modal was not closed');
+  assert.strictEqual(el('nuUsdaInput').value, '', 'the search box is cleared for the next food');
+  assert.strictEqual(nu_pendingSource, null);
+  assert.match(toasts.join(' '), /Added to Lunch\./);
+
+  // The ordinary Add Food button is unchanged: it still closes the modal.
+  search('protein bar', [bar()]);
+  nuPickUsda(0);
+  nuCloseModal = () => { closed++; }; nuSaveLog = async () => ({ error: null });
+  try { await realSave(); } finally { nuCloseModal = origClose; nuSaveLog = origLog; }
+  assert.strictEqual(closed, 1);
+  assert.match(toasts.join(' '), /Food logged!/);
 });
 
 test('+ on a generic food waits for its real household serving (never a silent 100 g)', async () => {
@@ -114,6 +155,7 @@ test('+ never logs when a typed unit could not be applied — the card stays ope
   assert.strictEqual(saved.length, 0, 'nothing is saved');
   assert.match(toasts.join(' '), /Pick a serving for 2 cup/);
   assert.ok(nu_pendingSource, 'the card is open on that food');
+  assert.strictEqual(el('nuAddView').style.display, 'block', 'and it is actually shown');
 });
 
 test('+ on one of the user\'s own foods uses the same path', async () => {

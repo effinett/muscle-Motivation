@@ -61,3 +61,19 @@ test('new top-of-page controls clear the 44px touch floor and use no emoji', () 
   }
   assert.ok(!/[\u{1F300}-\u{1FAFF}]/u.test(main), 'no emoji in the page body');
 });
+
+test('favorites and recents share ONE "Your Foods" row fed by the shared pool', () => {
+  assert.match(main, /<div class="section-label">Your Foods<\/div>\s*<div class="qa-chips" id="ownChips">/);
+  assert.ok(!/id="favChips"|id="recentChips"/.test(html), 'the two separate rows are gone');
+  assert.match(main, /<div class="section-label">Saved Meals<\/div>/, 'Saved Meals is untouched');
+  const fn = html.match(/async function loadOwnChips\(force\) \{([\s\S]*?)\n  \}/)[1];
+  assert.match(fn, /nuLoadOwnFoods\(!!force\)/, 'same pool as search and suggestions');
+  assert.match(fn, /renderChips\('ownChips', ownItems, 'pickOwnChip'/);
+  assert.match(html, /function pickOwnChip\(i\) \{\s*if \(ownItems\[i\]\) nuOpenModalWithFood\(ownItems\[i\], \{ date: currentDate, meal: suggestMeal\(\) \}\);/,
+    'a chip opens the same card as before');
+  // every existing refresh call site still refreshes the row
+  assert.match(html, /function loadRecentChips\(\) \{ return loadOwnChips\(true\); \}/);
+  assert.match(html, /function loadFavChips\(\) \{ return loadOwnChips\(true\); \}/);
+  assert.match(html, /window\.onFavoritesChanged = loadFavChips;/);
+  assert.match(html, /it\.own === 'favorite'/, 'favorites are marked on the chip');
+});

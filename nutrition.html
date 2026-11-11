@@ -151,6 +151,7 @@
     }
     .qa-chips::-webkit-scrollbar { height: 0; }
     .qa-chips .nu-chip { min-height: 40px; }   /* thumb-friendly page targets */
+    .nu-chip-star { color: var(--red); font-size: 11px; margin-right: -2px; }
     .qa-empty { font-size: 12px; color: var(--text-muted); padding: 2px 2px 6px; }
 
     /* Copy Yesterday (shown only when today is empty and yesterday isn't) */
@@ -739,14 +740,14 @@
     <!-- Copy Yesterday (rendered only when today is empty + yesterday has food) -->
     <div id="copyYdayWrap"></div>
 
-    <!-- Quick add: saved meals + favorited + recently logged foods.
-         Meals first — the highest-intent shortcut gets the top row. -->
+    <!-- Quick add: saved meals + the user's own foods.
+         Meals first — the highest-intent shortcut gets the top row. Favorites
+         and recently logged foods share ONE row (favorites first, starred): the
+         same pool food search and the Quick Log suggestions use. -->
     <div class="section-label">Saved Meals</div>
     <div class="qa-chips" id="mealChips"><div class="qa-empty">Loading&hellip;</div></div>
-    <div class="section-label">Favorites</div>
-    <div class="qa-chips" id="favChips"><div class="qa-empty">Loading&hellip;</div></div>
-    <div class="section-label">Recent</div>
-    <div class="qa-chips" id="recentChips"><div class="qa-empty">Loading&hellip;</div></div>
+    <div class="section-label">Your Foods</div>
+    <div class="qa-chips" id="ownChips"><div class="qa-empty">Loading&hellip;</div></div>
 
     <!-- Meals -->
     <div id="mealsWrap"></div>
@@ -954,8 +955,8 @@
   }
 
   /* ── quick add: Recent + Favorites chips (Phase 3.3) ─────────────── */
-  var recentItems = [];   // per-serving items for nuOpenModalWithFood
-  var favItems = [];
+  var ownItems = [];      // per-serving items for nuOpenModalWithFood (favorites first, then recents)
+  var OWN_CHIPS_VISIBLE = 12;
 
   // Chips carry no meal context — suggest one from the time of day (still
   // editable in the form before saving).
@@ -983,31 +984,33 @@
       // line; the accessible label keeps the full canonical name + calories.
       var cl = FoodDisplay.fdCompactLabel({ name: it.name, brand: it.brand, usda_fdc_id: it.usda_fdc_id });
       var full = nuEsc(it.name);
+      var fav = it.own === 'favorite';
       return '<button type="button" class="nu-chip" title="' + full + '"' +
-          ' aria-label="' + nuEsc(cl.ariaLabel) + ', ' + nuRound(it.calories) + ' calories"' +
+          ' aria-label="' + (fav ? 'Favorite: ' : '') + nuEsc(cl.ariaLabel) + ', ' + nuRound(it.calories) + ' calories"' +
           ' onclick="' + pickFn + '(' + i + ')">' +
+          (fav ? '<span class="nu-chip-star" aria-hidden="true">★</span>' : '') +
           '<span class="nu-chip-name">' + nuEsc(cl.name) + '</span>' +
         '</button>';
     }).join('');
   }
 
-  async function loadRecentChips() {
-    recentItems = await nuFetchRecentLogged(currentUserId, 10);
-    renderChips('recentChips', recentItems, 'pickRecent', 'No recent foods yet.');
+  // ONE row for the user's own foods: favorites first (starred), then recently
+  // logged — the shared pool (nuLoadOwnFoods) that food search and the Quick
+  // Log suggestions also read, so all three always agree.
+  async function loadOwnChips(force) {
+    var pool = await nuLoadOwnFoods(!!force);
+    ownItems = (pool || []).slice(0, OWN_CHIPS_VISIBLE);
+    renderChips('ownChips', ownItems, 'pickOwnChip',
+      'Foods you log appear here — tap ☆ on a food to keep it first.');
+    return pool;
   }
+  // Kept names: every existing call site (save, copy yesterday, AI log, star
+  // toggle) refreshes the single row.
+  function loadRecentChips() { return loadOwnChips(true); }
+  function loadFavChips() { return loadOwnChips(true); }
 
-  async function loadFavChips() {
-    var favs = await nuLoadFavorites();
-    favItems = favs.map(nuFavToItem);   // shared mapping (nutrition.js)
-    renderChips('favChips', favItems, 'pickFav',
-      'No favorites yet — tap ☆ while logging a food to save it here.');
-  }
-
-  function pickRecent(i) {
-    if (recentItems[i]) nuOpenModalWithFood(recentItems[i], { date: currentDate, meal: suggestMeal() });
-  }
-  function pickFav(i) {
-    if (favItems[i]) nuOpenModalWithFood(favItems[i], { date: currentDate, meal: suggestMeal() });
+  function pickOwnChip(i) {
+    if (ownItems[i]) nuOpenModalWithFood(ownItems[i], { date: currentDate, meal: suggestMeal() });
   }
 
   // Star toggled inside the modal → nu_favorites cache is already updated.
@@ -1576,8 +1579,7 @@
   // logging history, so they refresh here too — no extra save action needed.
   window.onFoodSaved = async function () {
     await refresh();
-    loadRecentChips();
-    nuLoadOwnFoods(true).then(renderAiSuggest);   // suggestions include what was just logged
+    loadOwnChips(true).then(renderAiSuggest);     // chips + suggestions include what was just logged
   };
 
   // ── Unsaved-work contract (Phase 4.3.5G) ──────────────────────────────
@@ -1619,15 +1621,13 @@
         renderDateLabel();
         await refresh();
         loadMealChips();
-        loadFavChips();
-        loadRecentChips();
+        loadOwnChips().then(renderAiSuggest);
         lucide.createIcons();
         focusQuickLogFromHash();
         registerQuickLogDirty();
-        // As-you-type suggestions: load the user's own foods once, then match locally.
+        // As-you-type suggestions match locally against the pool loadOwnChips loaded.
         var qlInput = document.getElementById('aiLogInput');
         if (qlInput) qlInput.addEventListener('input', renderAiSuggest);
-        nuLoadOwnFoods().then(renderAiSuggest);
       } catch (err) {
         console.error('Nutrition page error:', err);
         window.location.href = 'auth.html';
