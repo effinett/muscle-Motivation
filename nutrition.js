@@ -593,7 +593,7 @@ function nuRenderOwnResults(q) {
     el.innerHTML = '';
     nuLoadOwnFoods().then(function () {
       var input = document.getElementById('nuUsdaInput');
-      if (nu_ownFoods && input) nuRenderOwnResults(input.value);
+      if (nu_ownFoods && input) nuRenderOwnResults(nuOwnQueryText(input.value));
     });
     return;
   }
@@ -630,9 +630,10 @@ function nuPickOwn(i) {
     if (raw.portions && raw.portions.length && !nu_detailCache[raw.fdcId]) {
       nu_detailCache[raw.fdcId] = raw.portions;
     }
-    nuOpenUsdaCard(nuNormalizeUsdaFood(raw));
+    nuOpenUsdaCard(nuNormalizeUsdaFood(raw), nu_searchQty);
     return;
   }
+  nu_cardQty = null;
   nu_pendingSource = null;
   // Same identity rule as nuOpenModalWithFood: a USDA food without a raw
   // payload keeps its 'usda:<fdcId>' favorite key.
@@ -649,7 +650,9 @@ function nuPickOwn(i) {
   document.getElementById('nuProtein').value  = item.protein  != null ? item.protein  : '';
   document.getElementById('nuCarbs').value    = item.carbs    != null ? item.carbs    : '';
   document.getElementById('nuFat').value       = item.fat      != null ? item.fat      : '';
-  document.getElementById('nuServings').value = 1;
+  // A custom food has one saved serving, so only a bare count applies ("2 shakes").
+  document.getElementById('nuServings').value =
+    (nu_searchQty && !nu_searchQty.unit && +nu_searchQty.quantity > 0) ? +nu_searchQty.quantity : 1;
   document.getElementById('nuRecentWrap').style.display = 'none';
   nu_formBackTo = 'search';
   nuShowForm(true);
@@ -802,6 +805,8 @@ function nuShowUsdaSearch(isRoot, preserve) {
 
   if (!preserve) {
     document.getElementById('nuUsdaInput').value = '';
+    nu_searchQty = null;
+    nuRenderQtyHint();
     nu_usdaResults = [];
     document.getElementById('nuUsdaResults').innerHTML = '';
     nuUsdaSetStatus('Search the food database to auto-fill calories & macros.');
@@ -811,7 +816,7 @@ function nuShowUsdaSearch(isRoot, preserve) {
     nuLoadOwnFoods(true).then(function () {
       var input = document.getElementById('nuUsdaInput');
       var view = document.getElementById('nuUsdaView');
-      if (input && view && view.style.display !== 'none') nuRenderOwnResults(input.value);
+      if (input && view && view.style.display !== 'none') nuRenderOwnResults(nuOwnQueryText(input.value));
     });
   }
   nuSyncFavBtn();
@@ -873,7 +878,10 @@ function nuUsdaSetStatus(msg, kind) {
 function nuUsdaInputChanged() {
   var q = document.getElementById('nuUsdaInput').value.trim();
   if (nu_usdaTimer) clearTimeout(nu_usdaTimer);
-  nuRenderOwnResults(q);          // local + instant, independent of the database request
+  nu_searchQty = nuReadSearchQty(q);
+  nuRenderQtyHint();
+  // Own foods match on the food words only ("2 eggs" → "eggs"); local + instant.
+  nuRenderOwnResults(nu_searchQty ? nu_searchQty.food : q);
 
   if (q.length < 2) {
     if (nu_usdaAbort) { try { nu_usdaAbort.abort(); } catch (e) {} nu_usdaAbort = null; }
@@ -989,15 +997,100 @@ function nuServingChanged(key) {
   nuApplyServing(key);
 }
 
+/* ── Quantity typed in the search box (roadmap 5.4.12) ────────────────────────
+ * "200g chicken" / "2 eggs" / "1.5 cups rice": the shared parseQueryQuantity
+ * (food-ranking.js) reads the amount the search query strips, and the picked
+ * food opens with that amount already set. Serving choice is the SAME shared
+ * rule AI Quick Log uses (nuAiChooseServing) — nothing is decided here:
+ *   • a stated weight            → custom grams, quantity 1
+ *   • a volume on a liquid       → custom ml, quantity 1
+ *   • a unit the food can express→ that serving, quantity ÷ the label's count
+ *   • a bare count               → the default serving × the count
+ *   • a unit the food can NOT express → nothing is applied (never a guess)
+ * The user still sees and confirms the card before anything is saved. */
+var nu_searchQty = null;       // amount parsed from the current search text, or null
+var nu_cardQty   = null;       // { pq, applied } for the card that is open
+
+// The food words of a search text — own foods match on these ("2 eggs" → "eggs").
+function nuOwnQueryText(text) {
+  var pq = nuReadSearchQty(text);
+  return pq ? pq.food : text;
+}
+
+// Plain-words label for a parsed amount: "200 g", "1.5 cup", "2 ×".
+function nuQtyLabel(pq) {
+  if (!pq) return '';
+  var n = Math.round(+pq.quantity * 100) / 100;
+  return pq.unit ? (n + ' ' + pq.unit) : (n + ' ×');
+}
+
+// One quiet line under the search box so the user knows the amount was read.
+function nuRenderQtyHint() {
+  var el = document.getElementById('nuQtyHint');
+  if (!el) return;
+  el.textContent = nu_searchQty ? ('Amount: ' + nuQtyLabel(nu_searchQty) + ' — set when you pick a food') : '';
+  el.style.display = nu_searchQty ? 'block' : 'none';
+}
+
+function nuReadSearchQty(text) {
+  try { return (typeof parseQueryQuantity === 'function') ? parseQueryQuantity(text) : null; }
+  catch (e) { return null; }
+}
+
+// Apply the pending amount to the open card. Returns true once applied.
+// Called on open and again when household portions arrive (a unit like "cup"
+// often only exists in the fetched portions). Never overrides a serving the
+// user has chosen by hand.
+function nuApplySearchQuantity(f) {
+  var st = nu_cardQty;
+  if (!st || st.applied || nu_servingTouched || nu_pendingSource !== f) return false;
+  var pq = st.pq, qty = +pq.quantity;
+  var per100 = f.raw && f.raw.nutrients;
+  var sel = document.getElementById('nuServingSelect');
+  var customEl = document.getElementById('nuCustomGrams');
+  var servingsEl = document.getElementById('nuServings');
+  if (!sel || !servingsEl || !(qty > 0)) return false;
+  function hasKey(k) { return nu_servingOptions.some(function (o) { return o.key === k; }); }
+  var key = null, servings = 1, custom = null;
+
+  if (per100 && +pq.grams > 0 && !f.is_liquid && hasKey('custom')) {
+    key = 'custom'; custom = +pq.grams;
+  } else if (per100 && f.is_liquid && (pq.unit === 'ml' || pq.unit === 'l') && hasKey('custom')) {
+    key = 'custom'; custom = Math.round(qty * (pq.unit === 'l' ? 1000 : 1));
+  } else if (pq.unit) {
+    var sv = nuAiChooseServing(f, nu_servingOptions, (f.raw && f.raw.portions) || nu_detailCache[f.usda_fdc_id] || [],
+      { quantity: qty, unit: pq.unit, grams: null, text: '' });
+    if (!sv || !sv.matchedUnit || !sv.key || sv.custom || !hasKey(sv.key)) return false;   // retried when portions load
+    key = sv.key;
+    servings = qty / (sv.unitCount > 0 ? sv.unitCount : 1);
+  } else {
+    key = sel.value;                 // bare count × the default serving
+    servings = qty;
+  }
+  servings = Math.round(servings * 100) / 100;
+  if (!key || !(servings > 0)) return false;
+
+  sel.value = key;
+  if (custom != null && customEl) customEl.value = custom;
+  servingsEl.value = servings;
+  nuApplyServing(key);
+  // A unit/weight match is an explicit serving choice: lock it so late-arriving
+  // portions don't re-default it. A bare count keeps following the default
+  // serving ("2 eggs" → 2 × 100 g → 2 × 1 large once portions arrive).
+  if (pq.unit || custom != null) { nu_servingTouched = true; st.applied = true; }
+  return true;
+}
+
 function nuPickUsda(i) {
   var f = nu_usdaResults[i];
   if (!f) return;
-  nuOpenUsdaCard(f);
+  nuOpenUsdaCard(f, nu_searchQty);
 }
 
 // Open the selected-food card for a normalized USDA food — the one card path
 // for a tapped search row AND a tapped "Your foods" row.
-function nuOpenUsdaCard(f) {
+function nuOpenUsdaCard(f, searchQty) {
+  nu_cardQty = searchQty ? { pq: searchQty, applied: false } : null;
   nu_pendingSource = f;
   nu_servingTouched = false;
   document.getElementById('nuName').value = f.name;      // logged name keeps the brand suffix
@@ -1027,6 +1120,7 @@ function nuOpenUsdaCard(f) {
   nu_formBackTo = 'search';            // back arrow returns to the search results
   nuShowForm(true);                    // switches the form into USDA-card mode
   nuApplyServing(def);                 // fills hidden inputs + readout for the default serving
+  nuApplySearchQuantity(f);            // "200g chicken" → opens already set to 200 g
   setTimeout(function () { document.getElementById('nuServingSelect').focus(); }, 60);
 
   // Non-blocking: enrich the dropdown with real household servings when they arrive.
@@ -1054,6 +1148,7 @@ async function nuLoadPortions(f) {
     var def = nuDefaultServingKey(f, nu_servingOptions, portions);
     nuRenderServingSelect(def);
     nuApplyServing(def);
+    nuApplySearchQuantity(f);          // a typed unit may only exist now ("1 cup" portion)
   } else {
     // Respect the user's choice; keep it selected if it still exists.
     var keep = nu_servingOptions.some(function (o) { return o.key === prevKey; }) ? prevKey : (sel && sel.value);
@@ -1317,6 +1412,7 @@ var nu_editSource = null;  // USDA identity of the log being edited — favorite
 // Shared modal reset: clear carried state and hide every sub-panel. Used by
 // BOTH modal entry points (nuOpenModal, nuOpenModalWithFood) so they can't drift.
 function nuResetModalState() {
+  nu_searchQty = null; nu_cardQty = null;
   nu_pendingSource = null;
   nu_editSource = null;
   nu_formBackTo = null;
@@ -1930,6 +2026,7 @@ function nuModalMarkup() {
           '<span class="nu-dbsearch-ico">📷</span>' +
           '<span>Scan a barcode</span>' +
         '</button>' +
+        '<div class="nu-qty-hint" id="nuQtyHint" style="display:none;"></div>' +
         '<div class="nu-own-list" id="nuOwnResults"></div>' +
         '<div class="nu-usda-status" id="nuUsdaStatus"></div>' +
         '<div class="nu-usda-list" id="nuUsdaResults"></div>' +

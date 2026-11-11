@@ -562,6 +562,76 @@ function stripMeasurements(toks) {
   return out;
 }
 
+/* ── Typed quantity ("200g chicken", "2 eggs", "1.5 cups rice") ───────────────
+ * stripMeasurements above REMOVES a leading amount so the database query is
+ * clean; this is its counterpart — it READS that same amount so a surface can
+ * pre-fill the serving instead of discarding what the user typed. Deterministic
+ * (no AI) and deliberately conservative: only a LEADING number is read, a unit
+ * word counts only directly after it (same UNIT_WORDS as stripping, so the two
+ * can never disagree), and anything doubtful returns null — the search then
+ * behaves exactly as before.
+ * Returns { quantity, unit, grams, food } or null:
+ *   • quantity — the number typed ("1/2" → 0.5)
+ *   • unit     — canonical singular unit ('g','oz','cup','slice'…), or null for
+ *                a bare count ("2 eggs")
+ *   • grams    — TOTAL stated weight for weight units (6 oz → 170), else null —
+ *                the same convention the AI parser uses, so nuAiChooseServing
+ *                treats both identically
+ *   • food     — the remaining text ("chicken breast")
+ * Product names that START with a number are not quantities ("7 up",
+ * "100 grand", "3 musketeers") — NUMERIC_NAME_PREFIXES; extend the list, not the
+ * code. "2% milk" is untouched ("2%" is not a number token). */
+const WEIGHT_UNIT_GRAMS = { g: 1, kg: 1000, oz: 28.3495, lb: 453.592 };
+const UNIT_CANONICAL = {
+  gram: 'g', grams: 'g', ounce: 'oz', ounces: 'oz', lbs: 'lb', pound: 'lb', pounds: 'lb',
+  liter: 'l', liters: 'l', tablespoon: 'tbsp', tablespoons: 'tbsp',
+  teaspoon: 'tsp', teaspoons: 'tsp', cups: 'cup', slices: 'slice', pieces: 'piece',
+  servings: 'serving', scoops: 'scoop', handfuls: 'handful',
+};
+const NUMERIC_NAME_PREFIXES = ['7 up', '7up', '3 musketeers', '100 grand', '5 hour', '365', '4c', '9 grain', '12 grain', '7 grain', '5 grain'];
+const QTY_MAX_COUNT = 50;       // "2 eggs" yes; "100 calorie pack" no
+const QTY_MAX_GRAMS = 5000;
+
+function parseQueryQuantity(q) {
+  // nText's spelling, except a '.' or '/' BETWEEN digits survives ("1.5", "1/2").
+  const norm = String(q == null ? '' : q).toLowerCase()
+    .replace(/['’]/g, '')
+    .replace(/[^a-z0-9%./]+/g, ' ')
+    .replace(/(^| )\.(\d)/g, '$10.$2')          // ".5 cup" → "0.5 cup"
+    .replace(/[./](?!\d)/g, ' ')
+    .replace(/(^|[^\d])[./]/g, '$1 ')
+    .replace(/\s+/g, ' ').trim();
+  if (!norm) return null;
+  if (NUMERIC_NAME_PREFIXES.some(function (p) { return norm === p || norm.indexOf(p + ' ') === 0; })) return null;
+  const toks = norm.split(/\s+/);
+  if (toks.length < 2) return null;                 // an amount needs a food after it
+
+  let qty = null, unit = null, used = 1;
+  const glued = /^(\d+(?:\.\d+)?)(g|kg|oz|lb|lbs|ml|l)$/.exec(toks[0]);
+  const frac = /^(\d+)\/(\d+)$/.exec(toks[0]);
+  if (glued) { qty = +glued[1]; unit = glued[2]; }
+  else if (frac) { qty = (+frac[2] > 0) ? (+frac[1] / +frac[2]) : null; }
+  else if (/^\d+(\.\d+)?$/.test(toks[0])) { qty = +toks[0]; }
+  if (!(qty > 0)) return null;
+
+  if (!unit && toks.length >= 3 && UNIT_WORDS.has(toks[1])) { unit = toks[1]; used = 2; }
+  let rest = toks.slice(used);
+  if (rest[0] === 'of') rest = rest.slice(1);
+  if (!rest.length || isQuantityToken(rest[0])) return null;
+
+  if (unit) unit = UNIT_CANONICAL[unit] || unit;
+  let grams = null;
+  if (unit && WEIGHT_UNIT_GRAMS[unit]) {
+    grams = Math.round(qty * WEIGHT_UNIT_GRAMS[unit]);
+    if (!(grams > 0) || grams > QTY_MAX_GRAMS) return null;
+  } else if (unit === 'ml' || unit === 'l') {
+    if (qty * (unit === 'l' ? 1000 : 1) > QTY_MAX_GRAMS) return null;
+  } else if (qty > QTY_MAX_COUNT) {
+    return null;
+  }
+  return { quantity: Math.round(qty * 1000) / 1000, unit: unit || null, grams: grams, food: rest.join(' ') };
+}
+
 /* ── Dictionary for spell correction + compound splitting ────────────────────
  * Derived from EVERY config list above (foods, brands, cuts, descriptors,
  * derivative terms, aliases) — growing any list automatically extends typo
@@ -1610,6 +1680,7 @@ if (typeof module !== 'undefined' && module.exports) {
     RANK_WEIGHTS: RANK_WEIGHTS,
     // query pipeline (consumed by api/usda-search.js fetch orchestration)
     expandQuery: expandQuery,
+    parseQueryQuantity: parseQueryQuantity,
     supplementFor: supplementFor,
     brandSupplementQuery: brandSupplementQuery,
     spellCorrect: spellCorrect,
