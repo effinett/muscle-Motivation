@@ -81,6 +81,7 @@ function naturalScore(label, grams, amount) {
 
 // Trim USDA foodPortions to what the client needs: accurate gram-weighted
 // measures, most natural default FIRST (the client defaults to portions[0]).
+const SURVEY_CUP_DEMOTION = 15;
 function trimPortions(food) {
   const raw = Array.isArray(food.foodPortions) ? food.foodPortions : [];
   const seen = {};
@@ -98,6 +99,12 @@ function trimPortions(food) {
       const amount = p.amount != null ? +p.amount : 1;
       out.push({ label, amount, gramWeight: g, _n: naturalScore(label, g, amount) });
     });
+  // FNDDS survey dishes list whole-item sizes ("1 large" burrito, "1 medium"
+  // taco) next to "1 cup". When a dish has an item size, a cup of it is not the
+  // natural default — demote cups so one burrito, not 120 g of one, comes first.
+  if (food.dataType === 'Survey (FNDDS)' && out.some((p) => /\b(small|medium|large)\b/i.test(p.label))) {
+    out.forEach((p) => { if (/^\s*[\d.\/]+\s+cups?\b/i.test(p.label)) p._n -= SURVEY_CUP_DEMOTION; });
+  }
   // Stable sort (Node ≥ 12): naturalness desc, USDA sequence as tie-break.
   out.sort((a, b) => b._n - a._n);
   out.forEach((p) => { delete p._n; });
