@@ -568,8 +568,29 @@
       color: var(--green); border: 1px solid rgba(34,197,94,0.35);
       background: rgba(34,197,94,0.10); padding: 2px 8px; border-radius: 999px;
     }
-    /* Serving dropdown + optional custom-grams input (16px font avoids iOS zoom) */
+    /* Serving chips + optional custom-grams input (16px font avoids iOS zoom).
+       The native select stays in the DOM as the value holder, hidden. */
     #nuServingSelect, .nu-custom-grams { font-size: 16px; }
+    .nu-serving-native { display: none; }
+    .nu-serving-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .nu-serving-chip {
+      min-height: 44px; max-width: 100%; padding: 8px 14px; cursor: pointer;
+      background: var(--surface-2); border: 1px solid var(--border-2); border-radius: 10px;
+      color: var(--text-2); text-align: left;
+      font-family: 'Barlow', sans-serif; font-size: 14px; font-weight: 600; line-height: 1.25;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      transition: border-color .2s, color .2s, background .2s;
+    }
+    .nu-serving-chip:hover { border-color: var(--red-border); color: var(--text); }
+    .nu-serving-chips:not(.is-expanded) .nu-serving-chip.is-extra { display: none; }
+    .nu-serving-chips.is-expanded .nu-serving-more { display: none; }
+    .nu-serving-more {
+      min-height: 44px; padding: 8px 14px; cursor: pointer;
+      background: transparent; border: 1px dashed var(--border-3); border-radius: 10px;
+      color: var(--text-2); font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: .5px;
+    }
+    .nu-serving-more:hover { color: var(--text); border-color: var(--red-border); }
+    .nu-serving-chip.is-on { background: var(--red); border-color: var(--red); color: #fff; }
     .nu-custom-grams { margin-top: 8px; }
     /* Quantity stepper — thumb-friendly ± buttons around the input */
     .nu-stepper { display: flex; align-items: stretch; gap: 8px; }
