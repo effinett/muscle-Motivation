@@ -1474,6 +1474,9 @@ any of this is pulled ahead of the locked critical path (§13) is Effi's decisio
   not yet measured.
 - *Open — launch risk, verify under 4.5 cost/quotas:* the production `USDA_API_KEY` hourly request limit
   against that fan-out. Discovered dependency for G5 / 4.5-A.
+  *2026-11-11:* the key is a Vercel sensitive variable and cannot be read back, so `/api/usda-search` now
+  logs the allowance from USDA's own response headers (`usda-search quota: …`, and `quota LOW` under 10%).
+  The number itself is still **unconfirmed** until a production search has produced that log line.
 - *Open:* token verification is a Supabase round-trip on every search; local JWT verification would remove
   it (auth change — needs approval).
 

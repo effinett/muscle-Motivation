@@ -681,3 +681,58 @@ test('response cache: off without the service key; slow or failing storage is ju
     if (savedUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = savedUrl;
   }
 });
+
+/* ── USDA quota visibility ───────────────────────────────────────────────── */
+const { noteQuota, quotaState } = _internals;
+const quotaRes = (limit, remaining) => ({ headers: { get: (k) => ({ 'x-ratelimit-limit': limit, 'x-ratelimit-remaining': remaining })[k.toLowerCase()] } });
+function capture() { const lines = []; return { lines, log: (m) => lines.push('log ' + m), warn: (m) => lines.push('warn ' + m) }; }
+
+test('quota: the limit is logged once per instance, again only if it changes', () => {
+  quotaState.limit = null; quotaState.warnedAt = 0;
+  const c = capture();
+  assert.deepEqual(noteQuota(quotaRes('1000', '998'), c), { limit: 1000, remaining: 998 });
+  noteQuota(quotaRes('1000', '997'), c);
+  assert.deepEqual(c.lines, ['log usda-search quota: limit 1000 requests/hour, 998 remaining']);
+  noteQuota(quotaRes('3600', '3599'), c);
+  assert.strictEqual(c.lines.length, 2, 'a changed allowance is logged');
+});
+
+test('quota: a low-allowance warning fires under 10%, at most every five minutes', () => {
+  quotaState.limit = 1000; quotaState.warnedAt = 0;
+  const c = capture();
+  noteQuota(quotaRes('1000', '101'), c);
+  assert.strictEqual(c.lines.length, 0, 'above 10% is quiet');
+  noteQuota(quotaRes('1000', '100'), c);
+  noteQuota(quotaRes('1000', '40'), c);
+  assert.deepEqual(c.lines, ['warn usda-search quota LOW: 100 of 1000 requests left this hour'], 'one warning, not one per request');
+  quotaState.warnedAt = Date.now() - 6 * 60 * 1000;
+  noteQuota(quotaRes('1000', '0'), c);
+  assert.strictEqual(c.lines.length, 2);
+});
+
+test('quota: missing or malformed headers are ignored and never throw', () => {
+  quotaState.limit = null; quotaState.warnedAt = 0;
+  const c = capture();
+  for (const r of [null, {}, { headers: {} }, quotaRes(undefined, undefined), quotaRes('abc', '5'), quotaRes('1000', 'x'),
+    { headers: { get() { throw new Error('boom'); } } }]) {
+    assert.strictEqual(noteQuota(r, c), null);
+  }
+  assert.deepEqual(c.lines, []);
+});
+
+test('quota: a search reads the headers of real USDA responses, and still works without them', async () => {
+  poolCache.clear(); quotaState.limit = null; quotaState.warnedAt = 0;
+  const impl = async (url) => ({ ok: true, headers: quotaRes('1000', '42').headers,
+    json: async () => ({ foods: String(url).includes('Branded') ? [] : rawBanana() }) });
+  const origLog = console.log, origWarn = console.warn; const seen = [];
+  console.log = (m) => seen.push(String(m)); console.warn = (m) => seen.push(String(m));
+  try {
+    await withFetch(impl, async () => {
+      const out = await searchFoods('banana');
+      assert.strictEqual(out.status, 200);
+    });
+  } finally { console.log = origLog; console.warn = origWarn; }
+  assert.ok(seen.some((m) => /usda-search quota: limit 1000/.test(m)));
+  assert.ok(seen.some((m) => /quota LOW: 42 of 1000/.test(m)));
+  assert.strictEqual(quotaState.limit, 1000);
+});
