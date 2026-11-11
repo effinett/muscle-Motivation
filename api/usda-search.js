@@ -334,6 +334,24 @@ async function searchFoods(q, _retried, opts) {
       });
     }
 
+    // FNDDS survey foods go through POST: USDA's GET search answers a survey
+    // query with a spurious 400 about half the time (measured 2026-11-11:
+    // 11/24 GET calls failed, 0/24 POST calls), while Branded/SR GETs never do.
+    function fetchSurvey(query, pageSize, requireAll) {
+      const key = ['POST', SURVEY_DATA_TYPE, pageSize, requireAll ? 1 : 0, query].join('|');
+      return cachedPool(key, async function () {
+        const body = { query: query, dataType: [SURVEY_DATA_TYPE], pageSize: pageSize, pageNumber: 1 };
+        if (requireAll) body.requireAllWords = true;
+        const r = await fetch(`${USDA_ENDPOINT}?api_key=${encodeURIComponent(EFFECTIVE_KEY)}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        });
+        noteQuota(r);
+        if (!r.ok) { const e = new Error('upstream'); e.status = r.status; throw e; }
+        const d = await r.json();
+        return Array.isArray(d.foods) ? d.foods.map(trimFood) : [];
+      });
+    }
+
     // Branded pulls a WIDE pool (USDA max 200). USDA's own relevance buries the
     // right product deep — e.g. "kirkland peanut butter" wouldn't surface Kirkland's
     // organic PB inside the top 50 — so we cast a wide net and let the shared
@@ -361,7 +379,7 @@ async function searchFoods(q, _retried, opts) {
       // Composed dishes (roadmap 5.4.11): USDA's FNDDS survey foods are the
       // verified source for "cheese pizza", "chicken burrito", "caesar salad" —
       // dishes Foundation/SR Legacy barely cover. Generic data, same ranker.
-      fetchType(effQuery, SURVEY_DATA_TYPE, SURVEY_PAGE_SIZE, multiWord),
+      fetchSurvey(effQuery, SURVEY_PAGE_SIZE, multiWord),
     ]);
 
     // If BOTH calls failed, surface the error (mirror the old single-call behavior).
