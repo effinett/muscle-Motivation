@@ -220,6 +220,24 @@ async function nuDeleteLog(id) {
   return await supabaseClient.from('food_logs').delete().eq('id', id);
 }
 
+// Undo for a one-tap add: removes exactly the row that add wrote (by id), then
+// refreshes the page the same way a manual delete does. A second tap is a no-op.
+var nu_undoing = {};
+async function nuUndoLog(id) {
+  if (!id || nu_undoing[id]) return;
+  nu_undoing[id] = true;
+  try {
+    var res = await nuDeleteLog(id);
+    if (res.error) throw res.error;
+    showToast('Removed.');
+    if (typeof window.onFoodSaved === 'function') await window.onFoodSaved();
+  } catch (err) {
+    console.error('nuUndoLog error:', err);
+    delete nu_undoing[id];
+    showToast('Could not undo — tap the food in your log to remove it.');
+  }
+}
+
 /* ── totals ────────────────────────────────────────────────────────────── */
 function nuDayTotals(logs) {
   return (logs || []).reduce(function (t, l) {
@@ -372,7 +390,12 @@ async function nuSave(opts) {
     if (keepOpen) {
       nu_pendingSource = null; nu_editSource = null; nu_cardQty = null;
       nuShowUsdaSearch(nu_usdaIsRoot, false);       // cleared box + Your foods, ready for the next one
-      showToast('Added to ' + (NU_MEAL_LABELS[meal] || 'your log') + '.');
+      // One tap in, one tap out: the toast carries Undo for the row just written.
+      var addedId = res.data && res.data.id;
+      showToast('Added to ' + (NU_MEAL_LABELS[meal] || 'your log') + '.', addedId ? {
+        actionLabel: 'Undo', duration: 6000,
+        onAction: function () { nuUndoLog(addedId); },
+      } : undefined);
     } else {
       nuCloseModal();
       showToast('Food logged!');

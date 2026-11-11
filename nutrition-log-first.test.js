@@ -77,3 +77,16 @@ test('favorites and recents share ONE "Your Foods" row fed by the shared pool', 
   assert.match(html, /window\.onFavoritesChanged = loadFavChips;/);
   assert.match(html, /it\.own === 'favorite'/, 'favorites are marked on the chip');
 });
+
+test('page toast: optional action button, tracked timer, never tappable while hidden', () => {
+  const fn = html.match(/function showToast\(msg, opts\) \{([\s\S]*?)\n  \}/)[1];
+  assert.match(fn, /t\.textContent = msg;/, 'message is set as text, never HTML');
+  assert.match(fn, /btn\.textContent = opts\.actionLabel;/, 'action label is text too');
+  assert.match(fn, /if \(toastTimer\) clearTimeout\(toastTimer\);/, 'an older toast cannot cut a newer one short');
+  assert.match(fn, /\(opts && opts\.duration\) \|\| 3000/, 'default duration unchanged for existing callers');
+  const hide = html.match(/function hideToast\(\) \{([\s\S]*?)\n  \}/)[1];
+  assert.match(hide, /btn\.remove\(\)/, 'the action is removed when the toast hides');
+  assert.match(html, /\.toast:not\(\.show\) \{ pointer-events: none; \}/);
+  assert.match(html, /\.toast-action \{[^}]*min-height:\s*44px/);
+  assert.match(html, /<div class="toast" id="toast" role="status" aria-live="polite"><\/div>/);
+});

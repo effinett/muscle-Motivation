@@ -31,7 +31,8 @@ global.supabaseClient = {
   from: () => { throw new Error('DB must not be touched'); },
 };
 const toasts = [];
-global.showToast = (m) => { toasts.push(m); };
+const toastOpts = [];
+global.showToast = (m, o) => { toasts.push(m); toastOpts.push(o || null); };
 ['food-core.js', 'food-display.js', 'food-ranking.js', 'food-memory.js', 'food-meal.js', 'nutrition.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(__dirname, f), 'utf8'), { filename: f });
 });
@@ -60,7 +61,7 @@ const bar = () => ({ fdcId: 30, description: 'PROTEIN BAR', dataType: 'Branded',
 function search(text, raws) {
   nuResetModalState();
   for (const k of Object.keys(nu_detailCache)) delete nu_detailCache[k];
-  saved.length = 0; toasts.length = 0; saveOpts.length = 0;
+  saved.length = 0; toasts.length = 0; saveOpts.length = 0; toastOpts.length = 0;
   el('nuFoodId').value = '';
   el('nuMeal').value = 'lunch';
   el('nuUsdaInput').value = text;
@@ -196,4 +197,51 @@ test('injected food-modal markup contains no emoji', () => {
     'no emoji glyphs (the favourite star is a text glyph, not an emoji)');
   assert.match(html, /class="nu-scan-ico"[^>]*aria-label="Scan a barcode"/, 'barcode scan lives inside the search field');
   assert.match(html, /class="modal-close"[^>]*aria-label="Close"><svg/);
+});
+
+test('the one-tap toast offers Undo, which deletes exactly the row that was added', async () => {
+  search('protein bar', [bar()]);
+  const deleted = [];
+  let refreshed = 0;
+  const origLog = nuSaveLog, origDel = nuDeleteLog, origStub = nuSave, origSaved = global.onFoodSaved;
+  nuSaveLog = async () => ({ error: null, data: { id: 'log-77' } });
+  nuDeleteLog = async (id) => { deleted.push(id); return { error: null }; };
+  global.onFoodSaved = async () => { refreshed++; };
+  nuSave = realSave;
+  try {
+    await nuQuickAdd('usda', 0);
+    const opts = toastOpts[toastOpts.length - 1];
+    assert.ok(opts && opts.actionLabel === 'Undo' && typeof opts.onAction === 'function', 'toast carries an Undo action');
+    assert.ok(opts.duration >= 5000, 'and stays long enough to reach');
+    assert.strictEqual(refreshed, 1);
+
+    opts.onAction(); opts.onAction();               // double tap
+    await new Promise((r) => setTimeout(r, 10));
+    assert.deepStrictEqual(deleted, ['log-77'], 'one delete, of that row only');
+    assert.match(toasts[toasts.length - 1], /Removed\./);
+    assert.strictEqual(refreshed, 2, 'totals and lists refresh after the undo');
+  } finally { nuSaveLog = origLog; nuDeleteLog = origDel; nuSave = origStub; global.onFoodSaved = origSaved; }
+});
+
+test('undo failure is reported, never silent; no row id → no Undo offered', async () => {
+  const origDel = nuDeleteLog, origLog = nuSaveLog, origStub = nuSave;
+  nuDeleteLog = async () => ({ error: { message: 'offline' } });
+  toasts.length = 0;
+  await nuUndoLog('log-99');
+  assert.match(toasts.join(' '), /Could not undo/);
+  nuDeleteLog = origDel;
+
+  search('protein bar', [bar()]);
+  nuSaveLog = async () => ({ error: null, data: null });
+  nuSave = realSave;
+  try { await nuQuickAdd('usda', 0); } finally { nuSaveLog = origLog; nuSave = origStub; }
+  assert.strictEqual(toastOpts[toastOpts.length - 1], null, 'a plain message when the row id is unknown');
+
+  // The ordinary Add Food save offers no Undo (the entry is one tap away to edit).
+  search('protein bar', [bar()]);
+  nuPickUsda(0);
+  const origClose = nuCloseModal;
+  nuCloseModal = () => {}; nuSaveLog = async () => ({ error: null, data: { id: 'x' } });
+  try { await realSave(); } finally { nuCloseModal = origClose; nuSaveLog = origLog; }
+  assert.strictEqual(toastOpts[toastOpts.length - 1], null);
 });
