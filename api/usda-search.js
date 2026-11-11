@@ -41,6 +41,10 @@ const EFFECTIVE_KEY = USDA_API_KEY || 'DEMO_KEY';
 const USING_DEMO    = !USDA_API_KEY;
 
 const USDA_ENDPOINT = 'https://api.nal.usda.gov/fdc/v1/foods/search';
+// FNDDS survey foods (composed dishes). Multi-word queries require every word,
+// so "chicken caesar salad" is not flooded with every chicken row.
+const SURVEY_DATA_TYPE = 'Survey (FNDDS)';
+const SURVEY_PAGE_SIZE = 50;
 
 // USDA nutrient ids we care about (search results key nutrients by id).
 // Energy has a few variants; we try them in order of preference.
@@ -342,7 +346,7 @@ async function searchFoods(q, _retried, opts) {
     const supQ = ranking.supplementFor(effQuery);
     const brandSupQ = ranking.brandSupplementQuery(effQuery);
     const multiWord = effQuery.indexOf(' ') >= 0;
-    const [brandedRes, genericRes, supRes, brandSupRes, allWordsRes] = await Promise.allSettled([
+    const [brandedRes, genericRes, supRes, brandSupRes, allWordsRes, surveyRes] = await Promise.allSettled([
       fetchType(effQuery, 'Branded', 200),
       // 50 (not 15): USDA's own relevance buries staple cuts — "chicken" didn't
       // surface breast, "rice" didn't surface plain cooked rice, inside the top 25.
@@ -353,6 +357,10 @@ async function searchFoods(q, _retried, opts) {
       // generic pool with single-word hits; requireAllWords recovers the items
       // that actually contain every query word (any multi-word food, no list).
       multiWord ? fetchType(effQuery, 'Foundation,SR Legacy', 25, true) : Promise.resolve([]),
+      // Composed dishes (roadmap 5.4.11): USDA's FNDDS survey foods are the
+      // verified source for "cheese pizza", "chicken burrito", "caesar salad" —
+      // dishes Foundation/SR Legacy barely cover. Generic data, same ranker.
+      fetchType(effQuery, SURVEY_DATA_TYPE, SURVEY_PAGE_SIZE, multiWord),
     ]);
 
     // If BOTH calls failed, surface the error (mirror the old single-call behavior).
@@ -374,9 +382,11 @@ async function searchFoods(q, _retried, opts) {
       brandSupRes.status === 'fulfilled' ? brandSupRes.value : []);
     let generic = mergeGeneric(
       mergeGeneric(
-        genericRes.status === 'fulfilled' ? genericRes.value : [],
-        allWordsRes.status === 'fulfilled' ? allWordsRes.value : []),
-      supRes.status === 'fulfilled' ? supRes.value : []);
+        mergeGeneric(
+          genericRes.status === 'fulfilled' ? genericRes.value : [],
+          allWordsRes.status === 'fulfilled' ? allWordsRes.value : []),
+        supRes.status === 'fulfilled' ? supRes.value : []),
+      surveyRes.status === 'fulfilled' ? surveyRes.value : []);
 
     // Zero-result recovery ladder — runs ONLY when the exact query found
     // nothing, so legitimate words are never hijacked by correction:
