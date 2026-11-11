@@ -1501,7 +1501,8 @@ any of this is pulled ahead of the locked critical path (§13) is Effi's decisio
   unchanged); as-you-type own-food suggestions under it plus a "Search foods for …" hand-off; Search
   and Scan buttons beside it. Favorites and Recent merged into one "Your Foods" row (owner-approved
   2026-11-10; favorites first, starred; same pool as search). One-tap add keeps search open for the next
-  food. *Open:* a database result list directly under the field; undo on the add toast.
+  food, and its toast carries Undo (deletes that row by id). *Open:* a database result list directly
+  under the field.
 - One-tap add of the default serving from a result row. *Shipped 2026-11-10 in the Add Food search* (the +
   opens the same card path and calls the same `nuSave`; never logs an unapplied typed unit; hidden while
   editing). Barcode scan moved inside the search field; injected modal markup is emoji-free (§13).

@@ -636,6 +636,17 @@
     .btn-delete-log:hover { border-color: var(--red); color: var(--red); }
 
     /* .toast now lives in app-shell.css */
+    /* Toast action (Undo). The button fills the toast's height so the tap
+       target clears 44px; a hidden toast is never interactive. */
+    .toast:not(.show) { pointer-events: none; }
+    .toast-action {
+      margin: -12px -12px -12px 14px; padding: 0 12px; min-height: 44px; min-width: 44px;
+      background: none; border: none; border-left: 1px solid var(--border-2);
+      color: var(--text); cursor: pointer; vertical-align: middle;
+      font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 700;
+      letter-spacing: 1px; text-transform: uppercase;
+    }
+    .toast-action:hover, .toast-action:focus-visible { color: var(--red-hover, #D11D27); }
 
     @media (max-width: 480px) {
       .container { padding: 20px 12px calc(24px + var(--mm-bottom-clearance, 0px)); }
@@ -823,7 +834,7 @@
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.0/dist/umd/supabase.js" integrity="sha384-3wY11tldQ5+yWqAvmTN4XtQvnjoTva0cV15O/O/O5NTtp0ivVopSzLOzsVXWZse9" crossorigin="anonymous"></script>
@@ -843,11 +854,34 @@
 
   document.getElementById('foodModalMount').innerHTML = nuModalMarkup();
 
-  function showToast(msg) {
+  // showToast(msg) is unchanged for every existing caller. An optional second
+  // argument adds ONE action button (e.g. Undo after a one-tap add):
+  //   { actionLabel, onAction, duration }
+  // The hide timer is tracked so a newer toast is never cut short by an older
+  // one, and the action is removed the moment the toast hides — a hidden toast
+  // can never be tapped.
+  var toastTimer = null;
+  function hideToast() {
     var t = document.getElementById('toast');
-    t.textContent = msg;
+    if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+    t.classList.remove('show');
+    var btn = t.querySelector('.toast-action');
+    if (btn) btn.remove();
+  }
+  function showToast(msg, opts) {
+    var t = document.getElementById('toast');
+    if (toastTimer) clearTimeout(toastTimer);
+    t.textContent = msg;                              // also clears any earlier action
+    if (opts && opts.actionLabel && typeof opts.onAction === 'function') {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'toast-action';
+      btn.textContent = opts.actionLabel;
+      btn.addEventListener('click', function () { hideToast(); opts.onAction(); });
+      t.appendChild(btn);
+    }
     t.classList.add('show');
-    setTimeout(function () { t.classList.remove('show'); }, 3000);
+    toastTimer = setTimeout(hideToast, (opts && opts.duration) || 3000);
   }
 
   /* ── date navigation ─────────────────────────────────────────────── */
