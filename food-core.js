@@ -398,6 +398,18 @@ function nuVaguePortionServing(f, per100, parsed) {
 //   5. the card's own default (nuDefaultServingKey — portion/serving/100 g)
 function nuAiChooseServing(f, opts, portions, parsed) {
   var per100 = f.raw && f.raw.nutrients ? f.raw.nutrients : null;
+  // A stated VOLUME is not a weight. The AI parser fills `grams` for
+  // millilitres ("250 ml milk" → grams 250), which is only right at water
+  // density (oil is ~0.9, honey ~1.4). Convert through the food's own verified
+  // volume serving first; with no anchor, fall through to the stated grams
+  // exactly as before.
+  if (+parsed.grams > 0 && per100 && !f.is_liquid && parsed.unit) {
+    var statedVol = NU_VOLUME_UNIT_ALIASES[String(parsed.unit).toLowerCase().trim().replace(/s$/, '').replace(/\./g, '')];
+    if (statedVol) {
+      var anchored = nuVolumeServing(f, opts, per100, parsed, statedVol);
+      if (anchored) return anchored;
+    }
+  }
   if (+parsed.grams > 0 && per100 && !f.is_liquid) {
     // grams is the TOTAL stated weight ("6 oz" → quantity 6, unit oz,
     // grams 170) — wholeQuantity tells the resolver NOT to multiply by
