@@ -1487,7 +1487,12 @@ any of this is pulled ahead of the locked critical path (§13) is Effi's decisio
   A zero-result is recorded only once the text stops changing for two seconds. *Open:* a reader for the
   data (service-role query or admin view) and the 180-day purge.
 - **4.5.17 Layer B:** live-model AI parse fidelity (already the largest untested surface).
-- *Open — data-source decision under §2.4:* a barcode fallback source; lookup is USDA Branded only.
+- *Shipped 2026-11-11 (owner decision: yes, labeled unverified):* barcode fallback to **Open Food Facts**
+  on a clean USDA miss. Fail-closed validation (`offToFood`), "Unverified" label naming the source,
+  logged as a manual entry, never ranked into search. Recorded as the one exception in `AGENTS.md` §17.
+  *Open:* **not yet exercised against the live Open Food Facts API** (unreachable from the authoring
+  environment); their terms ask for a contact email in the User-Agent (a site URL is sent today) and
+  limit product reads to 15/minute per IP; the ODbL licence terms have not had a legal review.
 
 **Smarter**
 - **5.4.1 / 5.4.2 refinement:** the user's own foods appear inside database search, ahead of the network

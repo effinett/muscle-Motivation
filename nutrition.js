@@ -314,8 +314,11 @@ function nuShowForm(withBack) {
     document.getElementById('nuAddView').style.display    = 'block';
   }
   var editing = !!document.getElementById('nuFoodId').value;
-  // USDA pick → polished selected-food card; manual/edit → plain editable form.
-  var isUsda = !!(nu_pendingSource && nu_pendingSource.usda_fdc_id);
+  // Database pick → polished selected-food card; manual/edit → plain editable
+  // form. An unverified (Open Food Facts) food is a database pick too: it gets
+  // the card — where its "Unverified" label and serving chips live — even
+  // though it has no USDA id.
+  var isUsda = !!(nu_pendingSource && (nu_pendingSource.usda_fdc_id || nuIsUnverified(nu_pendingSource)));
   nuSetMode(isUsda);
   document.getElementById('nuModalTitle').textContent = editing ? 'Edit Food' : 'Add Food';
   document.getElementById('nuSaveBtn').textContent = editing ? 'Save Changes' : 'Add Food';
@@ -375,7 +378,9 @@ async function nuSave(opts) {
     var uid = s.data.session.user.id;
     // Only attach USDA provenance if the picked food's name is still intact —
     // editing the name means the user is logging something else, so log it manual.
-    var src = (nu_pendingSource && nu_pendingSource.name === name) ? nu_pendingSource : null;
+    // An unverified (Open Food Facts) food is logged as a MANUAL entry: USDA
+    // provenance is only ever stamped on USDA data.
+    var src = (nu_pendingSource && nu_pendingSource.name === name && !nuIsUnverified(nu_pendingSource)) ? nu_pendingSource : null;
     var res = await nuSaveLog(uid, {
       id: document.getElementById('nuFoodId').value || null,
       name: name, meal: meal, servings: servings,
@@ -582,6 +587,9 @@ var nu_quickSilent = false;    // true only while one-tap add prepares the card 
 function nuAddButton(kind, i, fullName) {
   var fid = document.getElementById('nuFoodId');
   if (fid && fid.value) return '';                 // editing → no one-tap add
+  // Community (unverified) data always goes through the card, so the user
+  // sees the label and the numbers before anything is logged.
+  if (kind === 'usda' && nuIsUnverified(nu_usdaResults[i])) return '';
   return '<button type="button" class="nu-usda-add" onclick="nuQuickAdd(\'' + kind + '\',' + i + ')"' +
     ' aria-label="Add ' + nuEsc(fullName) + '" title="Add">' + nuIcon(NU_ICON_PLUS, 20) + '</button>';
 }
@@ -1170,7 +1178,9 @@ function nuRenderUsdaResults() {
     var dm = FoodDisplay.buildFoodDisplay(f);
     var meta = dm.secondaryParts.map(nuEsc);   // brand · variety (identity)
     meta.push(nuEsc(dm.serving));
-    var sub = '<span class="nu-verified-sm">USDA</span> · ' + meta.join(' · ');
+    var sub = (nuIsUnverified(f)
+      ? '<span class="nu-unverified-sm">Unverified</span>'
+      : '<span class="nu-verified-sm">USDA</span>') + ' · ' + meta.join(' · ');
     return header +
       '<div class="nu-usda-row">' +
         '<button type="button" class="nu-usda-open" onclick="nuPickUsda(' + i + ')" title="' + nuEsc(dm.fullName) + '">' +
@@ -1372,6 +1382,27 @@ function nuPickUsda(i) {
 
 // Open the selected-food card for a normalized USDA food — the one card path
 // for a tapped search row AND a tapped "Your foods" row.
+// A food from the Open Food Facts barcode fallback (community data, not USDA).
+// Read from the raw payload so the shared NormalizedFood shape is untouched.
+function nuIsUnverified(f) {
+  return !!(f && f.raw && f.raw.source === 'off');
+}
+// Card badge: the green USDA mark, or a neutral "Unverified" one that names the
+// source (which is also the attribution Open Food Facts' licence asks for).
+function nuRenderSourceBadge(f) {
+  var badge = document.getElementById('nuCardSource');
+  var note = document.getElementById('nuCardSourceNote');
+  var off = nuIsUnverified(f);
+  if (badge) {
+    badge.textContent = off ? 'Unverified' : 'USDA';
+    badge.className = off ? 'nu-unverified' : 'nu-verified';
+  }
+  if (note) {
+    note.textContent = off ? 'From Open Food Facts, a community database. Check it against the label.' : '';
+    note.style.display = off ? 'block' : 'none';
+  }
+}
+
 function nuOpenUsdaCard(f, searchQty) {
   nu_servingExpanded = false;
   nu_cardQty = searchQty ? { pq: searchQty, applied: false } : null;
@@ -1390,6 +1421,7 @@ function nuOpenUsdaCard(f, searchQty) {
   var cardMeta = [cardDm.brand, cardDm.variety].filter(Boolean).join(' · ');
   bEl.textContent = cardMeta;
   bEl.style.display = cardMeta ? 'inline-block' : 'none';
+  nuRenderSourceBadge(f);
 
   // Same serving rule as the search list (nuDefaultServingKey). Portions already
   // cached by the row prefetch apply synchronously, so the card opens showing
@@ -2234,8 +2266,9 @@ function nuModalMarkup() {
           '<div class="nu-card-name" id="nuCardName"></div>' +
           '<div class="nu-card-meta">' +
             '<span class="nu-card-brand" id="nuCardBrand" style="display:none;"></span>' +
-            '<span class="nu-verified">USDA</span>' +
+            '<span class="nu-verified" id="nuCardSource">USDA</span>' +
           '</div>' +
+          '<div class="nu-source-note" id="nuCardSourceNote" style="display:none;"></div>' +
         '</div>' +
         // manual/edit only — editable food name
         '<div class="field-group" id="nuNameGroup">' +

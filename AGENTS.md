@@ -650,6 +650,12 @@ Small calorie surplus · Progressive overload · High protein · Consistent trai
 
 ### Nutrition Data Rules (binding)
 - **Nutrition values must come from verified food databases (USDA), never AI-generated.** LLMs supply the search query + quantity/unit/brand only.
+  - **One owner-approved exception (2026-11-11): the barcode fallback.** When USDA has no product for a
+    scanned barcode, `/api/usda-barcode` may return the product from Open Food Facts (crowd-sourced).
+    Such a food is flagged `unverified`, is shown with an "Unverified" label naming Open Food Facts
+    (never the USDA mark), must pass the completeness and plausibility checks in `offToFood`, and is
+    logged as a **manual** entry — USDA provenance is never stamped on it. It never enters search
+    ranking. Do not widen this to other surfaces without Effi's approval.
 - **All entries are confirmed by the user before saving.**
 - **All logged foods contribute to daily cal/protein/carb/fat/micronutrient tracking.**
 - **Food-logging surfaces (`Live` and `Planned`):**
