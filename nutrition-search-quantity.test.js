@@ -31,13 +31,22 @@ test('household units are canonical singular; "of" is dropped; decimals and frac
   assert.deepStrictEqual(P('250 ml milk'), { quantity: 250, unit: 'ml', grams: null, food: 'milk' });
 });
 
+test('fluid ounces are one unit, in every spelling', () => {
+  assert.deepStrictEqual(P('8 fl oz milk'), { quantity: 8, unit: 'fl oz', grams: null, food: 'milk' });
+  assert.deepStrictEqual(P('8 fluid ounces of milk'), { quantity: 8, unit: 'fl oz', grams: null, food: 'milk' });
+  assert.deepStrictEqual(P('8 floz orange juice'), { quantity: 8, unit: 'fl oz', grams: null, food: 'orange juice' });
+  assert.strictEqual(ranking.expandQuery('8 fl oz milk').query, 'milk', 'and the database query drops them');
+  assert.strictEqual(ranking.expandQuery('8 fluid ounces of milk').query, 'milk');
+});
+
 test('a bare count has no unit', () => {
   assert.deepStrictEqual(P('2 eggs'), { quantity: 2, unit: null, grams: null, food: 'eggs' });
 });
 
 test('anything doubtful is NOT a quantity', () => {
   ['chicken', '3', '', null, '2% milk', '7 up', '7up', '100 grand bar', '3 musketeers', '12 grain bread',
-   '100 calorie pack', '0 eggs', '2 3 eggs', '1/0 cup rice', '10kg rice', 'reeses pieces', 'eggs 2', 'Dr. Pepper']
+   '100 calorie pack', '0 eggs', '2 3 eggs', '1/0 cup rice', '10kg rice', 'reeses pieces', 'eggs 2', 'Dr. Pepper',
+   '2 fl oz', '2 cup', 'fl oz milk', '500 fl oz water']
     .forEach((q) => assert.strictEqual(P(q), null, JSON.stringify(q)));
 });
 
@@ -45,6 +54,41 @@ test('the food words agree with what the search query keeps', () => {
   ['200g chicken breast', '2 eggs', '1.5 cups rice', '6 oz salmon', '2 slices of whole wheat bread'].forEach((q) => {
     assert.strictEqual(ranking.expandQuery(P(q).food).query, ranking.expandQuery(q).query, q);
   });
+});
+
+/* ── tier 1b: volume conversion through a verified anchor ────────────── */
+const core = require('./food-core.js');
+const V = core.nuVolumeAmount;
+const milkOpts = () => [
+  { key: 'p0', grams: 244, description: '1 cup', label: '1 cup (244 g)' },
+  { key: 'p1', grams: 15.25, description: '1 tbsp', label: '1 tbsp (15 g)' },
+  { key: '100g', grams: 100, description: '100 g' },
+  { key: 'custom', custom: true, label: 'Custom grams…' },
+];
+
+test('nuVolumeAmount: a weight-based food converts through ITS OWN volume serving', () => {
+  const solid = { is_liquid: false };
+  assert.deepStrictEqual(V(solid, milkOpts(), 8, 'fl oz'), { grams: 241, anchor: '1 cup' });   // 244 g × 236.6/240
+  assert.deepStrictEqual(V(solid, milkOpts(), 250, 'ml'), { grams: 254, anchor: '1 cup' });
+  assert.deepStrictEqual(V(solid, milkOpts(), 2, 'tsp'), { grams: 10, anchor: '1 tbsp' }, 'nearest-sized anchor');
+  assert.deepStrictEqual(V(solid, [{ grams: 55, description: '2/3 cup (55 g)' }], 1, 'cup'), { grams: 83, anchor: '2/3 cup (55 g)' },
+    'a label serving with a fractional count is an anchor too');
+  assert.deepStrictEqual(V(solid, [{ grams: 32, description: '2 tbsp' }], 1, 'cup'), { grams: 256, anchor: '2 tbsp' });
+});
+
+test('nuVolumeAmount: no volume serving on the food → null, never a guessed density', () => {
+  const solid = { is_liquid: false };
+  assert.strictEqual(V(solid, [{ key: '100g', grams: 100, description: '100 g' }, { key: 'oz', grams: 28.35, description: '1 oz (28 g)' }], 1, 'cup'), null);
+  assert.strictEqual(V(solid, [{ grams: 50, description: '1 large' }], 2, 'tbsp'), null);
+  assert.strictEqual(V(solid, milkOpts(), 1, 'slice'), null, 'not a volume unit');
+  assert.strictEqual(V(solid, milkOpts(), 0, 'cup'), null);
+  assert.strictEqual(V(null, milkOpts(), 1, 'cup'), null);
+});
+
+test('nuVolumeAmount: a food measured in ml is a pure unit conversion', () => {
+  assert.deepStrictEqual(V({ is_liquid: true }, [], 2, 'tbsp'), { ml: 30 });
+  assert.deepStrictEqual(V({ is_liquid: true }, [], 12, 'fl oz'), { ml: 355 });
+  assert.deepStrictEqual(V({ is_liquid: true }, [], 1.5, 'l'), { ml: 1500 });
 });
 
 /* ── tier 2: the card ────────────────────────────────────────────────── */
@@ -118,6 +162,46 @@ test('"1.5 cups rice" → applied once the cup portion loads; quantity 1.5', asy
   await settle();
   assert.strictEqual(+el('nuServings').value, 1.5);
   assert.strictEqual(nu_pendingSource.grams, 158);
+});
+
+const milk = () => ({ fdcId: 14, description: 'Milk, whole, 3.25% milkfat', dataType: 'SR Legacy',
+  nutrients: { kcal: 61, protein: 3.2, carbs: 4.8, fat: 3.3, fiber: 0, sugar: 5 } });
+const cola = () => ({ fdcId: 15, description: 'COLA', dataType: 'Branded', brand: 'Acme',
+  servingSize: 355, servingSizeUnit: 'ml', householdServing: '1 can',
+  nutrients: { kcal: 42, protein: 0, carbs: 10.6, fat: 0, fiber: 0, sugar: 10.6 } });
+
+test('"8 fl oz milk" on a weight-based milk → grams through its own cup serving', async () => {
+  detail = [{ label: '1 cup', amount: 1, gramWeight: 244 }];
+  search('8 fl oz milk', [milk()]);
+  nuPickUsda(0);
+  assert.strictEqual(+el('nuServings').value, 1, 'no anchor yet → nothing guessed');
+  await settle();
+  assert.strictEqual(el('nuServingSelect').value, 'custom');
+  assert.strictEqual(+el('nuCustomGrams').value, 241);
+  assert.strictEqual(+el('nuServings').value, 1);
+});
+
+test('"1 tbsp milk" converts from the cup serving when the food has no tbsp serving', async () => {
+  detail = [{ label: '1 cup', amount: 1, gramWeight: 244 }];
+  search('1 tbsp milk', [milk()]);
+  nuPickUsda(0);
+  await settle();
+  assert.strictEqual(el('nuServingSelect').value, 'custom');
+  assert.strictEqual(+el('nuCustomGrams').value, 15, '244 g × 15/240');
+});
+
+test('a drink measured in ml: "12 fl oz cola" and "2 tbsp cola" become ml', () => {
+  detail = [];
+  search('12 fl oz cola', [cola()]);
+  nuPickUsda(0);
+  assert.strictEqual(nu_pendingSource.is_liquid, true);
+  assert.strictEqual(el('nuServingSelect').value, 'custom');
+  assert.strictEqual(+el('nuCustomGrams').value, 355);
+  assert.strictEqual(+el('nuCalories').value, 149, '42 kcal/100 ml × 355 ml');
+
+  search('2 tbsp cola', [cola()]);
+  nuPickUsda(0);
+  assert.strictEqual(+el('nuCustomGrams').value, 30);
 });
 
 test('a unit the food cannot express is never guessed', async () => {

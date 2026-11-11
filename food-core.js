@@ -236,6 +236,55 @@ function nuAiCupServing(f, parsed) {
   return null;
 }
 
+/* ── Volume conversion from a VERIFIED anchor (roadmap 5.4.12) ────────────────
+ * For people who measure with cups and spoons instead of a scale. Converts a
+ * stated volume ("1 tbsp", "8 fl oz", "250 ml", "1.5 cups") into an amount the
+ * food can be logged in, WITHOUT inventing a density:
+ *   • a food USDA measures in ml → pure unit conversion (tbsp = 15 ml);
+ *   • a weight-based food → only through one of ITS OWN gram-weighted volume
+ *     servings ("1 cup (244 g)", "2 tbsp (32 g)", a label's "2/3 cup (55 g)").
+ *     That serving fixes grams-per-ml for this exact food, and the request is
+ *     scaled by volume: 1 tbsp of a food whose cup weighs 244 g is 244 × 15/240.
+ *   • no volume serving on the food → null. Never a guessed weight.
+ * Unit sizes match the ones already used for liquids above (cup 240 ml, tbsp
+ * 15, tsp 5, fl oz 29.5735). When several anchors exist the one closest in
+ * size to the requested AMOUNT is used (a tbsp anchor for 2 tsp, a cup anchor
+ * for 8 fl oz), which keeps the scaling factor small.
+ * Returns { grams, anchor } | { ml } | null. Pure. */
+var NU_VOLUME_UNIT_ML = { tsp: 5, tbsp: 15, 'fl oz': 29.5735, cup: 240, ml: 1, l: 1000 };
+var NU_VOLUME_LABEL_RE = /^\s*(\d+\s*\/\s*\d+|\d+(?:\.\d+)?)\s*(cups?|tbsp|tablespoons?|tsp|teaspoons?|fl\.?\s*oz|fluid\s+ounces?)\b/i;
+function nuVolumeLabelUnit(word) {
+  var w = String(word).toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ');
+  if (w.indexOf('cup') === 0) return 'cup';
+  if (w.indexOf('tb') === 0 || w.indexOf('tablespoon') === 0) return 'tbsp';
+  if (w.indexOf('ts') === 0 || w.indexOf('teaspoon') === 0) return 'tsp';
+  return 'fl oz';
+}
+function nuVolumeAmount(f, opts, quantity, unit) {
+  var uml = NU_VOLUME_UNIT_ML[String(unit || '').toLowerCase()];
+  var qty = +quantity;
+  if (!uml || !(qty > 0) || !f) return null;
+  var totalMl = qty * uml;
+  if (f.is_liquid) return { ml: Math.round(totalMl) };
+  var best = null;
+  (opts || []).forEach(function (o) {
+    if (!o || o.custom || !(+o.grams > 0)) return;
+    var text = String(o.description || o.label || '');
+    var m = text.match(NU_VOLUME_LABEL_RE);
+    if (!m) return;
+    var count = nuAiLabelCount({ description: m[1] });
+    var anchorMl = count * NU_VOLUME_UNIT_ML[nuVolumeLabelUnit(m[2])];
+    if (!(anchorMl > 0)) return;
+    var distance = Math.abs(Math.log(anchorMl / totalMl));
+    if (!best || distance < best.distance) {
+      best = { distance: distance, gramsPerMl: +o.grams / anchorMl, anchor: text };
+    }
+  });
+  if (!best) return null;
+  var grams = Math.round(totalMl * best.gramsPerMl);
+  return grams > 0 ? { grams: grams, anchor: best.anchor } : null;
+}
+
 // Leading count in a serving label: "2 tbsp (32 g)" → 2, "0.5 cup" → 0.5,
 // "1/2 cup" → 0.5, "1 large" → 1. The user's quantity is in THEIR unit, so
 // servings = quantity ÷ this count — "1/2 cup oats" on a "0.5 cup" serving is
@@ -1613,6 +1662,8 @@ if (typeof module !== 'undefined' && module.exports) {
     nuCreateResolver: nuCreateResolver,
     nuFoodKey: nuFoodKey,
     nuMatchOwnFoods: nuMatchOwnFoods,
+    NU_VOLUME_UNIT_ML: NU_VOLUME_UNIT_ML,
+    nuVolumeAmount: nuVolumeAmount,
     nuBuildSaveSrc: nuBuildSaveSrc,
     nuNameSingular: nuNameSingular,
     nuTitleCase: nuTitleCase,

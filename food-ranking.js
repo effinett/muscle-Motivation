@@ -546,12 +546,21 @@ function isQuantityToken(t) {
   return /^\d+([./]\d+)?$/.test(t) || /^\d+(\.\d+)?(g|kg|oz|lb|lbs|ml|l)$/.test(t);
 }
 // "2 slices bread" → [bread]; "cup of rice" → [rice]; "reeses pieces" → intact.
+function isFluidOunceAt(toks, i) {
+  // "fl oz" / "fluid ounces" as ONE unit ("floz" is a single token, below).
+  return (toks[i] === 'fl' || toks[i] === 'fluid') && /^(oz|ounce|ounces)$/.test(toks[i + 1] || '');
+}
 function stripMeasurements(toks) {
   const out = [];
   for (let i = 0; i < toks.length; i++) {
     const t = toks[i];
     if (STOP_WORDS.has(t)) continue;
     if (isQuantityToken(t)) continue;
+    // "8 fl oz milk" → [milk]: only in measurement position, like every unit.
+    if (i > 0 && isQuantityToken(toks[i - 1])) {
+      if (isFluidOunceAt(toks, i)) { i++; continue; }
+      if (t === 'floz') continue;
+    }
     if (UNIT_WORDS.has(t)) {
       const afterQty = i > 0 && isQuantityToken(toks[i - 1]);
       const beforeOf = i + 1 < toks.length && toks[i + 1] === 'of';
@@ -572,7 +581,7 @@ function stripMeasurements(toks) {
  * behaves exactly as before.
  * Returns { quantity, unit, grams, food } or null:
  *   • quantity — the number typed ("1/2" → 0.5)
- *   • unit     — canonical singular unit ('g','oz','cup','slice'…), or null for
+ *   • unit     — canonical singular unit ('g','oz','fl oz','cup','slice'…), or null for
  *                a bare count ("2 eggs")
  *   • grams    — TOTAL stated weight for weight units (6 oz → 170), else null —
  *                the same convention the AI parser uses, so nuAiChooseServing
@@ -614,10 +623,14 @@ function parseQueryQuantity(q) {
   else if (/^\d+(\.\d+)?$/.test(toks[0])) { qty = +toks[0]; }
   if (!(qty > 0)) return null;
 
-  if (!unit && toks.length >= 3 && UNIT_WORDS.has(toks[1])) { unit = toks[1]; used = 2; }
+  if (!unit && toks.length >= 4 && isFluidOunceAt(toks, 1)) { unit = 'fl oz'; used = 3; }
+  else if (!unit && toks.length >= 3 && toks[1] === 'floz') { unit = 'fl oz'; used = 2; }
+  else if (!unit && toks.length >= 3 && UNIT_WORDS.has(toks[1])) { unit = toks[1]; used = 2; }
   let rest = toks.slice(used);
   if (rest[0] === 'of') rest = rest.slice(1);
   if (!rest.length || isQuantityToken(rest[0])) return null;
+  // what follows must be a food, not a dangling unit ("2 fl oz", "2 cup")
+  if (isFluidOunceAt(rest, 0) || (rest.length === 1 && (UNIT_WORDS.has(rest[0]) || rest[0] === 'floz'))) return null;
 
   if (unit) unit = UNIT_CANONICAL[unit] || unit;
   let grams = null;
@@ -626,6 +639,8 @@ function parseQueryQuantity(q) {
     if (!(grams > 0) || grams > QTY_MAX_GRAMS) return null;
   } else if (unit === 'ml' || unit === 'l') {
     if (qty * (unit === 'l' ? 1000 : 1) > QTY_MAX_GRAMS) return null;
+  } else if (unit === 'fl oz') {
+    if (qty > 170) return null;                       // ~5 litres
   } else if (qty > QTY_MAX_COUNT) {
     return null;
   }

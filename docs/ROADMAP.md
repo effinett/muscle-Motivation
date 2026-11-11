@@ -1489,6 +1489,11 @@ any of this is pulled ahead of the locked critical path (§13) is Effi's decisio
 - **5.4.12:** quantity typed in the search box ("200g chicken", "2 eggs") pre-fills the serving.
   *Shipped 2026-11-10* (shared `parseQueryQuantity` in `food-ranking.js`; serving choice reuses
   `nuAiChooseServing`; a unit the food cannot express is never guessed).
+  *Extended 2026-11-10 for cup-and-spoon users:* fluid ounces parsed; a volume the food has no serving
+  for is converted through one of the food's own gram-weighted volume servings (shared `nuVolumeAmount`
+  in `food-core.js`) or, for foods USDA measures in ml, by unit conversion. *Open:* route AI Quick Log
+  through `nuVolumeAmount` (changes shared serving choice — needs benchmark review); hand measures
+  (handful, glass, bowl) in the search box.
 
 **Logging UI** *(5.4, with 5.0 gesture polish)*
 - One entry point: a single search field that handles a food name, a sentence (AI Quick Log) and barcode.
