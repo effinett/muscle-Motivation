@@ -424,6 +424,7 @@
     .nu-usda-status.loading { color: var(--text-2); }
     .nu-usda-status.error { color: var(--red); }
     .nu-usda-list { display: flex; flex-direction: column; gap: 7px; max-height: 50vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+    .nu-usda-list.is-stale { opacity: .45; transition: opacity .12s ease; }
     .nu-usda-row {
       display: flex; align-items: center; justify-content: space-between; gap: 12px;
       width: 100%; text-align: left; cursor: pointer;

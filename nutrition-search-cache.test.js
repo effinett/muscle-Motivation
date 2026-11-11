@@ -105,3 +105,79 @@ test('nuUsdaSearch: no meal context → no X-Meal-Context header, default cache'
   assert.ok(!(lastFetchOpts.headers || {})['X-Meal-Context'], 'no meal header without a projection');
   assert.strictEqual(lastFetchOpts.cache, undefined, 'plain search keeps the short cache');
 });
+
+/* ── session query cache (search latency) ──────────────────────────────────
+ * A plain search answered moments ago is served from memory; anything carrying
+ * correction or meal context always reaches the server. */
+function countingFetch(foods) {
+  const state = { calls: 0 };
+  const orig = global.fetch;
+  global.fetch = async (u, opts) => {
+    if (String(u).startsWith('/api/usda-search')) {
+      state.calls++;
+      lastFetchOpts = opts || {};
+      return { ok: true, json: async () => ({ foods: foods }) };
+    }
+    throw new Error('unexpected fetch ' + u);
+  };
+  state.restore = () => { global.fetch = orig; };
+  return state;
+}
+const oatPool = () => [{ fdcId: 77, description: 'Oats, rolled', dataType: 'SR Legacy', nutrients: { kcal: 379 } }];
+
+test('query cache: a repeated plain query is served from memory (one request)', async () => {
+  nu_corrections = [];
+  const f = countingFetch(oatPool());
+  try {
+    const a = await nuUsdaSearch('rolled oats');
+    const b = await nuUsdaSearch('  Rolled Oats ');           // case/space-insensitive key
+    assert.strictEqual(f.calls, 1, 'second identical query costs no request');
+    assert.deepStrictEqual(b, a);
+    b[0].description = 'mutated';
+    const c = await nuUsdaSearch('rolled oats');
+    assert.strictEqual(c[0].description, 'Oats, rolled', 'readers get copies, never the cached rows');
+  } finally { f.restore(); }
+});
+
+test('query cache: correction context always bypasses the cache', async () => {
+  nu_corrections = [];
+  const f = countingFetch(oatPool());
+  try {
+    await nuUsdaSearch('protein bar');                         // cached as a plain query
+    nu_corrections = seedCorrection('protein bar');            // user corrects it
+    await nuUsdaSearch('protein bar');
+    assert.strictEqual(f.calls, 2, 'a fresh correction must reach the server');
+    assert.strictEqual(lastFetchOpts.cache, 'no-store');
+  } finally { f.restore(); nu_corrections = []; }
+});
+
+test('query cache: meal-context requests are neither served from nor stored in it', async () => {
+  nu_corrections = [];
+  const f = countingFetch(oatPool());
+  const projection = { v: 1, beverage: true, cookedExpected: false, animal: null,
+    commodity: false, companionCats: ['carb'], role: 'beverage', mealType: null };
+  try {
+    await nuUsdaSearch('iced latte', { mealContext: projection });
+    await nuUsdaSearch('iced latte', { mealContext: projection });
+    assert.strictEqual(f.calls, 2, 'contextual responses are never cached');
+    await nuUsdaSearch('iced latte');
+    assert.strictEqual(f.calls, 3, 'and never seed the plain-query cache');
+  } finally { f.restore(); }
+});
+
+test('query cache: empty results are not cached; entries expire and are bounded', async () => {
+  nu_corrections = [];
+  const empty = countingFetch([]);
+  try {
+    await nuUsdaSearch('zzqx'); await nuUsdaSearch('zzqx');
+    assert.strictEqual(empty.calls, 2, 'a zero-result answer is always re-asked');
+  } finally { empty.restore(); }
+
+  nuQueryCachePut('stale thing', oatPool());
+  nu_queryCache['stale thing'].at = Date.now() - NU_QUERY_CACHE_TTL - 1;
+  assert.strictEqual(nuQueryCacheGet('stale thing'), null, 'expired entries are not served');
+
+  for (let i = 0; i < NU_QUERY_CACHE_MAX + 15; i++) nuQueryCachePut('bulk ' + i, oatPool());
+  assert.ok(Object.keys(nu_queryCache).length <= NU_QUERY_CACHE_MAX, 'cache stays bounded');
+  assert.strictEqual(nuQueryCacheGet('bulk 0'), null, 'oldest entries are evicted first');
+});

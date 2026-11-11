@@ -373,3 +373,115 @@ test('buildMealSignal: correction + meal signals coexist on the same request', (
   assert.strictEqual(both.foods[0].fdcId, 11);
   assert.ok(scoreOf(both, 11) > scoreOf(base, 11));
 });
+
+/* ── search latency: warm-instance pool cache + concurrent signals ─────────
+ * No network: global.fetch is stubbed with a counting USDA responder. */
+const { cachedPool, poolCache, POOL_CACHE_TTL_MS, POOL_CACHE_MAX } = _internals;
+
+function usdaStub(foodsFor) {
+  const calls = [];
+  return {
+    calls,
+    impl: async (url) => {
+      const u = new URL(String(url));
+      calls.push(u.searchParams.get('dataType') + '|' + u.searchParams.get('query'));
+      const foods = foodsFor(u.searchParams.get('dataType'), u.searchParams.get('query'));
+      if (foods instanceof Error) return { ok: false, status: 503, json: async () => ({}) };
+      return { ok: true, json: async () => ({ foods }) };
+    },
+  };
+}
+const rawBanana = () => [{ fdcId: 501, description: 'Bananas, raw', dataType: 'SR Legacy',
+  foodCategory: 'Fruits and Fruit Juices',
+  foodNutrients: [{ nutrientId: 1008, value: 89 }, { nutrientId: 1003, value: 1.1 }] }];
+
+test('pool cache: a repeated search reuses the USDA pools (no second upstream call)', async () => {
+  poolCache.clear();
+  const stub = usdaStub((type) => (type === 'Branded' ? [] : rawBanana()));
+  await withFetch(stub.impl, async () => {
+    const first = await searchFoods('banana');
+    const n = stub.calls.length;
+    assert.ok(n >= 2, 'first search hits USDA');
+    const second = await searchFoods('banana');
+    assert.strictEqual(stub.calls.length, n, 'second identical search makes no upstream call');
+    assert.deepEqual(second.body.foods.map((f) => [f.fdcId, f.score]), first.body.foods.map((f) => [f.fdcId, f.score]),
+      'cached pools rank identically');
+  });
+});
+
+test('pool cache: concurrent identical fetches share one upstream call; readers get clones', async () => {
+  poolCache.clear();
+  let loads = 0;
+  const load = async () => { loads++; return [{ fdcId: 1, nutrients: { kcal: 10 } }]; };
+  const [a, b] = await Promise.all([cachedPool('k', load), cachedPool('k', load)]);
+  assert.strictEqual(loads, 1);
+  a[0].score = 99; a[0].nutrients.kcal = 0;
+  assert.strictEqual(b[0].score, undefined, 'a reader cannot mutate another reader');
+  const c = await cachedPool('k', load);
+  assert.strictEqual(c[0].nutrients.kcal, 10, 'nor the cached pool itself');
+});
+
+test('pool cache: failures are never cached; entries expire; size is bounded', async () => {
+  poolCache.clear();
+  let n = 0;
+  const flaky = async () => { n++; if (n === 1) { const e = new Error('upstream'); e.status = 429; throw e; } return []; };
+  await assert.rejects(cachedPool('f', flaky));
+  await cachedPool('f', flaky);
+  assert.strictEqual(n, 2, 'a failed fetch is retried, not replayed');
+
+  let loads = 0;
+  const load = async () => { loads++; return []; };
+  await cachedPool('t', load);
+  poolCache.get('t').at = Date.now() - POOL_CACHE_TTL_MS - 1;
+  await cachedPool('t', load);
+  assert.strictEqual(loads, 2, 'an expired entry is refetched');
+
+  for (let i = 0; i < POOL_CACHE_MAX + 20; i++) await cachedPool('b' + i, load);
+  assert.ok(poolCache.size <= POOL_CACHE_MAX);
+});
+
+test('searchFoods: signals may arrive as a promise and rank exactly like an array', async () => {
+  const q = 'fairlife milk';
+  const [milk, bar] = fairlifePool();
+  const sig = foodMemory.nmCorrectionSignal([correction(q, bar, milk)], { query: q });
+  const raw = (f) => ({ fdcId: f.fdcId, description: f.description, brandName: f.brand, dataType: 'Branded',
+    foodNutrients: [{ nutrientId: 1008, value: f.nutrients.kcal }] });
+  const stub = usdaStub((type) => (type === 'Branded' ? fairlifePool().map(raw) : []));
+  const ids = (o) => o.body.foods.map((f) => [f.fdcId, f.score]);
+  await withFetch(stub.impl, async () => {
+    poolCache.clear(); const plain = await searchFoods(q);
+    poolCache.clear(); const arr = await searchFoods(q, undefined, { signals: [sig] });
+    poolCache.clear(); const prom = await searchFoods(q, undefined, { signals: Promise.resolve([sig]) });
+    poolCache.clear(); const none = await searchFoods(q, undefined, { signals: Promise.resolve([]) });
+    assert.deepEqual(ids(prom), ids(arr), 'promise signals == array signals');
+    assert.deepEqual(ids(none), ids(plain), 'an empty signal list is plain ranking');
+    assert.notDeepEqual(ids(arr), ids(plain), 'and the signal really applies');
+  });
+});
+
+test('route: correction lookup runs alongside the USDA fetches, not ahead of them', async () => {
+  poolCache.clear();
+  const order = [];
+  let releaseCorrections;
+  const gate = new Promise((r) => { releaseCorrections = r; });
+  const impl = async (url) => {
+    const s = String(url);
+    if (s.includes('/auth/v1/user')) return { ok: true, json: async () => ({ id: 'u1' }) };
+    if (s.includes('/rest/v1/food_corrections')) {
+      order.push('corrections:start'); await gate; order.push('corrections:end');
+      return { ok: true, json: async () => [] };
+    }
+    order.push('usda');
+    if (order.filter((x) => x === 'usda').length === 1) releaseCorrections();
+    return { ok: true, json: async () => ({ foods: s.includes('Branded') ? [] : rawBanana() }) };
+  };
+  const res = { headers: {}, setHeader(k, v) { this.headers[k] = v; }, status(c) { this.code = c; return this; }, json(b) { this.body = b; return this; } };
+  await withFetch(impl, async () => {
+    await require('./api/usda-search.js')({ method: 'GET', headers: { authorization: 'Bearer tok' }, query: { q: 'banana' } }, res);
+  });
+  assert.strictEqual(res.code, 200);
+  assert.ok(order.indexOf('usda') < order.indexOf('corrections:end'),
+    'USDA fetches start before the correction lookup has finished');
+  assert.strictEqual(res.headers['Cache-Control'], 'private, max-age=60', 'no memory → plain cacheable response');
+  assert.ok(res.body.foods.some((f) => f.fdcId === 501));
+});

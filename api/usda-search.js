@@ -103,6 +103,45 @@ function trimFood(f) {
   };
 }
 
+/* ── Warm-instance USDA pool cache ────────────────────────────────────────────
+ * One search fans out to 3–5 USDA calls, and USDA's food data changes on a
+ * release cadence, not per request — so a trimmed pool fetched a few minutes ago
+ * is the same pool. Each (query, dataType, pageSize, requireAll) fetch is
+ * memoized for the life of the warm function instance:
+ *   • the PROMISE is cached, so concurrent identical fetches share one upstream
+ *     call (typing "chick" → "chicken" by two users costs one USDA request);
+ *   • a failed fetch is evicted immediately — errors are never cached;
+ *   • readers get CLONES, so nothing downstream can mutate the cached pool;
+ *   • bounded by entry count + TTL (oldest-first eviction), memory-only — it
+ *     holds public USDA data only, never anything user-specific, and vanishes
+ *     with the instance. A durable cross-instance cache is a separate decision.
+ * Ranking is untouched: the ranker receives exactly the pools USDA returned. */
+const POOL_CACHE_TTL_MS = 10 * 60 * 1000;
+const POOL_CACHE_MAX    = 150;
+const poolCache = new Map();   // key → { at, promise }
+
+function clonePool(foods) {
+  return foods.map(function (f) {
+    return Object.assign({}, f, { nutrients: Object.assign({}, f.nutrients) });
+  });
+}
+
+// `load` performs the real upstream fetch and resolves to a trimmed pool.
+function cachedPool(key, load) {
+  const now = Date.now();
+  const hit = poolCache.get(key);
+  if (hit && now - hit.at < POOL_CACHE_TTL_MS) return hit.promise.then(clonePool);
+  if (hit) poolCache.delete(key);
+  const promise = Promise.resolve().then(load);
+  poolCache.set(key, { at: now, promise: promise });
+  promise.catch(function () {
+    const cur = poolCache.get(key);
+    if (cur && cur.promise === promise) poolCache.delete(key);
+  });
+  while (poolCache.size > POOL_CACHE_MAX) poolCache.delete(poolCache.keys().next().value);
+  return promise.then(clonePool);
+}
+
 // Merge a supplemental pool into the primary one (dedupe by fdcId).
 function mergeGeneric(primary, supplement) {
   const seen = new Set(primary.map(function (f) { return f.fdcId; }));
@@ -143,11 +182,14 @@ async function searchFoods(q, _retried, opts) {
         `&pageSize=${pageSize}&pageNumber=1` +
         (requireAll ? '&requireAllWords=true' : '');
     }
-    async function fetchType(query, dataType, pageSize, requireAll) {
-      const r = await fetch(typeUrl(query, dataType, pageSize, requireAll));
-      if (!r.ok) { const e = new Error('upstream'); e.status = r.status; throw e; }
-      const d = await r.json();
-      return Array.isArray(d.foods) ? d.foods.map(trimFood) : [];
+    function fetchType(query, dataType, pageSize, requireAll) {
+      const key = [dataType, pageSize, requireAll ? 1 : 0, query].join('|');
+      return cachedPool(key, async function () {
+        const r = await fetch(typeUrl(query, dataType, pageSize, requireAll));
+        if (!r.ok) { const e = new Error('upstream'); e.status = r.status; throw e; }
+        const d = await r.json();
+        return Array.isArray(d.foods) ? d.foods.map(trimFood) : [];
+      });
     }
 
     // Branded pulls a WIDE pool (USDA max 200). USDA's own relevance buries the
@@ -250,7 +292,11 @@ async function searchFoods(q, _retried, opts) {
       }
     }
 
-    const body = buildResponse(effQuery, branded, generic, opts);
+    // `opts.signals` may be an array OR a promise of one: the route starts the
+    // correction-memory lookup alongside the USDA fetches instead of ahead of
+    // them, and the signals are only needed here, at ranking time.
+    const signals = (opts && opts.signals) ? await opts.signals : undefined;
+    const body = buildResponse(effQuery, branded, generic, signals ? { signals: signals } : undefined);
 
     if (eq.expanded) body.expandedQuery = effQuery;   // transparency for the client/debugging
     if (USING_DEMO) body.warning = 'Using DEMO_KEY (rate-limited, dev only).';
@@ -340,14 +386,18 @@ module.exports = async (req, res) => {
     // options.signals seam and are summed by the shared ranker (food-ranking.js):
     //   • correction memory (Phase 4.2.4) — user-specific, persistent + session;
     //   • meal context (Phase 4.2.6)      — request-scoped meal reasoning.
-    let correctionSignal = null;
-    try { correctionSignal = await buildCorrectionSignal(q, req, token); } catch (e) { correctionSignal = null; }
+    // The correction lookup is a Supabase round-trip that only matters at
+    // ranking time, so it runs CONCURRENTLY with the USDA fetches rather than
+    // ahead of them. The promise never rejects (failure → no signal).
     let mealSignal = null;
     try { mealSignal = buildMealSignal(req); } catch (e) { mealSignal = null; }
-    const signals = [correctionSignal, mealSignal].filter(Boolean);
-    const contextual = signals.length > 0;
+    const signalsPromise = Promise.resolve()
+      .then(function () { return buildCorrectionSignal(q, req, token); })
+      .catch(function () { return null; })
+      .then(function (correctionSignal) { return [correctionSignal, mealSignal].filter(Boolean); });
 
-    const out = await searchFoods(q, undefined, contextual ? { signals } : undefined);
+    const out = await searchFoods(q, undefined, { signals: signalsPromise });
+    const contextual = (await signalsPromise).length > 0;
     if (out.status === 200) {
       // A context-influenced response is request-specific (user corrections and/or
       // this meal), so it must never be served from a URL-keyed cache to a later,
@@ -367,6 +417,7 @@ module.exports = async (req, res) => {
 // entries now delegate to food-ranking.js (one source of truth).
 module.exports._internals = {
   trimFood, buildResponse, mergeGeneric, searchFoods,
+  cachedPool, poolCache, POOL_CACHE_TTL_MS, POOL_CACHE_MAX,
   loadPersistentCorrections, buildCorrectionSignal, buildMealSignal,
   expandQuery: ranking.expandQuery,
   supplementFor: ranking.supplementFor,
