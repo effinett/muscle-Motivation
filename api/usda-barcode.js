@@ -11,6 +11,9 @@
 // scanners hand back 12-digit UPC-A / 13-digit EAN-13, so we query a few
 // zero-pad variants and accept only exact matches (leading zeros ignored).
 //
+// When USDA has no product for the code, Open Food Facts is tried and its food
+// is returned flagged `unverified` (see the fallback section below).
+//
 // Env: USDA_API_KEY (DEMO_KEY fallback for local/dev only) + SUPABASE_URL +
 // SUPABASE_ANON_KEY — same as the other USDA routes. Key never reaches the browser.
 
@@ -78,6 +81,124 @@ function pickBest(matches) {
   return matches[0];
 }
 
+/* ── Open Food Facts fallback (owner-approved 2026-11-11) ─────────────────────
+ * Tried ONLY when USDA has no product for the barcode. Open Food Facts is a
+ * free, crowd-sourced database ("no assurances that the data is accurate"), so
+ * a food from it is returned flagged `unverified` — the client labels it, and
+ * logs it as a manual entry, never as a USDA-verified one.
+ *
+ * Fail closed: anything short of a clean, complete, plausible nutrition panel
+ * is treated as "not found" (the exact outcome before this fallback existed).
+ * A product must have a name, energy and all three macros per 100 g, sane
+ * magnitudes, and energy that roughly agrees with its macros (Atwater) — which
+ * also rejects mis-keyed crowd entries.
+ *
+ * Their terms: a descriptive User-Agent, and product reads are limited to
+ * 15/minute per IP — so results (hits and misses) are memoized per warm
+ * instance, and every failure or timeout is just "not found". Data is ODbL;
+ * the client shows the "Open Food Facts" attribution wherever the food appears. */
+const OFF_ENDPOINT   = 'https://world.openfoodfacts.org/api/v2/product/';
+const OFF_FIELDS     = 'code,product_name,brands,nutriments,serving_size,serving_quantity,serving_quantity_unit';
+const OFF_USER_AGENT = 'MuscleMotivation/1.0 (https://musclemotivation.fit)';
+const OFF_TIMEOUT_MS = 2500;
+const OFF_MEMO_TTL_MS = 60 * 60 * 1000;
+const OFF_MEMO_MAX    = 200;
+const offMemo = new Map();     // gtinKey → { at, food }  (food may be null: a remembered miss)
+
+function offNumber(v) {
+  if (v === null || v === undefined || v === '' || typeof v === 'boolean') return null;
+  const n = +v;
+  return (isFinite(n) && n >= 0) ? n : null;
+}
+function round1(n) { return Math.round(n * 10) / 10; }
+
+// Open Food Facts product → the SAME trimmed shape trimFood returns, plus
+// `source: 'off'` / `unverified: true`. Returns null unless the panel is
+// complete and plausible. Pure.
+function offToFood(product, code) {
+  if (!product || typeof product !== 'object') return null;
+  const name = String(product.product_name || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+  if (!name) return null;
+  const n = (product.nutriments && typeof product.nutriments === 'object') ? product.nutriments : {};
+
+  let kcal = offNumber(n['energy-kcal_100g']);
+  if (kcal === null) {
+    const kj = offNumber(n['energy-kj_100g']) !== null ? offNumber(n['energy-kj_100g']) : offNumber(n['energy_100g']);
+    if (kj !== null) kcal = kj / 4.184;
+  }
+  const protein = offNumber(n['proteins_100g']);
+  const carbs   = offNumber(n['carbohydrates_100g']);
+  const fat     = offNumber(n['fat_100g']);
+  if (kcal === null || protein === null || carbs === null || fat === null) return null;   // incomplete panel
+  if (kcal > 900 || protein > 100 || carbs > 100 || fat > 100 || protein + carbs + fat > 105) return null;
+  const estimate = 4 * protein + 4 * carbs + 9 * fat;
+  if (Math.abs(kcal - estimate) > Math.max(0.25 * Math.max(kcal, estimate), 30)) return null;   // energy disagrees with macros
+
+  const size = offNumber(product.serving_quantity);
+  const unit = String(product.serving_quantity_unit || 'g').toLowerCase();
+  const hasServing = size !== null && size > 0 && size <= 2000 && (unit === 'g' || unit === 'ml');
+  const brand = String(product.brands || '').split(',')[0].replace(/\s+/g, ' ').trim().slice(0, 60);
+  const household = String(product.serving_size || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+
+  return {
+    fdcId: null,                              // not a USDA food — no USDA identity
+    description: name,
+    dataType: 'Open Food Facts',
+    foodCategory: '',
+    brand: brand,
+    gtinUpc: String(code || product.code || '').replace(/\D/g, ''),
+    servingSize: hasServing ? size : null,
+    servingSizeUnit: hasServing ? unit : '',
+    householdServing: hasServing ? household : '',
+    nutrients: {
+      kcal: Math.round(kcal),
+      protein: round1(protein), carbs: round1(carbs), fat: round1(fat),
+      fiber: round1(offNumber(n['fiber_100g']) || 0),
+      sugar: round1(offNumber(n['sugars_100g']) || 0),
+    },
+    group: 'branded',
+    source: 'off',
+    unverified: true,
+  };
+}
+
+// → an unverified food, or null. Never throws.
+async function lookupOpenFoodFacts(code) {
+  const key = gtinKey(code);
+  if (!key) return null;
+  const hit = offMemo.get(key);
+  if (hit && Date.now() - hit.at < OFF_MEMO_TTL_MS) return hit.food ? JSON.parse(JSON.stringify(hit.food)) : null;
+
+  let food = null, settled = false;
+  try {
+    const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, OFF_TIMEOUT_MS);
+    try {
+      const digits = String(code).replace(/\D/g, '');
+      const r = await fetch(OFF_ENDPOINT + encodeURIComponent(digits) + '?fields=' + OFF_FIELDS, {
+        headers: { 'User-Agent': OFF_USER_AGENT, Accept: 'application/json' },
+        signal: ctrl ? ctrl.signal : undefined,
+      });
+      if (r.status === 404) settled = true;                       // a real "no such product"
+      else if (r.ok) {
+        const d = await r.json();
+        settled = true;
+        // Exact-barcode guard, zero-pad insensitive — same rule as the USDA path.
+        if (d && d.status === 1 && d.product && gtinKey(d.code || d.product.code || digits) === key) {
+          food = offToFood(d.product, digits);
+        }
+      }
+    } finally { clearTimeout(timer); }
+  } catch (e) {
+    settled = false;                                              // timeout / network / bad JSON: do not remember
+  }
+  if (settled) {
+    offMemo.set(key, { at: Date.now(), food: food ? JSON.parse(JSON.stringify(food)) : null });   // callers never share the memo's object
+    while (offMemo.size > OFF_MEMO_MAX) offMemo.delete(offMemo.keys().next().value);
+  }
+  return food;
+}
+
 async function lookupBarcode(code) {
   const variants = gtinVariants(code);
   const key = gtinKey(code);
@@ -121,7 +242,8 @@ async function lookupBarcode(code) {
     });
   });
 
-  if (!matches.length) return { status: 200, body: { food: null } };
+  // USDA has no product for this barcode → try Open Food Facts (unverified).
+  if (!matches.length) return { status: 200, body: { food: await lookupOpenFoodFacts(code) } };
 
   const best = pickBest(matches);
   const food = best._trim;
@@ -154,8 +276,11 @@ module.exports = async (req, res) => {
     }
 
     const out = await lookupBarcode(code);
-    // A barcode's product is static — cache found results client-side for a day.
-    if (out.status === 200 && out.body.food) res.setHeader('Cache-Control', 'private, max-age=86400');
+    // A barcode's product is static — cache found results client-side for a day
+    // (an unverified community entry for an hour: those get corrected over time).
+    if (out.status === 200 && out.body.food) {
+      res.setHeader('Cache-Control', 'private, max-age=' + (out.body.food.unverified ? 3600 : 86400));
+    }
     return res.status(out.status).json(out.body);
   } catch (err) {
     console.error('usda-barcode error:', err);
@@ -164,4 +289,5 @@ module.exports = async (req, res) => {
 };
 
 // Exposed for the offline harness only.
-module.exports._internals = { gtinVariants, gtinKey, pickBest, lookupBarcode };
+module.exports._internals = { gtinVariants, gtinKey, pickBest, lookupBarcode,
+  offToFood, lookupOpenFoodFacts, offMemo, OFF_USER_AGENT, OFF_ENDPOINT };
