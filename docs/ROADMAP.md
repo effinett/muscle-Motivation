@@ -1503,8 +1503,10 @@ any of this is pulled ahead of the locked critical path (§13) is Effi's decisio
 - *Shipped 2026-11-11 (owner decision: yes, labeled unverified):* barcode fallback to **Open Food Facts**
   on a clean USDA miss. Fail-closed validation (`offToFood`), "Unverified" label naming the source,
   logged as a manual entry, never ranked into search. Recorded as the one exception in `AGENTS.md` §17.
-  *Open:* **not yet exercised against the live Open Food Facts API** (unreachable from the authoring
-  environment); their terms ask for a contact email in the User-Agent (a site URL is sent today) and
+  *Live check 2026-11-11 (10 real barcodes, ~0.1 s each):* 8 resolved, an incomplete panel and an
+  invalid code were rejected as designed. Crowd data can be wrong (Oreo's serving reads "3g", not ~34 g);
+  the "Unverified" label and the confirm card are the guard.
+  *Open:* their terms ask for a contact email in the User-Agent (a site URL is sent today) and
   limit product reads to 15/minute per IP; the ODbL licence terms have not had a legal review.
 
 **Smarter**
@@ -1521,8 +1523,11 @@ any of this is pulled ahead of the locked critical path (§13) is Effi's decisio
   2026-11-11 (owner-approved):* `nuAiChooseServing` gains the same conversion as a fallback branch (4b);
   a fluid ounce tries its own label, then the conversion, before the legacy "oz" label match. Fixture
   sweep (95 foods x 5 units): 27 probes newly resolved, 8 fl oz probes corrected, 0 others changed.
+  *Live AI check 2026-11-11:* the parser sends "fl oz" intact, and sends millilitres as grams too
+  ("250 ml milk" → grams 250); a stated volume now converts through the food's anchor before that grams
+  value is used (oil and honey were 10–30% off at water density).
   *Open:* hand measures (handful, glass, bowl) in the search box; an unresolved unit still logs the
-  default serving x quantity (flagged) — e.g. "250 ml" of a food with no volume serving.
+  default serving x quantity (flagged).
 
 **Logging UI** *(5.4, with 5.0 gesture polish)*
 - One entry point: a single search field that handles a food name, a sentence (AI Quick Log) and barcode.

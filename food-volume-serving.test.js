@@ -104,3 +104,22 @@ test('the resolver logs ONE serving of the converted total', async () => {
   assert.strictEqual(r.serving_description, '3 tbsp (46 g)');
   assert.strictEqual(core.nuScaleMacros(r.perUnit, r.servings).calories, 28);
 });
+
+test('a volume the parser also sent as grams ("250 ml" → grams 250) converts through the anchor', () => {
+  const sv = choose(milkRaw(), CUP, { quantity: 250, unit: 'ml', grams: 250 });
+  assert.strictEqual(sv.converted, true);
+  assert.strictEqual(sv.grams, 254, '244 g per 240 ml × 250 ml');
+  const oil = { fdcId: 9, description: 'Oil, olive, salad or cooking', dataType: 'SR Legacy',
+    nutrients: { kcal: 884, protein: 0, carbs: 0, fat: 100, fiber: 0, sugar: 0 } };
+  const oilSv = choose(oil, [{ label: '1 tbsp', amount: 1, gramWeight: 13.5 }], { quantity: 30, unit: 'ml', grams: 30 });
+  assert.strictEqual(oilSv.grams, 27, 'oil is lighter than water: 13.5 g per 15 ml × 30 ml');
+});
+
+test('no volume anchor → the stated grams still apply, exactly as before', () => {
+  const sv = choose(chickenRaw(), [], { quantity: 250, unit: 'ml', grams: 250 });
+  assert.strictEqual(sv.grams, 250);
+  assert.ok(!sv.converted);
+  const weight = choose(milkRaw(), CUP, { quantity: 6, unit: 'oz', grams: 170 });
+  assert.strictEqual(weight.grams, 170, 'a weight unit is never re-routed');
+  assert.ok(!weight.converted);
+});
