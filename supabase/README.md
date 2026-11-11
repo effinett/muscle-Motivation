@@ -5,9 +5,9 @@ customer data, no auth users and no credentials.
 
 | Path | What it is |
 |---|---|
-| `schema/current-schema.sql` | **Authoritative rebuild file.** Complete current structure of schema `public` (25 tables, constraints, indexes, row-level security, 59 policies, functions, triggers, grants, comments) plus the `auth.users` sign-up trigger and the `ensure_rls` event trigger. Schema only — no rows. |
+| `schema/current-schema.sql` | **Authoritative rebuild file.** Complete current structure of schema `public` (26 tables, constraints, indexes, row-level security, 60 policies, functions, triggers, grants, comments) plus the `auth.users` sign-up trigger and the `ensure_rls` event trigger. Schema only — no rows. |
 | `schema/baseline-pre-2026-06-09.sql` | Objects created before migration tracking began (`profiles`, `handle_new_user` + `on_auth_user_created`, `rls_auto_enable` + `ensure_rls`). Only needed to replay history. |
-| `migrations/` | The 68 migrations applied to production (as of 2026-10-05), with their original version numbers. History, not a rebuild script — see below. |
+| `migrations/` | The 69 migrations applied to production (as of 2026-11-11), with their original version numbers. History, not a rebuild script — see below. |
 
 ## Rebuild the structure on a new Supabase project
 
@@ -60,3 +60,7 @@ Both rebuild paths were applied to isolated throwaway Postgres 17 databases and 
 with production by a catalog fingerprint covering tables, columns, constraints, indexes,
 functions, triggers, policies, RLS flags, table/column/function grants and event triggers:
 identical in every category.
+
+**Since that verification (not re-fingerprinted):** `food_search_events`
+(`20261111111733`, 2026-11-11) was added to `schema/current-schema.sql` by hand, with the
+policy expression, index definition and comments copied from the live catalog.

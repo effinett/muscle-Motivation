@@ -794,6 +794,7 @@ function nuRenderOwnResults(q) {
 function nuPickOwn(i) {
   var item = nu_ownMatches[i];
   if (!item) return;
+  nuPickTelemetry(i, 'own');
   if (nu_usdaAbort) { try { nu_usdaAbort.abort(); } catch (e) {} nu_usdaAbort = null; }
   if (nu_usdaTimer) { clearTimeout(nu_usdaTimer); nu_usdaTimer = null; }
   var raw = item.raw_food;
@@ -1049,6 +1050,7 @@ function nuUsdaSetStatus(msg, kind) {
 function nuUsdaInputChanged() {
   var q = document.getElementById('nuUsdaInput').value.trim();
   if (nu_usdaTimer) clearTimeout(nu_usdaTimer);
+  nuCancelZeroTelemetry();        // the text changed — the last empty result was not final
   nu_searchQty = nuReadSearchQty(q);
   nuRenderQtyHint();
   // Own foods match on the food words only ("2 eggs" → "eggs"); local + instant.
@@ -1065,6 +1067,41 @@ function nuUsdaInputChanged() {
   // A query already answered this session renders at once; a new one waits out
   // the debounce so typing doesn't fan out a request per keystroke.
   nu_usdaTimer = setTimeout(function () { nuRunUsdaSearch(q); }, nuQueryCacheGet(q) ? 0 : 300);
+}
+
+/* ── Search telemetry hooks (roadmap 4.5.17) ─────────────────────────────────
+ * Two anonymous signals through FoodTelemetry (food-telemetry.js): a search
+ * that settled on zero results, and which result position was picked. Never
+ * awaited; a page without the module emits nothing. */
+var NU_ZERO_SETTLE_MS = 2000;  // a zero-result counts only if the text stops changing
+var nu_zeroTimer = null;
+
+function nuTelemetry(kind, fields) {
+  try {
+    if (typeof FoodTelemetry !== 'undefined') FoodTelemetry.emit(kind, fields);
+  } catch (e) { /* telemetry can never break logging */ }
+}
+function nuCancelZeroTelemetry() {
+  if (nu_zeroTimer) { clearTimeout(nu_zeroTimer); nu_zeroTimer = null; }
+}
+// Half-typed words ("chic") return nothing all the time; only a query the user
+// left standing is evidence of a real gap.
+function nuScheduleZeroTelemetry(q) {
+  nuCancelZeroTelemetry();
+  nu_zeroTimer = setTimeout(function () {
+    nu_zeroTimer = null;
+    nuTelemetry('zero_result', { query: q });
+  }, NU_ZERO_SETTLE_MS);
+}
+function nuSearchText() {
+  var input = document.getElementById('nuUsdaInput');
+  return input ? String(input.value || '').trim() : '';
+}
+function nuPickTelemetry(rank, source) {
+  nuTelemetry('pick', {
+    query: nuSearchText(), resultCount: Math.min(nu_usdaResults.length, 200),
+    rank: rank, source: source, via: nu_quickSilent ? 'add' : 'row',
+  });
 }
 
 async function nuRunUsdaSearch(q) {
@@ -1092,6 +1129,7 @@ async function nuRunUsdaSearch(q) {
     if (!results.length) {
       settle(true);
       nuUsdaSetStatus('No foods found for “' + q + '”.', 'empty');
+      nuScheduleZeroTelemetry(q);
       return;
     }
     nu_usdaResults = results;
@@ -1328,6 +1366,7 @@ function nuApplySearchQuantity(f) {
 function nuPickUsda(i) {
   var f = nu_usdaResults[i];
   if (!f) return;
+  nuPickTelemetry(i, f.group === 'branded' ? 'branded' : 'generic');
   nuOpenUsdaCard(f, nu_searchQty);
 }
 
@@ -1661,6 +1700,7 @@ var nu_editSource = null;  // USDA identity of the log being edited — favorite
 // Shared modal reset: clear carried state and hide every sub-panel. Used by
 // BOTH modal entry points (nuOpenModal, nuOpenModalWithFood) so they can't drift.
 function nuResetModalState() {
+  nuCancelZeroTelemetry();
   nu_searchQty = null; nu_cardQty = null;
   nu_pendingSource = null;
   nu_editSource = null;
