@@ -1077,7 +1077,7 @@
   var pendingSaveMeal = null; // meal key ('breakfast'…) being saved
 
   async function loadMealChips() {
-    savedMeals = await nuFetchSavedMeals();
+    savedMeals = await nuLoadSavedMeals(true);   // shared cache — food search lists the same meals
     var chipItems = savedMeals.map(function (m) {
       return { name: m.name, calories: nuSavedMealTotals(m.items).calories };
     });
@@ -1085,8 +1085,16 @@
       'No saved meals yet — log some foods, then tap “Save meal”.');
   }
 
-  function pickMeal(i) {
-    var m = savedMeals[i];
+  function pickMeal(i) { openMealSheet(savedMeals[i]); }
+
+  // A saved meal picked inside food search: close search, open the SAME confirm
+  // sheet a chip opens, on the meal the user was adding to.
+  window.onPickSavedMeal = function (m, ctx) {
+    nuCloseModal();
+    openMealSheet(m, ctx && ctx.meal);
+  };
+
+  function openMealSheet(m, slot) {
     if (!m || !(m.items || []).length) return;
     sheetMeal = m;
     document.getElementById('mealSheetTitle').textContent = m.name;
@@ -1112,7 +1120,7 @@
     document.getElementById('mealSheetTotals').textContent =
       m.items.length + (m.items.length === 1 ? ' food · ' : ' foods · ') +
       nuRound(tot.calories) + ' kcal · ' + nuRound(tot.protein) + ' g protein';
-    document.getElementById('mealSheetSlot').value = suggestMeal();
+    document.getElementById('mealSheetSlot').value = (slot && NU_MEAL_LABELS[slot]) ? slot : suggestMeal();
     MMSheet.open(document.getElementById('mealSheet'), { onClose: function () { sheetMeal = null; } });
   }
 

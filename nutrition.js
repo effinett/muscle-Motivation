@@ -696,6 +696,58 @@ function nuOwnShownFdcIds() {
   return ids;
 }
 
+/* ── Saved meals inside search (roadmap 5.4.3 groundwork) ─────────────────────
+ * Typing a saved meal's name lists it above "Your foods". Picking it hands the
+ * meal to the page (window.onPickSavedMeal), which opens the SAME confirm sheet
+ * a saved-meal chip opens — nothing is logged from the search row itself, and
+ * a page without that hook simply shows no meal rows. One cache serves both the
+ * page chips and search, so they can never disagree. */
+var NU_MEAL_LIMIT_TYPING = 2;
+var nu_savedMeals = null;      // saved_meals rows, newest first; null until loaded
+var nu_savedMealsLoading = null;
+var nu_mealMatches = [];       // rows currently rendered, index-aligned with nuPickSavedMeal
+
+function nuLoadSavedMeals(force) {
+  if (nu_savedMeals && !force) return Promise.resolve(nu_savedMeals);
+  if (nu_savedMealsLoading) return nu_savedMealsLoading;
+  nu_savedMealsLoading = nuFetchSavedMeals().then(function (rows) {
+    nu_savedMeals = rows || [];
+    return nu_savedMeals;
+  });
+  nu_savedMealsLoading.then(function () { nu_savedMealsLoading = null; }, function () { nu_savedMealsLoading = null; });
+  return nu_savedMealsLoading;
+}
+
+function nuSavedMealRowsHtml(query) {
+  nu_mealMatches = [];
+  var fid = document.getElementById('nuFoodId');
+  if (!query || typeof window.onPickSavedMeal !== 'function' || !nu_savedMeals || (fid && fid.value)) return '';
+  nu_mealMatches = nuMatchOwnFoods(query, nu_savedMeals.filter(function (m) { return (m.items || []).length; }), NU_MEAL_LIMIT_TYPING);
+  if (!nu_mealMatches.length) return '';
+  return '<div class="nu-usda-group">Saved meals</div>' +
+    nu_mealMatches.map(function (m, i) {
+      var n = m.items.length;
+      return '<div class="nu-usda-row">' +
+          '<button type="button" class="nu-usda-open" onclick="nuPickSavedMeal(' + i + ')" title="' + nuEsc(m.name) + '">' +
+            '<span class="nu-usda-main">' +
+              '<span class="nu-usda-name">' + nuEsc(m.name) + '</span>' +
+              '<span class="nu-usda-sub">Saved meal · ' + n + (n === 1 ? ' food' : ' foods') + '</span>' +
+            '</span>' +
+            '<span class="nu-usda-cals">' + nuRound(nuSavedMealTotals(m.items).calories) + '<small>kcal</small></span>' +
+          '</button>' +
+        '</div>';
+    }).join('');
+}
+
+function nuPickSavedMeal(i) {
+  var m = nu_mealMatches[i];
+  if (!m || typeof window.onPickSavedMeal !== 'function') return;
+  if (nu_usdaAbort) { try { nu_usdaAbort.abort(); } catch (e) {} nu_usdaAbort = null; }
+  if (nu_usdaTimer) { clearTimeout(nu_usdaTimer); nu_usdaTimer = null; }
+  var mealEl = document.getElementById('nuMeal');
+  window.onPickSavedMeal(m, { meal: mealEl ? mealEl.value : null });
+}
+
 function nuRenderOwnResults(q) {
   var el = document.getElementById('nuOwnResults');
   if (!el) return;
@@ -710,7 +762,13 @@ function nuRenderOwnResults(q) {
   var query = String(q || '').trim();
   var before = Object.keys(nuOwnShownFdcIds()).join(',');
   nu_ownMatches = nuMatchOwnFoods(query, nu_ownFoods, query ? NU_OWN_LIMIT_TYPING : NU_OWN_LIMIT_IDLE);
-  el.innerHTML = !nu_ownMatches.length ? '' :
+  if (query && !nu_savedMeals && typeof window.onPickSavedMeal === 'function') {
+    nuLoadSavedMeals().then(function () {             // first search of the session: fill in when ready
+      var input = document.getElementById('nuUsdaInput');
+      if (input && nuOwnQueryText(input.value).trim() === query) nuRenderOwnResults(query);
+    });
+  }
+  el.innerHTML = nuSavedMealRowsHtml(query) + (!nu_ownMatches.length ? '' :
     '<div class="nu-usda-group">Your foods</div>' +
     nu_ownMatches.map(function (it, i) {
       var dm = FoodDisplay.buildFoodDisplay(it);
@@ -725,7 +783,7 @@ function nuRenderOwnResults(q) {
           '</button>' +
           nuAddButton('own', i, dm.fullName) +
         '</div>';
-    }).join('');
+    }).join(''));
   // Keep the database list in step when the set of foods shown here changed.
   if (nu_usdaResults.length && Object.keys(nuOwnShownFdcIds()).join(',') !== before) nuRenderUsdaResults();
 }
