@@ -511,6 +511,73 @@ function nuRenderSearchList(q) {
 
 // Chip labels use the shared FoodDisplay.fdCompactLabel (food-display.js).
 
+/* ── Inline icons ─────────────────────────────────────────────────────────────
+ * Stroke icons drawn inline (currentColor), so injected markup never waits on
+ * an icon library and never falls back to an emoji (design system §13: no
+ * emojis in product UI). Same visual weight as the Lucide set used elsewhere. */
+function nuIcon(paths, size) {
+  var n = size || 18;
+  return '<svg class="nu-ico" width="' + n + '" height="' + n + '" viewBox="0 0 24 24" fill="none" ' +
+    'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
+    'aria-hidden="true" focusable="false">' + paths + '</svg>';
+}
+var NU_ICON_PLUS    = '<path d="M12 5v14"/><path d="M5 12h14"/>';
+var NU_ICON_CLOSE   = '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>';
+var NU_ICON_SEARCH  = '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>';
+var NU_ICON_BARCODE = '<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/>' +
+  '<path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/>' +
+  '<path d="M8 7v10"/><path d="M12 7v10"/><path d="M16 7v10"/>';
+
+/* ── One-tap add (roadmap 5.4 logging UI) ─────────────────────────────────────
+ * The + on a result row logs that food's default serving without stopping on
+ * the card. It is NOT a second save path: it opens the same card the row tap
+ * opens (so serving choice, typed amount and provenance are computed by the
+ * one existing code path) and then calls the same nuSave. Rules:
+ *   • a generic food waits for its real household serving first, so one tap
+ *     logs what the row shows (1 large egg), never a silent 100 g fallback;
+ *   • if the user typed an amount with a unit and this food cannot express it,
+ *     nothing is logged — the card stays open so they choose a serving;
+ *   • hidden while EDITING an existing entry (a tap there would overwrite it). */
+var nu_quickAdding = false;
+
+function nuAddButton(kind, i, fullName) {
+  var fid = document.getElementById('nuFoodId');
+  if (fid && fid.value) return '';                 // editing → no one-tap add
+  return '<button type="button" class="nu-usda-add" onclick="nuQuickAdd(\'' + kind + '\',' + i + ')"' +
+    ' aria-label="Add ' + nuEsc(fullName) + '" title="Add">' + nuIcon(NU_ICON_PLUS, 20) + '</button>';
+}
+
+async function nuQuickAdd(kind, i) {
+  if (nu_quickAdding) return;
+  var own = (kind === 'own');
+  var item = own ? nu_ownMatches[i] : nu_usdaResults[i];
+  if (!item) return;
+  nu_quickAdding = true;
+  try {
+    var fdcId = own ? (item.raw_food && item.raw_food.fdcId) : item.usda_fdc_id;
+    var hasServing = own ? !!(item.raw_food && item.raw_food.servingSize) : !!item.has_serving;
+    if (fdcId != null && !hasServing && !nu_detailCache[fdcId] &&
+        !(own && item.raw_food.portions && item.raw_food.portions.length)) {
+      try { await nuFetchUsdaDetail(fdcId); } catch (e) { /* card falls back to its base options */ }
+    }
+    var typed = nu_searchQty;
+    if (own) nuPickOwn(i); else nuPickUsda(i);
+    // A typed unit/weight that could not be applied must never log silently as
+    // "1 default serving" — leave the card open for the user to choose.
+    if (typed && (typed.unit || typed.grams) && nu_pendingSource && !(nu_cardQty && nu_cardQty.applied)) {
+      showToast('Pick a serving for ' + nuQtyLabel(typed) + '.');
+      return;
+    }
+    if (typed && typed.unit && !nu_pendingSource) {   // custom food + a unit it has no data for
+      showToast('Pick an amount for this food.');
+      return;
+    }
+    await nuSave();
+  } finally {
+    nu_quickAdding = false;
+  }
+}
+
 /* ── Your foods inside search (roadmap 5.4.1 / 5.4.2 refinement) ─────────────
  * Favorites + recently logged foods, matched locally as the user types and
  * shown above the database results — no request, so they appear instantly.
@@ -605,13 +672,16 @@ function nuRenderOwnResults(q) {
     nu_ownMatches.map(function (it, i) {
       var dm = FoodDisplay.buildFoodDisplay(it);
       var meta = [it.own === 'favorite' ? 'Favorite' : 'Recent'].concat(dm.secondaryParts.map(nuEsc));
-      return '<button type="button" class="nu-usda-row" onclick="nuPickOwn(' + i + ')" title="' + nuEsc(dm.fullName) + '">' +
-          '<span class="nu-usda-main">' +
-            '<span class="nu-usda-name" aria-label="' + nuEsc(dm.fullName) + '">' + nuEsc(dm.name) + '</span>' +
-            '<span class="nu-usda-sub">' + meta.join(' · ') + '</span>' +
-          '</span>' +
-          '<span class="nu-usda-cals">' + nuRound(it.calories) + '<small>kcal</small></span>' +
-        '</button>';
+      return '<div class="nu-usda-row">' +
+          '<button type="button" class="nu-usda-open" onclick="nuPickOwn(' + i + ')" title="' + nuEsc(dm.fullName) + '">' +
+            '<span class="nu-usda-main">' +
+              '<span class="nu-usda-name" aria-label="' + nuEsc(dm.fullName) + '">' + nuEsc(dm.name) + '</span>' +
+              '<span class="nu-usda-sub">' + meta.join(' · ') + '</span>' +
+            '</span>' +
+            '<span class="nu-usda-cals">' + nuRound(it.calories) + '<small>kcal</small></span>' +
+          '</button>' +
+          nuAddButton('own', i, dm.fullName) +
+        '</div>';
     }).join('');
   // Keep the database list in step when the set of foods shown here changed.
   if (nu_usdaResults.length && Object.keys(nuOwnShownFdcIds()).join(',') !== before) nuRenderUsdaResults();
@@ -963,14 +1033,17 @@ function nuRenderUsdaResults() {
     meta.push(nuEsc(dm.serving));
     var sub = '<span class="nu-verified-sm">USDA</span> · ' + meta.join(' · ');
     return header +
-      '<button type="button" class="nu-usda-row" onclick="nuPickUsda(' + i + ')" title="' + nuEsc(dm.fullName) + '">' +
-        '<span class="nu-usda-main">' +
-          '<span class="nu-usda-name" aria-label="' + nuEsc(dm.fullName) + '">' + nuEsc(dm.name) + '</span>' +
-          '<span class="nu-usda-sub">' + sub + '</span>' +
-          '<span class="nu-usda-macros">' + nuEsc(dm.macroSummary) + '</span>' +
-        '</span>' +
-        '<span class="nu-usda-cals">' + dm.calories + '<small>kcal</small></span>' +
-      '</button>';
+      '<div class="nu-usda-row">' +
+        '<button type="button" class="nu-usda-open" onclick="nuPickUsda(' + i + ')" title="' + nuEsc(dm.fullName) + '">' +
+          '<span class="nu-usda-main">' +
+            '<span class="nu-usda-name" aria-label="' + nuEsc(dm.fullName) + '">' + nuEsc(dm.name) + '</span>' +
+            '<span class="nu-usda-sub">' + sub + '</span>' +
+            '<span class="nu-usda-macros">' + nuEsc(dm.macroSummary) + '</span>' +
+          '</span>' +
+          '<span class="nu-usda-cals">' + dm.calories + '<small>kcal</small></span>' +
+        '</button>' +
+        nuAddButton('usda', i, dm.fullName) +
+      '</div>';
   }).join('');
 }
 
@@ -1937,13 +2010,13 @@ function nuModalMarkup() {
         '<button class="nu-back" id="nuBackBtn" style="display:none;" onclick="nuModalBack()" title="Back">←</button>' +
         '<div class="modal-title" id="nuModalTitle">Add Food</div>' +
         '<button class="nu-fav" id="nuFavBtn" style="display:none;" onclick="nuToggleFavorite()" title="Save to favorites">☆</button>' +
-        '<button class="modal-close" onclick="nuCloseModal()" aria-label="Close">✕</button>' +
+        '<button class="modal-close" onclick="nuCloseModal()" aria-label="Close">' + nuIcon(NU_ICON_CLOSE) + '</button>' +
       '</div>' +
       '<div id="nuAddView">' +
         '<input type="hidden" id="nuFoodId">' +
         // manual/edit only — jump (back) to the food-database search
         '<button type="button" class="nu-dbsearch" id="nuDbSearchBtn" onclick="nuOpenUsda()">' +
-          '<span class="nu-dbsearch-ico">🔍</span>' +
+          '<span class="nu-dbsearch-ico">' + nuIcon(NU_ICON_SEARCH, 16) + '</span>' +
           '<span>Search food database</span>' +
         '</button>' +
         '<div class="nu-recent" id="nuRecentWrap" style="display:none;">' +
@@ -2032,11 +2105,10 @@ function nuModalMarkup() {
         '<div class="nu-saved-list" id="nuSearchList"></div>' +
       '</div>' +
       '<div id="nuUsdaView" style="display:none;">' +
-        '<input type="text" class="nu-search-input" id="nuUsdaInput" maxlength="80" autocomplete="off" placeholder="Search foods (e.g. chicken breast)…" oninput="nuUsdaInputChanged()">' +
-        '<button type="button" class="nu-dbsearch nu-scan-btn" onclick="nuOpenScanner()">' +
-          '<span class="nu-dbsearch-ico">📷</span>' +
-          '<span>Scan a barcode</span>' +
-        '</button>' +
+        '<div class="nu-search-wrap">' +
+          '<input type="text" class="nu-search-input" id="nuUsdaInput" maxlength="80" autocomplete="off" placeholder="Search foods (e.g. 2 eggs, 200g chicken)…" oninput="nuUsdaInputChanged()">' +
+          '<button type="button" class="nu-scan-ico" onclick="nuOpenScanner()" aria-label="Scan a barcode" title="Scan a barcode">' + nuIcon(NU_ICON_BARCODE, 20) + '</button>' +
+        '</div>' +
         '<div class="nu-qty-hint" id="nuQtyHint" style="display:none;"></div>' +
         '<div class="nu-own-list" id="nuOwnResults"></div>' +
         '<div class="nu-usda-status" id="nuUsdaStatus"></div>' +
