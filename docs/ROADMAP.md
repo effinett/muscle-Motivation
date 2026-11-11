@@ -1487,6 +1487,8 @@ any of this is pulled ahead of the locked critical path (§13) is Effi's decisio
   result. *Shipped 2026-11-10 for favorites and recently logged foods* (shared `nuMatchOwnFoods` in
   `food-core.js`; local, no request). *Open:* saved meals in the same list.
 - **5.4.12:** quantity typed in the search box ("200g chicken", "2 eggs") pre-fills the serving.
+  *Shipped 2026-11-10* (shared `parseQueryQuantity` in `food-ranking.js`; serving choice reuses
+  `nuAiChooseServing`; a unit the food cannot express is never guessed).
 
 **Logging UI** *(5.4, with 5.0 gesture polish)*
 - One entry point: a single search field that handles a food name, a sentence (AI Quick Log) and barcode.
