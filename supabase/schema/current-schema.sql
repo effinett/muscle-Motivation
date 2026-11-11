@@ -238,6 +238,17 @@ CREATE TABLE public."food_logs" (
   "serving_unit" text,
   "gtin_upc" text
 );
+CREATE TABLE public."food_search_events" (
+  "id" uuid DEFAULT gen_random_uuid() NOT NULL,
+  "event" text NOT NULL,
+  "query" text NOT NULL,
+  "result_count" smallint DEFAULT 0 NOT NULL,
+  "picked_rank" smallint,
+  "picked_source" text,
+  "via" text,
+  "schema_version" integer DEFAULT 1 NOT NULL,
+  "created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
 CREATE TABLE public."foods" (
   "id" uuid DEFAULT gen_random_uuid() NOT NULL,
   "user_id" uuid NOT NULL,
@@ -508,6 +519,7 @@ ALTER TABLE public."food_corrections" ADD CONSTRAINT "food_corrections_user_quer
 ALTER TABLE public."food_corrections" ADD CONSTRAINT "food_corrections_status_check" CHECK ((status = ANY (ARRAY['active'::text, 'superseded'::text, 'deactivated'::text])));
 ALTER TABLE public."food_logs" ADD CONSTRAINT "food_logs_pkey" PRIMARY KEY (id);
 ALTER TABLE public."food_logs" ADD CONSTRAINT "food_logs_meal_check" CHECK ((meal = ANY (ARRAY['breakfast'::text, 'lunch'::text, 'dinner'::text, 'snack'::text])));
+ALTER TABLE public."food_search_events" ADD CONSTRAINT "food_search_events_pkey" PRIMARY KEY (id);
 ALTER TABLE public."foods" ADD CONSTRAINT "foods_pkey" PRIMARY KEY (id);
 ALTER TABLE public."funnel_events" ADD CONSTRAINT "funnel_events_pkey" PRIMARY KEY (id);
 ALTER TABLE public."leads" ADD CONSTRAINT "leads_pkey" PRIMARY KEY (id);
@@ -571,6 +583,7 @@ CREATE INDEX food_corrections_user_intent_idx ON public.food_corrections USING b
 CREATE INDEX food_corrections_user_normq_idx ON public.food_corrections USING btree (user_id, norm_query) WHERE (status = 'active'::text);
 CREATE INDEX food_logs_user_date_idx ON public.food_logs USING btree (user_id, date);
 CREATE INDEX food_logs_user_fdc_idx ON public.food_logs USING btree (user_id, usda_fdc_id) WHERE (usda_fdc_id IS NOT NULL);
+CREATE INDEX food_search_events_event_created_idx ON public.food_search_events USING btree (event, created_at DESC);
 CREATE UNIQUE INDEX foods_user_name_uidx ON public.foods USING btree (user_id, name);
 CREATE UNIQUE INDEX foods_user_source_fdc_uidx ON public.foods USING btree (user_id, usda_fdc_id) WHERE ((source = 'usda'::text) AND (usda_fdc_id IS NOT NULL));
 CREATE INDEX funnel_events_event_created_idx ON public.funnel_events USING btree (event, created_at DESC);
@@ -654,6 +667,16 @@ REVOKE ALL ON TABLE public."food_logs" FROM PUBLIC, anon, authenticated, service
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public."food_logs" TO "anon";
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public."food_logs" TO "authenticated";
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public."food_logs" TO "service_role";
+ALTER TABLE public."food_search_events" ENABLE ROW LEVEL SECURITY;
+COMMENT ON TABLE public."food_search_events" IS 'Roadmap 4.5.17. Append-only anonymous food-search telemetry: zero-result searches and the result position picked. Contains NO user id by construction. Write-only from clients: INSERT policy only, no SELECT policy. Retention intent 180 days, no automatic purge.';
+COMMENT ON COLUMN public."food_search_events"."query" IS 'Search text as typed, lowercased and whitespace-collapsed, 2-80 characters. The client never sends text containing @ or a run of 7+ digits.';
+COMMENT ON COLUMN public."food_search_events"."picked_rank" IS '0-based position of the picked row within its list (database results or the user''s own foods). NULL for zero_result.';
+COMMENT ON COLUMN public."food_search_events"."picked_source" IS 'Which list the pick came from: generic | branded | own. NULL for zero_result.';
+COMMENT ON COLUMN public."food_search_events"."via" IS 'row = the food card was opened; add = one-tap add. NULL for zero_result.';
+REVOKE ALL ON TABLE public."food_search_events" FROM PUBLIC, anon, authenticated, service_role;
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public."food_search_events" TO "anon";
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public."food_search_events" TO "authenticated";
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public."food_search_events" TO "service_role";
 ALTER TABLE public."foods" ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public."foods" FROM PUBLIC, anon, authenticated, service_role;
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public."foods" TO "anon";
@@ -801,6 +824,8 @@ CREATE POLICY "Users select own food logs" ON public."food_logs" AS PERMISSIVE F
 CREATE POLICY "Users update own food logs" ON public."food_logs" AS PERMISSIVE FOR UPDATE TO public
   USING ((auth.uid() = user_id))
   WITH CHECK ((auth.uid() = user_id));
+CREATE POLICY "food_search_events_insert" ON public."food_search_events" AS PERMISSIVE FOR INSERT TO "authenticated"
+  WITH CHECK (((schema_version = 1) AND ((char_length(query) >= 2) AND (char_length(query) <= 80)) AND (((event = 'zero_result'::text) AND (result_count = 0) AND (picked_rank IS NULL) AND (picked_source IS NULL) AND (via IS NULL)) OR ((event = 'pick'::text) AND ((result_count >= 0) AND (result_count <= 200)) AND ((picked_rank >= 0) AND (picked_rank <= 200)) AND (picked_source = ANY (ARRAY['generic'::text, 'branded'::text, 'own'::text])) AND (via = ANY (ARRAY['row'::text, 'add'::text]))))));
 CREATE POLICY "Users delete own foods" ON public."foods" AS PERMISSIVE FOR DELETE TO public
   USING ((auth.uid() = user_id));
 CREATE POLICY "Users insert own foods" ON public."foods" AS PERMISSIVE FOR INSERT TO public

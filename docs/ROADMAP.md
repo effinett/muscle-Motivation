@@ -1478,7 +1478,10 @@ any of this is pulled ahead of the locked critical path (§13) is Effi's decisio
   SR Legacy only, which is the structural cause of the composed-dish gap. Verified USDA data, so §2.4 holds.
   Requires live-pool validation and new benchmark coverage before it ships.
 - **4.5.17:** search telemetry — zero-result queries and the rank position the user picked — as the
-  real-world evidence source for certification (needs a table → migration approval, privacy review).
+  real-world evidence source for certification. *Shipped 2026-11-11 (owner-approved):*
+  `public.food_search_events` (migration `20261111111733`; write-only, no user id) + `food-telemetry.js`.
+  A zero-result is recorded only once the text stops changing for two seconds. *Open:* a reader for the
+  data (service-role query or admin view) and the 180-day purge.
 - **4.5.17 Layer B:** live-model AI parse fidelity (already the largest untested surface).
 - *Open — data-source decision under §2.4:* a barcode fallback source; lookup is USDA Branded only.
 
