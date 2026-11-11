@@ -1504,9 +1504,12 @@ any of this is pulled ahead of the locked critical path (§13) is Effi's decisio
   `nuAiChooseServing`; a unit the food cannot express is never guessed).
   *Extended 2026-11-10 for cup-and-spoon users:* fluid ounces parsed; a volume the food has no serving
   for is converted through one of the food's own gram-weighted volume servings (shared `nuVolumeAmount`
-  in `food-core.js`) or, for foods USDA measures in ml, by unit conversion. *Open:* route AI Quick Log
-  through `nuVolumeAmount` (changes shared serving choice — needs benchmark review); hand measures
-  (handful, glass, bowl) in the search box.
+  in `food-core.js`) or, for foods USDA measures in ml, by unit conversion. *AI Quick Log shipped
+  2026-11-11 (owner-approved):* `nuAiChooseServing` gains the same conversion as a fallback branch (4b);
+  a fluid ounce tries its own label, then the conversion, before the legacy "oz" label match. Fixture
+  sweep (95 foods x 5 units): 27 probes newly resolved, 8 fl oz probes corrected, 0 others changed.
+  *Open:* hand measures (handful, glass, bowl) in the search box; an unresolved unit still logs the
+  default serving x quantity (flagged) — e.g. "250 ml" of a food with no volume serving.
 
 **Logging UI** *(5.4, with 5.0 gesture polish)*
 - One entry point: a single search field that handles a food name, a sentence (AI Quick Log) and barcode.
