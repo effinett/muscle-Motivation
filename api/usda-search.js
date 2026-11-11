@@ -42,8 +42,9 @@ const USING_DEMO    = !USDA_API_KEY;
 
 const USDA_ENDPOINT = 'https://api.nal.usda.gov/fdc/v1/foods/search';
 // FNDDS survey foods (composed dishes). Multi-word queries require every word,
-// so "chicken caesar salad" is not flooded with every chicken row.
-const SURVEY_DATA_TYPE = 'Survey (FNDDS)';
+// so "chicken caesar salad" is not flooded with every chicken row. Ranking of
+// these rows (dish vs single food) is owned by food-ranking.js.
+const SURVEY_DATA_TYPE = ranking.SURVEY_DATA_TYPE;
 const SURVEY_PAGE_SIZE = 50;
 
 // USDA nutrient ids we care about (search results key nutrients by id).
