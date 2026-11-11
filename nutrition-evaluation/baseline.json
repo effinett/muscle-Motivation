@@ -1,13 +1,13 @@
 {
   "schemaVersion": "4.2.9-1",
   "caseSetVersion": "4.2.9-1",
-  "sha": "c837e5875c08ff2a9b791c0f213aa43eed10d404",
-  "generatedAt": "2026-08-02T20:49:53.655Z",
-  "totalCases": 288,
+  "sha": "33d90533280274d1b1e7a2b7b0264f4c23ec0fb3",
+  "generatedAt": "2026-11-11T19:21:23.550Z",
+  "totalCases": 294,
   "categoryCounts": {
     "parsing": 19,
     "retrieval": 25,
-    "ranking": 42,
+    "ranking": 48,
     "confidence": 38,
     "clarification": 21,
     "portion": 35,
@@ -435,6 +435,36 @@
       "category": "ranking"
     },
     "rank-tea-cake-identity": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-fndds-caesar-salad-not-dressing": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-fndds-taco-not-taco-bell-burrito": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-fndds-chicken-burrito-not-ground-chicken": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-fndds-sushi-not-sushi-rice": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-fndds-pancakes-nfs-canonical": {
+      "pass": true,
+      "stage": null,
+      "category": "ranking"
+    },
+    "rank-fndds-chicken-breast-stays-foundation": {
       "pass": true,
       "stage": null,
       "category": "ranking"

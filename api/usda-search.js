@@ -46,6 +46,7 @@ const USDA_ENDPOINT = 'https://api.nal.usda.gov/fdc/v1/foods/search';
 // these rows (dish vs single food) is owned by food-ranking.js.
 const SURVEY_DATA_TYPE = ranking.SURVEY_DATA_TYPE;
 const SURVEY_PAGE_SIZE = 50;
+const SURVEY_COMPONENT_RE = /\bas ingredient in\b/i;
 
 // USDA nutrient ids we care about (search results key nutrients by id).
 // Energy has a few variants; we try them in order of preference.
@@ -348,7 +349,11 @@ async function searchFoods(q, _retried, opts) {
         noteQuota(r);
         if (!r.ok) { const e = new Error('upstream'); e.status = r.status; throw e; }
         const d = await r.json();
-        return Array.isArray(d.foods) ? d.foods.map(trimFood) : [];
+        // FNDDS also lists recipe COMPONENTS ("Tomatoes as ingredient in
+        // omelet") — parts of a survey recipe, never a food anyone logs.
+        return Array.isArray(d.foods)
+          ? d.foods.filter(function (f) { return !SURVEY_COMPONENT_RE.test(f.description || ''); }).map(trimFood)
+          : [];
       });
     }
 
@@ -610,6 +615,7 @@ module.exports._internals = {
   trimFood, buildResponse, mergeGeneric, searchFoods,
   cachedPool, poolCache, POOL_CACHE_TTL_MS, POOL_CACHE_MAX,
   noteQuota, quotaState,
+  SURVEY_DATA_TYPE, SURVEY_PAGE_SIZE, SURVEY_COMPONENT_RE,
   responseCacheKey, responseCacheGet, responseCachePut, responseCacheable, RANKING_FINGERPRINT,
   RESPONSE_CACHE_TTL_MS, RESPONSE_CACHE_MAX_BYTES,
   loadPersistentCorrections, buildCorrectionSignal, buildMealSignal,

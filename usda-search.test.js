@@ -736,3 +736,74 @@ test('quota: a search reads the headers of real USDA responses, and still works 
   assert.ok(seen.some((m) => /quota LOW: 42 of 1000/.test(m)));
   assert.strictEqual(quotaState.limit, 1000);
 });
+
+/* ── composed dishes: USDA FNDDS survey fetch (roadmap 5.4.11) ───────────── */
+const { SURVEY_DATA_TYPE, SURVEY_COMPONENT_RE } = _internals;
+
+function surveyStub(surveyFoods, opts) {
+  const calls = [];
+  return {
+    calls,
+    impl: async (url, init) => {
+      const u = new URL(String(url));
+      if (init && init.method === 'POST') {
+        const body = JSON.parse(init.body);
+        calls.push({ method: 'POST', body, keyInUrl: u.searchParams.has('api_key') });
+        if (opts && opts.surveyFails) return { ok: false, status: 400, json: async () => ({}) };
+        return { ok: true, json: async () => ({ foods: surveyFoods }) };
+      }
+      calls.push({ method: 'GET', dataType: u.searchParams.get('dataType') });
+      return { ok: true, json: async () => ({ foods: u.searchParams.get('dataType') === 'Branded' ? [] : [] }) };
+    },
+  };
+}
+const fnddsRaw = (fdcId, description, foodCategory, kcal) => ({ fdcId, description, dataType: SURVEY_DATA_TYPE, foodCategory,
+  foodNutrients: [{ nutrientId: 1008, value: kcal }, { nutrientId: 1003, value: 10 }] });
+
+test('FNDDS: one POST per search (never a GET — USDA GET 400s on survey data), merged into generic', async () => {
+  poolCache.clear();
+  const stub = surveyStub([fnddsRaw(2708514, 'Taco, NFS', 'Burritos and tacos', 246)]);
+  await withFetch(stub.impl, async () => {
+    const out = await searchFoods('taco');
+    assert.strictEqual(out.status, 200);
+    const top = out.body.foods[0];
+    assert.strictEqual(top.fdcId, 2708514, 'the survey dish is ranked like any generic food');
+    assert.strictEqual(top.group, 'generic');
+  });
+  const posts = stub.calls.filter((c) => c.method === 'POST');
+  assert.strictEqual(posts.length, 1);
+  assert.deepEqual(posts[0].body, { query: 'taco', dataType: [SURVEY_DATA_TYPE], pageSize: 50, pageNumber: 1 });
+  assert.ok(!stub.calls.some((c) => c.method === 'GET' && /Survey/.test(c.dataType || '')), 'no survey GET');
+});
+
+test('FNDDS: a multi-word query requires every word', async () => {
+  poolCache.clear();
+  const stub = surveyStub([]);
+  await withFetch(stub.impl, async () => { await searchFoods('chicken burrito'); });
+  const post = stub.calls.find((c) => c.method === 'POST');
+  assert.strictEqual(post.body.requireAllWords, true);
+});
+
+test('FNDDS: recipe components ("X as ingredient in omelet") are dropped', async () => {
+  poolCache.clear();
+  const stub = surveyStub([
+    fnddsRaw(1, 'Tomatoes as ingredient in omelet', 'Not included in a food category', 25),
+    fnddsRaw(2, 'Egg omelet or scrambled egg, no added fat', 'Eggs and omelets', 143),
+  ]);
+  let foods;
+  await withFetch(stub.impl, async () => { foods = (await searchFoods('omelet')).body.foods; });
+  assert.ok(!foods.some((f) => SURVEY_COMPONENT_RE.test(f.description)));
+  assert.ok(foods.some((f) => f.fdcId === 2), 'real survey foods stay');
+});
+
+test('FNDDS: a failed survey fetch never sinks the search, and is not cached', async () => {
+  poolCache.clear();
+  const failing = surveyStub([], { surveyFails: true });
+  await withFetch(failing.impl, async () => {
+    const out = await searchFoods('banana');
+    assert.strictEqual(out.status, 200, 'Branded/SR results still return');
+  });
+  const ok = surveyStub([fnddsRaw(9, 'Banana, raw', 'Bananas', 89)]);
+  await withFetch(ok.impl, async () => { await searchFoods('banana'); });
+  assert.strictEqual(ok.calls.filter((c) => c.method === 'POST').length, 1, 'the failure was retried on the next search');
+});

@@ -1,22 +1,23 @@
-# Nutrition Evaluation — Phase 4.2.10c Baseline
+# Nutrition Evaluation — Roadmap 5.4.11 Baseline (composed dishes)
 
 Durable summary of the recorded baseline. Machine record: `baseline.json`.
 Update deliberately via `node nutrition-evaluation/runner.js --update-baseline`.
 
-- **SHA:** `331334993c60e0f878d13bb456a30d719cc4185b` (Phase 4.2.10a; 4.2.10b metrics recorded pre-commit)
+- **Recorded:** 2026-11-11 on branch `feat/fndds-search` (roadmap 5.4.11); previous record was Phase 4.2.10c
 - **Schema version:** `4.2.9-1`  ·  **Case-set version:** `4.2.9-1`
-- **Total cases:** 288 (scored 286 · informational 2 · known_fail 0)
-- **Production logic changed by this phase:** Phase 4.2.10c is presentation-wiring
-  only (shared food-display model across every nutrition surface); no ranking,
-  confidence, or nutrition-calculation change. (4.2.10b changed ranking/confidence.)
+- **Total cases:** 294 (scored 292 · informational 2 · known_fail 0)
+- **Production logic changed by this change:** yes — ranking. USDA FNDDS survey foods are searched, a
+  survey row outside a dish category takes `RANK_WEIGHTS.surveyNonDish`, and `nfs` is a
+  canonical-positive term. Pools without survey rows rank exactly as before (pinned by
+  `food-ranking-survey.test.js`), so every pre-existing case is unchanged.
 
 ## Headline metrics
 
 | Metric | Value |
 |---|---|
-| Overall pass rate (scored) | 100% (286/286) |
-| Top-1 accuracy | 100% (19/19) |
-| Acceptable-candidate accuracy | 100% (51/51) |
+| Overall pass rate (scored) | 100% (292/292) |
+| Top-1 accuracy | 100% (24/24) |
+| Acceptable-candidate accuracy | 100% (57/57) |
 | Retrieval recall @1 / @3 / @5 / @10 | 95.8% / 100% / 100% / 100% |
 | Clarification precision / recall | 100% (7/7) / 100% (7/7) |
 | **False-confidence rate** | **0% (0/31)** |
@@ -25,6 +26,17 @@ Update deliberately via `node nutrition-evaluation/runner.js --update-baseline`.
 | Meal accuracy (case / item) | 100% / 100% |
 | Parsing accuracy (case / field) | 100% / 100% |
 | Display accuracy | 100% (73/73) |
+
+## What moved vs the 4.2.10c baseline (roadmap 5.4.11)
+
+- **Added 6 scored ranking cases** (`rank-fndds-*`, pools `nutrition-evaluation/pools-fndds.js`, captured
+  from live USDA on 2026-11-11): caesar salad, taco, chicken burrito, sushi and pancakes resolve to the
+  survey dish; chicken breast keeps the Foundation record over survey single foods.
+- **Removed 0 · changed outcomes 0 · regression flips 0 · metric movement none.** One expectation I
+  authored was corrected before recording: `topNotRegex: 'dressing'` also matched the correct dish
+  ("…, no dressing"), so it became `'^salad dressing'`.
+- Against the pre-change ranker the five dish cases already pass (the survey data itself fixes them) and
+  `rank-fndds-chicken-breast-stays-foundation` fails — the live regression the dish rule prevents.
 
 ## What moved vs the 4.2.9 baseline
 

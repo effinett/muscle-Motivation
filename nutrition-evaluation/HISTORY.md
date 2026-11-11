@@ -26,6 +26,7 @@ runs on the recorded corpus. Figures that predate a record are marked `n/a`.
 |---|---|---|---|---|---|---|---|---|---|---|
 | 2026-07-30 | 4.2.9 | `47b9736` | 237 / 229 | 99.6% (228/229) | 5% (1/20) | n/a | n/a | n/a | n/a | Evaluation foundation: first committed baseline for the `nutrition-evaluation/` diagnostic suite. One documented open item (bare "coffee" false-confidence) deferred to a confidence-hardening phase. |
 | 2026-08-02 | 4.2.10b | `c837e587` | 288 / 286 | 100% (286/286) | 0% (0/31) | 100% (7/7) / 100% (7/7) | 100% (76/76) | 121/121 | 188/188 | Path C material-ambiguity confidence + explicit-family consistency + polarity/parenthetical ranking fixes. Stale `conf-coffee` fixture corrected (false-confidence 5% → 0%). New `p10b-*` multi-candidate pools. |
+| 2026-11-11 | 5.4.11 | branch `feat/fndds-search` | 294 / 292 | 100% (292/292) | 0% (0/31) | 100% (7/7) / 100% (7/7) | 100% (76/76) | 119/119 | 209/209 | Composed dishes: USDA FNDDS survey foods searched; dish-category rule keeps Foundation/SR canonical for single foods. Six live-captured ranking cases added; no existing outcome changed. |
 
 Notes:
 

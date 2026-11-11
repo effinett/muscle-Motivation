@@ -98,4 +98,32 @@ module.exports = [
     { topNameRegex: 'cake' },
     { subcategory: 'food-identity', tags: ['ranking', 'beverage'],
       notes: 'tea cake resolves to its baked identity, not a tea beverage.' }),
+
+  /* composed dishes (roadmap 5.4.11) — live-captured FNDDS pools. A survey DISH
+     outranks the weak SR/branded rows that led before FNDDS was searched… */
+  Cp('rank-fndds-caesar-salad-not-dressing', 'caesar salad', 'pfn-caesar-salad',
+    { preferredCandidateId: 2709591, topNotRegex: '^salad dressing' },
+    { subcategory: 'composed-dish', tags: ['ranking', 'fndds', '5.4.11'],
+      notes: 'Before FNDDS: "Salad dressing, caesar, fat-free" led. The dish must lead, never the dressing.' }),
+  Cp('rank-fndds-taco-not-taco-bell-burrito', 'taco', 'pfn-taco',
+    { preferredCandidateId: 2708514, topNotRegex: 'burrito|shell|seasoning|sauce' },
+    { subcategory: 'composed-dish', tags: ['ranking', 'fndds', '5.4.11'],
+      notes: 'Before FNDDS: "TACO BELL, Bean Burrito" led. A taco, not a component or another dish.' }),
+  Cp('rank-fndds-chicken-burrito-not-ground-chicken', 'chicken burrito', 'pfn-chicken-burrito',
+    { topNameRegex: 'burrito', topNotRegex: 'ground|lunchmeat|bowl' },
+    { subcategory: 'composed-dish', tags: ['ranking', 'fndds', '5.4.11'],
+      notes: 'Before FNDDS: "Chicken, ground, raw" led. Must be a chicken burrito.' }),
+  Cp('rank-fndds-sushi-not-sushi-rice', 'sushi', 'pfn-sushi',
+    { preferredCandidateId: 2708959, topNotRegex: 'rice' },
+    { subcategory: 'composed-dish', tags: ['ranking', 'fndds', '5.4.11'],
+      notes: 'Before FNDDS: branded uncooked sushi rice (356 kcal/100 g) led.' }),
+  Cp('rank-fndds-pancakes-nfs-canonical', 'pancakes', 'pfn-pancakes',
+    { preferredCandidateId: 2708294, topNotRegex: 'syrup|chinese|potato' },
+    { subcategory: 'composed-dish', tags: ['ranking', 'fndds', '5.4.11'],
+      notes: 'FNDDS "NFS" (not further specified) is the survey\'s own canonical dish.' }),
+  /* …while an FNDDS SINGLE food never displaces the Foundation/SR canonical record. */
+  Cp('rank-fndds-chicken-breast-stays-foundation', 'chicken breast', 'pfn-chicken-breast',
+    { preferredCandidateId: 2646170, topNotRegex: 'rotisserie|sauteed|stewed' },
+    { subcategory: 'composed-dish', tags: ['ranking', 'fndds', '5.4.11', 'collision'],
+      notes: 'Live regression found 2026-11-11 before the dish rule: FNDDS "Chicken breast, baked, skin eaten" took #1 on name match alone.' }),
 ];

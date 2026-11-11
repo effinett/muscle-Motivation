@@ -89,8 +89,11 @@ const EXTRA_PORTIONS = {
 // Phase 4.2.10b evidence pools (isolated `p10b-*` keys — never shadow anything).
 const { SEARCHES_10B, PORTIONS_10B } = require('./pools-10b.js');
 
+// Roadmap 5.4.11 composed-dish pools (isolated `pfn-*` keys, live-captured FNDDS).
+const { SEARCHES_FNDDS, PORTIONS_FNDDS } = require('./pools-fndds.js');
+
 // Existing benchmark pools win on any accidental key clash (frozen corpus first).
-const POOLS = Object.assign({}, EXTRA_SEARCHES, SEARCHES_10B, base.FIXTURE_SEARCHES);
-const PORTIONS = Object.assign({}, EXTRA_PORTIONS, PORTIONS_10B, base.FIXTURE_PORTIONS);
+const POOLS = Object.assign({}, EXTRA_SEARCHES, SEARCHES_10B, SEARCHES_FNDDS, base.FIXTURE_SEARCHES);
+const PORTIONS = Object.assign({}, EXTRA_PORTIONS, PORTIONS_10B, PORTIONS_FNDDS, base.FIXTURE_PORTIONS);
 
 module.exports = { POOLS, PORTIONS, EXTRA_SEARCHES, EXTRA_PORTIONS };

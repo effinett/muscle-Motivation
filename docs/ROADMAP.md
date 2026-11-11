@@ -1487,6 +1487,13 @@ any of this is pulled ahead of the locked critical path (§13) is Effi's decisio
 - **5.4.11:** add USDA **FNDDS (Survey)** to the searched data types — search queries Branded, Foundation and
   SR Legacy only, which is the structural cause of the composed-dish gap. Verified USDA data, so §2.4 holds.
   Requires live-pool validation and new benchmark coverage before it ships.
+  *Shipped 2026-11-11:* validated against live USDA (50 queries, before/after): 16 of 30 dish queries
+  gained a better #1 ("caesar salad" was the dressing, "taco" a Taco Bell burrito, "chicken burrito" raw
+  ground chicken, "sushi" uncooked sushi rice); all 20 single-food controls kept their #1. Six live-captured
+  evaluation cases (`nutrition-evaluation/pools-fndds.js`). One extra USDA call per search.
+  *Open:* "pizza" leads with a whole-wheat-crust survey row; "meatloaf" (USDA spells it "meat loaf") and
+  "beef taco" (taco filling) still miss; a burrito's default serving is "1 cup", not one burrito; bare
+  "salad" still has no generic record.
 - **4.5.17:** search telemetry — zero-result queries and the rank position the user picked — as the
   real-world evidence source for certification. *Shipped 2026-11-11 (owner-approved):*
   `public.food_search_events` (migration `20261111111733`; write-only, no user id) + `food-telemetry.js`.
