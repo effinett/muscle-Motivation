@@ -1457,6 +1457,40 @@ exercise-metadata seam). Audit and extend; do not recreate.
 - **5.4.14 — Meal-context confidence gating.** Resolve the currently deferred, default-off meal-context
   confidence behavior before activating it.
 
+### Food search & logging upgrade backlog *(recorded 2026-11-10, owner-requested audit)*
+
+Requirements placed into existing phases — **no new phase, no renumbering, no sequencing change**. Whether
+any of this is pulled ahead of the locked critical path (§13) is Effi's decision.
+
+**Speed**
+- *Shipped (2026-11-10, no schema or config change):* correction-memory lookup runs concurrently with the
+  USDA fetches; warm-instance USDA pool cache in `/api/usda-search`; client session query cache; the result
+  list keeps its previous rows while a new search loads.
+- *Open — needs approval:* a **durable** cross-instance USDA cache (Supabase table or Vercel store —
+  migration / config). One search fans out to 3–5 USDA calls plus one detail call per generic row.
+- *Open — launch risk, verify under 4.5 cost/quotas:* the production `USDA_API_KEY` hourly request limit
+  against that fan-out. Discovered dependency for G5 / 4.5-A.
+- *Open:* token verification is a Supabase round-trip on every search; local JWT verification would remove
+  it (auth change — needs approval).
+
+**Accuracy**
+- **5.4.11:** add USDA **FNDDS (Survey)** to the searched data types — search queries Branded, Foundation and
+  SR Legacy only, which is the structural cause of the composed-dish gap. Verified USDA data, so §2.4 holds.
+  Requires live-pool validation and new benchmark coverage before it ships.
+- **4.5.17:** search telemetry — zero-result queries and the rank position the user picked — as the
+  real-world evidence source for certification (needs a table → migration approval, privacy review).
+- **4.5.17 Layer B:** live-model AI parse fidelity (already the largest untested surface).
+- *Open — data-source decision under §2.4:* a barcode fallback source; lookup is USDA Branded only.
+
+**Smarter**
+- **5.4.1 / 5.4.2 refinement:** the user's own foods (favorites, recents, saved meals) appear inside
+  database search, ahead of the network result.
+- **5.4.12:** quantity typed in the search box ("200g chicken", "2 eggs") pre-fills the serving.
+
+**Logging UI** *(5.4, with 5.0 gesture polish)*
+- One entry point: a single search field that handles a food name, a sentence (AI Quick Log) and barcode.
+- One-tap add of the default serving from a result row.
+
 ## PHASE 5.5 — ADAPTIVE AI COACHING
 
 The evolution beyond conversational Coach and action tools. **Owns check-in content and cadence; delivery

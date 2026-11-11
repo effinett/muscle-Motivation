@@ -525,6 +525,29 @@ var nu_usdaIsRoot    = false;  // true when search is the modal's root (new entr
 var nu_formBackTo    = null;   // where the form's back arrow returns ('search' | null)
 var nu_recentLoaded  = false;  // lazy-load guard for the manual form's recent chips
 
+// Session query cache: a plain (no-context) search answered moments ago is
+// served from memory, so backspacing or retyping a query is instant and costs
+// no request. Only NON-contextual, non-empty responses are stored — a query
+// with correction or meal context always goes to the server, so a fresh
+// correction can never be masked by a cached ranking. Bounded + short-lived.
+var NU_QUERY_CACHE_MAX = 40;
+var NU_QUERY_CACHE_TTL = 5 * 60 * 1000;
+var nu_queryCache = {};        // normalized query → { at, foods }
+var nu_queryCacheKeys = [];    // insertion order, for oldest-first eviction
+function nuQueryCacheKey(q) { return String(q || '').trim().toLowerCase(); }
+function nuQueryCacheGet(q) {
+  var hit = nu_queryCache[nuQueryCacheKey(q)];
+  if (!hit || Date.now() - hit.at > NU_QUERY_CACHE_TTL) return null;
+  return hit.foods.map(function (f) { return Object.assign({}, f); });
+}
+function nuQueryCachePut(q, foods) {
+  var k = nuQueryCacheKey(q);
+  if (!k || !foods || !foods.length) return;
+  if (!nu_queryCache[k]) nu_queryCacheKeys.push(k);
+  nu_queryCache[k] = { at: Date.now(), foods: foods.map(function (f) { return Object.assign({}, f); }) };
+  while (nu_queryCacheKeys.length > NU_QUERY_CACHE_MAX) delete nu_queryCache[nu_queryCacheKeys.shift()];
+}
+
 // Fetch trimmed USDA foods through the proxy. `opts` = { signal?, mealContext? }:
 // `signal` cancels stale requests (manual search); `mealContext` is the Phase
 // 4.2.6 per-item meal projection attached by the resolver for AI Quick Log.
@@ -564,6 +587,7 @@ async function nuUsdaSearch(query, opts) {
   // headers). `no-store` bypasses that so the context applies immediately. Plain
   // searches keep the short cache (common while typing).
   if (contextual) fetchOpts.cache = 'no-store';
+  else { var cached = nuQueryCacheGet(query); if (cached) return cached; }
   var res = await fetch('/api/usda-search?q=' + encodeURIComponent(query), fetchOpts);
   if (!res.ok) {
     var msg = 'Search failed.';
@@ -571,7 +595,9 @@ async function nuUsdaSearch(query, opts) {
     var err = new Error(msg); err.status = res.status; throw err;
   }
   var data = await res.json();
-  return (data && data.foods) || [];
+  var foods = (data && data.foods) || [];
+  if (!contextual) nuQueryCachePut(query, foods);
+  return foods;
 }
 
 // Candidate normalization + the serving engine (nuNormalizeUsdaFood,
@@ -703,7 +729,9 @@ function nuUsdaInputChanged() {
     return;
   }
 
-  nu_usdaTimer = setTimeout(function () { nuRunUsdaSearch(q); }, 300);
+  // A query already answered this session renders at once; a new one waits out
+  // the debounce so typing doesn't fan out a request per keystroke.
+  nu_usdaTimer = setTimeout(function () { nuRunUsdaSearch(q); }, nuQueryCacheGet(q) ? 0 : 300);
 }
 
 async function nuRunUsdaSearch(q) {
@@ -712,23 +740,36 @@ async function nuRunUsdaSearch(q) {
   nu_usdaAbort = (typeof AbortController !== 'undefined') ? new AbortController() : null;
   var seq = ++nu_usdaSeq;
 
+  // Keep the previous results on screen (dimmed) while the new ones load, so
+  // the list never flashes empty between keystrokes. The rows still map to
+  // nu_usdaResults, so tapping one mid-load opens the food that is shown.
   nuUsdaSetStatus('Searching…', 'loading');
-  document.getElementById('nuUsdaResults').innerHTML = '';
+  var listEl = document.getElementById('nuUsdaResults');
+  if (listEl && listEl.classList) listEl.classList.add('is-stale');
+  function settle(clear) {
+    if (!listEl) return;
+    if (listEl.classList) listEl.classList.remove('is-stale');
+    if (clear) { nu_usdaResults = []; listEl.innerHTML = ''; }
+  }
 
   try {
     var foods = await nuUsdaSearch(q, { signal: nu_usdaAbort ? nu_usdaAbort.signal : undefined });
     if (seq !== nu_usdaSeq) return;                       // a newer search superseded us
-    nu_usdaResults = foods.map(nuNormalizeUsdaFood);
-    if (!nu_usdaResults.length) {
+    var results = foods.map(nuNormalizeUsdaFood);
+    if (!results.length) {
+      settle(true);
       nuUsdaSetStatus('No foods found for “' + q + '”.', 'empty');
       return;
     }
+    nu_usdaResults = results;
+    settle(false);
     nuUsdaSetStatus('');
     nuRenderUsdaResults();
     nuPrefetchPortions();   // rows update to their true default household serving
   } catch (err) {
     if (err && err.name === 'AbortError') return;         // stale request — ignore
     if (seq !== nu_usdaSeq) return;
+    settle(true);
     console.error('nuRunUsdaSearch error:', err);
     nuUsdaSetStatus(err && err.message ? err.message : 'Search failed. Try again.', 'error');
   }
