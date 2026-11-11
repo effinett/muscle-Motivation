@@ -1476,7 +1476,10 @@ any of this is pulled ahead of the locked critical path (§13) is Effi's decisio
   against that fan-out. Discovered dependency for G5 / 4.5-A.
   *2026-11-11:* the key is a Vercel sensitive variable and cannot be read back, so `/api/usda-search` now
   logs the allowance from USDA's own response headers (`usda-search quota: …`, and `quota LOW` under 10%).
-  The number itself is still **unconfirmed** until a production search has produced that log line.
+  *Confirmed 2026-11-11 from production logs:* **3,600 requests/hour** (api.data.gov's standard registered-key
+  limit). At 3–5 USDA calls per uncached search plus one detail call per generic row picked, that is roughly
+  600–1,000 uncached searches an hour before the warm-instance and durable caches absorb repeats. Adequate
+  for launch; revisit if the `quota LOW` warning ever appears.
 - *Open:* token verification is a Supabase round-trip on every search; local JWT verification would remove
   it (auth change — needs approval).
 
