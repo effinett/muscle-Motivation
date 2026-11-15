@@ -23,3 +23,34 @@ test('word modifiers and real units are untouched (SR / Foundation shapes)', () 
   assert.ok(labels.includes('1 cup, mashed'));
   assert.ok(labels.includes('2 tbsp'));
 });
+
+test('FNDDS dishes: a whole-item size beats "1 cup" (one burrito, not 120 g of one)', () => {
+  const portions = trimPortions({ dataType: 'Survey (FNDDS)', foodPortions: [
+    { sequenceNumber: 1, amount: 1, gramWeight: 120, portionDescription: '1 cup' },
+    { sequenceNumber: 2, amount: 1, gramWeight: 330, portionDescription: '1 large' },
+    { sequenceNumber: 3, amount: 1, gramWeight: 110, portionDescription: '1 miniature' },
+  ] });
+  assert.strictEqual(portions[0].label, '1 large');
+});
+
+test('the cup rule is FNDDS-only and needs an item size (soup, salad, SR foods keep their cup)', () => {
+  const soup = trimPortions({ dataType: 'Survey (FNDDS)', foodPortions: [
+    { sequenceNumber: 1, amount: 1, gramWeight: 245, portionDescription: '1 cup' },
+    { sequenceNumber: 2, amount: 1, gramWeight: 245, portionDescription: 'Quantity not specified', modifier: '90000' },
+  ] });
+  assert.strictEqual(soup[0].label, '1 cup');
+  const sr = trimPortions({ dataType: 'SR Legacy', foodPortions: [
+    { sequenceNumber: 1, amount: 1, gramWeight: 120, measureUnit: { name: 'cup' } },
+    { sequenceNumber: 2, amount: 1, gramWeight: 330, modifier: 'large', measureUnit: { name: 'undetermined' } },
+  ] });
+  assert.strictEqual(sr[0].label, '1 cup', 'non-survey ordering is unchanged');
+});
+
+test('"Guideline amount per hot dog" rows are never the default serving', () => {
+  const portions = trimPortions({ dataType: 'Survey (FNDDS)', foodPortions: [
+    { sequenceNumber: 1, amount: 1, gramWeight: 64, portionDescription: 'Guideline amount per cup of french fries' },
+    { sequenceNumber: 2, amount: 1, gramWeight: 64, portionDescription: 'Guideline amount per hot dog or per hamburger' },
+    { sequenceNumber: 3, amount: 1, gramWeight: 255, portionDescription: '1 cup' },
+  ] });
+  assert.strictEqual(portions[0].label, '1 cup');
+});

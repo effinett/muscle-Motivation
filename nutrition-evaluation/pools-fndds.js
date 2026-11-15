@@ -86,7 +86,20 @@ const SUSHI = [
   SV(2708961, 'Sushi roll, California', 'Egg rolls, dumplings, sushi', [94, 2.92, 18.39, 0.67, 1, 2.13]),
 ];
 
+// Bare "pizza": USDA's first 50 FNDDS rows are all variants (no plain "NFS"
+// cheese pizza). Captured live 2026-11-11.
+const PIZZA = [
+  SV(2708618, 'Pizza, cheese, stuffed crust', 'Pizza', [274, 12.23, 30, 11.63, 1.7, 2.9]),
+  SV(2708674, 'Pizza, no cheese, thin crust', 'Pizza', [276, 7.46, 31, 13.69, 1.8, 5.03]),
+  SV(2708633, 'Pizza, cheese, with fruit, medium crust', 'Pizza', [239, 9.96, 30.81, 8.45, 2.1, 4.61]),
+  SV(2708622, 'Pizza, extra cheese, thin crust', 'Pizza', [268, 12.08, 31.71, 10.29, 2.2, 3.48]),
+  SV(2708612, 'Pizza, cheese, from frozen, thin crust', 'Pizza', [263, 11.91, 28.8, 11.07, 3, 3.71]),
+  SV(2708693, 'Pizza, cheese, gluten-free thin crust', 'Pizza', [264, 8.73, 26.53, 13.62, 2.5, 3.2]),
+  SV(2708687, 'Pizza, cheese, whole wheat thin crust', 'Pizza', [267, 11.77, 28.62, 12.38, 3.5, 3.59]),
+];
+
 const SEARCHES_FNDDS = {
+  'pfn-pizza': PIZZA,
   'pfn-caesar-salad': CAESAR, 'pfn-taco': TACO, 'pfn-chicken-burrito': CHICKEN_BURRITO,
   'pfn-chicken-breast': CHICKEN_BREAST, 'pfn-pancakes': PANCAKES, 'pfn-sushi': SUSHI,
 };

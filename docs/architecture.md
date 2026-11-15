@@ -47,6 +47,9 @@ The pure candidate-reranking intelligence behind every food search — extracted
   plus any category containing "sandwich") competes at full strength; any other survey row takes
   `RANK_WEIGHTS.surveyNonDish` so the Foundation/SR record stays the canonical single food. `nfs`
   ("not further specified") is a canonical-positive term. Non-survey rows are unaffected.
+  Unrequested pizza variants are `SPECIALTY_SUBTYPES` (every stem must be present, so they never touch
+  bread or cheese). `/api/usda-food` orders FNDDS portions so a whole-item size beats "1 cup" when the
+  dish has one, and "Guideline amount per …" topping rows are never the default.
 - **Extension seam:** `options.signals` — pure `(candidate, features, ctx) → number` passes.
   Phases 4.2.3+ (confidence, correction memory, portion compatibility, meal context,
   preferences) plug in there without touching candidate acquisition or creating a second

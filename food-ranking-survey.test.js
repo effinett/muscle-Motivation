@@ -79,3 +79,29 @@ test('pools without survey rows rank exactly as before (rule is survey-only)', (
     assert.deepStrictEqual(a, b);
   } finally { R.RANK_WEIGHTS.surveyNonDish = saved; }
 });
+
+test('pizza: unrequested crust and cheese variants rank below a plain cheese pizza', () => {
+  const pool = [
+    SV(1, 'Pizza, no cheese, thin crust', 'Pizza'),
+    SV(2, 'Pizza, extra cheese, thin crust', 'Pizza'),
+    SV(3, 'Pizza, cheese, whole wheat thin crust', 'Pizza'),
+    SV(4, 'Pizza, cheese, gluten-free thin crust', 'Pizza'),
+    SV(5, 'Pizza, cheese, with fruit, medium crust', 'Pizza'),
+    SV(6, 'Pizza, cheese, from frozen, thin crust', 'Pizza'),
+  ];
+  assert.strictEqual(top('pizza', pool).fdcId, 6);
+  assert.strictEqual(top('whole wheat pizza', pool.concat([])).fdcId, 3, 'asking for it lifts the demotion');
+});
+
+test('the pizza variant terms never touch non-pizza foods', () => {
+  // Same row except "no" vs "low": if 'pizza no cheese' fired on a non-pizza
+  // food, the "no" row would score 350 lower.
+  const sc = (d) => R.rankFoodCandidates('cheese', [row(30, d, 'SR Legacy', 'Dairy and Egg Products', 300)]).foods[0].score;
+  assert.strictEqual(sc('Cheese sauce, no salt'), sc('Cheese sauce, low salt'));
+  // and a crust term needs every word: a pizza CRUST product is demoted, but a
+  // pizza row that does not name that crust is not
+  const pz = (d) => R.rankFoodCandidates('pizza', [SV(32, d, 'Pizza')]).foods[0].score;
+  // "whole" also earns one canonical-positive term, so the net is the two together
+  assert.strictEqual(pz('Pizza, cheese, whole wheat thin crust') - pz('Pizza, cheese, wheat thin crust'),
+    R.RANK_WEIGHTS.specialtySubtype + R.RANK_WEIGHTS.canonicalPositive);
+});
