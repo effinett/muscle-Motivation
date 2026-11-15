@@ -541,6 +541,10 @@ const CANDIDATE_FAMILY = [
 const SPECIALTY_SUBTYPES = [
   'glutinous', 'sticky', 'sushi', 'arborio', 'mochi', 'sweet rice', 'wild rice',
   'condensed', 'evaporated', 'eggnog', 'kefir',
+  // FNDDS pizza crust variants (roadmap 5.4.11): every stem must be present, so
+  // these only ever match a pizza row naming that crust — never plain bread.
+  'whole wheat crust', 'gluten free crust', 'stuffed crust', 'fruit crust',
+  'pizza no cheese', 'pizza extra cheese',
 ];
 
 /* ── Text normalization shared by the query pipeline AND scoring ─────────────

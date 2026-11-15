@@ -121,6 +121,10 @@ module.exports = [
     { preferredCandidateId: 2708294, topNotRegex: 'syrup|chinese|potato' },
     { subcategory: 'composed-dish', tags: ['ranking', 'fndds', '5.4.11'],
       notes: 'FNDDS "NFS" (not further specified) is the survey\'s own canonical dish.' }),
+  Cp('rank-fndds-pizza-plain-cheese', 'pizza', 'pfn-pizza',
+    { preferredCandidateId: 2708612, topNotRegex: 'no cheese|extra cheese|whole wheat|gluten|fruit|stuffed' },
+    { subcategory: 'composed-dish', tags: ['ranking', 'fndds', '5.4.11', 'specialty'],
+      notes: 'Bare "pizza" — every live FNDDS row is a variant; a plain cheese pizza must lead, not a whole-wheat, gluten-free, no-cheese or fruit crust.' }),
   /* …while an FNDDS SINGLE food never displaces the Foundation/SR canonical record. */
   Cp('rank-fndds-chicken-breast-stays-foundation', 'chicken breast', 'pfn-chicken-breast',
     { preferredCandidateId: 2646170, topNotRegex: 'rotisserie|sauteed|stewed' },

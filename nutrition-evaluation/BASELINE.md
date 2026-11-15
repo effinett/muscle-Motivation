@@ -5,7 +5,7 @@ Update deliberately via `node nutrition-evaluation/runner.js --update-baseline`.
 
 - **Recorded:** 2026-11-11 on branch `feat/fndds-search` (roadmap 5.4.11); previous record was Phase 4.2.10c
 - **Schema version:** `4.2.9-1`  ·  **Case-set version:** `4.2.9-1`
-- **Total cases:** 294 (scored 292 · informational 2 · known_fail 0)
+- **Total cases:** 295 (scored 293 · informational 2 · known_fail 0)
 - **Production logic changed by this change:** yes — ranking. USDA FNDDS survey foods are searched, a
   survey row outside a dish category takes `RANK_WEIGHTS.surveyNonDish`, and `nfs` is a
   canonical-positive term. Pools without survey rows rank exactly as before (pinned by
@@ -15,9 +15,9 @@ Update deliberately via `node nutrition-evaluation/runner.js --update-baseline`.
 
 | Metric | Value |
 |---|---|
-| Overall pass rate (scored) | 100% (292/292) |
-| Top-1 accuracy | 100% (24/24) |
-| Acceptable-candidate accuracy | 100% (57/57) |
+| Overall pass rate (scored) | 100% (293/293) |
+| Top-1 accuracy | 100% (25/25) |
+| Acceptable-candidate accuracy | 100% (58/58) |
 | Retrieval recall @1 / @3 / @5 / @10 | 95.8% / 100% / 100% / 100% |
 | Clarification precision / recall | 100% (7/7) / 100% (7/7) |
 | **False-confidence rate** | **0% (0/31)** |
@@ -26,6 +26,13 @@ Update deliberately via `node nutrition-evaluation/runner.js --update-baseline`.
 | Meal accuracy (case / item) | 100% / 100% |
 | Parsing accuracy (case / field) | 100% / 100% |
 | Display accuracy | 100% (73/73) |
+
+## What moved — 2026-11-15 tuning (roadmap 5.4.11)
+
+- **Added 1 scored ranking case** `rank-fndds-pizza-plain-cheese` (pool `pfn-pizza`, live-captured): bare
+  "pizza" must lead with a plain cheese pizza, not a whole-wheat / gluten-free / no-cheese / fruit variant.
+  It fails on the pre-tuning ranker and passes now. **Changed outcomes 0 · regression flips 0 · metric
+  movement none.**
 
 ## What moved vs the 4.2.10c baseline (roadmap 5.4.11)
 

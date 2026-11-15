@@ -1491,9 +1491,13 @@ any of this is pulled ahead of the locked critical path (§13) is Effi's decisio
   gained a better #1 ("caesar salad" was the dressing, "taco" a Taco Bell burrito, "chicken burrito" raw
   ground chicken, "sushi" uncooked sushi rice); all 20 single-food controls kept their #1. Six live-captured
   evaluation cases (`nutrition-evaluation/pools-fndds.js`). One extra USDA call per search.
-  *Open:* "pizza" leads with a whole-wheat-crust survey row; "meatloaf" (USDA spells it "meat loaf") and
-  "beef taco" (taco filling) still miss; a burrito's default serving is "1 cup", not one burrito; bare
-  "salad" still has no generic record.
+  *Tuned 2026-11-15 (live-validated, 55 queries: only "pizza" changed):* unrequested pizza variants
+  (whole-wheat, gluten-free, stuffed or fruit crust; no or extra cheese) are specialty subtypes, so "pizza"
+  leads with "Pizza, cheese, from frozen, thin crust"; an FNDDS dish with a whole-item size opens on it
+  ("1 large" burrito, not "1 cup"); FNDDS "Guideline amount per hot dog" portions are never the default
+  (chili opened on 64 g of hot-dog topping).
+  *Open:* "meatloaf" (USDA spells it "meat loaf") and "beef taco" (USDA names the filling, not the taco)
+  still miss — naming gaps, not ranking; bare "salad" still has no generic record.
 - **4.5.17:** search telemetry — zero-result queries and the rank position the user picked — as the
   real-world evidence source for certification. *Shipped 2026-11-11 (owner-approved):*
   `public.food_search_events` (migration `20261111111733`; write-only, no user id) + `food-telemetry.js`.
