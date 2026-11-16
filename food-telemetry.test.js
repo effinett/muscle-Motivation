@@ -15,6 +15,8 @@ const path = require('node:path');
 
 const T = require('./food-telemetry.js');
 const MIGRATION = fs.readFileSync(path.join(__dirname, 'supabase/migrations/20261111111733_food_search_events.sql'), 'utf8');
+// The insert policy as it stands now (latest migration that replaces it).
+const POLICY = fs.readFileSync(path.join(__dirname, 'supabase/migrations/20261116063000_food_search_events_quicklog.sql'), 'utf8');
 
 test('cleanQuery: lowercased, collapsed, capped; private-looking text is never sent', () => {
   assert.strictEqual(T.cleanQuery('  Chicken   BREAST '), 'chicken breast');
@@ -53,15 +55,32 @@ test('buildEvent: an invalid event is dropped, never repaired', () => {
 });
 
 test('the insert policy enumerates the SAME vocabulary and ranges as the client', () => {
-  const list = (re) => MIGRATION.match(re)[1].split(',').map((s) => s.trim().replace(/'/g, ''));
+  const list = (re) => POLICY.match(re)[1].split(',').map((s) => s.trim().replace(/'/g, ''));
   assert.deepStrictEqual(list(/picked_source in \(([^)]*)\)/), T.SOURCES);
   assert.deepStrictEqual(list(/via in \(([^)]*)\)/), T.VIAS);
-  assert.match(MIGRATION, new RegExp('char_length\\(query\\) between ' + T.QUERY_MIN + ' and ' + T.QUERY_MAX));
-  assert.match(MIGRATION, new RegExp('result_count between 0 and ' + T.COUNT_MAX));
-  assert.match(MIGRATION, new RegExp('picked_rank between 0 and ' + T.COUNT_MAX));
-  assert.match(MIGRATION, new RegExp('schema_version = ' + T.SCHEMA_VERSION));
-  assert.match(MIGRATION, /event = 'zero_result'[\s\S]*event = 'pick'/);
+  assert.deepStrictEqual(list(/event in \(([^)]*)\)/), T.QL_EVENTS);
+  assert.match(POLICY, new RegExp('char_length\\(query\\) between ' + T.QUERY_MIN + ' and ' + T.QUERY_MAX));
+  assert.match(POLICY, new RegExp('result_count between 0 and ' + T.COUNT_MAX));
+  assert.match(POLICY, new RegExp('picked_rank between 0 and ' + T.COUNT_MAX));
+  assert.match(POLICY, new RegExp('schema_version = ' + T.SCHEMA_VERSION));
+  assert.match(POLICY, /event = 'zero_result'[\s\S]*event = 'pick'/);
+  assert.match(POLICY, /\(picked_source = 'quicklog'\) = \(via = 'chooser'\)/);
+  assert.ok(!/create table|for (select|update|delete|all)\b/i.test(POLICY), 'policy-only migration');
   assert.match(MIGRATION, new RegExp('create table if not exists public\\.' + T.TABLE + ' '));
+});
+
+test('Quick Log outcomes carry the per-food query and a count — nothing else', () => {
+  for (const kind of T.QL_EVENTS) {
+    const row = T.buildEvent(kind, { query: 'Greek Yogurt', resultCount: 4, name: 'Yogurt', fdcId: 9, userId: 'u' });
+    assert.deepStrictEqual(row, { event: kind, query: 'greek yogurt', result_count: kind === 'ql_unmatched' ? 0 : 4,
+      picked_rank: null, picked_source: null, via: null, schema_version: 1 }, kind);
+  }
+  assert.strictEqual(T.buildEvent('ql_matched', { query: 'a' }), null);
+  assert.strictEqual(T.buildEvent('ql_chooser', { query: 'rice', resultCount: 201 }), null);
+  assert.deepStrictEqual(T.buildEvent('pick', { query: 'rice', resultCount: 3, rank: 1, source: 'quicklog', via: 'chooser' }),
+    { event: 'pick', query: 'rice', result_count: 3, picked_rank: 1, picked_source: 'quicklog', via: 'chooser', schema_version: 1 });
+  assert.strictEqual(T.buildEvent('pick', { query: 'rice', resultCount: 3, rank: 1, source: 'quicklog', via: 'row' }), null);
+  assert.strictEqual(T.buildEvent('pick', { query: 'rice', resultCount: 3, rank: 1, source: 'generic', via: 'chooser' }), null);
 });
 
 test('the table is write-only and holds no user identity', () => {
@@ -178,4 +197,35 @@ test('telemetry failure can never break a pick; the page loads the module', () =
   assert.ok(nu_pendingSource, 'the card still opened');
   const page = fs.readFileSync(path.join(__dirname, 'nutrition.html'), 'utf8');
   assert.ok(page.indexOf('<script src="food-telemetry.js"></script>') < page.indexOf('<script src="nutrition.js"></script>'));
+});
+
+test('Quick Log reports one outcome per item, chooser taps and hand searches', () => {
+  events.length = 0;
+  nuAiOutcomeTelemetry([
+    { parsed: { query: 'egg', text: '2 eggs and toast' }, food: {}, unmatched: false },
+    { parsed: { query: 'cereal' }, needsChoice: true, choices: [{}, {}, {}] },
+    { parsed: { query: 'coffee' }, needsClarification: true, choices: [] },
+    { parsed: { query: 'zorbloaf' }, unmatched: true },
+    null,
+  ]);
+  assert.deepStrictEqual(events.splice(0), [
+    ['ql_matched', { query: 'egg', resultCount: 1 }],
+    ['ql_chooser', { query: 'cereal', resultCount: 3 }],
+    ['ql_clarify', { query: 'coffee', resultCount: 1 }],
+    ['ql_unmatched', { query: 'zorbloaf', resultCount: 0 }],
+  ], 'the per-food query, never the sentence');
+  nuAiChoiceTelemetry({ parsed: { query: 'cereal' }, choices: [{}, {}, {}] }, 2);
+  assert.deepStrictEqual(events.pop(), ['pick', { query: 'cereal', resultCount: 3, rank: 2, source: 'quicklog', via: 'chooser' }]);
+  nuAiManualTelemetry({ parsed: { query: 'zorbloaf' } });
+  assert.deepStrictEqual(events.pop(), ['ql_manual', { query: 'zorbloaf' }]);
+
+  const saved = global.FoodTelemetry;
+  global.FoodTelemetry = { emit: () => { throw new Error('boom'); } };
+  try { nuAiOutcomeTelemetry([{ parsed: { query: 'egg' } }]); nuAiChoiceTelemetry(null, 0); nuAiManualTelemetry(undefined); }
+  finally { global.FoodTelemetry = saved; }
+
+  const page = fs.readFileSync(path.join(__dirname, 'nutrition.html'), 'utf8');
+  assert.match(page, /aiItems = await nuAiResolveMealItems\([^)]*\);\s*nuAiOutcomeTelemetry\(aiItems\);/);
+  assert.match(page, /nuAiChoiceTelemetry\(it, ci\);\s*try \{\s*aiItems\[i\] = await nuAiResolveChoice/);
+  assert.match(page, /nuAiManualTelemetry\(it\);\s*aiItems\.splice\(i, 1\);/);
 });

@@ -7,7 +7,7 @@ customer data, no auth users and no credentials.
 |---|---|
 | `schema/current-schema.sql` | **Authoritative rebuild file.** Complete current structure of schema `public` (27 tables, constraints, indexes, row-level security, 60 policies, functions, triggers, grants, comments) plus the `auth.users` sign-up trigger and the `ensure_rls` event trigger. Schema only — no rows. |
 | `schema/baseline-pre-2026-06-09.sql` | Objects created before migration tracking began (`profiles`, `handle_new_user` + `on_auth_user_created`, `rls_auto_enable` + `ensure_rls`). Only needed to replay history. |
-| `migrations/` | The 70 migrations applied to production (as of 2026-11-11), with their original version numbers. History, not a rebuild script — see below. |
+| `migrations/` | The 71 migrations applied to production (as of 2026-11-16), with their original version numbers. History, not a rebuild script — see below. |
 
 ## Rebuild the structure on a new Supabase project
 
@@ -66,3 +66,6 @@ identical in every category.
 to `schema/current-schema.sql` by hand, with policy expressions, index definitions,
 grants and comments copied from the live catalog. `usda_search_cache` is server-only: RLS
 with no policies, and no privileges for `anon` or `authenticated`.
+`20261116063000` (`food_search_events_quicklog`, 2026-11-16) replaces only the
+`food_search_events` insert policy so it also accepts AI Quick Log outcomes; its live
+policy text was copied into `schema/current-schema.sql` the same way.

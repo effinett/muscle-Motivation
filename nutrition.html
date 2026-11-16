@@ -1359,6 +1359,7 @@
       // still returns one resolved item per food, so the review sheet + save path
       // are unchanged; foods stay separate entries.
       aiItems = await nuAiResolveMealItems(parsed.items, text, parsed.meal);
+      nuAiOutcomeTelemetry(aiItems);
       document.getElementById('aiSheetSrc').textContent = '“' + text + '”';
       document.getElementById('aiSheetMeal').value = parsed.meal || suggestMeal();
       renderAiSheet();
@@ -1517,6 +1518,7 @@
     // resolved one (nuRecordCorrection ignores confirming the top hit). Guarded
     // so it can never block the actual resolve/log.
     try { if (typeof nuRecordCorrection === 'function') nuRecordCorrection(it, ci); } catch (e) {}
+    nuAiChoiceTelemetry(it, ci);
     try {
       aiItems[i] = await nuAiResolveChoice(it, ci);
       renderAiSheet();
@@ -1597,6 +1599,7 @@
     var it = aiItems[i];
     if (!it) return;
     var meal = document.getElementById('aiSheetMeal').value;
+    nuAiManualTelemetry(it);
     aiItems.splice(i, 1);
     if (!aiItems.length) closeAiSheet(); else renderAiSheet();
     nuOpenModal({ meal: meal, date: currentDate });
