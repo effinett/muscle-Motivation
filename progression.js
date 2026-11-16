@@ -92,6 +92,12 @@
     return (Math.round(n * 10) / 10).toString();
   }
 
+  // A prescription range as people read it: "8–10", but a fixed target is
+  // "10", never "10–10" (owner-reported 2026-11-16).
+  function rangeText(low, high) {
+    return low === high ? String(low) : low + '–' + high;
+  }
+
   // ── Equipment inference (drives rounding + jump size) ──────────────────────
   // Order matters: more specific patterns are checked first.
   function inferEquipment(name) {
@@ -454,7 +460,7 @@
                    : '';                       // unknown → no noun, never a guess
     var goalRange = {
       low: low, high: high, unit: goalUnit,
-      display: low + '–' + high + goalSuffix
+      display: rangeText(low, high) + goalSuffix
     };
 
     // Unit- and load-aware coaching copy (Phase 4.3.9B). Only a caller that
@@ -481,11 +487,11 @@
       var startWeight = pw !== null ? roundWeight(pw, equip) : null;
       var note;
       if (startWeight !== null) {
-        note = 'Start around ' + fmtNum(startWeight) + ' lb and aim for ' + low + '–' + high + noun + '.';
+        note = 'Start around ' + fmtNum(startWeight) + ' lb and aim for ' + rangeText(low, high) + noun + '.';
       } else if (equip === 'bodyweight') {
-        note = 'Log your sets — aim for ' + low + '–' + high + noun + ' and we\'ll guide you next time.';
+        note = 'Log your sets — aim for ' + rangeText(low, high) + noun + ' and we\'ll guide you next time.';
       } else {
-        note = 'Pick a weight you can do for ' + low + '–' + high + noun + '. We\'ll guide your progression next time.';
+        note = 'Pick a weight you can do for ' + rangeText(low, high) + noun + '. We\'ll guide your progression next time.';
       }
       return {
         hasHistory: false,
