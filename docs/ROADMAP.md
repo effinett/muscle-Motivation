@@ -927,6 +927,9 @@ owner is new — K.1 → 4.3.9-L, K.2 → 4.3.9F. Neither historical record is a
 
 **Goal:** build the core premium differentiator.
 
+
+**Prerequisite (owner decision 2026-11-16):** Bodyweight Exercise Progression v1 (5.1.2) ships before 4.4
+starts. 4.4.4 Training intelligence reads that progression state; it never makes a separate decision.
 ### Coach v1 read-only contract (binding)
 
 **Coach v1 MAY:** read · understand · analyze · explain · recommend.
@@ -1400,6 +1403,14 @@ exercise-metadata seam). Audit and extend; do not recreate.
 - **5.1.1 — Previous-performance system hardening.** Improve the shipped system.
 - **5.1.2 — Advanced progressive overload.** Extend the existing progression logic; distinguish real
   progression from single-session noise.
+  *Bodyweight Exercise Progression v1 — required before 4.4 (owner decision 2026-11-16).* Covers bodyweight
+  exercises with approved progression paths. The ceiling is the top of the Program's prescribed range; there
+  is no separate per-exercise ceiling. When every prescribed set reaches the top of the range for two
+  consecutive completed sessions, the client is offered the next pre-approved harder variation on that
+  exercise's path and confirms good form by accepting; the step-up is stored per client and never edits a
+  Program or Routine. An exercise at the end of its path holds at its prescribed range and is marked as having
+  no next step. Bodyweight Foundations stays equipment-free. Weighted and equipment-based progression are
+  future work, built with equipment-aware programming.
 - **5.1.3 — Equipment-aware increments** *(deferred from the progression spec)*. Account for realistic
   available jumps.
 - **5.1.4 — Warm-up support** *(deferred from the progression spec)*.
@@ -1412,14 +1423,6 @@ exercise-metadata seam). Audit and extend; do not recreate.
   concepts where scientifically and practically appropriate. Keyed on canonical exercise identity.
 - **5.1.8 — Coach integration.** Coach explains progression recommendations rather than presenting
   unexplained numbers.
-- **5.1.9 — Automatic variation progression** *(owner-approved 2026-11-16; pulled forward — built before
-  4.4)*. When a client tops an exercise's range, progression stops printing "move to a harder variation"
-  and acts: while more reps or time are still sensible, it keeps adding them; once they are not, the next
-  session loads the harder variation automatically, with a short notice and one tap to go back. Binding:
-  the step-up is per user only (no Program or Routine is ever mutated); it follows a reviewed progression
-  ladder of canonical exercises, never a guess from names or difficulty alone; an equipment-free Program
-  only ever steps to equipment-free exercises; mobility, breathing and cardio holds never level up; and the
-  Coach (4.4) later reads the same state rather than deciding separately.
 
 ---
 
@@ -2112,7 +2115,6 @@ Reordered 2026-09-02. Rationale and binding gates G1–G6 are in §4.
 
 | # | Phase | Classification |
 |---|---|---|
-| 0 | **5.1.9** — Automatic variation progression *(pulled forward 2026-11-16, owner-approved)* | BEFORE 4.4 |
 | 1 | **4.4** — Personal AI Coach v1, Read-Only | LAUNCH-BLOCKING |
 | 2 | **4.5-I** — Pre-Activation Build & Certification (all activation flags OFF) | LAUNCH-BLOCKING |
 | 3 | **4.3.8** — Interactive First-Run Experience | LAUNCH-BLOCKING |

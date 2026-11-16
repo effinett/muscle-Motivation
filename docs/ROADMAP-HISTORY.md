@@ -1981,6 +1981,6 @@ products, so the membership-only Bodyweight Foundations was unreachable from Pro
 
 **Found during the workout, fixed:** a fixed rep target read "10–10 reps" (Dead Bug). PR #107.
 
-**Owner decision recorded the same day:** automatic variation progression (roadmap 5.1.9) is pulled
-forward ahead of 4.4.
+**Owner decision recorded the same day:** Bodyweight Exercise Progression v1 (scope of 5.1.2) ships
+before 4.4. No phase was renumbered or reordered; it is recorded as a 4.4 prerequisite.
 
