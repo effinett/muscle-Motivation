@@ -842,7 +842,7 @@ question and ignoring the answer is not acceptable in a paid personalization pro
 
 - **4.3.9A — Catalog metadata correction.** Correct inaccurate `equipment_summary` and `difficulty` on the
   existing Programs. **Behaviour-changing, not bookkeeping** — it changes what real users are recommended.
-- **4.3.9B — Bodyweight / No-Equipment Program.** *In progress.* Checkpoint record:
+- **4.3.9B — Bodyweight / No-Equipment Program.** *Complete (2026-11-16).* Checkpoint record:
   `docs/ROADMAP-HISTORY.md`, 2026-10-04 entry. **CP4e** (owner-approved 2026-10-04) publishes the six
   CP4d frequency Routines and activates the 4/5/6-day mapping: 4 days `push_core_a, lower_a,
   push_core_b, lower_b`; 5 days `push_core_a, lower_a, conditioning_core, push_core_b, lower_b`; 6 days
@@ -852,8 +852,10 @@ question and ignoring the answer is not acceptable in a paid personalization pro
   and verified 2026-10-05** (migration `20261005041336`). **CP4e-2** (code only) activates the mapping
   and labels every Program session with its Routine's own name; see the 2026-10-05 history entry.
   **CP4f** (PR #75) fixed the Start bar's clearance. The 2026-10-19 criterion B audit passes every content
-  item. Still open: Bodyweight-active device checks at 6–2 days and one real-device run that starts and
-  completes a representative workout (see the 2026-10-19 history entry).
+  item. *Complete 2026-11-16:* Bodyweight-active device checks at 6–2 days passed on the owner's iPhone,
+  and a representative workout (Full Body B) was started from the Program and finished, with "Next up:
+  Full Body C" correct for 2 days (see the 2026-11-16 history entry). The Programs route audit found and
+  fixed Profile's "Browse all programs" skipping membership-only Programs (PR #106).
 - **4.3.9C — Women's Full Body + Glutes Program.**
 - **4.3.9D — Women's Bodyweight / No-Equipment Program.**
 - **4.3.9E — Glute Builder repositioning.** Preserve it as the glute-**specialization**, not the broad
@@ -1410,6 +1412,14 @@ exercise-metadata seam). Audit and extend; do not recreate.
   concepts where scientifically and practically appropriate. Keyed on canonical exercise identity.
 - **5.1.8 — Coach integration.** Coach explains progression recommendations rather than presenting
   unexplained numbers.
+- **5.1.9 — Automatic variation progression** *(owner-approved 2026-11-16; pulled forward — built before
+  4.4)*. When a client tops an exercise's range, progression stops printing "move to a harder variation"
+  and acts: while more reps or time are still sensible, it keeps adding them; once they are not, the next
+  session loads the harder variation automatically, with a short notice and one tap to go back. Binding:
+  the step-up is per user only (no Program or Routine is ever mutated); it follows a reviewed progression
+  ladder of canonical exercises, never a guess from names or difficulty alone; an equipment-free Program
+  only ever steps to equipment-free exercises; mobility, breathing and cardio holds never level up; and the
+  Coach (4.4) later reads the same state rather than deciding separately.
 
 ---
 
@@ -2102,6 +2112,7 @@ Reordered 2026-09-02. Rationale and binding gates G1–G6 are in §4.
 
 | # | Phase | Classification |
 |---|---|---|
+| 0 | **5.1.9** — Automatic variation progression *(pulled forward 2026-11-16, owner-approved)* | BEFORE 4.4 |
 | 1 | **4.4** — Personal AI Coach v1, Read-Only | LAUNCH-BLOCKING |
 | 2 | **4.5-I** — Pre-Activation Build & Certification (all activation flags OFF) | LAUNCH-BLOCKING |
 | 3 | **4.3.8** — Interactive First-Run Experience | LAUNCH-BLOCKING |

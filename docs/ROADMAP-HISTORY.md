@@ -1960,3 +1960,27 @@ workout is started and finished and reaches the Completion card showing the corr
 finish creates the first Bodyweight `user_programs` row, which is the expected enrolment-on-first-finish
 behaviour, not automatic enrolment. Production is then re-read to confirm it. Criterion A (recommendation
 honesty) belongs to the whole 4.3.9-L track and is not assessed here.
+
+## 2026-11-16 — Phase 4.3.9B CLOSED — Bodyweight / No-Equipment Program
+
+**Status: CLOSED.** Every criterion B item the 2026-10-19 audit left open is now evidenced. Criterion A
+(recommendation honesty) belongs to the whole 4.3.9-L track and is not assessed here.
+
+**Owner device validation (iPhone), Bodyweight Foundations active:** at 6, 5, 4, 3 and 2 training days,
+Home and Train both named Bodyweight Foundations with matching session labels, the Program page showed
+that frequency's approved schedule, and changing frequency never switched the active Program — all pass.
+
+**Representative workout:** Full Body B started from the Program and finished on 2026-11-16. Production
+(read-only): the workout carries `program_slug = 'bodyweight_foundations'`, `session_key = 'full_b'`,
+`completed = true`; the Completion card's "Next up: Full Body C" is correct for a 2-day schedule; the
+Bodyweight `user_programs` row exists. Viewing at each frequency created no workouts.
+
+**Programs route audit:** Profile's "Browse all programs" opened the Store, which lists only purchasable
+products, so the membership-only Bodyweight Foundations was unreachable from Profile. Fixed in PR #106
+(squash `c533a27`): it now opens Train's Programs pane; the Store stays on Profile as "Shop programs".
+
+**Found during the workout, fixed:** a fixed rep target read "10–10 reps" (Dead Bug). PR #107.
+
+**Owner decision recorded the same day:** automatic variation progression (roadmap 5.1.9) is pulled
+forward ahead of 4.4.
+
