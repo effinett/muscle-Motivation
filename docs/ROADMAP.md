@@ -811,6 +811,12 @@ possible, not a slideshow.
 - **4.3.8G — Contextual education framework.** Introduce advanced features when encountered rather than
   overloading first run.
 - **4.3.8H — Funnel instrumentation.** Tour started · skipped · completed · major step viewed.
+- **4.3.8I — Your plan, explained** *(owner requirement, recorded 2026-11-16)*. Extend the 4.3.7E value
+  reveal into the first run: tell the user their recommended training days, approximate workout length,
+  cardio and daily steps, and how the app will help them hit each one. Values come from
+  `personalization-core.js` and stored targets only — derived, not generated, and no new nutrition math.
+  A recommendation the engine cannot derive today (for example, workout length or a steps target) needs
+  its rule added to `personalization-core.js` first; it is never written as copy.
 
 **Input-surface constraint (binding).** First-run teaches **Quick Log** as the food-logging path and may
 say the user can type a meal description. It must **not** anchor to, depend on, or promise
@@ -1275,6 +1281,11 @@ Undo applies wherever technically appropriate. **Material actions must never sil
 - **4.7.6 — AI workout generation.** Structured routines referencing canonical exercise identity. Valid
   `exercise_id` or appropriate custom identity · no fabricated exercise records · user previews · user
   confirms before save.
+  *Owner requirement (recorded 2026-11-16):* a chat-style **"Push workout today"** experience — the user
+  asks for a session and Coach builds one from their declared equipment, their progression state
+  (`progression.js`) and learned preferences (5.5.10), keeping the exercises they already train rather
+  than reshuffling them each time (no unnecessary exercise churn), through the same preview-and-confirm
+  path.
 - **4.7.7 — Goal / plan actions.** Propose, then update supported plan variables after confirmation.
 - **4.7.8 — Reminder actions.** Coach may create or update reminders **only by calling the shared 4.6
   notification system** ("Remind me to weigh myself tomorrow"). No Coach-specific scheduler.
@@ -1503,6 +1514,11 @@ any of this is pulled ahead of the locked critical path (§13) is Effi's decisio
   `public.food_search_events` (migration `20261111111733`; write-only, no user id) + `food-telemetry.js`.
   A zero-result is recorded only once the text stops changing for two seconds. *Open:* a reader for the
   data (service-role query or admin view) and the 180-day purge.
+  *Extended 2026-11-16 (PR #104, migration `20261116063127`):* one `ql_*` event per AI Quick Log item
+  (matched / chooser / clarify / unmatched / manual) plus Quick Log chooser taps as picks.
+  *Checked 2026-11-16:* the table still holds **0 rows**. Not a defect: the insert policy and grants
+  accept every event kind (verified by a rolled-back insert as `authenticated`), and production has
+  seen almost no food logging since 2026-11-11. The first real rows confirm the client path end to end.
 - **4.5.17 Layer B:** live-model AI parse fidelity (already the largest untested surface).
 - *Shipped 2026-11-11 (owner decision: yes, labeled unverified):* barcode fallback to **Open Food Facts**
   on a clean USDA miss. Fail-closed validation (`offToFood`), "Unverified" label naming the source,
