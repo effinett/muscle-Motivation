@@ -95,7 +95,8 @@ test('an unresolved prescription carries no unit noun at all', () => {
 test('PARITY: omitting tracking metadata preserves the original wording', () => {
   // Every pre-CP3d-2a caller omits both keys and must be byte-identical.
   assert.equal(goal({ repsLow: 8, repsHigh: 12 }), '8–12 reps');
-  assert.equal(goal({ repsLow: 5, repsHigh: 5 }), '5–5 reps');
+  // A fixed target reads as one number (owner-reported 2026-11-16), not "5–5".
+  assert.equal(goal({ repsLow: 5, repsHigh: 5 }), '5 reps');
   assert.equal(goal({}), Progression.DEFAULT_LOW + '–' + Progression.DEFAULT_HIGH + ' reps');
 });
 
@@ -1091,4 +1092,12 @@ test('CP4c: resume re-derives Pike Lean guidance and its seconds target; a swapp
   assert.equal(swapped.reps_low, undefined, 'and takes no prescription it does not own');
   // Another Program's slug gets no guidance at all on resume.
   (await resumeSandbox('muscle_gain')).forEach((x) => assert.equal(x.programGuidance, null, x.name));
+});
+
+test('a fixed target reads as one number in the goal and the coaching note', () => {
+  const g = Progression.analyze({ repsLow: 10, repsHigh: 10, history: [] });
+  assert.equal(g.goalRange.display, '10 reps');
+  assert.ok(!/10–10/.test(g.coachNote), g.coachNote);
+  assert.match(g.coachNote, /for 10 reps/);
+  assert.equal(goal({ repsLow: 8, repsHigh: 10 }), '8–10 reps');
 });
