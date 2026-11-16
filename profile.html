@@ -517,8 +517,15 @@
           '</div>';
         });
       }
-      html += '<a class="item" href="store.html">' +
+      // Same destination as every other "Browse programs" link: Train's Programs
+      // pane reads the live catalog, so it lists membership-only Programs such
+      // as Bodyweight Foundations that the Store (purchasable products) never shows.
+      html += '<a class="item" href="workout.html?pane=programs">' +
         '<div class="item-main"><div class="item-name">Browse all programs</div></div>' +
+        '<span class="item-val">→</span></a>';
+      // Commerce stays on Profile (4.3.4): the Store is still one tap away.
+      html += '<a class="item" href="store.html">' +
+        '<div class="item-main"><div class="item-name">Shop programs</div></div>' +
         '<span class="item-val">→</span></a>';
       card.innerHTML = html;
 
