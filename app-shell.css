@@ -65,7 +65,7 @@
   --mm-accent-border:   rgba(177, 18, 27, 0.30);
 
   /* ── 3 · SEMANTIC (never aliases the accent) ─────────────────────────── */
-  --mm-success: #1DED69;
+  --mm-success: #25D366;
   --mm-warning: #E0A800;
   --mm-danger:  #DC2626;
 
@@ -81,13 +81,13 @@
    * and a future change to the success colour must not silently restyle the
    * calorie category. Equally it is NOT accent-derived, so a user theme never
    * collapses the calorie/macro distinction. */
-  --mm-calories: #1DED69;
+  --mm-calories: #25D366;
 
   /* Weight / body-composition trend charts (Progress page + Home widget).
    * A data category like calories, not a judgement: the line is the same
    * green whether the trend goes up or down. Not accent-derived, and not
    * --mm-success, so changing either never restyles the chart. */
-  --mm-trend: #1DED69;
+  --mm-trend: #25D366;
 }
 
 /* Keep the soft/border accent derivatives following a changed --mm-accent.
