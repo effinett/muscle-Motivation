@@ -617,6 +617,9 @@
           <div class="reveal-name" id="ob-rProgramName">—</div>
           <div class="reveal-reasons" id="ob-rProgramReasons"></div>
           <div class="reveal-meta" id="ob-rProgramMeta"></div>
+          <!-- Phase 4.3.9F. The engine's own runners-up, named only — nothing
+               here navigates away from an unsaved onboarding. -->
+          <div class="reveal-meta" id="ob-rOtherOptions" style="display:none;"></div>
         </div>
         <!-- Phase 4.3.9-L. Shown INSTEAD of the card above when the engine
              deliberately withheld a recommendation because no Program is
@@ -1295,6 +1298,17 @@
     if (rec.recommendedDaysPerWeek) meta.push(rec.recommendedDaysPerWeek + ' days / week');
     if (rec.difficulty) meta.push(rec.difficulty);
     document.getElementById('ob-rProgramMeta').textContent = meta.join(' · ');
+
+    // Phase 4.3.9F — "See other options", by name only, from the engine's own
+    // ranked alternatives. Hidden when there are none.
+    var others = (Personalization.otherOptions ? Personalization.otherOptions(plan) : []);
+    var otherEl = document.getElementById('ob-rOtherOptions');
+    if (otherEl) {
+      otherEl.textContent = others.length
+        ? 'Other options: ' + others.map(function (o) { return o.name; }).join(' · ') + '. You can switch anytime in Programs.'
+        : '';
+      otherEl.style.display = others.length ? '' : 'none';
+    }
 
     block.style.display = 'block';
   }

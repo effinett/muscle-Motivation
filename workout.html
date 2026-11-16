@@ -483,6 +483,15 @@
       min-height: 44px; text-decoration: none;
     }
     .btn-icon[disabled] { opacity: 0.3; pointer-events: none; }
+    /* Phase 4.3.9F — "See other options": a quiet secondary control under the
+       recommended Program, 44px tall for touch. */
+    .other-options-toggle {
+      display: block; width: 100%; min-height: 44px; margin: 8px 0 4px;
+      background: transparent; border: 1px solid var(--border-1, #2A2A2A); border-radius: 10px;
+      color: var(--text-2, #B8B8B8); font-family: 'Barlow', sans-serif; font-size: 13px;
+      font-weight: 700; letter-spacing: 1px; text-transform: uppercase; cursor: pointer;
+    }
+    #otherOptionsList .tpl-card { margin-top: 8px; }
 
     /* Save-as-Routine review (CP7) */
     .review-flag {
@@ -4689,6 +4698,16 @@
   // (recommendation is not access), and skipping that request keeps this
   // path to at most ONE call — usually zero, since program-catalog.js caches
   // the catalog in sessionStorage for the whole browser session.
+  // Phase 4.3.9F — expands or collapses the ranked alternatives.
+  function toggleOtherOptions(btn) {
+    var list = document.getElementById('otherOptionsList');
+    if (!list || !btn) return;
+    var open = list.hidden;
+    list.hidden = !open;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    btn.textContent = open ? 'Hide other options' : 'See other options';
+  }
+
   async function renderSuggestedProgram(profile) {
     try {
       var catalog = pcCached();
@@ -4745,6 +4764,23 @@
       // may have changed it earlier in this page's life.
       document.getElementById('suggestedLabel').textContent = 'Recommended For You';
 
+      // Phase 4.3.9F — the engine's own ranked alternatives, behind one tap.
+      // Presentation only: no second ranking, and every option already passed
+      // the equipment gate, so nothing listed is something they cannot do.
+      var others = (Personalization.otherOptions ? Personalization.otherOptions(plan) : [])
+        .filter(function (o) { return o.pagePath; });
+      var othersHtml = others.map(function (o) {
+        return '<div class="tpl-card">' +
+          '<div class="tpl-info">' +
+            '<div class="tpl-name">' + esc(o.name) + '</div>' +
+            '<div class="tpl-sub">' + esc(Personalization.describeOption(o, plan).join(' · ')) + '</div>' +
+          '</div>' +
+          '<div class="tpl-actions">' +
+            '<a class="btn-tpl-start" href="' + esc(o.pagePath) + '">View</a>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+
       document.getElementById('suggestedWrap').innerHTML =
         '<div class="tpl-card">' +
           '<div class="tpl-info">' +
@@ -4754,7 +4790,12 @@
           '<div class="tpl-actions">' +
             '<a class="btn-tpl-start" href="' + esc(rec.pagePath) + '">View</a>' +
           '</div>' +
-        '</div>';
+        '</div>' +
+        (others.length
+          ? '<button type="button" class="other-options-toggle" aria-expanded="false" ' +
+              'aria-controls="otherOptionsList" onclick="toggleOtherOptions(this)">See other options</button>' +
+            '<div id="otherOptionsList" hidden>' + othersHtml + '</div>'
+          : '');
       document.getElementById('suggestedSection').style.display = '';
     } catch (e) {
       // Never fatal: Train's own sections are unaffected by a suggestion that

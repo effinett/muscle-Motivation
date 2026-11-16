@@ -842,6 +842,12 @@ question and ignoring the answer is not acceptable in a paid personalization pro
 
 - **4.3.9A — Catalog metadata correction.** Correct inaccurate `equipment_summary` and `difficulty` on the
   existing Programs. **Behaviour-changing, not bookkeeping** — it changes what real users are recommended.
+  *Complete (factual status correction, 2026-11-16):* shipped 2026-09-04 as migration `20260904042551`
+  (`phase_439l_cp2_program_equipment_and_difficulty`), with the equipment eligibility gate and the no-fit
+  card (PR #55). Replay 2026-11-16 (3 goals × 3 experience × 3 gym access × 2–6 days, live catalog): every
+  combination receives a Program; none is a no-fit. Open coverage gaps, recorded for 4.3.9-L content:
+  advanced users get only Beginner–Intermediate Programs (experience caveat shown); fat-loss users without
+  a gym get the muscle-goal Bodyweight Foundations; home-equipment users get Bodyweight Foundations.
 - **4.3.9B — Bodyweight / No-Equipment Program.** *Complete (2026-11-16).* Checkpoint record:
   `docs/ROADMAP-HISTORY.md`, 2026-10-04 entry. **CP4e** (owner-approved 2026-10-04) publishes the six
   CP4d frequency Routines and activates the 4/5/6-day mapping: 4 days `push_core_a, lower_a,
@@ -860,9 +866,17 @@ question and ignoring the answer is not acceptable in a paid personalization pro
 - **4.3.9D — Women's Bodyweight / No-Equipment Program.**
 - **4.3.9E — Glute Builder repositioning.** Preserve it as the glute-**specialization**, not the broad
   default it currently becomes by metadata accident.
+  *Status 2026-11-16:* the metadata accident is gone — after 4.3.9A, Muscle Gain wins every muscle/recomp
+  full-gym case and Glute Builder is the recommended pick for no combination. It now appears only as a
+  "See other options" alternative. Its glute-specialization positioning (copy, page) remains open.
 - **4.3.9F — Ranked shortlist / "See other options".** One primary recommendation plus alternatives.
   Presentation over `personalization-core.js`, which already returns `training.recommendedProgram` plus a
   ranked `training.alternatives`. **Do not create a second ranking engine.**
+  *Complete 2026-11-16:* `Personalization.otherOptions` (the engine's own alternatives, in order, capped at
+  two) and `describeOption` (catalog facts only; names a different goal as such). Train shows a "See other
+  options" toggle under the recommendation; the onboarding reveal names them without links; Home keeps its
+  one-line hero. `personalization-options.test.js` proves no option fails the equipment gate across the
+  whole input space.
 
 **Binding constraints.**
 
