@@ -1111,11 +1111,9 @@ test('weight: the full Progress chart did not regress', () => {
   // Defaults reproduce the previous output exactly; only the colour literal
   // became currentColor, and the page sets that colour to the same red.
   const page = read('weight-history.html');
-  assert.match(page, /\.chart-card\s*\{[^}]*color:\s*var\(--red\)/,
-    'the card supplies the accent the chart used to hard-code');
-  assert.match(SHELL, /--red:\s*var\(--mm-accent\)/);
-  assert.match(SHELL, /--mm-accent:\s*var\(--mm-brand-red\)/);
-  assert.match(SHELL, /--mm-brand-red:\s*#B1121B/, 'which resolves to the original literal');
+  assert.match(page, /\.chart-card\s*\{[^}]*color:\s*var\(--mm-trend\)/,
+    'the card supplies the chart colour from the trend category token');
+  assert.match(SHELL, /--mm-trend:\s*#[0-9A-Fa-f]{6}/, 'a literal category colour');
   // Progress still calls the renderer with no size options at all.
   assert.match(page, /var svg = wlChartSVG\(logs\);/, 'weight chart: bare call');
   assert.ok(!/wlChartSVG\(logs, \{\s*width/.test(page), 'no size override crept in');
@@ -1182,9 +1180,9 @@ test('weight: the widget is an accessible navigation target, the SVG is not', ()
   assert.ok(!/pointer-events:\s*none/.test(spark), 'the widget must be tappable');
 
   // Theme tokens throughout: the card sets the colour, the renderer inherits it.
-  assert.match(spark, /color:\s*var\(--mm-accent\)/, 'theme token, not a literal');
+  assert.match(spark, /color:\s*var\(--mm-trend\)/, 'same token as the Progress chart');
   assert.match(read('weight.js'), /stroke="currentColor"/,
-    'the stroke follows the theme colour, so a user accent flows through');
+    'the stroke follows the card colour');
   assert.ok(!/#[0-9A-Fa-f]{6}/.test(spark), 'no hard-coded colour on the card');
 
   // No chart chrome authored here: no axes, grid, ticks, tooltips or heading.
