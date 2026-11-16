@@ -7,7 +7,7 @@ customer data, no auth users and no credentials.
 |---|---|
 | `schema/current-schema.sql` | **Authoritative rebuild file.** Complete current structure of schema `public` (27 tables, constraints, indexes, row-level security, 60 policies, functions, triggers, grants, comments) plus the `auth.users` sign-up trigger and the `ensure_rls` event trigger. Schema only — no rows. |
 | `schema/baseline-pre-2026-06-09.sql` | Objects created before migration tracking began (`profiles`, `handle_new_user` + `on_auth_user_created`, `rls_auto_enable` + `ensure_rls`). Only needed to replay history. |
-| `migrations/` | The 71 migrations applied to production (as of 2026-11-16), with their original version numbers. History, not a rebuild script — see below. |
+| `migrations/` | The 72 migrations applied to production (as of 2026-11-16), with their original version numbers. History, not a rebuild script — see below. |
 
 ## Rebuild the structure on a new Supabase project
 
@@ -18,10 +18,10 @@ separately from the encrypted private backup, never from this repository.
 ## Why the migrations are not a rebuild script
 
 Replaying `baseline` + `migrations/` in order rebuilds the same structure (verified),
-but nine migrations are guarded **data** migrations that assert production row state
+but ten migrations are guarded **data** migrations that assert production row state
 and deliberately abort on an empty database; they contain no structural changes:
 `20260825142638`, `20260904042551`, `20260920231151`, `20260929030347`, `20260930032337`,
-`20261002024350`, `20261002173108`, `20261003000515`, `20261005041336`.
+`20261002024350`, `20261002173108`, `20261003000515`, `20261005041336`, `20261116183238`.
 
 `20261002173108` (`phase_439b_cp4c_bodyweight_guidance_pike_lean`) updates the exercise
 JSON arrays of two Bodyweight Foundations Routines (Full Body A and B) under exact-state
@@ -42,6 +42,12 @@ requires each of them to match its CP4d record, plus the published Program, Full
 nine links, the equipment-free pool fingerprint and the catalog, and aborts on any divergence. It
 inserts, deletes and relinks nothing and changes no schedule mapping. It checks ownership against
 Full Body A/B/C rather than naming an account, so it needs no session setting either.
+
+`20261116183238` (`phase_439b_bodyweight_rep_ranges`) changes only `reps_low` / `reps_high` at nine
+slots on five Bodyweight Foundations Routines (owner-approved 2026-11-16), so no slot is a fixed
+target. It proves each new array equals its old array with only those values changed, requires the
+published Program, the five Routines and their links, and aborts on any divergence. It changes no
+Program, link, schedule, catalog row or other Routine.
 
 Two of them (`20260920231151`, `20260929030347`) reference the platform owner account.
 In this repository that one value is read from a session setting instead of being written
