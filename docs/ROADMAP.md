@@ -842,7 +842,7 @@ question and ignoring the answer is not acceptable in a paid personalization pro
 
 - **4.3.9A — Catalog metadata correction.** Correct inaccurate `equipment_summary` and `difficulty` on the
   existing Programs. **Behaviour-changing, not bookkeeping** — it changes what real users are recommended.
-- **4.3.9B — Bodyweight / No-Equipment Program.** *In progress.* Checkpoint record:
+- **4.3.9B — Bodyweight / No-Equipment Program.** *Complete (2026-11-16).* Checkpoint record:
   `docs/ROADMAP-HISTORY.md`, 2026-10-04 entry. **CP4e** (owner-approved 2026-10-04) publishes the six
   CP4d frequency Routines and activates the 4/5/6-day mapping: 4 days `push_core_a, lower_a,
   push_core_b, lower_b`; 5 days `push_core_a, lower_a, conditioning_core, push_core_b, lower_b`; 6 days
@@ -852,8 +852,10 @@ question and ignoring the answer is not acceptable in a paid personalization pro
   and verified 2026-10-05** (migration `20261005041336`). **CP4e-2** (code only) activates the mapping
   and labels every Program session with its Routine's own name; see the 2026-10-05 history entry.
   **CP4f** (PR #75) fixed the Start bar's clearance. The 2026-10-19 criterion B audit passes every content
-  item. Still open: Bodyweight-active device checks at 6–2 days and one real-device run that starts and
-  completes a representative workout (see the 2026-10-19 history entry).
+  item. *Complete 2026-11-16:* Bodyweight-active device checks at 6–2 days passed on the owner's iPhone,
+  and a representative workout (Full Body B) was started from the Program and finished, with "Next up:
+  Full Body C" correct for 2 days (see the 2026-11-16 history entry). The Programs route audit found and
+  fixed Profile's "Browse all programs" skipping membership-only Programs (PR #106).
 - **4.3.9C — Women's Full Body + Glutes Program.**
 - **4.3.9D — Women's Bodyweight / No-Equipment Program.**
 - **4.3.9E — Glute Builder repositioning.** Preserve it as the glute-**specialization**, not the broad
@@ -924,6 +926,9 @@ owner is new — K.1 → 4.3.9-L, K.2 → 4.3.9F. Neither historical record is a
 ## PHASE 4.4 — PERSONAL AI COACH v1 — READ-ONLY
 
 **Goal:** build the core premium differentiator.
+
+**Prerequisite (owner decision 2026-11-16):** Bodyweight Exercise Progression v1 (5.1.2) ships before 4.4
+starts. 4.4.4 Training intelligence reads that progression state; it never makes a separate decision.
 
 ### Coach v1 read-only contract (binding)
 
@@ -1398,6 +1403,14 @@ exercise-metadata seam). Audit and extend; do not recreate.
 - **5.1.1 — Previous-performance system hardening.** Improve the shipped system.
 - **5.1.2 — Advanced progressive overload.** Extend the existing progression logic; distinguish real
   progression from single-session noise.
+  *Bodyweight Exercise Progression v1 — required before 4.4 (owner decision 2026-11-16).* Covers bodyweight
+  exercises with approved progression paths. The ceiling is the top of the Program's prescribed range; there
+  is no separate per-exercise ceiling. When every prescribed set reaches the top of the range for two
+  consecutive completed sessions, the client is offered the next pre-approved harder variation on that
+  exercise's path and confirms good form by accepting; the step-up is stored per client and never edits a
+  Program or Routine. An exercise at the end of its path holds at its prescribed range and is marked as having
+  no next step. Bodyweight Foundations stays equipment-free. Weighted and equipment-based progression are
+  future work, built with equipment-aware programming.
 - **5.1.3 — Equipment-aware increments** *(deferred from the progression spec)*. Account for realistic
   available jumps.
 - **5.1.4 — Warm-up support** *(deferred from the progression spec)*.
