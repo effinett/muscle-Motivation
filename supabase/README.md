@@ -5,9 +5,9 @@ customer data, no auth users and no credentials.
 
 | Path | What it is |
 |---|---|
-| `schema/current-schema.sql` | **Authoritative rebuild file.** Complete current structure of schema `public` (27 tables, constraints, indexes, row-level security, 60 policies, functions, triggers, grants, comments) plus the `auth.users` sign-up trigger and the `ensure_rls` event trigger. Schema only — no rows. |
+| `schema/current-schema.sql` | **Authoritative rebuild file.** Complete current structure of schema `public` (28 tables, constraints, indexes, row-level security, 62 policies, functions, triggers, grants, comments) plus the `auth.users` sign-up trigger and the `ensure_rls` event trigger. Schema only — no rows. |
 | `schema/baseline-pre-2026-06-09.sql` | Objects created before migration tracking began (`profiles`, `handle_new_user` + `on_auth_user_created`, `rls_auto_enable` + `ensure_rls`). Only needed to replay history. |
-| `migrations/` | The 72 migrations applied to production (as of 2026-11-16), with their original version numbers. History, not a rebuild script — see below. |
+| `migrations/` | The 73 migrations applied to production (as of 2026-11-16), with their original version numbers. History, not a rebuild script — see below. |
 
 ## Rebuild the structure on a new Supabase project
 
@@ -75,3 +75,7 @@ with no policies, and no privileges for `anon` or `authenticated`.
 `20261116063127` (`food_search_events_quicklog`, 2026-11-16) replaces only the
 `food_search_events` insert policy so it also accepts AI Quick Log outcomes; its live
 policy text was copied into `schema/current-schema.sql` the same way.
+`20261116191336` (`create_user_exercise_progressions`, 2026-11-16) adds the append-only
+`user_exercise_progressions` table for Bodyweight Exercise Progression v1: owner-scoped INSERT and
+SELECT policies only, no UPDATE or DELETE, nothing for `anon`. It was appended to
+`schema/current-schema.sql` from the applied migration text.

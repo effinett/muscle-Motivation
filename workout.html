@@ -1539,6 +1539,7 @@
 <script src="personalization-core.js"></script>
 <script src="workout-history.js"></script>
 <script src="progression.js"></script>
+<script src="bodyweight-progression.js"></script>
 <!-- Shared exercise-intelligence core (Phase 4.2.1E) — powers the picker's
      normalization/alias/variant-aware search (Phase 4.2.1F). Load before the
      inline consumer below. -->
@@ -2428,6 +2429,9 @@
 
   // A prescription's guidance, or null. Blank, non-string and missing are absent.
   function readProgramGuidance(entry) {
+    if (entry && typeof entry.stepped_from === 'string' && entry.stepped_from) {
+      return 'Stepped up from ' + entry.stepped_from + '. You earned this next step — keep your form solid.';
+    }
     if (!entry || typeof entry.notes !== 'string') return null;
     var text = entry.notes.trim();
     return text ? text : null;
@@ -4227,6 +4231,19 @@
     }
   }
 
+  // Bodyweight Exercise Progression v1 — this client's step-up choices for one
+  // Program, oldest first (the latest per exercise wins). Never throws.
+  async function loadProgressionSteps(programSlug) {
+    if (!programSlug || !currentUser) return [];
+    try {
+      var res = await supabaseClient.from('user_exercise_progressions')
+        .select('from_exercise_id,to_exercise_id,state,created_at')
+        .eq('user_id', currentUser.id).eq('program_slug', programSlug)
+        .order('created_at', { ascending: true });
+      return (res && !res.error && res.data) ? res.data : [];
+    } catch (e) { return []; }
+  }
+
   async function startProgramSession(programSlug, sessionKey, mode) {
     mode = (mode === 'progression') ? 'progression' : 'optional';
 
@@ -4270,6 +4287,11 @@
     // defensive check so a future caller cannot reintroduce a blank launch.
     if (sessData) {
       var exList = sessData.exercises || [];
+      // Bodyweight Exercise Progression v1: the client's accepted step-ups
+      // replace a slot for THIS client only. The Routine itself is untouched.
+      if (typeof BodyweightProgression !== 'undefined') {
+        exList = BodyweightProgression.applySteps(exList, await loadProgressionSteps(programSlug));
+      }
       for (var i = 0; i < exList.length; i++) {
         var ex = exList[i];
         var pids = exerciseIdentityColumns(ex.name, ex.exercise_id != null ? ex.exercise_id : null);

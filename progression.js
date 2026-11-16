@@ -564,8 +564,9 @@
         recWeight = base; // bodyweight — can't add load
         recReps = high;
         if (noLoad) {
-          note = 'You topped the range. Keep adding ' + (timed ? 'time' : 'reps') + ' beyond ' + high + noun +
-                 ', or move to a harder variation.';
+          // Bodyweight Exercise Progression v1: never grow past the ceiling. The
+          // step-up decision (two sessions at the top) is bodyweight-progression.js's.
+          note = 'You hit the top of the range on every set. Hold ' + high + noun + ' and keep your form solid.';
         } else {
           note = 'You topped the ' + (timed ? 'range' : 'rep range') + '. Add ' + (timed ? 'time' : 'reps') +
                  ' beyond ' + high + (timed ? ' sec' : '') + ', add load, or move to a harder variation.';
