@@ -2458,6 +2458,38 @@ async function nuAiResolveMealItems(items, mealText, mealType) {
   }));
 }
 function nuAiResolveChoice(item, ci) { return nu_resolver.resolveChoice(item, ci); }
+
+/* ── Quick Log telemetry (roadmap 4.5.17) ─────────────────────────────────────
+ * One anonymous event per resolved item, keyed by the AI's short per-food query
+ * (never the member's sentence). Same never-awaited, never-throws contract as
+ * the search hooks (nuTelemetry). */
+function nuAiItemQuery(it) {
+  var p = (it && it.parsed) || {};
+  return String(p.query || '').trim();
+}
+function nuAiOutcomeTelemetry(items) {
+  try {
+    (items || []).forEach(function (it) {
+      if (!it) return;
+      var kind = it.unmatched ? 'ql_unmatched'
+        : it.needsClarification ? 'ql_clarify'
+        : it.needsChoice ? 'ql_chooser' : 'ql_matched';
+      var n = it.needsChoice ? (it.choices || []).length : (it.unmatched ? 0 : 1);
+      nuTelemetry(kind, { query: nuAiItemQuery(it), resultCount: Math.min(n, 200) });
+    });
+  } catch (e) { /* telemetry can never break logging */ }
+}
+function nuAiChoiceTelemetry(it, ci) {
+  try {
+    nuTelemetry('pick', {
+      query: nuAiItemQuery(it), resultCount: Math.min(((it && it.choices) || []).length, 200),
+      rank: ci, source: 'quicklog', via: 'chooser',
+    });
+  } catch (e) {}
+}
+function nuAiManualTelemetry(it) {
+  try { nuTelemetry('ql_manual', { query: nuAiItemQuery(it) }); } catch (e) {}
+}
 function nuAiResolveClarification(item, choice) { return nu_resolver.resolveClarification(item, choice); }
 
 /* ── Correction memory capture (Phase 4.2.4) ─────────────────────────────────

@@ -678,8 +678,8 @@ ALTER TABLE public."food_search_events" ENABLE ROW LEVEL SECURITY;
 COMMENT ON TABLE public."food_search_events" IS 'Roadmap 4.5.17. Append-only anonymous food-search telemetry: zero-result searches and the result position picked. Contains NO user id by construction. Write-only from clients: INSERT policy only, no SELECT policy. Retention intent 180 days, no automatic purge.';
 COMMENT ON COLUMN public."food_search_events"."query" IS 'Search text as typed, lowercased and whitespace-collapsed, 2-80 characters. The client never sends text containing @ or a run of 7+ digits.';
 COMMENT ON COLUMN public."food_search_events"."picked_rank" IS '0-based position of the picked row within its list (database results or the user''s own foods). NULL for zero_result.';
-COMMENT ON COLUMN public."food_search_events"."picked_source" IS 'Which list the pick came from: generic | branded | own. NULL for zero_result.';
-COMMENT ON COLUMN public."food_search_events"."via" IS 'row = the food card was opened; add = one-tap add. NULL for zero_result.';
+COMMENT ON COLUMN public."food_search_events"."picked_source" IS 'Which list the pick came from: generic | branded | own | quicklog (Quick Log chooser). NULL for every other event.';
+COMMENT ON COLUMN public."food_search_events"."via" IS 'row = the food card was opened; add = one-tap add; chooser = a Quick Log chooser row. NULL for every non-pick event.';
 REVOKE ALL ON TABLE public."food_search_events" FROM PUBLIC, anon, authenticated, service_role;
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public."food_search_events" TO "anon";
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public."food_search_events" TO "authenticated";
@@ -837,7 +837,7 @@ CREATE POLICY "Users update own food logs" ON public."food_logs" AS PERMISSIVE F
   USING ((auth.uid() = user_id))
   WITH CHECK ((auth.uid() = user_id));
 CREATE POLICY "food_search_events_insert" ON public."food_search_events" AS PERMISSIVE FOR INSERT TO "authenticated"
-  WITH CHECK (((schema_version = 1) AND ((char_length(query) >= 2) AND (char_length(query) <= 80)) AND (((event = 'zero_result'::text) AND (result_count = 0) AND (picked_rank IS NULL) AND (picked_source IS NULL) AND (via IS NULL)) OR ((event = 'pick'::text) AND ((result_count >= 0) AND (result_count <= 200)) AND ((picked_rank >= 0) AND (picked_rank <= 200)) AND (picked_source = ANY (ARRAY['generic'::text, 'branded'::text, 'own'::text])) AND (via = ANY (ARRAY['row'::text, 'add'::text]))))));
+  WITH CHECK (((schema_version = 1) AND ((char_length(query) >= 2) AND (char_length(query) <= 80)) AND (((event = 'zero_result'::text) AND (result_count = 0) AND (picked_rank IS NULL) AND (picked_source IS NULL) AND (via IS NULL)) OR ((event = 'pick'::text) AND ((result_count >= 0) AND (result_count <= 200)) AND ((picked_rank >= 0) AND (picked_rank <= 200)) AND (picked_source = ANY (ARRAY['generic'::text, 'branded'::text, 'own'::text, 'quicklog'::text])) AND (via = ANY (ARRAY['row'::text, 'add'::text, 'chooser'::text])) AND ((picked_source = 'quicklog'::text) = (via = 'chooser'::text))) OR ((event = ANY (ARRAY['ql_matched'::text, 'ql_chooser'::text, 'ql_clarify'::text, 'ql_unmatched'::text, 'ql_manual'::text])) AND ((result_count >= 0) AND (result_count <= 200)) AND (picked_rank IS NULL) AND (picked_source IS NULL) AND (via IS NULL)))));
 CREATE POLICY "Users delete own foods" ON public."foods" AS PERMISSIVE FOR DELETE TO public
   USING ((auth.uid() = user_id));
 CREATE POLICY "Users insert own foods" ON public."foods" AS PERMISSIVE FOR INSERT TO public
