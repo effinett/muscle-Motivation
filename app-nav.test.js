@@ -856,3 +856,15 @@ test('trainPaneHref adds no parameter for Today or an unknown pane', () => {
   assert.strictEqual(AppNav.trainPaneHref(undefined), 'workout.html');
   assert.strictEqual(AppNav.trainPaneHref('programs'), 'workout.html?pane=programs');
 });
+
+// 4.3.9B Programs route audit (2026-11-16): Profile's "Browse all programs" and
+// Train's Programs pane must reach the same live catalog. The Store lists only
+// purchasable products, so a membership-only Program (Bodyweight Foundations)
+// was unreachable from Profile.
+test('Profile "Browse all programs" lands on Train\'s Programs pane, not the Store', () => {
+  const html = read('profile.html');
+  const link = html.match(/<a class="item" href="([^"]+)">'\s*\+\s*'<div class="item-main"><div class="item-name">Browse all programs/);
+  assert.ok(link, 'Browse all programs link not found');
+  assert.strictEqual(link[1], AppNav.trainPaneHref('programs'));
+  assert.strictEqual(AppNav.resolveTrainPane('?pane=programs'), 'programs');
+});
