@@ -261,6 +261,24 @@ loaded on `workout.html` AFTER `exercise-core.js` (reuses its `normalizeEquipmen
   Covered by `exercise-filters.test.js` and `discovery`-tagged
   `benchmarks/exercise-cases.jsonl` cases (collision assertions, not just presence).
 
+### Bodyweight Exercise Progression v1 — `bodyweight-progression.js` (`Planned` wiring; engine built 2026-11-16)
+
+Roadmap 5.1.2 bodyweight scope, required before 4.4 (owner decisions 2026-11-16). Pure: no DOM,
+fetch, DB or clock. The workout screen, the Completion card and the AI Coach read the same answer.
+
+- **`decide({ exerciseId, prescription, history, declinedAt })`** → `{ status, ceiling, streak, next }`.
+  `status` ∈ `not_eligible` · `building` · `one_more` · `step_up` · `terminal`.
+- **Ceiling = the prescription's `reps_high`.** No per-exercise ceiling exists. A session counts only
+  when it was completed, every prescribed working set was logged, and every working set reached the
+  ceiling; warm-ups never count. Two consecutive such sessions → `step_up` (with the next variation and
+  its range) or `terminal`. A fixed prescription (`reps_low >= reps_high`) is `not_eligible`.
+- **`PATHS`** (owner-approved, all equipment-free) and **`TERMINAL`** are the only data; an exercise on
+  neither is `not_eligible`, so mobility, cardio and equipment work keep today's behaviour.
+- **`applySteps(entries, steps)`** builds the session a client does from their accepted step-ups
+  (latest state per `from` wins; chains follow approved paths only). It returns new objects and never
+  mutates a Routine; replaced entries carry `stepped_from`.
+- Identity is canonical `exercise_id` only. Covered by `bodyweight-progression.test.js`.
+
 ### Shared Exercise-Logging Reliability Core — `exercise-log.js` (`Live`, Phase 4.2.1J)
 
 The logging-reliability sibling of `exercise-core.js` (identity/resolution),
