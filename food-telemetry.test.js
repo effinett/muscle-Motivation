@@ -16,7 +16,7 @@ const path = require('node:path');
 const T = require('./food-telemetry.js');
 const MIGRATION = fs.readFileSync(path.join(__dirname, 'supabase/migrations/20261111111733_food_search_events.sql'), 'utf8');
 // The insert policy as it stands now (latest migration that replaces it).
-const POLICY = fs.readFileSync(path.join(__dirname, 'supabase/migrations/20261116063000_food_search_events_quicklog.sql'), 'utf8');
+const POLICY = fs.readFileSync(path.join(__dirname, 'supabase/migrations/20261116063127_food_search_events_quicklog.sql'), 'utf8');
 
 test('cleanQuery: lowercased, collapsed, capped; private-looking text is never sent', () => {
   assert.strictEqual(T.cleanQuery('  Chicken   BREAST '), 'chicken breast');

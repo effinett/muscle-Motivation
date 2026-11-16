@@ -66,6 +66,6 @@ identical in every category.
 to `schema/current-schema.sql` by hand, with policy expressions, index definitions,
 grants and comments copied from the live catalog. `usda_search_cache` is server-only: RLS
 with no policies, and no privileges for `anon` or `authenticated`.
-`20261116063000` (`food_search_events_quicklog`, 2026-11-16) replaces only the
+`20261116063127` (`food_search_events_quicklog`, 2026-11-16) replaces only the
 `food_search_events` insert policy so it also accepts AI Quick Log outcomes; its live
 policy text was copied into `schema/current-schema.sql` the same way.
