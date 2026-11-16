@@ -155,3 +155,48 @@ test('declined steps and steps off the approved paths are ignored', () => {
   assert.equal(B.applySteps(ROUTINE, [{ from_exercise_id: EX.WALL_PUSH_UP, to_exercise_id: EX.PUSH_UP, state: 'accepted' }])[0].name, 'Wall Push-Up');
   assert.equal(B.applySteps(ROUTINE, [{ from_exercise_id: EX.DEAD_BUG, to_exercise_id: EX.PLANK, state: 'accepted' }])[1].name, 'Dead Bug');
 });
+
+/* ── wiring (pages + table) ──────────────────────────────────────────────── */
+
+const fs = require('node:fs');
+const path = require('node:path');
+const read = (f) => fs.readFileSync(path.join(__dirname, f), 'utf8');
+
+test('workout.html applies accepted step-ups when a Program session is built, without touching the Routine', () => {
+  const W = read('workout.html');
+  assert.match(W, /<script src="progression\.js"><\/script>\n<script src="bodyweight-progression\.js"><\/script>/);
+  const start = W.slice(W.indexOf('async function startProgramSession'));
+  assert.match(start.slice(0, 4000), /exList = BodyweightProgression\.applySteps\(exList, await loadProgressionSteps\(programSlug\)\)/);
+  assert.match(W, /\.from\('user_exercise_progressions'\)[\s\S]{0,200}\.eq\('program_slug', programSlug\)/);
+  assert.match(W, /entry\.stepped_from[\s\S]{0,120}'Stepped up from '/);
+});
+
+test('the Completion page reads the same decision and offers Step up / Not yet / Go back', () => {
+  const C = read('workout-complete.html');
+  assert.match(C, /<script src="bodyweight-progression\.js"><\/script>/);
+  assert.match(C, /tmplEx = BodyweightProgression\.applySteps\(tmplEx, steps\)/);
+  assert.match(C, /var B = BodyweightProgression;[\s\S]{0,400}B\.decide\(\{ exerciseId: e\.exercise_id, prescription: tmpl/);
+  for (const s of ['accepted', 'declined', 'reverted']) assert.ok(C.includes("\\'" + s + "\\'"), s + ' is recorded');
+  assert.match(C, />Step up</);
+  assert.match(C, />Not yet</);
+  assert.match(C, /Go back to /);
+  assert.match(C, /No next step is set for this exercise yet/);
+});
+
+test('the step-up table is append-only and owner-scoped', () => {
+  const M = read('supabase/migrations/20261116191336_create_user_exercise_progressions.sql');
+  assert.match(M, /enable row level security/);
+  assert.match(M, /for select to authenticated\s+using \(auth\.uid\(\) = user_id\)/);
+  assert.match(M, /for insert to authenticated\s+with check \(auth\.uid\(\) = user_id\)/);
+  assert.ok(!/for (update|delete|all)\b/i.test(M), 'no update, delete or all policy');
+  assert.match(M, /revoke update, delete, truncate on public\.user_exercise_progressions from authenticated/);
+  assert.match(M, /state in \('accepted', 'declined', 'reverted'\)/);
+});
+
+test('the equipment-free topped note never tells a client to grow past the ceiling', () => {
+  const P = require('./progression.js');
+  const r = P.analyze({ exerciseName: 'Glute Bridge', repsLow: 12, repsHigh: 15, targetSets: 2, unit: 'reps', equipment: 'bodyweight',
+    history: [{ sets: [{ weight: null, reps: 15, completed: true }, { weight: null, reps: 15, completed: true }] }] });
+  assert.ok(!/beyond|harder variation/i.test(r.coachNote), r.coachNote);
+  assert.match(r.coachNote, /Hold 15 reps/);
+});

@@ -153,6 +153,17 @@
     .prog-item:first-of-type { border-top:none; padding-top:0; }
     .prog-ex { font-size:13px; font-weight:700; margin-bottom:2px; }
     .prog-note { font-size:12.5px; color:var(--text-2); line-height:1.45; }
+    /* Bodyweight Exercise Progression v1: the step-up offer and its choices */
+    .prog-actions { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
+    .prog-btn {
+      min-height:40px; padding:9px 16px; border-radius:10px; cursor:pointer;
+      font-family:'Barlow',sans-serif; font-size:13px; font-weight:700;
+      letter-spacing:0.8px; text-transform:uppercase;
+    }
+    .prog-btn.primary { background:var(--red); color:#fff; border:1px solid var(--red); }
+    .prog-btn.secondary { background:transparent; color:var(--text-1, #fff); border:1px solid var(--border-1); }
+    .prog-btn[disabled] { opacity:0.5; cursor:default; }
+    .prog-done { font-size:12.5px; color:var(--green); margin-top:6px; font-weight:600; }
 
     /* ── Next up ── */
     .next-label { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px; }
@@ -266,6 +277,7 @@
 <script src="schedules.js"></script>
 <script src="program-catalog.js"></script>
 <script src="progression.js"></script>
+<script src="bodyweight-progression.js"></script>
 <!-- Shared exercise-identity cores (Phase 4.2.1E/J/K): stable canonical/custom/
      legacy identity so the recap's per-exercise trend never merges a same-name
      canonical and custom (or two same-name customs). -->
@@ -431,6 +443,85 @@
     return (await programSession(slug, key)).exercises;
   }
 
+  /* ── Bodyweight Exercise Progression v1 ─────────────────────────────────
+     The decision lives in bodyweight-progression.js. This page only reads the
+     client's past choices and records a new one. Append-only: every choice is
+     a new row; the latest row per exercise wins. Never throws. */
+  async function loadProgressionSteps(slug){
+    if(!slug || !user) return [];
+    try {
+      var res = await supabaseClient.from('user_exercise_progressions')
+        .select('from_exercise_id,to_exercise_id,state,created_at')
+        .eq('user_id', user.id).eq('program_slug', slug)
+        .order('created_at', { ascending: true });
+      return (res && !res.error && res.data) ? res.data : [];
+    } catch(e){ return []; }
+  }
+  function latestStepFor(steps, fromId){
+    var last = null;
+    (steps||[]).forEach(function(s){ if(s.from_exercise_id === fromId) last = s; });
+    return last;
+  }
+  var BW_DONE_TEXT = {
+    accepted: 'Done. Your next session loads the new exercise.',
+    declined: 'No problem. We\'ll offer it again after two more sessions at the top.',
+    reverted: 'Done. Your next session goes back to the previous exercise.'
+  };
+  async function bwChoose(btn, slug, fromId, toId, state){
+    var box = btn.closest('.prog-actions');
+    if(box) box.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+    try {
+      var res = await supabaseClient.from('user_exercise_progressions')
+        .insert({ user_id: user.id, program_slug: slug, from_exercise_id: fromId, to_exercise_id: toId,
+                  state: state, engine_version: BodyweightProgression.VERSION });
+      if(res && res.error) throw res.error;
+      if(box) box.outerHTML = '<div class="prog-done">' + esc(BW_DONE_TEXT[state]) + '</div>';
+    } catch(e){
+      console.error('bwChoose', e);
+      if(box) box.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+      alertSoft('Couldn\'t save that. Check your connection and try again.');
+    }
+  }
+  function alertSoft(msg){
+    var el = document.getElementById('progressionCard');
+    if(el) el.insertAdjacentHTML('beforeend', '<div class="prog-note" style="color:var(--red);margin-top:8px">' + esc(msg) + '</div>');
+  }
+  // One exercise's v1 guidance, or null when v1 says nothing about it.
+  function bwGuidance(w, e, tmpl, sessions, steps){
+    if(typeof BodyweightProgression==='undefined' || !w.program_slug || e.exercise_id==null) return null;
+    var B = BodyweightProgression;
+    var last = latestStepFor(steps, e.exercise_id);
+    var hist = [{ date: w.created_at, completed: true, sets: e.sets }]
+      .concat((sessions||[]).map(function(s){ return { date: s.date, completed: true, sets: s.sets }; }));
+    var d = B.decide({ exerciseId: e.exercise_id, prescription: tmpl, history: hist,
+                       declinedAt: (last && last.state === 'declined') ? last.created_at : null });
+    var html = null;
+    if(d.status === B.STATUS.STEP_UP){
+      html = '<div class="prog-note">Top of the range on every set, two sessions running. You\'ve earned the next step: <strong>' + esc(d.next.name) + '</strong>, ' + d.next.reps_low + '–' + d.next.reps_high + ' reps.</div>' +
+        '<div class="prog-actions">' +
+          '<button class="prog-btn primary" onclick="bwChoose(this,\'' + esc(w.program_slug) + '\',\'' + e.exercise_id + '\',\'' + d.next.exerciseId + '\',\'accepted\')">Step up</button>' +
+          '<button class="prog-btn secondary" onclick="bwChoose(this,\'' + esc(w.program_slug) + '\',\'' + e.exercise_id + '\',\'' + d.next.exerciseId + '\',\'declined\')">Not yet</button>' +
+        '</div>';
+    } else if(d.status === B.STATUS.TERMINAL){
+      html = '<div class="prog-note">Top of the range on every set, two sessions running. No next step is set for this exercise yet, so hold it here and keep every rep clean.</div>';
+    } else if(d.status === B.STATUS.ONE_MORE){
+      var path = B.pathFrom(e.exercise_id);
+      html = '<div class="prog-note">Top of the range on every set. ' + (path
+        ? 'One more session like this unlocks ' + esc(path.toName) + '.'
+        : 'Hold it here next session.') + '</div>';
+    }
+    // A slot the client stepped into: offer the way back.
+    if(tmpl && tmpl.stepped_from){
+      var back = null;
+      (steps||[]).forEach(function(s){ if(s.to_exercise_id === e.exercise_id && s.state === 'accepted') back = s; });
+      if(back && latestStepFor(steps, back.from_exercise_id).state === 'accepted'){
+        html = (html || '') + '<div class="prog-actions"><button class="prog-btn secondary" onclick="bwChoose(this,\'' +
+          esc(w.program_slug) + '\',\'' + back.from_exercise_id + '\',\'' + e.exercise_id + '\',\'reverted\')">Go back to ' + esc(tmpl.stepped_from) + '</button></div>';
+      }
+    }
+    return html;
+  }
+
   async function loadAll(workoutId){
     // Current workout + its exercises + sets (RLS scopes to this user).
     var { data: w } = await supabaseClient
@@ -456,15 +547,20 @@
 
     // Optional: programmed rep ranges for the session (for progression text).
     var ranges = {};
+    var steps = [];
     if(w.program_slug && w.session_key){
       try {
         var tmplEx = await programSessionExercises(w.program_slug, w.session_key);
+        // Bodyweight Exercise Progression v1: the session the client actually
+        // did used their accepted step-ups, so its ranges must too.
+        steps = await loadProgressionSteps(w.program_slug);
+        if(typeof BodyweightProgression!=='undefined') tmplEx = BodyweightProgression.applySteps(tmplEx, steps);
         tmplEx.forEach(function(t){ ranges[(t.name||'').toLowerCase()] = t; });
       } catch(e){}
     }
     var tracking = await loadTrackingTypes(exs);
 
-    return { w:w, exs:exs, ranges:ranges, tracking:tracking };
+    return { w:w, exs:exs, ranges:ranges, tracking:tracking, steps:steps };
   }
 
   // Attach `e.history` (prior sessions, newest first) to each current exercise,
@@ -688,7 +784,9 @@
                    .concat(sessions.map(function(s){ return { date:s.date, sets:s.sets.map(mapSet) }; }));
         var rec = Progression.analyze(Object.assign({ exerciseName:e.name, repsLow:tmpl.reps_low, repsHigh:tmpl.reps_high, targetSets:tmpl.sets, history:hist },
                                                     noteMetaFor(e, hist)));
-        progItems.push('<div class="prog-item"><div class="prog-ex">'+esc(e.name)+'</div><div class="prog-note">'+esc(rec.coachNote)+'</div></div>');
+        var bw = bwGuidance(w, e, tmpl, sessions, d.steps);
+        progItems.push('<div class="prog-item"><div class="prog-ex">'+esc(e.name)+'</div>'+
+          (bw || '<div class="prog-note">'+esc(rec.coachNote)+'</div>')+'</div>');
       }
     });
 

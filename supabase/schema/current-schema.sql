@@ -994,3 +994,40 @@ DO $$ BEGIN
     CREATE EVENT TRIGGER "ensure_rls" ON ddl_command_end WHEN TAG IN ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO') EXECUTE FUNCTION public.rls_auto_enable();
   END IF;
 END $$;
+
+-- ── user_exercise_progressions (migration 20261116191336, 2026-11-16) ─────────
+-- Added by hand from the applied migration; not re-fingerprinted (see README).
+create table if not exists public.user_exercise_progressions (
+  id               uuid primary key default gen_random_uuid(),
+  user_id          uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  program_slug     text not null check (char_length(program_slug) between 1 and 64),
+  from_exercise_id uuid not null references public.exercises(id) on delete cascade,
+  to_exercise_id   uuid not null references public.exercises(id) on delete cascade,
+  state            text not null check (state in ('accepted', 'declined', 'reverted')),
+  engine_version   integer not null default 1 check (engine_version >= 1),
+  created_at       timestamptz not null default now(),
+  constraint user_exercise_progressions_distinct check (from_exercise_id <> to_exercise_id)
+);
+
+comment on table public.user_exercise_progressions is
+  'Bodyweight Exercise Progression v1 (roadmap 5.1.2). Append-only per-client step-up choices: the latest row per (user_id, program_slug, from_exercise_id) is current. Owner-scoped INSERT and SELECT only; no UPDATE or DELETE. Never edits a Program or Routine.';
+
+create index if not exists user_exercise_progressions_user_program_idx
+  on public.user_exercise_progressions (user_id, program_slug, created_at desc);
+
+alter table public.user_exercise_progressions enable row level security;
+
+drop policy if exists user_exercise_progressions_select_own on public.user_exercise_progressions;
+create policy user_exercise_progressions_select_own
+  on public.user_exercise_progressions
+  for select to authenticated
+  using (auth.uid() = user_id);
+
+drop policy if exists user_exercise_progressions_insert_own on public.user_exercise_progressions;
+create policy user_exercise_progressions_insert_own
+  on public.user_exercise_progressions
+  for insert to authenticated
+  with check (auth.uid() = user_id);
+
+revoke all on public.user_exercise_progressions from anon;
+revoke update, delete, truncate on public.user_exercise_progressions from authenticated;
