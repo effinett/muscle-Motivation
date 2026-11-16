@@ -927,9 +927,9 @@ owner is new — K.1 → 4.3.9-L, K.2 → 4.3.9F. Neither historical record is a
 
 **Goal:** build the core premium differentiator.
 
-
 **Prerequisite (owner decision 2026-11-16):** Bodyweight Exercise Progression v1 (5.1.2) ships before 4.4
 starts. 4.4.4 Training intelligence reads that progression state; it never makes a separate decision.
+
 ### Coach v1 read-only contract (binding)
 
 **Coach v1 MAY:** read · understand · analyze · explain · recommend.
