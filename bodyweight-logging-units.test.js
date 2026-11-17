@@ -382,6 +382,24 @@ test('a loaded Push-Up or Plank in a gym program keeps its weight advice in ever
   });
 });
 
+test('"hold the top" note fix: an unloaded bodyweight or timed exercise in a gym program holds at the top', () => {
+  const unloaded = (reps) => reps.map((r) => ({ weight: null, reps: r, completed: true }));
+  GYM.concat([null]).forEach((slug) => {
+    const G = workoutSandbox({ slug });
+    const push = G.recForExercise(ex('pushup', { history: [{ sets: unloaded([12, 12]) }], targetSets: 2, sets: [{}, {}] }));
+    assert.equal(push.coachNote, 'You hit the top of the range on every set. Hold 12 reps and keep your form solid.', String(slug));
+    const plank = G.recForExercise(ex('plank', { low: 20, high: 40, targetSets: 2, sets: [{}, {}],
+      history: [{ sets: unloaded([40, 40]) }] }));
+    assert.doesNotMatch(plank.coachNote, /beyond|add load|harder variation/i, String(slug) + ' plank: ' + plank.coachNote);
+    // The Weight column is unchanged by the note fix.
+    assert.ok(hasWeightInput(G.buildExCard(ex('pushup'), 0)), String(slug) + ' keeps the weight input');
+    // A weight typed today brings the weight wording back.
+    const typed = G.recForExercise(ex('pushup', { history: [{ sets: unloaded([12, 12]) }], targetSets: 2,
+      sets: [{ weight_lbs: 20 }, {}] }));
+    assert.match(typed.coachNote, /add load/, String(slug) + ' weight today: ' + typed.coachNote);
+  });
+});
+
 test('a failed or empty history read never removes the weight input outside Bodyweight Foundations', () => {
   GYM.forEach((slug) => {
     const G = workoutSandbox({ slug });
@@ -445,21 +463,24 @@ test('the completion page reads is_bodyweight and passes tracking metadata into 
   const f = make({ byId, failed: false });
   const noWeight = [{ sets: [{ weight: null, reps: 30 }] }];
   const today = (w) => ({ exercise_id: 'pike', sets: [{ weight_lbs: w, reps: 30 }] });
-  assert.deepEqual(f({ exercise_id: 'pike' }, noWeight), { trackingType: 'time', equipment: 'bodyweight', load: 'none' });
+  assert.deepEqual(f({ exercise_id: 'pike' }, noWeight), { trackingType: 'time', equipment: 'bodyweight', load: 'none', noLoadNote: true });
   // Weighted HISTORY no longer matters inside BWF; a weight entered TODAY does.
   assert.deepEqual(f({ exercise_id: 'pike' }, [{ sets: [{ weight: 10, reps: 30 }] }]),
-    { trackingType: 'time', equipment: 'bodyweight', load: 'none' });
+    { trackingType: 'time', equipment: 'bodyweight', load: 'none', noLoadNote: true });
   assert.deepEqual(f(today(10), noWeight), { trackingType: 'time', load: 'optional' });
-  assert.deepEqual(f(today(0), noWeight), { trackingType: 'time', equipment: 'bodyweight', load: 'none' });
+  assert.deepEqual(f(today(0), noWeight), { trackingType: 'time', equipment: 'bodyweight', load: 'none', noLoadNote: true });
   assert.deepEqual(f({ exercise_id: 'bench' }, noWeight), { trackingType: 'weight_reps', load: 'required' });
   assert.deepEqual(f({ exercise_id: 'dips' }, noWeight), { trackingType: 'weighted_bodyweight', load: 'optional' });
   assert.deepEqual(f({ exercise_id: null }, noWeight), { load: 'unknown' }, 'custom keeps legacy wording');
   assert.deepEqual(f({ exercise_id: 'gone' }, noWeight), { load: 'unknown' }, 'missing row keeps legacy wording');
   assert.deepEqual(make({ byId, failed: true })({ exercise_id: 'pike' }, noWeight), { load: 'unknown' }, 'failed read');
-  // Gym and manual workouts: the unit still applies, the no-load rule never does.
+  // Gym and manual workouts: the unit still applies and equipment/load stay as
+  // before; only the note wording flag is set (the 4.3.9-L "hold the top" fix).
   GYM.concat([null]).forEach((slug) => {
     assert.deepEqual(make({ byId, failed: false }, slug)({ exercise_id: 'pike' }, noWeight),
-      { trackingType: 'time', load: 'optional' }, String(slug));
+      { trackingType: 'time', load: 'optional', noLoadNote: true }, String(slug));
+    assert.deepEqual(make({ byId, failed: false }, slug)(today(10), noWeight),
+      { trackingType: 'time', load: 'optional' }, String(slug) + ' weight today keeps the weight wording');
   });
 });
 

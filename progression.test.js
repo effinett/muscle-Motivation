@@ -250,3 +250,55 @@ test('evaluatePRs: lighter set that beats only volume → volume PR message', ()
   assert.equal(res.topMessage, '90 lb × 13 (volume PR)');
   assert.equal(res.best.best_volume, 1170);
 });
+
+/* ── "Hold the top" note fix (4.3.9-L, owner decision 2026-11-17) ────────────
+ * A caller may pass `noLoadNote: true` for a catalog-confirmed bodyweight-reps
+ * or timed exercise with no weight today, in ANY Program. It changes the words
+ * only, and only when the session being read carried no load. */
+{
+  const P = require('./progression.js');
+  const BANNED = /beyond|add load|harder variation/i;
+  const unloaded = (reps) => reps.map((r) => ({ weight: null, reps: r, completed: true }));
+  const loaded = (reps) => reps.map((r) => ({ weight: 25, reps: r, completed: true }));
+  // Every branch: top on every set, in range (equal and uneven), a lagging set at
+  // the ceiling, below range, incomplete, and first session.
+  const BRANCHES = [[12, 12, 12], [9, 9, 9], [10, 9, 9], [12, 12, 9], [5, 5, 5], [10], []];
+  const run = (sets, extra) => P.analyze(Object.assign({
+    exerciseName: 'Push-Up', repsLow: 8, repsHigh: 12, targetSets: 3,
+    history: sets.length ? [{ sets }] : [] }, extra));
+
+  test('noLoadNote: no no-load note ever says beyond, add load or harder variation', () => {
+    ['bodyweight_reps', 'time'].forEach((trackingType) => {
+      BRANCHES.forEach((reps) => {
+        const rec = run(unloaded(reps), { trackingType, noLoadNote: true });
+        assert.doesNotMatch(rec.coachNote, BANNED, trackingType + ' ' + JSON.stringify(reps) + ': ' + rec.coachNote);
+      });
+    });
+    assert.match(run(unloaded([12, 12, 12]), { trackingType: 'bodyweight_reps', noLoadNote: true }).coachNote,
+      /^You hit the top of the range on every set\. Hold 12 reps and keep your form solid\.$/);
+  });
+
+  test('noLoadNote changes words only: numbers, actions and equipment are identical', () => {
+    BRANCHES.forEach((reps) => {
+      const a = run(unloaded(reps), { trackingType: 'bodyweight_reps', noLoadNote: true });
+      const b = run(unloaded(reps), { trackingType: 'bodyweight_reps' });
+      ['action', 'equipment', 'recommendedWeight', 'recommendedReps', 'recommendedSets',
+        'recommendedDisplay', 'plateau', 'deloadSuggested', 'deloadWeight'].forEach((k) =>
+        assert.deepStrictEqual(a[k], b[k], k + ' ' + JSON.stringify(reps)));
+    });
+  });
+
+  test('noLoadNote never touches a loaded session: weight advice is kept in every branch', () => {
+    BRANCHES.filter((r) => r.length).forEach((reps) => {
+      const a = run(loaded(reps), { trackingType: 'bodyweight_reps', noLoadNote: true });
+      const b = run(loaded(reps), { trackingType: 'bodyweight_reps' });
+      assert.deepStrictEqual(a, b, JSON.stringify(reps));
+    });
+  });
+
+  test('noLoadNote without tracking metadata keeps the historical wording byte-for-byte', () => {
+    BRANCHES.forEach((reps) => {
+      assert.deepStrictEqual(run(unloaded(reps), { noLoadNote: true }), run(unloaded(reps), {}));
+    });
+  });
+}

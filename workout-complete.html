@@ -320,7 +320,7 @@
   var RECAP_NEUTRAL_TYPES = { distance:true, time_distance:true };
   // Equipment-free Programs (Phase 4.3.9B). This page does not load
   // exercise-filters.js; a test pins this to ExerciseFilters.EQUIPMENT_FREE_PROGRAM_SLUGS.
-  var EQUIPMENT_FREE_PROGRAMS = { bodyweight_foundations:true };
+  var EQUIPMENT_FREE_PROGRAMS = { bodyweight_foundations:true, bodyweight_fat_loss:true };
   var RECAP_UNIT = { REPS:'reps', SECONDS:'sec', NEUTRAL:'neutral', UNRESOLVED:'unresolved' };
 
   function recapUnitFor(trackingType, rowFound){
@@ -664,6 +664,10 @@
       var noLoad = EQUIPMENT_FREE_PROGRAMS[w.program_slug] === true &&
                    row.is_bodyweight === true && noLoadType && !weightedToday;
       if(noLoad) meta.equipment = 'bodyweight';
+      // The "hold the top" note fix (4.3.9-L): in ANY Program, a catalog-confirmed
+      // bodyweight-reps or timed exercise with no weight today gets the no-load
+      // wording. Words only; equipment, load policy and weight advice are unchanged.
+      if(row.is_bodyweight === true && noLoadType && !weightedToday) meta.noLoadNote = true;
       meta.load = policy(noLoad);
       return meta;
     }

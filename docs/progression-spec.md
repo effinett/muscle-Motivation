@@ -126,6 +126,16 @@ Program (`session.equipmentFree`). Plateau, deload and established set count
 read the same filtered sessions, so they compare like with like. **No `load` →
 byte-identical to before.**
 
+**"Hold the top" wording — `noLoadNote` (4.3.9-L, 2026-11-17).** A caller may
+pass `noLoadNote: true` for a catalog `is_bodyweight` row tracked as
+`bodyweight_reps` or `time` with no weight entered today, in any Program. With
+tracking metadata present and no load in the session analyze() reads, the
+coach note uses the no-load wording ("You hit the top of the range on every set.
+Hold N and keep your form solid.") and never says "beyond", "add load" or
+"harder variation". It changes words only: numbers, actions, `equipment` and the
+weight input are untouched, and a loaded session keeps every piece of weight
+advice. **No `noLoadNote` → byte-identical to before.**
+
 **Deeper baseline.** `workout.html` keeps its 6-session window (what plateau,
 deload and set count read). When no session in it can anchor the policy
 (`Progression.needsDeeperBaseline`), one extra read scans older sessions —
