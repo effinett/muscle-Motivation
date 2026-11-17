@@ -164,6 +164,12 @@
     .prog-btn.secondary { background:transparent; color:var(--text-1, #fff); border:1px solid var(--border-1); }
     .prog-btn[disabled] { opacity:0.5; cursor:default; }
     .prog-done { font-size:12.5px; color:var(--green); margin-top:6px; font-weight:600; }
+    /* Phase 4.3.9-L "Ready for weights?" — one card per workout, bodyweight Programs only */
+    .rfw-card { margin-top:14px; }
+    .rfw-title { font-family:'Bebas Neue',sans-serif; font-size:24px; letter-spacing:0.5px; margin-bottom:6px; }
+    .rfw-body { font-size:13.5px; color:var(--text-2); line-height:1.55; }
+    .rfw-card .prog-btn { display:inline-flex; align-items:center; text-decoration:none; }
+    .rfw-note { font-size:12.5px; color:var(--text-muted); line-height:1.45; margin-top:8px; }
 
     /* ── Next up ── */
     .next-label { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px; }
@@ -249,6 +255,10 @@
     <!-- Subtle context-aware motivational line -->
     <div class="motivation" id="motivation"></div>
 
+    <!-- Phase 4.3.9-L "Ready for weights?" (ready-for-weights.js). Empty unless
+         an exercise in a bodyweight Program reached the end of its path. -->
+    <div id="weightsCard"></div>
+
     <!-- COLLAPSED DETAIL (power users only) -->
     <details class="details">
       <summary class="details-summary">
@@ -278,6 +288,11 @@
 <script src="program-catalog.js"></script>
 <script src="progression.js"></script>
 <script src="bodyweight-progression.js"></script>
+<!-- Phase 4.3.9-L "Ready for weights?": the card's rules, the shared Program
+     page's path rule, and the normal recommendation ranking it defers to. -->
+<script src="personalization-core.js"></script>
+<script src="program-page.js"></script>
+<script src="ready-for-weights.js"></script>
 <!-- Shared exercise-identity cores (Phase 4.2.1E/J/K): stable canonical/custom/
      legacy identity so the recap's per-exercise trend never merges a same-name
      canonical and custom (or two same-name customs). -->
@@ -487,7 +502,8 @@
     if(el) el.insertAdjacentHTML('beforeend', '<div class="prog-note" style="color:var(--red);margin-top:8px">' + esc(msg) + '</div>');
   }
   // One exercise's v1 guidance, or null when v1 says nothing about it.
-  function bwGuidance(w, e, tmpl, sessions, steps){
+  // `out`, when given, collects { name, status } for the "Ready for weights?" card.
+  function bwGuidance(w, e, tmpl, sessions, steps, out){
     if(typeof BodyweightProgression==='undefined' || !w.program_slug || e.exercise_id==null) return null;
     var B = BodyweightProgression;
     var last = latestStepFor(steps, e.exercise_id);
@@ -495,6 +511,7 @@
       .concat((sessions||[]).map(function(s){ return { date: s.date, completed: true, sets: s.sets }; }));
     var d = B.decide({ exerciseId: e.exercise_id, prescription: tmpl, history: hist,
                        declinedAt: (last && last.state === 'declined') ? last.created_at : null });
+    if(out) out.push({ name: e.name, status: d.status });
     var html = null;
     if(d.status === B.STATUS.STEP_UP){
       html = '<div class="prog-note">Top of the range on every set, two sessions running. You\'ve earned the next step: <strong>' + esc(d.next.name) + '</strong>, ' + d.next.reps_low + '–' + d.next.reps_high + ' reps.</div>' +
@@ -721,7 +738,7 @@
     document.getElementById('statGrid').innerHTML = statsHtml;
 
     // PR detection + exercise breakdown + progression (single pass)
-    var prCards=[], bdRows=[], progItems=[], improved=0, analyzable=0;
+    var prCards=[], bdRows=[], progItems=[], improved=0, analyzable=0, bwStatuses=[];
     exs.forEach(function(e){
       var ws = working(e.sets);
       var sessions = e.history || [];
@@ -788,7 +805,7 @@
                    .concat(sessions.map(function(s){ return { date:s.date, sets:s.sets.map(mapSet) }; }));
         var rec = Progression.analyze(Object.assign({ exerciseName:e.name, repsLow:tmpl.reps_low, repsHigh:tmpl.reps_high, targetSets:tmpl.sets, history:hist },
                                                     noteMetaFor(e, hist)));
-        var bw = bwGuidance(w, e, tmpl, sessions, d.steps);
+        var bw = bwGuidance(w, e, tmpl, sessions, d.steps, bwStatuses);
         progItems.push('<div class="prog-item"><div class="prog-ex">'+esc(e.name)+'</div>'+
           (bw || '<div class="prog-note">'+esc(rec.coachNote)+'</div>')+'</div>');
       }
@@ -819,6 +836,9 @@
     // Next up
     renderNext(w);
 
+    // Phase 4.3.9-L "Ready for weights?" — at most one card for this workout.
+    renderWeightsCard(w, bwStatuses);
+
     // Motivation
     // One quiet, context-aware line — PR day vs. a consistency day.
     document.getElementById('motivation').textContent = prCards.length
@@ -828,6 +848,44 @@
 
   function notWarmup(s){ return !s.is_warmup; }
   function mapSet(s){ return { weight:num(s.weight_lbs!=null?s.weight_lbs:s.weight), reps:num(s.reps), completed:s.completed, is_warmup:s.is_warmup }; }
+
+  /* Phase 4.3.9-L "Ready for weights?" (ready-for-weights.js holds the rules).
+   * Reads only: the profile fields the ranking uses and the PUBLISHED catalog.
+   * The ranking runs on a COPY of the profile with a home-setup answer; nothing
+   * is written, nobody is enrolled, and any failure just drops the direct link
+   * (or, if the rules module is missing, the whole card). */
+  async function renderWeightsCard(w, statuses){
+    var el = document.getElementById('weightsCard');
+    if(!el || typeof ReadyForWeights==='undefined') return;
+    var R = ReadyForWeights;
+    var input = { programSlug: w.program_slug, exercises: statuses };
+    if(!R.buildCard(input)) return;               // not a bodyweight Program, or nothing at the end of its path
+    try {
+      if(typeof Personalization!=='undefined' && typeof ProgramPage!=='undefined' && typeof pcLoadCatalog==='function'){
+        var catalog = pcCached() || await pcLoadCatalog();
+        var { data: prof } = await supabaseClient.from('profiles')
+          .select('goal,training_days,training_experience,gym_access').eq('id', user.id).maybeSingle();
+        if(prof && catalog && catalog.length){
+          var plan = Personalization.derivePersonalizedStart(R.rankingProfile(prof), { catalog: catalog });
+          input.recommended = plan && plan.training ? plan.training.recommendedProgram : null;
+          input.catalog = catalog;
+          input.pagePathFor = ProgramPage.pagePathFor;
+        }
+      }
+    } catch(e){ /* the direct link is optional; Update my equipment always stands */ }
+    var card = R.buildCard(input);
+    if(!card) return;
+    el.innerHTML =
+      '<div class="card rfw-card">' +
+        '<div class="rfw-title">' + esc(card.title) + '</div>' +
+        '<div class="rfw-body">' + esc(card.body) + '</div>' +
+        '<div class="prog-actions">' +
+          '<a class="prog-btn primary" href="' + esc(card.primary.href) + '">' + esc(card.primary.label) + '</a>' +
+          (card.secondary ? '<a class="prog-btn secondary" href="' + esc(card.secondary.href) + '">' + esc(card.secondary.label) + '</a>' : '') +
+        '</div>' +
+        (card.secondary ? '<div class="rfw-note">' + esc(card.secondary.note) + '</div>' : '') +
+      '</div>';
+  }
 
   async function renderNext(w){
     var el = document.getElementById('nextCard');
