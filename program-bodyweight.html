@@ -99,6 +99,16 @@
       transition: transform 0.15s, box-shadow 0.15s;
     }
     .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 30px rgba(177,18,27,0.35); }
+    /* Locked state: "Join membership" (primary) + "Browse programs" (secondary). */
+    .locked-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+    .btn-secondary {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-height: 44px; padding: 14px 28px;
+      background: transparent; border: 1px solid var(--border, #2A2A2A); border-radius: 10px;
+      color: white; font-size: 16px; font-weight: 700;
+      font-family: 'Bebas Neue', sans-serif; letter-spacing: 3px;
+      text-transform: uppercase; cursor: pointer; text-decoration: none;
+    }
 
     /* Container */
     .container {
@@ -282,7 +292,12 @@
   <span class="lock-icon"><i data-lucide="lock"></i></span>
   <h2>You don't have access yet</h2>
   <p id="lockedCopy">This program isn't part of your current access.</p>
-  <a class="btn-primary" href="workout.html?pane=programs">Browse programs</a>
+  <div class="locked-actions">
+    <!-- Shown only for a Program included with membership (showLocked). It goes
+         to the existing Store membership card; no new price, product or checkout. -->
+    <a class="btn-primary" id="lockedJoin" href="store.html#membership" style="display:none;">Join membership</a>
+    <a class="btn-primary" id="lockedBrowse" href="workout.html?pane=programs">Browse programs</a>
+  </div>
 </div>
 
 <!-- Program content. EVERY value is written from the catalog and from
@@ -444,6 +459,12 @@
       copy = 'This program is available as a one-time purchase.';
     }
     document.getElementById('lockedCopy').textContent = copy;
+    // A membership-included Program offers the existing membership as the way
+    // in; Browse programs then steps down to secondary. Anything else keeps
+    // Browse programs as the only, primary action.
+    var joinable = !!(program && program.includedWithMembership === true);
+    document.getElementById('lockedJoin').style.display = joinable ? 'inline-flex' : 'none';
+    document.getElementById('lockedBrowse').className = joinable ? 'btn-secondary' : 'btn-primary';
     document.getElementById('stickyCta').style.display = 'none';
     showOnly('lockedState');
     if (window.lucide) lucide.createIcons();
