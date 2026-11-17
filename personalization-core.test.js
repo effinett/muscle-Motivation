@@ -114,6 +114,69 @@ test('experience fit outranks schedule closeness (owner decision 2026-11-17)', (
   assert.notStrictEqual(pick('beginner', 3), 'advanced_muscle');
 });
 
+/* Equipment specificity (owner decision 2026-11-17, 4.3.9-L): after goal and
+ * experience, a Program built for exactly the user's equipment answer beats one
+ * they can merely also do — ahead of schedule closeness and catalog order. The
+ * fixtures deliberately give the LESS specific Program the better day count AND
+ * the earlier sort_order, so only the new tier can produce the expected pick. */
+function equipRow(slugName, goal, difficulty, equipmentSummary, days, sortOrder) {
+  return { slug: slugName, name: slugName, goal, difficulty, durationWeeks: 8,
+    recommendedDaysPerWeek: days, equipmentSummary, includedWithMembership: true,
+    standalonePurchasable: true, status: 'published', sortOrder, pagePath: slugName + '.html' };
+}
+const BI = 'Beginner – Intermediate';
+const pickFor = (cat, profile) => slug(P.derivePersonalizedStart(completeProfile(profile), { catalog: cat }));
+
+test('equipment specificity: Home Setup picks the Home Setup Program over Bodyweight', () => {
+  const cat = [equipRow('bw_muscle', 'muscle', BI, 'Bodyweight', 3, 1),
+               equipRow('home_muscle', 'muscle', BI, 'Home Setup', 4, 2)];
+  assert.strictEqual(pickFor(cat, { goal: 'muscle', training_days: 3, training_experience: 'beginner',
+    gym_access: 'home_basic' }), 'home_muscle');
+});
+
+test('equipment specificity: Full Gym picks the Full Gym Program over Home Setup and Bodyweight', () => {
+  const cat = [equipRow('bw_muscle', 'muscle', BI, 'Bodyweight', 3, 1),
+               equipRow('home_muscle', 'muscle', BI, 'Home Setup', 3, 2),
+               equipRow('gym_muscle', 'muscle', BI, 'Full Gym', 5, 3)];
+  assert.strictEqual(pickFor(cat, { goal: 'muscle', training_days: 3, training_experience: 'beginner',
+    gym_access: 'full_gym' }), 'gym_muscle');
+});
+
+test('equipment specificity: Bodyweight still picks Bodyweight', () => {
+  const cat = [equipRow('home_muscle', 'muscle', BI, 'Home Setup', 3, 1),
+               equipRow('gym_muscle', 'muscle', BI, 'Full Gym', 3, 2),
+               equipRow('bw_muscle', 'muscle', BI, 'Bodyweight', 5, 3)];
+  assert.strictEqual(pickFor(cat, { goal: 'muscle', training_days: 3, training_experience: 'beginner',
+    gym_access: 'bodyweight' }), 'bw_muscle');
+});
+
+test('equipment specificity never outranks goal or experience', () => {
+  // Goal: the exact-equipment Program has the wrong goal.
+  const goalCat = [equipRow('bw_fatloss', 'fatloss', BI, 'Bodyweight', 3, 1),
+                   equipRow('home_muscle', 'muscle', BI, 'Home Setup', 3, 2)];
+  assert.strictEqual(pickFor(goalCat, { goal: 'fatloss', training_days: 3, training_experience: 'beginner',
+    gym_access: 'home_basic' }), 'bw_fatloss');
+  // Experience: the exact-equipment Program is the wrong level.
+  const expCat = [equipRow('bw_muscle', 'muscle', BI, 'Bodyweight', 3, 1),
+                  equipRow('home_advanced', 'muscle', 'Advanced', 'Home Setup', 3, 2)];
+  assert.strictEqual(pickFor(expCat, { goal: 'muscle', training_days: 3, training_experience: 'beginner',
+    gym_access: 'home_basic' }), 'bw_muscle');
+  // And it is a preference, never eligibility: a Full Gym Program stays out for Home Setup.
+  const gateCat = [equipRow('gym_muscle', 'muscle', BI, 'Full Gym', 3, 1),
+                   equipRow('bw_muscle', 'muscle', BI, 'Bodyweight', 3, 2)];
+  assert.strictEqual(pickFor(gateCat, { goal: 'muscle', training_days: 3, training_experience: 'beginner',
+    gym_access: 'home_basic' }), 'bw_muscle');
+});
+
+test('equipment specificity: setup-spanning values are neither a match nor a penalty', () => {
+  const cat = [equipRow('any_muscle', 'muscle', BI, 'Any Setup', 3, 1),
+               equipRow('bw_muscle', 'muscle', BI, 'Bodyweight', 3, 2)];
+  assert.strictEqual(pickFor(cat, { goal: 'muscle', training_days: 3, training_experience: 'beginner',
+    gym_access: 'home_basic' }), 'any_muscle');
+  assert.strictEqual(pickFor(cat, { goal: 'muscle', training_days: 3, training_experience: 'beginner',
+    gym_access: 'bodyweight' }), 'bw_muscle');
+});
+
 test('a mismatched goal never outranks a matched goal on schedule alone', () => {
   // 3 training days is an EXACT fit for both muscle Programs and off-by-one
   // for the fat-loss Program. A fat-loss user must still get fat loss.

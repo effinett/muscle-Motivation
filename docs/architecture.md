@@ -420,10 +420,18 @@ AFTER `program-catalog.js`. Consumed by `onboarding.html`, `app.html` (Home),
   `target_calories` / `protein_target` / `maintenance_calories` and reports them;
   deficit/surplus restates two stored numbers. Never add a fourth calculator.
 - **Ranking is strictly lexicographic, not weighted:** goal rank → experience
-  fit → training-day delta (nulls last) → equipment fit → `sort_order` → slug.
+  fit → equipment exact → training-day delta (nulls last) → equipment fit →
+  `sort_order` → slug.
   Experience moved ahead of the day delta on 2026-11-17 (owner decision, 4.3.9-L):
   every catalog Program runs at 2–6 days, so level matters more than the
-  advertised day count. A
+  advertised day count. **Equipment exact** (owner decision 2026-11-17, 4.3.9-L)
+  is 1 when the Program's equipment value is built for exactly the user's
+  `gym_access` answer (`EQUIPMENT_LEVEL`: Full Gym → `full_gym`, Home Setup →
+  `home_basic`, Bodyweight → `bodyweight`), else 0. It is a preference only:
+  eligibility is still the `EQUIPMENT_ACCESS` gate, and setup-spanning values
+  ('Any Setup', 'Minimal Equipment') are never a match nor a penalty. So a Home
+  Setup client gets a Home Setup Program over a Bodyweight one, and a Full Gym
+  client a Full Gym Program. It emits no reason code. A
   goal mismatch therefore can never win on schedule alone *structurally*, not by
   weight tuning. Fits are tri-state (1 / 0 / −1) so unreadable metadata is
   neutral, never penalised. **`recomp` → muscle, then fat loss**, emitting

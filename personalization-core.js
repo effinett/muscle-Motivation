@@ -156,6 +156,23 @@
     'bodyweight only': ['full_gym', 'home_basic', 'bodyweight']
   };
 
+  /* EQUIPMENT SPECIFICITY (owner decision 2026-11-17, 4.3.9-L).
+   *
+   * Which of the three existing gym-access answers a catalog equipment value is
+   * BUILT for. This is a RANKING signal only: eligibility is still decided by
+   * EQUIPMENT_ACCESS above. A Program here is an exact match for a person whose
+   * answer equals its level; a less demanding Program they can also do is not.
+   * Values that span setups ('any setup', 'minimal equipment') have no level,
+   * so they are never an exact match and never a penalty either. */
+  var EQUIPMENT_LEVEL = {
+    'full gym': 'full_gym',
+    'home gym': 'home_basic',
+    'home setup': 'home_basic',
+    'home basic': 'home_basic',
+    'bodyweight': 'bodyweight',
+    'bodyweight only': 'bodyweight'
+  };
+
   /* Stable reason codes. Exported so tests and UI copy tables key off the
    * same constants instead of repeating string literals. */
   var REASON = {
@@ -302,6 +319,13 @@
     return supported.indexOf(gymAccess) >= 0 ? 1 : -1;
   }
 
+  // 1 when the Program is built for exactly the user's equipment answer, else 0.
+  function equipmentExact(gymAccess, program) {
+    if (!gymAccess) return 0;
+    var level = EQUIPMENT_LEVEL[normText(program.equipmentSummary)];
+    return level && level === gymAccess ? 1 : 0;
+  }
+
   /* ── ELIGIBILITY, not preference (Phase 4.3.9-L) ──────────────────────────
    * Equipment is the one signal that can make a Program undeliverable rather
    * than merely a worse fit. A user without a barbell cannot perform a barbell
@@ -375,14 +399,21 @@
    *
    *   1. goal rank            desc   (exact > partial > none)
    *   2. experience fit       desc   (suits > unknown > contradicts)
-   *   3. training-day delta   asc    (nulls last)
-   *   4. equipment fit        desc
+   *   3. equipment exact      desc   (built for the user's answer > not)
+   *   4. training-day delta   asc    (nulls last)
+   *   5. equipment fit        desc
+   *   6. catalog sort_order   asc
+   *   7. slug                 asc    (total order ⇒ always deterministic)
    *
    * Experience ranks ahead of schedule closeness (owner decision 2026-11-17,
    * 4.3.9-L): every catalog Program runs at 2–6 days, so a level match matters
    * more than how close the advertised day count is.
-   *   5. catalog sort_order   asc
-   *   6. slug                 asc    (total order ⇒ always deterministic)
+   *
+   * Equipment specificity ranks after goal and experience and ahead of
+   * schedule and catalog order (owner decision 2026-11-17, 4.3.9-L): a
+   * Home Setup client gets the Home Setup Program, not the Bodyweight one they
+   * can also do; a Full Gym client gets the Full Gym Program. It never makes a
+   * Program eligible — the equipment gate already ran.
    */
   function scoreProgram(program, ctx) {
     return {
@@ -390,6 +421,7 @@
       goalRank: goalRank(ctx.goal, program.goal),
       dayDelta: dayDelta(ctx.trainingDays, program),
       experienceFit: experienceFit(ctx.experience, program),
+      equipmentExact: equipmentExact(ctx.gymAccess, program),
       equipmentFit: equipmentFit(ctx.gymAccess, program)
     };
   }
@@ -397,6 +429,7 @@
   function compareScored(a, b) {
     if (a.goalRank !== b.goalRank) return b.goalRank - a.goalRank;
     if (a.experienceFit !== b.experienceFit) return b.experienceFit - a.experienceFit;
+    if (a.equipmentExact !== b.equipmentExact) return b.equipmentExact - a.equipmentExact;
 
     if (a.dayDelta !== b.dayDelta) {
       if (a.dayDelta == null) return 1;
