@@ -873,8 +873,11 @@ question and ignoring the answer is not acceptable in a paid personalization pro
     keep load advice);
   - marking Bodyweight Fat Loss equipment-free for Swap and the picker;
   - a "move up to weights" Completion card in Bodyweight Foundations and Bodyweight Fat Loss, shown once
-    per workout when an exercise reaches the end of its path. It links the matching weights Program and
-    Update my equipment, and never enrols or swaps anything.
+    per workout when an exercise reaches the end of its path. Its main action is Update my equipment;
+    the normal recommendation ranking then picks the Program. A direct link to Home Strength or Home Fat
+    Loss appears only when that ranking would pick it for the client. It never enrols or swaps anything.
+  - Program IDs (owner-approved 2026-11-17): `home_strength`, `home_fat_loss`, `bodyweight_fat_loss`,
+    `advanced_muscle`, `advanced_fat_loss`, `advanced_home_strength`.
 
   Each Program's migration is approved separately. 4.3.9C and 4.3.9D remain open and are not part of this
   approval.
