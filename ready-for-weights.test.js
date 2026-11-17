@@ -125,10 +125,10 @@ test('each source Program can only ever link to its own target', () => {
     { slug: 'home_fat_loss', name: 'x', pagePath: PP.pagePathFor('home_strength') }, cat, PP.pagePathFor), null);
 });
 
-test('the link appears only when the normal ranking picks the target (published, home Program sorts first)', () => {
+test('the link appears only when the normal ranking picks the target (published and ranked first)', () => {
   const cat = catalogOf(TODAY_ROWS.concat([
-    home('home_strength', 'Home Strength', 'muscle', 'Beginner – Intermediate', 0),
-    home('home_fat_loss', 'Home Fat Loss', 'fatloss', 'Beginner – Intermediate', 0)]));
+    home('home_strength', 'Home Strength', 'muscle', 'Beginner – Intermediate', 5),
+    home('home_fat_loss', 'Home Fat Loss', 'fatloss', 'Beginner – Intermediate', 6)]));
   const a = card('bodyweight_foundations', [TERMINAL], cat, BEGINNER_MUSCLE);
   assert.deepEqual(a.secondary, { slug: 'home_strength', label: 'See Home Strength',
     href: 'program.html?slug=home_strength', note: 'Home Strength uses dumbbells and a long resistance band.' });
@@ -141,21 +141,22 @@ test('the link appears only when the normal ranking picks the target (published,
 
 test('an advanced client is not sent to Home Strength; the ranking decides, nothing is hard-coded', () => {
   const cat = catalogOf(TODAY_ROWS.concat([
-    home('home_strength', 'Home Strength', 'muscle', 'Beginner – Intermediate', 0),
-    home('advanced_home_strength', 'Advanced Home Strength', 'muscle', 'Advanced', 0)]));
+    home('home_strength', 'Home Strength', 'muscle', 'Beginner – Intermediate', 5),
+    home('advanced_home_strength', 'Advanced Home Strength', 'muscle', 'Advanced', 10)]));
   const c = card('bodyweight_foundations', [TERMINAL], cat,
     { goal: 'muscle', training_days: 4, training_experience: 'advanced', gym_access: 'bodyweight' });
   assert.equal(c.secondary, null);
   assert.equal(c.primary.label, 'Update my equipment');
 });
 
-test('with today’s tie-break the ranking keeps the bodyweight Program, so no link (open decision)', () => {
-  // Home Setup and Bodyweight both fully support a home-setup client; sort_order
-  // breaks the tie. Pinned so a ranking change shows up here deliberately.
+test('the exact equipment match wins even though the bodyweight Program sorts first', () => {
+  // Since #117 (owner decision 2026-11-17) a Home Setup Program beats a
+  // Bodyweight one for a home-setup client after goal and experience, whatever
+  // the catalog order. Home Strength sorts AFTER Bodyweight Foundations here.
   const cat = catalogOf(TODAY_ROWS.concat([home('home_strength', 'Home Strength', 'muscle', 'Beginner – Intermediate', 5)]));
   const plan = P.derivePersonalizedStart(R.rankingProfile(BEGINNER_MUSCLE), { catalog: cat });
-  assert.equal(plan.training.recommendedProgram.slug, 'bodyweight_foundations');
-  assert.equal(card('bodyweight_foundations', [TERMINAL], cat, BEGINNER_MUSCLE).secondary, null);
+  assert.equal(plan.training.recommendedProgram.slug, 'home_strength');
+  assert.equal(card('bodyweight_foundations', [TERMINAL], cat, BEGINNER_MUSCLE).secondary.slug, 'home_strength');
 });
 
 test('rankingProfile asks with a home-setup answer and never changes the stored profile', () => {
@@ -260,7 +261,7 @@ test('rendered: today, only Update my equipment, and nothing is written', async 
 });
 
 test('rendered: the direct link appears once the target is published and ranked first', async () => {
-  const cat = catalogOf(TODAY_ROWS.concat([home('home_strength', 'Home Strength', 'muscle', 'Beginner – Intermediate', 0)]));
+  const cat = catalogOf(TODAY_ROWS.concat([home('home_strength', 'Home Strength', 'muscle', 'Beginner – Intermediate', 5)]));
   const r = await runCard({ catalog: cat });
   assert.match(r.html, /href="program\.html\?slug=home_strength">See Home Strength<\/a>/);
   assert.match(r.html, /Home Strength uses dumbbells and a long resistance band\./);
@@ -273,7 +274,7 @@ test('rendered: nothing for other Programs, nothing without an end-of-path exerc
 });
 
 test('rendered: a failed profile read drops only the direct link', async () => {
-  const cat = catalogOf(TODAY_ROWS.concat([home('home_strength', 'Home Strength', 'muscle', 'Beginner – Intermediate', 0)]));
+  const cat = catalogOf(TODAY_ROWS.concat([home('home_strength', 'Home Strength', 'muscle', 'Beginner – Intermediate', 5)]));
   const r = await runCard({ catalog: cat, profileError: true });
   assert.match(r.html, /Update my equipment/);
   assert.doesNotMatch(r.html, /See Home Strength/);

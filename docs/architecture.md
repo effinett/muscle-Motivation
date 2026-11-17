@@ -529,9 +529,9 @@ Completion page (`workout-complete.html`) shows the card and what it offers; the
   failure drops the link; the main action always stands. No ranking logic lives here.
 - **Never:** writes from the Completion page, enrols, changes a Program or equipment answer, starts a
   purchase, or swaps an exercise.
-- **Known interaction (open owner decision, 2026-11-17):** a Home Setup Program and a Bodyweight Program
-  both fully support a home-setup client, so `sort_order` breaks the tie and the bodyweight Program wins
-  under today's ranking. Pinned in `ready-for-weights.test.js`.
+- **Ranking dependency:** the direct link relies on the equipment-exact tier (#117, owner decision
+  2026-11-17): for a home-setup client a Home Setup Program beats a Bodyweight one after goal and
+  experience, whatever the catalog order. Pinned in `ready-for-weights.test.js`.
 - Tests: `ready-for-weights.test.js` (rules, gates with mutation checks, sandboxed render of the real
   `renderWeightsCard`, Profile write scope).
 
