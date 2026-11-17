@@ -510,6 +510,31 @@ general product analytics. Browser global `MMAnalytics`; loaded by `index.html`,
   a workout once published. Covered by `program-page.test.js` and
   `program-shared-page.test.js`.
 
+### "Ready for weights?" card — `ready-for-weights.js` (Phase 4.3.9-L, 2026-11-17)
+
+Pure; browser global `ReadyForWeights`, guarded `module.exports` in Node. Decides whether the
+Completion page (`workout-complete.html`) shows the card and what it offers; the page only renders.
+
+- **Where / when:** only for a workout whose `program_slug` is `bodyweight_foundations` or
+  `bodyweight_fat_loss`, and only when at least one exercise's `BodyweightProgression.decide` status is
+  `terminal`. One card per workout; it names each end-of-path exercise once, in workout order.
+- **Main action:** always "Update my equipment" → `profile.html?edit=equipment`, an equipment-only sheet
+  that writes `profiles.gym_access` and nothing else (no target recalculation, no Program change). After
+  saving, the sheet shows the normal ranking's pick for the updated profile (`equipmentMatch`), linking
+  only a Program that has a page. It never enrols.
+- **Direct link** ("See Home Strength" from Foundations, "See Home Fat Loss" from Bodyweight Fat Loss):
+  offered only when the target is in the **published** catalog, its `page_path` equals
+  `ProgramPage.pagePathFor(slug)`, and `Personalization.derivePersonalizedStart` run on
+  `rankingProfile(profile)` (a copy with `gym_access = 'home_basic'`) picks that same Program. Any doubt or
+  failure drops the link; the main action always stands. No ranking logic lives here.
+- **Never:** writes from the Completion page, enrols, changes a Program or equipment answer, starts a
+  purchase, or swaps an exercise.
+- **Ranking dependency:** the direct link relies on the equipment-exact tier (#117, owner decision
+  2026-11-17): for a home-setup client a Home Setup Program beats a Bodyweight one after goal and
+  experience, whatever the catalog order. Pinned in `ready-for-weights.test.js`.
+- Tests: `ready-for-weights.test.js` (rules, gates with mutation checks, sandboxed render of the real
+  `renderWeightsCard`, Profile write scope).
+
 ### Other shared modules (`Live`)
 
 - `metrics.js`, `snapshot.js` — dashboard snapshot/metrics.

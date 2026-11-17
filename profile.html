@@ -398,6 +398,44 @@
   </div>
 </div>
 
+<!-- Phase 4.3.9-L "Ready for weights?" — equipment only. Opened by
+     profile.html?edit=equipment. Writes gym_access and nothing else: no target
+     recalculation, no Program change, no enrolment. After saving it shows the
+     normal ranking's pick for the updated profile (ready-for-weights.js). -->
+<div class="modal-overlay" id="equipModal">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="equipTitle">
+    <div class="modal-header">
+      <div class="modal-title" id="equipTitle">Your Equipment</div>
+      <button class="modal-close" onclick="closeEquip()" aria-label="Close">✕</button>
+    </div>
+    <div id="equipForm">
+      <div class="field-group">
+        <label class="field-label" for="eq-gym">Gym Access</label>
+        <select id="eq-gym">
+          <option value="">Prefer not to say</option>
+          <option value="full_gym">Full gym</option>
+          <option value="home_basic">Home setup — some equipment</option>
+          <option value="bodyweight">Bodyweight only</option>
+        </select>
+      </div>
+      <div class="result-sub">This only changes which Programs we recommend. Your targets and your current Program stay the same.</div>
+      <div class="modal-actions">
+        <button class="btn-back-modal" onclick="closeEquip()">Cancel</button>
+        <button class="btn-save" id="equipSaveBtn" onclick="saveEquip()">Save</button>
+      </div>
+    </div>
+    <div id="equipResult" style="display:none;">
+      <div class="result-label" id="eqResultLabel"></div>
+      <div class="result-val" id="eqResultName" style="margin-bottom:8px;"></div>
+      <div class="result-sub" id="eqResultSub"></div>
+      <div class="modal-actions">
+        <button class="btn-back-modal" onclick="closeEquip()">Done</button>
+        <a class="btn-save" id="eqResultLink" href="#" style="display:flex;align-items:center;justify-content:center;text-decoration:none;">View Program</a>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.0/dist/umd/supabase.js" integrity="sha384-3wY11tldQ5+yWqAvmTN4XtQvnjoTva0cV15O/O/O5NTtp0ivVopSzLOzsVXWZse9" crossorigin="anonymous"></script>
@@ -406,6 +444,8 @@
 <script src="program-catalog.js"></script>
 <script src="entitlement-core.js"></script>
 <script src="program-state.js"></script>
+<script src="personalization-core.js"></script>
+<script src="ready-for-weights.js"></script>
 <script>
 
   // Profile is the SECONDARY/account destination — the low-frequency actions
@@ -464,6 +504,11 @@
 
         document.getElementById('authGate').style.display = 'none';
         document.getElementById('appContent').style.display = 'block';
+
+        // Phase 4.3.9-L: the "Ready for weights?" card's "Update my equipment".
+        try {
+          if (new URLSearchParams(window.location.search).get('edit') === 'equipment') openEquip();
+        } catch (e) { /* the rest of Profile still works */ }
 
         // ONE purchases request for the whole page: the Programs list and the
         // billing card are two questions about the same rows (CP2b).
@@ -756,6 +801,68 @@
       console.error('saveRecalc:', err);
       showToast('Error saving — try again.');
     }
+  }
+
+  // ── Equipment (Phase 4.3.9-L "Ready for weights?") ───────────────────
+  function openEquip() {
+    if (!currentProfile) return;
+    document.getElementById('eq-gym').value = currentProfile.gym_access || '';
+    document.getElementById('equipForm').style.display = '';
+    document.getElementById('equipResult').style.display = 'none';
+    MMSheet.open(document.getElementById('equipModal'), { initialFocus: '#eq-gym' });
+  }
+
+  function closeEquip() { MMSheet.close(document.getElementById('equipModal')); }
+
+  async function saveEquip() {
+    var btn = document.getElementById('equipSaveBtn');
+    var value = document.getElementById('eq-gym').value || null;
+    btn.disabled = true;
+    try {
+      var res = await supabaseClient
+        .from('profiles').update({ gym_access: value }).eq('id', currentUserId);
+      if (res.error) throw res.error;
+      currentProfile.gym_access = value;
+      await showEquipMatch();
+    } catch (err) {
+      console.error('saveEquip:', err);
+      showToast('Error saving — try again.');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // The normal ranking's own pick for the updated profile. Read-only: it never
+  // enrols, never changes the active Program, and only links a published
+  // Program that has a page.
+  async function showEquipMatch() {
+    var m = { kind: 'unknown' };
+    try {
+      var catalog = pcCached() || await pcLoadCatalog();
+      var plan = Personalization.derivePersonalizedStart(currentProfile, { catalog: catalog });
+      m = ReadyForWeights.equipmentMatch(plan, Personalization.describeReasons);
+    } catch (e) { m = { kind: 'unknown' }; }
+
+    var label = document.getElementById('eqResultLabel');
+    var name = document.getElementById('eqResultName');
+    var sub = document.getElementById('eqResultSub');
+    var link = document.getElementById('eqResultLink');
+    if (m.kind === 'match') {
+      label.textContent = 'Best match for your equipment';
+      name.textContent = m.name;
+      sub.textContent = m.reasons.join(' · ');
+      link.href = m.href;
+      link.style.display = 'flex';
+    } else {
+      label.textContent = 'Equipment saved';
+      name.textContent = '';
+      sub.textContent = m.kind === 'no_fit'
+        ? 'We don\u2019t have a Program for that equipment yet. Your current Program stays as it is.'
+        : 'Program recommendations will use your new answer.';
+      link.style.display = 'none';
+    }
+    document.getElementById('equipForm').style.display = 'none';
+    document.getElementById('equipResult').style.display = '';
   }
 
 </script>
