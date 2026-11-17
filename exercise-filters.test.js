@@ -646,9 +646,13 @@ test('4.3.9B: a custom, an inactive row, a misclassified row or nothing is never
   [null, undefined, {}, { id: null }].forEach((v) => assert.equal(EF.isEquipmentFreeExercise(v), false));
 });
 
-test('4.3.9B: only Bodyweight Foundations is an equipment-free Program', () => {
+test('4.3.9B / 4.3.9-L: only the two bodyweight Programs are equipment-free', () => {
   assert.equal(EF.isEquipmentFreeProgram('bodyweight_foundations'), true);
-  ['fat_loss_blueprint', 'muscle_gain', 'glute_builder', '', null, undefined, 'BODYWEIGHT_FOUNDATIONS', {}]
+  assert.equal(EF.isEquipmentFreeProgram('bodyweight_fat_loss'), true);
+  assert.deepEqual(EF.EQUIPMENT_FREE_PROGRAM_SLUGS.slice().sort(), ['bodyweight_fat_loss', 'bodyweight_foundations']);
+  ['fat_loss_blueprint', 'muscle_gain', 'glute_builder', 'home_strength', 'home_fat_loss',
+    'advanced_muscle', 'advanced_fat_loss', 'advanced_home_strength',
+    '', null, undefined, 'BODYWEIGHT_FOUNDATIONS', 'BODYWEIGHT_FAT_LOSS', {}]
     .forEach((s) => assert.equal(EF.isEquipmentFreeProgram(s), false, String(s)));
 });
 
