@@ -7,7 +7,7 @@ customer data, no auth users and no credentials.
 |---|---|
 | `schema/current-schema.sql` | **Authoritative rebuild file.** Complete current structure of schema `public` (28 tables, constraints, indexes, row-level security, 62 policies, functions, triggers, grants, comments) plus the `auth.users` sign-up trigger and the `ensure_rls` event trigger. Schema only — no rows. |
 | `schema/baseline-pre-2026-06-09.sql` | Objects created before migration tracking began (`profiles`, `handle_new_user` + `on_auth_user_created`, `rls_auto_enable` + `ensure_rls`). Only needed to replay history. |
-| `migrations/` | The 73 migrations applied to production (as of 2026-11-16), with their original version numbers. History, not a rebuild script — see below. |
+| `migrations/` | The 74 migrations applied to production (as of 2026-11-17), with their original version numbers. History, not a rebuild script — see below. |
 
 ## Rebuild the structure on a new Supabase project
 
@@ -18,10 +18,11 @@ separately from the encrypted private backup, never from this repository.
 ## Why the migrations are not a rebuild script
 
 Replaying `baseline` + `migrations/` in order rebuilds the same structure (verified),
-but ten migrations are guarded **data** migrations that assert production row state
+but eleven migrations are guarded **data** migrations that assert production row state
 and deliberately abort on an empty database; they contain no structural changes:
 `20260825142638`, `20260904042551`, `20260920231151`, `20260929030347`, `20260930032337`,
-`20261002024350`, `20261002173108`, `20261003000515`, `20261005041336`, `20261116183238`.
+`20261002024350`, `20261002173108`, `20261003000515`, `20261005041336`, `20261116183238`,
+`20261117192044`.
 
 `20261002173108` (`phase_439b_cp4c_bodyweight_guidance_pike_lean`) updates the exercise
 JSON arrays of two Bodyweight Foundations Routines (Full Body A and B) under exact-state
@@ -48,6 +49,16 @@ slots on five Bodyweight Foundations Routines (owner-approved 2026-11-16), so no
 target. It proves each new array equals its old array with only those values changed, requires the
 published Program, the five Routines and their links, and aborts on any divergence. It changes no
 Program, link, schedule, catalog row or other Routine.
+
+`20261117192044` (`phase_439l_home_strength_draft`, owner-approved 2026-11-17) adds Home Strength
+as a **hidden draft**: one Program (`status = 'draft'`, membership-included, not standalone-purchasable,
+`page_path = 'program.html?slug=home_strength'`), four private platform Routines (Full Body A/B/C and
+Conditioning & Core, 25 prescription entries over 21 Dumbbell / Band / Bodyweight exercises) and their
+four links (`full_a`, `full_b`, `full_c`, `conditioning_core`). It requires the exact starting catalog
+counts, the exercise catalog and the Bodyweight Foundations Full Body A/B/C owner, and aborts on any
+divergence. It inserts only; it publishes nothing, modifies no existing row, and creates no price,
+purchase, entitlement or enrolment. It derives the owner from Full Body A/B/C, so it needs no session
+setting. Publishing is a separate migration.
 
 Two of them (`20260920231151`, `20260929030347`) reference the platform owner account.
 In this repository that one value is read from a session setting instead of being written
