@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <!-- Neutral static title. The real Program name is written from the catalog
+       only after authorization succeeds, so view-source on the draft page
+       reveals nothing about it. -->
+  <title>Muscle Motivation – Program</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js" integrity="sha384-ouAVEJVCMsf8Svzn+BwqbaBhxBEA0xgeVBhHnxmWd+Wqyv18yhWCQwGegFD/OHLq" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --red: #B1121B;
+      --red-dim: rgba(177,18,27,0.12);
+      --bg: #050505;
+      --surface: #0f0f0f;
+      --surface2: #161616;
+      --border: #222;
+      --text: #ffffff;
+      --muted: #888;
+      --light: #ccc;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Barlow', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 0; opacity: 0.4;
+    }
+
+    /* Auth / loading gate */
+    #authGate {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      min-height: 100vh; background: var(--bg);
+      position: relative; z-index: 10;
+    }
+    #authGate img { width: 90px; margin-bottom: 20px; opacity: 0.8; filter: drop-shadow(0 0 12px rgba(177,18,27,0.4)); }
+    #authGate p { color: #555; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; }
+
+    /* Header */
+    header {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(5,5,5,0.97);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      display: flex; align-items: center;
+      justify-content: space-between;
+      height: 64px;
+    }
+    .header-logo { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+    .header-logo img { height: 44px; filter: drop-shadow(0 0 8px rgba(177,18,27,0.35)); }
+    .header-logo span {
+      font-family: 'Barlow', sans-serif; font-weight: 700;
+      font-size: 11px; letter-spacing: 3px;
+      color: var(--red); text-transform: uppercase;
+    }
+    .header-right { display: flex; align-items: center; gap: 14px; }
+    .back-link {
+      font-size: 12px; color: var(--muted); text-decoration: none;
+      letter-spacing: 1px; text-transform: uppercase; font-weight: 600;
+      transition: color 0.2s; min-height: 44px; display: flex; align-items: center;
+    }
+    .back-link:hover { color: var(--red); }
+
+    /* Unavailable + locked states share one centred layout */
+    #unavailableState, #lockedState {
+      display: none; flex-direction: column;
+      align-items: center; justify-content: center;
+      min-height: 80vh; text-align: center;
+      padding: 40px 20px; position: relative; z-index: 1;
+    }
+    #unavailableState .state-icon, #lockedState .lock-icon { color: var(--red); margin-bottom: 20px; }
+    #unavailableState .state-icon svg, #lockedState .lock-icon svg { width: 48px; height: 48px; }
+    #unavailableState h2, #lockedState h2 {
+      font-family: 'Bebas Neue', sans-serif; font-size: 32px;
+      letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px;
+    }
+    #unavailableState p, #lockedState p {
+      color: var(--muted); max-width: 420px; line-height: 1.6; margin-bottom: 28px;
+    }
+    .btn-primary {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-height: 44px; padding: 14px 28px;
+      background: var(--red); border: none; border-radius: 10px;
+      color: white; font-size: 16px; font-weight: 700;
+      font-family: 'Bebas Neue', sans-serif; letter-spacing: 3px;
+      text-transform: uppercase; cursor: pointer; text-decoration: none;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 30px rgba(177,18,27,0.35); }
+
+    /* Container */
+    .container {
+      max-width: 760px; margin: 0 auto;
+      /* Bottom reserve = the fixed Start bar's RENDERED height (which already
+         includes the home-indicator inset) + 24px breathing room, so the last
+         row and card always scroll fully clear of it whatever the session
+         count. --sticky-cta-h is measured by syncStickyReserve(); until it is
+         (or if it cannot be) the fallback covers the bar plus the inset. */
+      padding: 28px 16px calc(var(--sticky-cta-h, calc(110px + env(safe-area-inset-bottom, 0px))) + 24px);
+      position: relative; z-index: 1;
+    }
+
+    /* Hero */
+    .hero { text-align: center; padding: 24px 0 8px; }
+    .hero .eyebrow {
+      font-family: 'Barlow', sans-serif; font-weight: 700; font-size: 10px;
+      letter-spacing: 4px; color: var(--red); text-transform: uppercase;
+    }
+    .hero h1 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(34px, 9vw, 60px);
+      letter-spacing: 2px; text-transform: uppercase;
+      margin: 12px 0 8px; line-height: 1;
+      overflow-wrap: anywhere;
+    }
+    .hero p {
+      color: var(--muted); font-size: 15px; max-width: 520px;
+      margin: 0 auto; line-height: 1.6; overflow-wrap: anywhere;
+    }
+
+    /* Section label */
+    .section-label {
+      font-family: 'Barlow', sans-serif; font-weight: 700;
+      font-size: 10px; letter-spacing: 3px;
+      color: var(--red); text-transform: uppercase;
+      margin: 36px 0 14px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 22px 20px;
+      margin-bottom: 14px;
+      position: relative; overflow: hidden;
+    }
+    .card::before {
+      content: ''; position: absolute;
+      top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(177,18,27,0.25), transparent);
+    }
+    .card h3 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 20px; letter-spacing: 1px;
+      color: var(--text); margin-bottom: 10px;
+    }
+    .card p { color: var(--light); font-size: 14px; line-height: 1.7; margin-bottom: 10px; }
+    .card p:last-child { margin-bottom: 0; }
+
+    /* Facts grid — wraps to one column on the narrowest phones */
+    .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .fact {
+      background: var(--surface2); border-radius: 10px; padding: 12px 14px;
+      min-width: 0;
+    }
+    .fact-key {
+      font-size: 10px; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 4px;
+    }
+    .fact-val {
+      font-size: 14px; font-weight: 600; color: var(--text);
+      line-height: 1.4; overflow-wrap: anywhere;
+    }
+    @media (max-width: 360px) { .facts { grid-template-columns: 1fr; } }
+
+    /* Session rows — same primitives as the other Program pages */
+    .sched-grid { display: grid; gap: 8px; }
+    .sched-row {
+      display: flex; justify-content: space-between; gap: 12px; align-items: center;
+      background: var(--surface2); border-radius: 8px; padding: 11px 14px;
+      border: 1px solid transparent; transition: border-color .15s;
+      width: 100%; text-align: left; font-family: inherit; min-height: 44px;
+      color: inherit; cursor: pointer;
+    }
+    .sched-row:hover { border-color: var(--red); }
+    .sched-row:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+    .sched-row .day { font-weight: 600; color: var(--muted); font-size: 13px; min-width: 90px; }
+    .sched-row .sess { color: var(--text); font-size: 13px; text-align: right; overflow-wrap: anywhere; }
+    .sched-row.selected { border-color: var(--red); background: var(--red-dim); }
+    .sched-row .sess-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 0; }
+    .sched-row .rest-note { color: var(--muted); font-size: 12px; line-height: 1.5; text-align: right; }
+    .week-grid { display: grid; gap: 8px; }
+    .week-row {
+      display: flex; justify-content: space-between; gap: 12px; align-items: center;
+      background: var(--surface2); border-radius: 8px; padding: 11px 14px; min-height: 44px;
+    }
+    .week-row .day { font-weight: 600; color: var(--muted); font-size: 13px; min-width: 48px; }
+    .week-row .sess { color: var(--text); font-size: 13px; text-align: right; overflow-wrap: anywhere; }
+    .sched-row.selected .day { color: var(--red); }
+    .sched-note { color: var(--muted); font-size: 13px; margin-top: 14px; line-height: 1.6; }
+    .sched-retry { margin-top: 14px; padding: 10px 20px; font-size: 14px; letter-spacing: 2px; }
+    .sched-alt {
+      display: inline-block; margin-top: 12px; color: var(--muted);
+      font-size: 13px; font-weight: 600; text-decoration: none;
+      min-height: 44px; line-height: 44px;
+    }
+    .sched-alt:hover { color: var(--red); text-decoration: underline; }
+    .sched-note a { color: var(--red); text-decoration: none; font-weight: 600; }
+    .sched-note a:hover { text-decoration: underline; }
+
+    /* Sticky CTA */
+    .sticky-cta {
+      display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+      background: rgba(5,5,5,0.97); backdrop-filter: blur(12px);
+      border-top: 1px solid var(--border);
+      /* The bar sits on the home indicator: its content clears the inset. */
+      padding: 14px 20px calc(18px + env(safe-area-inset-bottom, 0px));
+    }
+    .sticky-cta-inner {
+      max-width: 760px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    }
+    .sticky-cta-label {
+      font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--muted); font-weight: 700; margin-bottom: 4px;
+    }
+    .sticky-cta-name {
+      font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 1px;
+      color: var(--text); line-height: 1.1; overflow-wrap: anywhere;
+    }
+    .sticky-cta-btn {
+      background: var(--red); color: white; border: none; border-radius: 10px;
+      padding: 12px 22px; min-height: 44px;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 2px;
+      cursor: pointer; text-decoration: none; white-space: nowrap;
+      transition: background 0.15s; flex-shrink: 0;
+    }
+    .sticky-cta-btn:hover { background: #D11D27; }
+    .sticky-cta-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+    @media (max-width: 480px) { .header-logo span { display: none; } }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
+      .btn-primary:hover { transform: none; }
+    }
+  </style>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#121011">
+  <meta name="application-name" content="Muscle Motivation">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Muscle Motivation">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="safe-area.css">
+  <script src="mm-errors.js" defer></script>
+</head>
+<body>
+
+<!-- Loading / auth gate -->
+<div id="authGate">
+  <img src="logow.png" alt="Muscle Motivation">
+  <p>Loading your program...</p>
+</div>
+
+<!-- Unavailable state. Covers a Program that is not in the published catalog
+     (draft, retired, unknown slug) AND every failure to establish access:
+     catalog error, unreadable purchases, unreadable Routines. Deliberately
+     neutral — it never says "draft", never names the Program, and never hints
+     at content. -->
+<div id="unavailableState">
+  <span class="state-icon"><i data-lucide="alert-circle"></i></span>
+  <h2>This program isn't available</h2>
+  <p id="unavailableCopy">We couldn't open this program right now. Browse the programs available to you and try again from there.</p>
+  <a class="btn-primary" href="workout.html?pane=programs">Browse programs</a>
+</div>
+
+<!-- Locked state — the Program IS published, the user simply has no access.
+     Copy is written at runtime from the catalog's own access flags, so it never
+     promises a purchase option the Program does not offer. -->
+<div id="lockedState">
+  <span class="lock-icon"><i data-lucide="lock"></i></span>
+  <h2>You don't have access yet</h2>
+  <p id="lockedCopy">This program isn't part of your current access.</p>
+  <a class="btn-primary" href="workout.html?pane=programs">Browse programs</a>
+</div>
+
+<!-- Program content. EVERY value is written from the catalog and from
+     program_routines at runtime; nothing about this Program is present in the
+     static markup, so an unauthorized visitor cannot read it from source. -->
+<div id="programContent" style="display:none;">
+
+  <header>
+    <a class="header-logo" href="app.html">
+      <img src="logow.png" alt="Muscle Motivation">
+      <span>Muscle Motivation</span>
+    </a>
+    <div class="header-right">
+      <a class="back-link" href="workout.html?pane=programs">← Programs</a>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <div class="hero">
+      <div class="eyebrow">Your Program</div>
+      <h1 id="progName"></h1>
+      <p id="progDesc"></p>
+    </div>
+
+    <div class="section-label">At a glance</div>
+    <div class="card">
+      <div class="facts" id="progFacts"></div>
+    </div>
+
+    <div class="section-label">Sessions</div>
+    <div class="card">
+      <!-- STATIC by design (Phase 4.3.9B). This sentence previously read
+           "You train N days a week", where N fell back to the PROGRAM's
+           recommended_days_per_week whenever the profile could not be read —
+           so a 4-day account was told it trained 3 days. Static copy is true
+           for every profile frequency and cannot be varied by any code path. -->
+      <p id="sessSummary">Choose any session below. Starting one here logs it to your history
+        without changing your dashboard progression.</p>
+      <div class="sched-grid" id="sessList"></div>
+      <!-- Deliberately states no number. Accuracy verified in source:
+           profiles.training_days is global and program-state.js
+           pgRemapAllSchedules() remaps every owned Program when it changes. -->
+      <p class="sched-note">Your workout frequency applies to every program you own. To change it, use
+        <a href="profile.html">Recalculate Goals</a> in your profile.</p>
+    </div>
+
+    <!-- Filled at runtime for the user's own frequency; hidden when it cannot be. -->
+    <div id="weekSection" style="display:none;">
+      <div class="section-label">How to plan your week</div>
+      <div class="card">
+        <div class="week-grid" id="weekList"></div>
+        <p class="sched-note" id="weekNote"></p>
+      </div>
+    </div>
+
+    <div id="equipSection" style="display:none;">
+      <div class="section-label">Equipment</div>
+      <div class="card"><p id="equipCopy"></p></div>
+    </div>
+
+  </div>
+</div>
+
+<div class="sticky-cta" id="stickyCta">
+  <div class="sticky-cta-inner">
+    <div>
+      <div class="sticky-cta-label" id="ctaLabel">Selected workout</div>
+      <div class="sticky-cta-name" id="ctaSessionName">—</div>
+    </div>
+    <a class="sticky-cta-btn" id="startBtn" href="workout.html">Start workout</a>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.0/dist/umd/supabase.js" integrity="sha384-3wY11tldQ5+yWqAvmTN4XtQvnjoTva0cV15O/O/O5NTtp0ivVopSzLOzsVXWZse9" crossorigin="anonymous"></script>
+<script src="supabase.js"></script>
+<script src="schedules.js"></script>
+<script src="program-catalog.js"></script>
+<script src="entitlement-core.js"></script>
+<script src="program-state.js"></script>
+<script src="program-page.js"></script>
+<script>
+  /* ── Shared Program page (Phase 4.3.9-L) ──────────────────────────────────
+     Renders ONE of the six 4.3.9-L catalog Programs, named by ?slug=. It is
+     program-bodyweight.html's authorized path with three additions: the week
+     may repeat a session (ProgramPage.resolveWeek), a static "How to plan your
+     week" card and rest notes (ProgramPage.weekPlan / restNote), and an
+     equipment card. A slug that is not one of the six, not in the published
+     catalog, or whose catalog page_path is not this page, is unavailable —
+     before any access check — so this page can never expose a Program that
+     has not been migrated and published.
+
+     The protection layers are inherited unchanged from the Bodyweight page,
+     which asked: what stops someone who knows this URL from seeing private
+     Program or Routine content before publication? FOUR independent layers,
+     all enforced in code rather than described:
+
+       1. requireAuth() — an unauthenticated visitor is redirected to auth.html
+          and never runs any of this.
+       2. pcLoadCatalog() reads the catalog with `.eq('status','published')`, so
+          a draft/retired Program is simply ABSENT. pcBySlug() returns null.
+       3. resolveProgramAccess(null, rows) returns `invalid_program` and denies
+          BEFORE any purchase or membership logic runs — a matching purchase or
+          an active membership cannot bypass draft status, because the Program
+          never reaches the entitlement comparison at all.
+       4. RLS independently withholds a draft `programs` row and its `private`
+          platform Routines from every browser client.
+
+     And a fifth, structural one: the static markup contains NO Program name,
+     description, session name or exercise. Every value is injected after
+     authorization succeeds, so view-source on the draft page reveals nothing.
+
+     A catalog Program renders here the moment its migration publishes it with
+     page_path = 'program.html?slug=<slug>'; until then this page is unavailable
+     for it. The authorized path is the ONLY path. */
+  // The requested Program. Only one of the six catalog slugs is ever used; any
+  // other value (missing, unknown, an existing Program with its own page) is
+  // unavailable, and nothing about it is read.
+  var REQUESTED_SLUG = (function () {
+    try { return new URLSearchParams(window.location.search).get('slug') || ''; }
+    catch (e) { return ''; }
+  })();
+  var PROGRAM_SLUG = (typeof ProgramPage !== 'undefined' && ProgramPage.isCatalogProgram(REQUESTED_SLUG))
+    ? REQUESTED_SLUG : null;
+  var PRODUCT_SLUG = PROGRAM_SLUG;
+
+  var LINKED_SESSIONS = []; // everything this Program links, as loaded
+  var SESSIONS = [];        // [{ session_key, name, position }] — THIS user's week, repeats allowed
+  var SELECTED = null;      // position (1-based) of the selected row; repeats share a key
+
+  /* ── Sticky Start bar clearance (Phase 4.3.9B CP4f) ─────────────────────
+     The page reserves exactly the bar's rendered height at its bottom (the
+     .container padding reads --sticky-cta-h), so nothing ever stays hidden
+     behind the fixed bar once scrolled to the end. The height is measured, not
+     assumed: it includes the home-indicator inset and any wrapped session
+     name, and it does not depend on how many sessions are listed. A hidden bar
+     (0 height) clears the value and the CSS fallback applies. */
+  // Never allowed to break the page: without a measurable bar or a styleable
+  // root it does nothing, and the CSS fallback reserve stays in force.
+  function syncStickyReserve() {
+    var bar = document.getElementById('stickyCta');
+    var root = document.documentElement;
+    if (!root || !root.style || typeof root.style.setProperty !== 'function') return;
+    var h = (bar && typeof bar.getBoundingClientRect === 'function') ? bar.getBoundingClientRect().height : 0;
+    if (h > 0) root.style.setProperty('--sticky-cta-h', Math.ceil(h) + 'px');
+    else root.style.removeProperty('--sticky-cta-h');
+  }
+  function watchStickyReserve() {
+    var bar = document.getElementById('stickyCta');
+    if (!bar) return;
+    // Fires when the bar is shown, hidden, or changes size (a longer name).
+    if (typeof ResizeObserver === 'function') new ResizeObserver(syncStickyReserve).observe(bar);
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('resize', syncStickyReserve);
+    }
+    syncStickyReserve();
+  }
+  watchStickyReserve();
+
+  function showOnly(id) {
+    ['authGate', 'unavailableState', 'lockedState', 'programContent'].forEach(function (el) {
+      var node = document.getElementById(el);
+      if (node) node.style.display = 'none';
+    });
+    var target = document.getElementById(id);
+    if (target) target.style.display = (id === 'programContent') ? 'block' : 'flex';
+  }
+
+  // Every non-authorized outcome lands here. One exit, so no future branch can
+  // accidentally fall through to rendered content.
+  function showUnavailable() {
+    document.getElementById('stickyCta').style.display = 'none';
+    showOnly('unavailableState');
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function showLocked(program) {
+    // Written from the catalog's own flags — never a hard-coded purchase pitch.
+    var copy = 'This program isn’t part of your current access.';
+    if (program && program.includedWithMembership && program.standalonePurchasable) {
+      copy = 'This program is included with an active membership, or available as a one-time purchase.';
+    } else if (program && program.includedWithMembership) {
+      copy = 'This program is included with an active Muscle Motivation membership.';
+    } else if (program && program.standalonePurchasable) {
+      copy = 'This program is available as a one-time purchase.';
+    }
+    document.getElementById('lockedCopy').textContent = copy;
+    document.getElementById('stickyCta').style.display = 'none';
+    showOnly('lockedState');
+    if (window.lucide) lucide.createIcons();
+  }
+
+  /* Sessions come from program_routines scoped by BOTH the Program slug and the
+     relationship — never by session_key alone, so a same-keyed Routine that
+     belongs to another Program can never be substituted here. `exercises` is
+     deliberately NOT selected: this page summarises the Program, it never needs
+     the prescriptions, and not fetching them means they cannot leak. RLS gates
+     the read, so an unentitled caller receives an empty list. */
+  async function loadSessions() {
+    try {
+      var res = await supabaseClient
+        .from('program_routines')
+        .select('session_key, sort_order, programs!inner(slug), workout_templates!inner(id, name)')
+        .eq('programs.slug', PROGRAM_SLUG)
+        .order('sort_order', { ascending: true });
+      if (res.error || !Array.isArray(res.data)) return null;
+      var rows = res.data
+        .filter(function (r) { return r && r.session_key && r.workout_templates; })
+        .map(function (r) {
+          return {
+            session_key: r.session_key,
+            name: r.workout_templates.name || r.session_key,
+            sort_order: r.sort_order,
+          };
+        });
+      return rows.length ? rows : null;     // nothing readable → fail closed
+    } catch (e) {
+      console.error('loadSessions:', e);
+      return null;
+    }
+  }
+
+  function esc(str) {
+    return String(str == null ? '' : str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function renderFacts(program) {
+    var goalLabel = (typeof GOAL_LABELS !== 'undefined' && program.goal)
+      ? (GOAL_LABELS[program.goal] || program.goal) : null;
+    var facts = [
+      ['Goal', goalLabel],
+      ['Equipment', program.equipmentSummary],
+      ['Duration', program.durationWeeks ? program.durationWeeks + ' weeks' : null],
+      ['Recommended', program.recommendedDaysPerWeek ? program.recommendedDaysPerWeek + ' days/week' : null],
+      ['Level', program.difficulty],
+      ['Access', (program.includedWithMembership && program.standalonePurchasable)
+        ? 'Membership or individual purchase'
+        : (program.includedWithMembership ? 'Included with membership'
+          : (program.standalonePurchasable ? 'Individual purchase' : null))],
+    ].filter(function (f) { return f[1]; });   // a missing value shows no row
+    document.getElementById('progFacts').innerHTML = facts.map(function (f) {
+      return '<div class="fact"><div class="fact-key">' + esc(f[0]) + '</div>' +
+             '<div class="fact-val">' + esc(f[1]) + '</div></div>';
+    }).join('');
+  }
+
+  function selectSession(position) {
+    var match = SESSIONS.filter(function (s) { return s.position === position; })[0];
+    if (!match) return;                       // only a listed session is selectable
+    SELECTED = position;
+    var key = match.session_key;
+    document.getElementById('ctaSessionName').textContent = match.name;
+    // Canonical launch URL. CP3d-1's authorizeProgramSession re-checks the
+    // catalog, entitlement and the Program-scoped Routine read at the WRITE
+    // boundary, so this link cannot create a workout for a draft Program even
+    // if it is copied elsewhere. `mode=optional` never advances progression.
+    document.getElementById('startBtn').href =
+      'workout.html?program=' + encodeURIComponent(PROGRAM_SLUG) +
+      '&session=' + encodeURIComponent(key) + '&mode=optional';
+    renderSessions();
+  }
+
+  function renderSessions() {
+    document.getElementById('sessList').innerHTML = SESSIONS.map(function (s) {
+      var sel = (s.position === SELECTED) ? ' selected' : '';
+      var note = ProgramPage.restNote(PROGRAM_SLUG, s.session_key);
+      return '<button type="button" class="sched-row' + sel + '"' +
+        ' aria-pressed="' + (sel ? 'true' : 'false') + '"' +
+        ' onclick="selectSession(' + Number(s.position) + ')">' +
+        '<span class="day">Session ' + esc(String(s.position)) + '</span>' +
+        '<span class="sess-wrap"><span class="sess">' + esc(s.name) + '</span>' +
+        (note ? '<span class="rest-note">' + esc(note) + '</span>' : '') +
+        '</span></button>';
+    }).join('');
+  }
+
+  // Static guidance for THIS user's frequency. Weekdays are suggestions; the app
+  // never pins a session to a day. Hidden whenever there is no plan to show.
+  function renderWeekPlan(days) {
+    var section = document.getElementById('weekSection');
+    var plan = ProgramPage.weekPlan(PROGRAM_SLUG, days, SESSIONS.map(function (s) { return s.session_key; }));
+    if (!plan) { section.style.display = 'none'; return; }
+    var nameOf = {};
+    SESSIONS.forEach(function (s) { nameOf[s.session_key] = s.name; });
+    var list = document.getElementById('weekList');
+    var note = document.getElementById('weekNote');
+    if (plan.mode === 'fixed') {
+      list.innerHTML = plan.rows.map(function (r) {
+        return '<div class="week-row"><span class="day">' + esc(r.day) + '</span>' +
+               '<span class="sess">' + esc(nameOf[r.key]) + '</span></div>';
+      }).join('');
+      note.textContent = 'A suggested week. Train on the days that suit you; the app always offers your next session.';
+    } else {
+      list.innerHTML = '<div class="week-row"><span class="day">Days</span>' +
+        '<span class="sess">' + esc(plan.days.join(' \u00b7 ')) + '</span></div>';
+      note.textContent = 'Your sessions rotate in order across these days: ' +
+        plan.keys.map(function (k) { return nameOf[k]; }).join(', ') +
+        '. The app always offers your next session.';
+    }
+    section.style.display = 'block';
+  }
+
+  function renderEquipment(program) {
+    var copy = ProgramPage.equipmentNote(PROGRAM_SLUG);
+    var section = document.getElementById('equipSection');
+    if (!copy) { section.style.display = 'none'; return; }
+    document.getElementById('equipCopy').textContent = copy;
+    section.style.display = 'block';
+  }
+
+  // Which session to preselect: the user's progression position when they have
+  // one, otherwise the first. Read-only — this page never creates an enrolment.
+  // Fail closed on an unknown frequency: no session rows, no Start CTA, nothing
+  // preselected. Neutral and retryable — the Program is fine, we just cannot
+  // read the profile. Deliberately distinct from showUnavailable(), which means
+  // "this Program is not available to you" and offers no retry.
+  function showFrequencyUnavailable(reason, userId, program) {
+    SELECTED = null;
+    document.getElementById('weekSection').style.display = 'none';
+    document.getElementById('sessList').innerHTML = '';
+    document.getElementById('stickyCta').style.display = 'none';
+
+    // Two states, one per thing the user can actually DO about it. The reason
+    // code comes from resolveTrainingDays(); frequencyFailureState() owns the
+    // mapping so all four Program pages classify it identically. Neither state
+    // names a column, a value or an error — only the next step.
+    if (frequencyFailureState(reason) === 'unsupported') {
+      // We have a frequency and no Program schedule covers it. A retry would
+      // return the same answer for ever, so the only action offered is the route
+      // that lets the user change it.
+      document.getElementById('sessSummary').innerHTML =
+        'Choose between 2 and 6 workout days to use this program.' +
+        '<br><a class="btn-primary sched-retry" href="profile.html">Recalculate Goals</a>';
+      return;
+    }
+
+    document.getElementById('sessSummary').innerHTML =
+      'We couldn’t load your workout schedule.' +
+      '<br><button type="button" class="btn-primary sched-retry" id="sessRetryBtn">Try again</button>';
+    // Guarded: if the retry control is somehow absent, the page must still settle
+    // in this neutral state rather than throw and be mistaken for a Program that
+    // is unavailable.
+    var retry = document.getElementById('sessRetryBtn');
+    if (retry) retry.addEventListener('click', function () {
+      retry.disabled = true; retry.textContent = 'Checking…';
+      preselect(userId, program).then(function (ready) {
+        if (ready) document.getElementById('stickyCta').style.display = 'block';
+      });
+    });
+  }
+
+  // CP4a third state. The frequency IS valid and supported, but the complete set
+  // of Routines it calls for could not be constructed. Deliberately distinct
+  // from the two PR #66 frequency states (which are about the frequency itself)
+  // and from showUnavailable() (which means the Program is not available to this
+  // user at all, and offers no retry).
+  //
+  // Cause-neutral by contract: no reason code, session key, Routine name, table,
+  // column, or error text — none of which the user could act on, and some of
+  // which would disclose unpublished content. The whole schedule fails, never a
+  // partial week.
+  function showScheduleUnavailable(userId, program) {
+    SESSIONS = [];
+    SELECTED = null;
+    document.getElementById('weekSection').style.display = 'none';
+    document.getElementById('sessList').innerHTML = '';
+    document.getElementById('stickyCta').style.display = 'none';
+    document.getElementById('startBtn').href = '';
+    document.getElementById('sessSummary').innerHTML =
+      'Your program schedule is temporarily unavailable. Your progress is safe. ' +
+      'Please try again shortly.' +
+      '<br><button type="button" class="btn-primary sched-retry" id="schedRetryBtn">Try Again</button>' +
+      '<br><a class="sched-alt" href="workout.html?pane=programs">Back to Programs</a>';
+    var retry = document.getElementById('schedRetryBtn');
+    if (retry) retry.addEventListener('click', function () {
+      retry.disabled = true; retry.textContent = 'Checking…';
+      preselect(userId, program).then(function (ready) {
+        if (ready) document.getElementById('stickyCta').style.display = 'block';
+      });
+    });
+  }
+
+  // Returns true only when a session was actually selected — the caller shows
+  // the Start CTA off this answer rather than assuming success.
+  async function preselect(userId, program) {
+    // training_days is read for SCHEDULE SELECTION ONLY and is never rendered.
+    // The previous code fell back to the Program's own recommended_days_per_week
+    // when the profile could not be read, which selected a schedule family from
+    // the PROGRAM's frequency as if it were the USER's. There is no safe number
+    // to substitute, so anything that is not a schedulable frequency now fails
+    // closed via the one canonical rule, resolveTrainingDays() in schedules.js:
+    // only a raw integer 2–6 may drive schedule selection. 0 and 1 are storable
+    // onboarding answers that no schedule covers, so they fail closed too rather
+    // than being normalised up to the 3-day family.
+    var profile = null;
+    try { profile = await getProfile(userId); } catch (e) { profile = null; }
+    var freq = resolveTrainingDays(profile);
+    if (!freq.ok) { showFrequencyUnavailable(freq.reason, userId, program); return false; }
+
+    // CP4a: the schedule array decides WHICH sessions exist for this user and in
+    // what order. LINKED_SESSIONS is everything the Program links; SESSIONS is
+    // only the subset this frequency calls for. Until CP4e activates the
+    // frequency-specific arrays this still resolves to Full Body A/B/C at every
+    // frequency, so behaviour is unchanged — what changes is that an unexpected
+    // linked Routine can no longer reach the page.
+    var expected = (typeof getScheduleForDays === 'function')
+      ? getScheduleForDays(PROGRAM_SLUG, freq.days) : null;
+
+    // Sessions are read ONLY now, after the frequency is known good. Ordering it
+    // this way means frequency classification always wins when both are broken,
+    // and no session query is issued on behalf of a user whose frequency we
+    // could not establish.
+    LINKED_SESSIONS = await loadSessions();
+    if (!LINKED_SESSIONS) { showScheduleUnavailable(userId, program); return false; }
+
+    var resolved = ProgramPage.resolveWeek(expected, LINKED_SESSIONS);
+    if (!resolved.ok) { showScheduleUnavailable(userId, program); return false; }
+    SESSIONS = resolved.sessions;
+    renderWeekPlan(freq.days);
+
+    var recommended = 1;
+    try {
+      var up = await supabaseClient
+        .from('user_programs').select('current_index')
+        .eq('user_id', userId).eq('program_slug', PROGRAM_SLUG).maybeSingle();
+      var idx = (up && up.data && up.data.current_index) ? up.data.current_index : 0;
+      // SESSIONS is already the ordered schedule, so the rotation lands on a key
+      // that is guaranteed present — no membership re-check is needed.
+      recommended = SESSIONS[idx % SESSIONS.length].position;
+    } catch (e) {
+      // Preselection is a convenience; the session intro is static markup and
+      // needs no fallback copy.
+      console.error('preselect:', e);
+    }
+    selectSession(recommended);
+    return true;
+  }
+
+  window.addEventListener('load', function () {
+    (async () => {
+      try {
+        var session = await requireAuth();       // layer 1
+        var user = session.user;
+
+        // Layer 2 + 3. One purchases request for the page, matching the other
+        // Program pages: the catalog and the unfiltered purchase rows are
+        // fetched together and the SHARED resolver decides. A status filter
+        // here would be a second entitlement policy.
+        var both = await Promise.all([
+          pcLoadCatalog(),
+          supabaseClient.from('purchases').select('product, status').eq('user_id', user.id),
+        ]);
+        var catalog = both[0];
+        var purchases = both[1];
+
+        // A catalog that failed to load is indistinguishable from an empty one.
+        // Both deny — never fall back to anything hard-coded.
+        if (!Array.isArray(catalog) || !catalog.length) { showUnavailable(); return; }
+
+        // Not one of the six → unavailable, before anything else is read.
+        if (!PROGRAM_SLUG) { showUnavailable(); return; }
+        var program = pcBySlug(catalog, PRODUCT_SLUG);   // null while draft
+        // Only a Program whose catalog page IS this page renders here, so an
+        // existing Program with its own page can never be shown twice.
+        if (program && program.pagePath !== ProgramPage.pagePathFor(PROGRAM_SLUG)) program = null;
+
+        // Defence in depth. The catalog is already published-only, and the
+        // shared resolver deliberately knows nothing about status — it answers
+        // "does this user have access to this Program?", not "is it live?". So
+        // the page refuses anything not explicitly published rather than
+        // trusting the loader's filter to be the only thing standing between a
+        // draft or retired Program and a rendered page.
+        if (program && program.status !== 'published') program = null;
+
+        var access = resolveProgramAccess(program, purchases.error ? null : purchases.data);
+
+        if (!access || !access.allowed) {
+          // `invalid_program` (absent from the published catalog) and
+          // `invalid_purchases` (access could not be evaluated) are NOT
+          // "you don't own this" — they are unavailable.
+          if (!program || access.reason === 'invalid_program'
+              || access.reason === 'invalid_purchases') {
+            showUnavailable();
+          } else {
+            showLocked(program);
+          }
+          return;
+        }
+
+        // Authorized. Layer 4 still applies: the Routine read below is RLS-gated
+        // and returns nothing if anything about this Program is not readable.
+        // Sessions are deliberately NOT loaded here. preselect() resolves the
+        // training frequency FIRST and only then reads sessions, so a user whose
+        // frequency is unknown or unsupported is never the subject of a session
+        // query, and a session read failure is always reported as the retryable
+        // schedule state rather than as an unavailable Program (CP4a).
+        document.title = 'Muscle Motivation – ' + program.name;
+        document.getElementById('progName').textContent = program.name;
+        document.getElementById('progDesc').textContent = program.description || '';
+        renderFacts(program);
+        renderEquipment(program);
+        var ready = await preselect(user.id, program);
+
+        showOnly('programContent');
+        // Gated on preselect's answer: an unknown training frequency leaves the
+        // Start CTA hidden rather than launching an unselected session.
+        if (ready) document.getElementById('stickyCta').style.display = 'block';
+        if (window.lucide) lucide.createIcons();
+      } catch (err) {
+        // requireAuth() redirects on its own; anything else fails closed rather
+        // than leaving a half-rendered page.
+        console.error('program page:', err);
+        showUnavailable();
+      }
+    })();
+  });
+</script>
+</body>
+</html>

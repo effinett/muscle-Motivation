@@ -731,9 +731,11 @@ function guidanceSandbox(source) {
 
 /* ── Slug gate ──────────────────────────────────────────────────────────── */
 
-test('guidance: only bodyweight_foundations is eligible', () => {
+test('guidance: only bodyweight_foundations and the six 4.3.9-L catalog Programs are eligible', () => {
   const s = guidanceSandbox();
-  assert.equal(s.programGuidanceEligible('bodyweight_foundations'), true);
+  ['bodyweight_foundations', 'home_strength', 'home_fat_loss', 'bodyweight_fat_loss',
+   'advanced_muscle', 'advanced_fat_loss', 'advanced_home_strength']
+    .forEach((slug) => assert.equal(s.programGuidanceEligible(slug), true, slug));
   ['muscle_gain', 'fat_loss_blueprint', 'glute_builder', 'BODYWEIGHT_FOUNDATIONS',
    'bodyweight_foundations ', '', null, undefined, 0, {}, ['bodyweight_foundations']]
     .forEach((slug) => {
