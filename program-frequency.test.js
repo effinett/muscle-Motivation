@@ -850,5 +850,6 @@ test('schedules.js mappings are untouched by this fix', () => {
   assert.deepEqual(s.getScheduleForDays('muscle_gain', 4), ['upper_a', 'lower_a', 'upper_b', 'lower_b']);
   assert.deepEqual(s.getScheduleForDays('glute_builder', 3),
     s.getScheduleForDays('glute_builder', 3));
-  assert.equal(Object.keys(s.PROGRAM_SCHEDULES).length, 4);
+  // 4.3.9-L added the six approved catalog Programs (owner decision 2026-11-17).
+  assert.equal(Object.keys(s.PROGRAM_SCHEDULES).length, 10);
 });

@@ -36,6 +36,53 @@ var PROGRAM_SCHEDULES = {
     5: ['push_core_a', 'lower_a', 'conditioning_core', 'push_core_b', 'lower_b'],
     6: ['push_core_a', 'lower_a', 'conditioning_core', 'push_core_b', 'lower_b', 'mobility_recovery'],
   },
+  // ── 4.3.9-L six-Program coverage catalog (owner-approved 2026-11-17) ──────
+  // Session lists exactly as approved in the Program Catalog Plan (Revision 4
+  // schedule fixes). A list may repeat a session; advanceProgramSession moves
+  // from the pointer's own position, so a repeat never skips what follows.
+  // These entries do nothing until each Program's migration publishes it.
+  home_strength: {
+    2: ['full_a', 'full_b', 'full_c'],
+    3: ['full_a', 'full_b', 'full_c'],
+    4: ['full_a', 'full_b', 'full_c', 'conditioning_core'],
+    5: ['full_a', 'conditioning_core', 'full_b', 'conditioning_core', 'full_c'],
+    6: ['full_a', 'conditioning_core', 'full_b', 'conditioning_core', 'full_c', 'conditioning_core'],
+  },
+  home_fat_loss: {
+    2: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
+    3: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
+    4: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
+    5: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
+    6: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
+  },
+  bodyweight_fat_loss: {
+    2: ['full_a', 'full_b'],
+    3: ['full_a', 'conditioning_a', 'full_b', 'full_a', 'conditioning_b', 'full_b'],
+    4: ['full_a', 'conditioning_a', 'full_b', 'conditioning_b'],
+    5: ['full_a', 'conditioning_a', 'full_b', 'conditioning_b'],
+    6: ['full_a', 'conditioning_a', 'full_b', 'conditioning_b'],
+  },
+  advanced_muscle: {
+    2: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
+    3: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
+    4: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
+    5: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
+    6: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
+  },
+  advanced_fat_loss: {
+    2: ['upper', 'lower'],
+    3: ['lower', 'upper', 'full_body'],
+    4: ['lower', 'upper', 'full_body', 'conditioning_core'],
+    5: ['lower', 'upper', 'full_body', 'upper', 'conditioning_core'],
+    6: ['lower', 'upper', 'full_body', 'upper', 'conditioning_core', 'upper'],
+  },
+  advanced_home_strength: {
+    2: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
+    3: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
+    4: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
+    5: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
+    6: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
+  },
   glute_builder: {
     2: ['glute_a', 'glute_b'],
     3: ['glute_a', 'glute_b', 'glute_c'],
@@ -67,6 +114,9 @@ var SESSION_LABELS = {
   push_core_a: 'Push & Core A',     push_core_b: 'Push & Core B',
   conditioning_core: 'Conditioning & Core',
   mobility_recovery: 'Mobility & Recovery',
+  // 4.3.9-L fallbacks (Routine names stay authoritative).
+  conditioning_a: 'Conditioning A', conditioning_b: 'Conditioning B',
+  lower: 'Lower Body',              full_body: 'Full Body',
 };
 
 /* Normalize any training_days value into a supported bucket (2–6).
