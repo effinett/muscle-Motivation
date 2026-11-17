@@ -1988,8 +1988,12 @@ before 4.4. No phase was renumbered or reordered; it is recorded as a 4.4 prereq
 ## 2026-11-17 — 4.3.9-L six-Program coverage catalog approved (owner decision)
 
 **Approved by the owner (2026-11-16 and 2026-11-17), recorded from the Program Catalog Plan, Revision 7:**
-- six membership-only Programs inside 4.3.9-L: Home Strength, Home Fat Loss, Bodyweight Fat Loss,
-  Advanced Muscle, Advanced Fat Loss and Advanced Home Strength;
+- six Programs inside 4.3.9-L: Home Strength, Home Fat Loss, Bodyweight Fat Loss, Advanced Muscle,
+  Advanced Fat Loss and Advanced Home Strength. Each is available as an individual purchase (that Program
+  only, no AI Coach membership features) and included with membership (AI Coach plus the whole Program
+  library). Individual prices are TBD;
+- Program IDs: `home_strength`, `home_fat_loss`, `bodyweight_fat_loss`, `advanced_muscle`,
+  `advanced_fat_loss`, `advanced_home_strength`;
 - 2–6-day session lists, including two schedule fixes (Home Strength 4–5 days; Advanced Fat Loss 3–6 days
   with suggested weekday layouts);
 - three content changes: Mountain Climber for Forward Lunge (Bodyweight Fat Loss), Jumping Jack for
@@ -2000,13 +2004,16 @@ before 4.4. No phase was renumbered or reordered; it is recorded as a 4.4 prereq
 - Bodyweight Fat Loss marked equipment-free;
 - static "How to plan your week" guidance;
 - home equipment eligibility kept copy-only;
-- a "move up to weights" Completion card for Bodyweight Foundations and Bodyweight Fat Loss.
+- a "Ready for weights?" Completion card for Bodyweight Foundations and Bodyweight Fat Loss. Its main
+  action is Update my equipment. A direct Program link may appear only after that Program has been
+  migrated and made available, and only when the normal ranking would select it for that client. It
+  never enrols a client, changes equipment, starts a purchase or swaps an exercise.
 
 **Bodyweight Exercise Progression v1:** the 16-exercise terminal list and the Reverse Crunch → Lying Leg
 Raise 8–12 range were confirmed.
 
 **Roadmap placement:** Home Strength moves from 4.3.9X.1 into 4.3.9-L under the 4.3.9-X conditional
 deferral rule: the 4.3.9A replay showed home-equipment users had no suitable launch Program. It is
-membership-only, not a one-time purchase. No phase was renumbered or reordered, and 4.3.9X.2 (Full Gym
+available as an individual purchase and included with membership. No phase was renumbered or reordered, and 4.3.9X.2 (Full Gym
 Strength) stays at 4.3.9-X. 4.3.9C and 4.3.9D remain open. Each Program migration still requires its own
 owner approval.

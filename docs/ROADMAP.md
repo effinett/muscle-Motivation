@@ -864,9 +864,12 @@ question and ignoring the answer is not acceptable in a paid personalization pro
   Presentation over `personalization-core.js`, which already returns `training.recommendedProgram` plus a
   ranked `training.alternatives`. **Do not create a second ranking engine.**
 - **Six-Program coverage catalog (owner-approved 2026-11-17).** Closes the coverage gaps recorded under
-  4.3.9A with six membership-only Programs: Home Strength (promoted from 4.3.9X.1), Home Fat Loss,
-  Bodyweight Fat Loss, Advanced Muscle, Advanced Fat Loss and Advanced Home Strength. Each supports 2–6
-  training days with owner-approved session lists. The approved plan (the "Program Catalog Plan",
+  4.3.9A with six Programs: Home Strength (promoted from 4.3.9X.1), Home Fat Loss, Bodyweight Fat Loss,
+  Advanced Muscle, Advanced Fat Loss and Advanced Home Strength. Each is available as an individual
+  purchase and included with membership. An individual purchase gives only that Program, with no AI
+  Coach membership features; membership gives AI Coach access and the whole Program library. Individual
+  prices are TBD, and no payment product is created by this entry. Each Program supports 2–6 training
+  days with owner-approved session lists. The approved plan (the "Program Catalog Plan",
   Revision 7) also covers:
   - ranking experience before schedule closeness;
   - the "hold the top" note for every no-load exercise in every Program (weighted Pull-Up and Chin-Up
@@ -874,8 +877,10 @@ question and ignoring the answer is not acceptable in a paid personalization pro
   - marking Bodyweight Fat Loss equipment-free for Swap and the picker;
   - a "move up to weights" Completion card in Bodyweight Foundations and Bodyweight Fat Loss, shown once
     per workout when an exercise reaches the end of its path. Its main action is Update my equipment;
-    the normal recommendation ranking then picks the Program. A direct link to Home Strength or Home Fat
-    Loss appears only when that ranking would pick it for the client. It never enrols or swaps anything.
+    the normal recommendation ranking then picks the Program. A direct Program link may appear only after
+    that target Program has been migrated and made available, and only when the normal ranking would
+    select it for that client; otherwise the card offers only Update my equipment. It never enrols a
+    client, changes their equipment, starts a purchase or swaps an exercise.
   - Program IDs (owner-approved 2026-11-17): `home_strength`, `home_fat_loss`, `bodyweight_fat_loss`,
     `advanced_muscle`, `advanced_fat_loss`, `advanced_home_strength`.
 
@@ -916,7 +921,8 @@ question and ignoring the answer is not acceptable in a paid personalization pro
 
 - **4.3.9X.1 — Home Strength Program.** *Promoted into 4.3.9-L (owner decision 2026-11-17)* under the
   conditional deferral below: the 4.3.9A replay showed home-equipment users had no suitable launch
-  Program. It ships pre-launch, membership-only, in the six-Program coverage catalog.
+  Program. It ships pre-launch in the six-Program coverage catalog, available as an individual purchase
+  and included with membership.
 - **4.3.9X.2 — Full Gym Strength Program.**
 - **4.3.9X.3 — Equipment-aware pulling (owner-approved 2026-10-22; after 4.3.9B closes).** Let a user
   declare simple pulling equipment (a pull-up bar, resistance bands, a suitable row setup) and let
