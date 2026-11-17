@@ -193,7 +193,11 @@ test('mapping: other Programs keep their exact schedules', () => {
   for (const slug of Object.keys(FROZEN)) {
     for (let d = 2; d <= 6; d++) assert.deepStrictEqual(plain(S.getScheduleForDays(slug, d)), FROZEN[slug][d], slug + ' ' + d);
   }
-  assert.equal(Object.keys(S.PROGRAM_SCHEDULES).length, 4);
+  // 4.3.9-L adds exactly the six approved catalog IDs; nothing else changes.
+  const ADDED = ['advanced_fat_loss', 'advanced_home_strength', 'advanced_muscle',
+    'bodyweight_fat_loss', 'home_fat_loss', 'home_strength'];
+  assert.deepStrictEqual(Object.keys(S.PROGRAM_SCHEDULES).sort(),
+    Object.keys(FROZEN).concat(['bodyweight_foundations'], ADDED).sort(), 'only the six approved Programs were added');
 });
 
 /* ── Home / Today's Plan (program-state.js) ────────────────────────────── */
@@ -383,6 +387,41 @@ for (const d of [4, 5, 6]) {
     }
   });
 }
+
+test('progression: a repeated session never skips what follows (4.3.9-L catalog lists)', async () => {
+  // Two full cycles of every catalog list, advancing from the pointer each
+  // time. With indexOf alone, Home Strength at 5 days would jump from the
+  // second Conditioning & Core back to Full Body B and never reach Full Body C.
+  const S = loadSchedules();
+  const SLUGS = ['home_strength', 'home_fat_loss', 'bodyweight_fat_loss',
+    'advanced_muscle', 'advanced_fat_loss', 'advanced_home_strength'];
+  for (const slug of SLUGS) {
+    for (const d of [2, 3, 4, 5, 6]) {
+      const keys = plain(S.getScheduleForDays(slug, d));
+      let idx = 0;
+      const seen = [];
+      for (let step = 0; step < keys.length * 2; step++) {
+        const { sb, db } = advanceHarness({ up: { id: 'up1', schedule_keys: keys, current_index: idx } });
+        seen.push(keys[idx]);
+        await sb.advanceProgramSession(slug, keys[idx]);
+        const u = advanceUpdate(db);
+        assert.equal(u.length, 1, slug + ' ' + d);
+        assert.equal(u[0].current_index, (idx + 1) % keys.length, slug + ' ' + d + ' step ' + step);
+        idx = u[0].current_index;
+      }
+      assert.deepEqual(seen, keys.concat(keys), slug + ' ' + d + ' runs the list in order');
+    }
+  }
+});
+
+test('progression: an out-of-order repeated session still advances from its first copy', async () => {
+  // The client opens Conditioning & Core while Full Body B is next. There is no
+  // way to know which copy they meant, so the long-standing rule applies.
+  const keys = ['full_a', 'conditioning_core', 'full_b', 'conditioning_core', 'full_c'];
+  const { sb, db } = advanceHarness({ up: { id: 'up1', schedule_keys: keys, current_index: 2 } });
+  await sb.advanceProgramSession('home_strength', 'conditioning_core');
+  assert.deepEqual(advanceUpdate(db).map((u) => u.current_index), [2]);
+});
 
 test('progression fallback (decision C): a row without keys uses the actual training_days, not 3', async () => {
   // 5-day user, row with no stored keys, just finished Push & Core B (index 3).

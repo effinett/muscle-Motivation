@@ -476,6 +476,14 @@
     // "bodyweight" (Push-Up, Plank) can still be loaded in a gym workout, so it
     // keeps the weight-oriented wording.
     var noLoad = unitAware && hasTrackingMeta(input, 'equipment') && equip === 'bodyweight';
+    // The "hold the top" note fix (owner decision 2026-11-17, 4.3.9-L). A caller
+    // may pass `noLoadNote: true` for a catalog-confirmed bodyweight-reps or timed
+    // exercise with no weight entered today, in ANY Program. It changes only the
+    // WORDS, and only when the session being read carried no load either, so a
+    // client who loads the exercise keeps every piece of weight advice. Numbers,
+    // actions, equipment and the weight input are untouched.
+    var lastLoaded = lastWorking.some(function (s) { var w = num(s.weight); return w !== null && w > 0; });
+    if (!noLoad && unitAware && input.noLoadNote === true && !lastLoaded) noLoad = true;
     var withUnit = function (display) { return timed && display ? display + ' sec' : display; };
 
     // ── No history → empty state, lean on programmed targets if present ──────

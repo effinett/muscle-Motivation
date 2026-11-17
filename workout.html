@@ -2330,6 +2330,12 @@
   // the "Today" line. Pure read — no DB, no side effects.
   function recForExercise(ex) {
     if (typeof Progression === 'undefined' || !Progression.analyze) return null;
+    // The "hold the top" note fix (4.3.9-L): in ANY Program, a catalog-confirmed
+    // bodyweight-reps or timed exercise with no weight entered today gets the
+    // no-load WORDING. Equipment, load policy and the Weight column are unchanged.
+    var noteRow = catalogRowForExercise(ex);
+    var noLoadNote = !!noteRow && noteRow.is_bodyweight === true &&
+                     NO_LOAD_TRACKING[noteRow.tracking_type] === true && !hasSavedWeight(ex);
     return Progression.analyze({
       exerciseName: ex.name,
       repsLow: ex.reps_low,
@@ -2345,6 +2351,7 @@
       // no-load exercise. Everywhere else equipment stays unset, so the weight
       // advice and weight progression are exactly as before.
       equipment: isNoLoadExercise(ex) ? 'bodyweight' : undefined,
+      noLoadNote: noLoadNote,
       // A bodyweight session, blank weights or a skipped exercise never
       // replace the weighted baseline a gym workout progresses from.
       load: loadPolicyForExercise(ex)
@@ -2919,7 +2926,7 @@
   // Read ONLY if exercise-filters.js failed to load, so an equipment-free
   // session still fails closed while every other Program keeps the original
   // fallback picker. Pinned by test to ExerciseFilters.EQUIPMENT_FREE_PROGRAM_SLUGS.
-  var EQUIPMENT_FREE_PROGRAMS_IF_UNLOADED = { bodyweight_foundations: true };
+  var EQUIPMENT_FREE_PROGRAMS_IF_UNLOADED = { bodyweight_foundations: true, bodyweight_fat_loss: true };
   function workoutEquipmentFree() {
     return equipmentFreeSlug(currentWorkout && currentWorkout.program_slug);
   }
@@ -5236,7 +5243,14 @@
           .from('profiles').select('training_days').eq('id', currentUser.id).maybeSingle();
         keys = getScheduleForDays(programSlug, profDays && profDays.training_days);
       }
-      var doneIdx = completedKey ? keys.indexOf(completedKey) : -1;
+      // A schedule may repeat a session (the 4.3.9-L catalog repeats Conditioning
+      // & Core or Upper at higher frequencies). When the finished session is the
+      // one the pointer was on, advance from THAT position; indexOf alone would
+      // jump back to the first copy and skip later sessions forever. With no
+      // repeats the two agree, so existing Programs behave exactly as before.
+      var curIdx = (up.current_index || 0) % keys.length;
+      var doneIdx = !completedKey ? -1
+        : (keys[curIdx] === completedKey ? curIdx : keys.indexOf(completedKey));
       var next;
       if (doneIdx >= 0) {
         next = (doneIdx + 1) % keys.length;

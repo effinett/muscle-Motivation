@@ -501,7 +501,8 @@
   EQUIPMENT_FREE_EXERCISE_IDS.forEach(function (id) { EQUIPMENT_FREE_SET[id] = true; });
 
   // Programs whose sessions may only use equipment-free exercises.
-  var EQUIPMENT_FREE_PROGRAMS = { bodyweight_foundations: true };
+  // Bodyweight Fat Loss joins Bodyweight Foundations (4.3.9-L, owner-approved 2026-11-17).
+  var EQUIPMENT_FREE_PROGRAMS = { bodyweight_foundations: true, bodyweight_fat_loss: true };
 
   // Does this Program impose the equipment-free rule? Anything else — another
   // Program, a manual workout, a missing slug — is unrestricted.
