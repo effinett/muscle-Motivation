@@ -1984,3 +1984,29 @@ products, so the membership-only Bodyweight Foundations was unreachable from Pro
 **Owner decision recorded the same day:** Bodyweight Exercise Progression v1 (scope of 5.1.2) ships
 before 4.4. No phase was renumbered or reordered; it is recorded as a 4.4 prerequisite.
 
+
+## 2026-11-17 — 4.3.9-L six-Program coverage catalog approved (owner decision)
+
+**Approved by the owner (2026-11-16 and 2026-11-17), recorded from the Program Catalog Plan, Revision 7:**
+- six membership-only Programs inside 4.3.9-L: Home Strength, Home Fat Loss, Bodyweight Fat Loss,
+  Advanced Muscle, Advanced Fat Loss and Advanced Home Strength;
+- 2–6-day session lists, including two schedule fixes (Home Strength 4–5 days; Advanced Fat Loss 3–6 days
+  with suggested weekday layouts);
+- three content changes: Mountain Climber for Forward Lunge (Bodyweight Fat Loss), Jumping Jack for
+  Kettlebell Swing in Conditioning + Core (Advanced Fat Loss), and Band Chest Press for Arnold Press
+  (Advanced Home Strength);
+- ranking experience before schedule closeness;
+- the "hold the top" note for no-load exercises in every Program;
+- Bodyweight Fat Loss marked equipment-free;
+- static "How to plan your week" guidance;
+- home equipment eligibility kept copy-only;
+- a "move up to weights" Completion card for Bodyweight Foundations and Bodyweight Fat Loss.
+
+**Bodyweight Exercise Progression v1:** the 16-exercise terminal list and the Reverse Crunch → Lying Leg
+Raise 8–12 range were confirmed.
+
+**Roadmap placement:** Home Strength moves from 4.3.9X.1 into 4.3.9-L under the 4.3.9-X conditional
+deferral rule: the 4.3.9A replay showed home-equipment users had no suitable launch Program. It is
+membership-only, not a one-time purchase. No phase was renumbered or reordered, and 4.3.9X.2 (Full Gym
+Strength) stays at 4.3.9-X. 4.3.9C and 4.3.9D remain open. Each Program migration still requires its own
+owner approval.

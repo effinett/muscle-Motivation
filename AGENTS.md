@@ -524,7 +524,7 @@ Free Guide → Program Purchase → Membership → Premium Coaching
 | 90-Day Fat Loss Blueprint | `fat_loss_blueprint` | $49 | Beginner–intermediate fat loss | `Live` (`program-fat-loss.html`) |
 | Muscle Gain Program | `muscle_gain` | $59 | Users prioritizing muscle growth | `Live` (`program-muscle-gain.html`) |
 | Glute Builder Program | `glute_builder` | $39 | Lower body / glute development | `Live` (`program-glute-builder.html`) |
-| Home Strength Program | TBD | TBD | Bodyweight + dumbbells | `Planned` |
+| Home Strength Program | TBD | Included with membership (not sold separately; owner decision 2026-11-17) | Dumbbells + resistance bands | `Planned` — roadmap 4.3.9-L six-Program coverage catalog |
 | Full Gym Strength Program | TBD | TBD | Full gym equipment | `Planned` |
 
 ### Membership
