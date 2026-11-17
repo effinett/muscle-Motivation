@@ -875,7 +875,7 @@ question and ignoring the answer is not acceptable in a paid personalization pro
   - the "hold the top" note for every no-load exercise in every Program (weighted Pull-Up and Chin-Up
     keep load advice);
   - marking Bodyweight Fat Loss equipment-free for Swap and the picker;
-  - a "move up to weights" Completion card in Bodyweight Foundations and Bodyweight Fat Loss, shown once
+  - a "Ready for weights?" Completion card in Bodyweight Foundations and Bodyweight Fat Loss, shown once
     per workout when an exercise reaches the end of its path. Its main action is Update my equipment;
     the normal recommendation ranking then picks the Program. A direct Program link may appear only after
     that target Program has been migrated and made available, and only when the normal ranking would
