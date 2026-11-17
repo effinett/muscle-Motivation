@@ -2437,7 +2437,13 @@
      nor to workout_sets, workouts, localStorage, user Routines, or the canonical
      catalog. It is re-derived from the authorized Routine on reload, which is
      also why a swapped exercise cannot keep someone else's instructions. */
-  var PROGRAM_GUIDANCE_SLUGS = { bodyweight_foundations: true };
+  // The six 4.3.9-L catalog Programs carry owner-approved notes too (Program
+  // Catalog Plan, 2026-11-17). Their slugs do nothing until each is published.
+  var PROGRAM_GUIDANCE_SLUGS = {
+    bodyweight_foundations: true,
+    home_strength: true, home_fat_loss: true, bodyweight_fat_loss: true,
+    advanced_muscle: true, advanced_fat_loss: true, advanced_home_strength: true,
+  };
 
   function programGuidanceEligible(programSlug) {
     return typeof programSlug === 'string' && PROGRAM_GUIDANCE_SLUGS[programSlug] === true;

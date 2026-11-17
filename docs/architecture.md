@@ -475,6 +475,33 @@ general product analytics. Browser global `MMAnalytics`; loaded by `index.html`,
 - Retention intent 180 days, no purge machinery. Covered by `analytics-core.test.js` and
   `funnel-wiring.test.js`.
 
+### Shared Program page — `program-page.js` + `program.html` (Phase 4.3.9-L, 2026-11-17)
+
+- **One page for the six catalog Programs** (`home_strength`, `home_fat_loss`,
+  `bodyweight_fat_loss`, `advanced_muscle`, `advanced_fat_loss`, `advanced_home_strength`),
+  addressed as `program.html?slug=<slug>`. Bodyweight Foundations and the three original
+  Programs keep their own pages.
+- **Never exposes an unavailable Program.** In order: the slug must be one of the six
+  (`ProgramPage.isCatalogProgram`); the Program must be in the published catalog and
+  `status = 'published'`; its `page_path` must equal `ProgramPage.pagePathFor(slug)`. Any
+  miss is the neutral unavailable state before any access check or Routine read. Then the
+  Bodyweight page's layers apply unchanged: `requireAuth`, `resolveProgramAccess`, RLS, and
+  no Program content in static markup. The page never writes or enrols; Start uses
+  `mode=optional`.
+- **`resolveWeek(expected, rows)`** — like the Bodyweight resolver, but the schedule may
+  repeat a session. Every expected key needs exactly one well-formed linked Routine, or the
+  whole week fails closed (`missing` / `duplicate` / `invalid_loaded`). Extras never render.
+  Rows carry a 1-based `position`; selection and preselection use it, so a repeated session
+  is selected by its own copy.
+- **`weekPlan(slug, days, keys)`** — static "How to plan your week" copy (decision 1g):
+  approved suggested weekdays, `fixed` when the list is one week long, otherwise `rotate`.
+  Guidance only; no session is ever pinned to a day. **`restNote(slug, key)`** — Advanced
+  Fat Loss Full Body only. **`equipmentNote(slug)`** — the approved equipment copy (decision
+  1h: copy only, never a check).
+- `workout.html`'s `PROGRAM_GUIDANCE_SLUGS` includes the six, so their Routine notes show in
+  a workout once published. Covered by `program-page.test.js` and
+  `program-shared-page.test.js`.
+
 ### Other shared modules (`Live`)
 
 - `metrics.js`, `snapshot.js` — dashboard snapshot/metrics.
