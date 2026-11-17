@@ -221,3 +221,8 @@ test('10d: component overflow guards — min-width:0 on key flex children', () =
   assert.match(style, /\.sm-item,\s*\.ai-item,\s*\.ai-choice\s*\{[^}]*max-width:\s*100%/,
     'cards are capped to 100% of the list width');
 });
+
+test('search results: rows in the height-capped list never shrink (they scroll)', () => {
+  assert.match(rule('.nu-usda-list'), /max-height/, 'list is height-capped');
+  assert.match(rule('.nu-usda-list > *'), /flex-shrink:\s*0/, 'children keep their natural height');
+});
