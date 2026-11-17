@@ -818,10 +818,47 @@
     return out;
   }
 
+  /* ── Phase 4.3.9F · "See other options" ────────────────────────────────
+   * Presentation over the ranking this engine already produced — never a
+   * second ranking. `otherOptions` returns the engine's own alternatives, in
+   * the engine's own order, capped. Every alternative already passed the
+   * equipment gate, so nothing listed is something the user cannot do.
+   *
+   * `describeOption` states CATALOG FACTS only: the Program's goal (named as a
+   * different goal when it is one), its equipment and its schedule. It never
+   * claims a fit the reason codes do not support. */
+  var OTHER_OPTIONS_MAX = 2;
+
+  function otherOptions(plan, max) {
+    var training = (plan && plan.training) || {};
+    if (!training.recommendedProgram) return [];
+    var alts = Array.isArray(training.alternatives) ? training.alternatives : [];
+    var n = (typeof max === 'number' && max >= 0) ? max : OTHER_OPTIONS_MAX;
+    return alts.filter(function (a) { return a && a.slug; }).slice(0, n);
+  }
+
+  function describeOption(option, plan) {
+    if (!option) return [];
+    var out = [];
+    var goal = GOAL_LABELS[option.goal];
+    var userGoal = plan && plan.goal ? plan.goal.key : null;
+    if (goal) {
+      var preferred = userGoal && GOAL_PREFERENCE[userGoal]
+        ? GOAL_PREFERENCE[userGoal].indexOf(option.goal) >= 0 : null;
+      out.push(preferred === false ? 'Different goal: ' + goal : 'Goal: ' + goal);
+    }
+    if (option.equipmentSummary) out.push(option.equipmentSummary);
+    if (option.recommendedDaysPerWeek) out.push(option.recommendedDaysPerWeek + ' days / week');
+    return out;
+  }
+
   var Personalization = {
     PLAN_VERSION: PLAN_VERSION,
     REASON_COPY: REASON_COPY,
     describeReasons: describeReasons,
+    OTHER_OPTIONS_MAX: OTHER_OPTIONS_MAX,
+    otherOptions: otherOptions,
+    describeOption: describeOption,
     STATUS: STATUS,
     REASON: REASON,
     WARNING: WARNING,
