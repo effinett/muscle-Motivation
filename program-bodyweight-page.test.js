@@ -1455,3 +1455,22 @@ test('CP4f: every frequency still lists, orders and launches every session (bar 
     assert.ok(h.el('startBtn').href.endsWith('session=' + last + '&mode=optional'), 'unchanged Start URL');
   }
 });
+
+/* ── locked: membership route (owner-approved 2026-11-17) ──────────────── */
+test('Bodyweight Foundations locked: Join membership primary, to the existing Store card', async () => {
+  const h = authorized({ purchases: NO_PURCHASES });
+  await h.run();
+  assert.deepEqual(h.shown(), ['lockedState']);
+  assert.equal(h.el('lockedJoin').style.display, 'inline-flex');
+  assert.equal(h.el('lockedBrowse').className, 'btn-secondary');
+  noWrites(h, 'locked join route');
+  const locked = PAGE.slice(PAGE.indexOf('<div id="lockedState">'), PAGE.indexOf('<!-- Program content'));
+  assert.match(locked, /id="lockedJoin" href="store\.html#membership"/);
+});
+
+test('Bodyweight Foundations: a member never sees the join route', async () => {
+  const h = authorized();
+  await h.run();
+  assert.deepEqual(h.shown(), ['programContent']);
+  assert.equal(h.el('lockedJoin').style.display, '');
+});

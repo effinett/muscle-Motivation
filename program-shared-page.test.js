@@ -247,3 +247,47 @@ test('static markup names no Program, session or exercise', () => {
   assert.doesNotMatch(markup, /Home Strength|Home Fat Loss|Bodyweight Fat Loss|Advanced (Muscle|Fat Loss|Home Strength)|Full Body [ABC]|Conditioning/);
   assert.doesNotMatch(PAGE, /\p{Extended_Pictographic}/u, 'no emojis');
 });
+
+/* ── locked: membership route (owner-approved 2026-11-17) ──────────────────
+ * A locked, membership-included Program offers the EXISTING membership card on
+ * the Store as its primary action; Browse programs steps down to secondary. An
+ * individually-only Program never shows it, and members never see the locked
+ * state at all. No price, checkout or entitlement logic is involved. */
+
+test('locked + membership-included: Join membership is primary, Browse programs secondary', async () => {
+  const h = harness({ purchases: [], links: HS_LINKS });   // HS: included_with_membership true
+  await h.run();
+  assert.deepEqual(h.shown(), ['lockedState']);
+  assert.equal(h.el('lockedJoin').style.display, 'inline-flex');
+  assert.equal(h.el('lockedBrowse').className, 'btn-secondary');
+  assert.deepEqual(h.writes, []);
+});
+
+test('locked + individually-only: no Join membership, Browse programs stays primary', async () => {
+  const h = harness({ purchases: [], links: HS_LINKS,
+    catalog: [Object.assign({}, HS, { included_with_membership: false, standalone_purchasable: true })] });
+  await h.run();
+  assert.deepEqual(h.shown(), ['lockedState']);
+  assert.equal(h.el('lockedJoin').style.display, 'none');
+  assert.equal(h.el('lockedBrowse').className, 'btn-primary');
+  assert.match(h.el('lockedCopy').textContent, /one-time purchase/);
+});
+
+test('a member never reaches the locked state, so the join route never runs', async () => {
+  const h = harness({ purchases: MEMBERSHIP, links: HS_LINKS });
+  await h.run();
+  assert.deepEqual(h.shown(), ['programContent']);
+  assert.equal(h.el('lockedJoin').style.display, '', 'showLocked never touched it');
+});
+
+test('the join link targets the existing Store membership card, hidden by default', () => {
+  const locked = PAGE.slice(PAGE.indexOf('<div id="lockedState">'), PAGE.indexOf('<!-- Program content'));
+  assert.equal((locked.match(/id="lockedJoin"/g) || []).length, 1);
+  assert.match(locked, /<a class="btn-primary" id="lockedJoin" href="store\.html#membership" style="display:none;">Join membership<\/a>/);
+  assert.match(locked, /id="lockedBrowse" href="workout\.html\?pane=programs">Browse programs<\/a>/);
+  const store = read('store.html');
+  assert.equal((store.match(/id="membership"/g) || []).length, 1, 'exactly one target');
+  const card = store.slice(store.indexOf('id="membership"'));
+  const next = card.indexOf('class="product-card', 10);
+  assert.match(card.slice(0, next), /buyProduct\('ai_membership', this\)/, 'the target is the existing membership card');
+});
