@@ -374,9 +374,13 @@
    * goal-mismatched Program above a goal-matched one.
    *
    *   1. goal rank            desc   (exact > partial > none)
-   *   2. training-day delta   asc    (nulls last)
-   *   3. experience fit       desc   (suits > unknown > contradicts)
+   *   2. experience fit       desc   (suits > unknown > contradicts)
+   *   3. training-day delta   asc    (nulls last)
    *   4. equipment fit        desc
+   *
+   * Experience ranks ahead of schedule closeness (owner decision 2026-11-17,
+   * 4.3.9-L): every catalog Program runs at 2–6 days, so a level match matters
+   * more than how close the advertised day count is.
    *   5. catalog sort_order   asc
    *   6. slug                 asc    (total order ⇒ always deterministic)
    */
@@ -392,13 +396,13 @@
 
   function compareScored(a, b) {
     if (a.goalRank !== b.goalRank) return b.goalRank - a.goalRank;
+    if (a.experienceFit !== b.experienceFit) return b.experienceFit - a.experienceFit;
 
     if (a.dayDelta !== b.dayDelta) {
       if (a.dayDelta == null) return 1;
       if (b.dayDelta == null) return -1;
       return a.dayDelta - b.dayDelta;
     }
-    if (a.experienceFit !== b.experienceFit) return b.experienceFit - a.experienceFit;
     if (a.equipmentFit !== b.equipmentFit) return b.equipmentFit - a.equipmentFit;
 
     var ao = num(a.program.sortOrder) || 0;

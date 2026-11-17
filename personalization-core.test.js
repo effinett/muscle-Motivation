@@ -89,6 +89,31 @@ test('exact training-day fit wins when goal rank is equal', () => {
   assert.ok(plan.training.reasons.includes(P.REASON.TRAINING_DAYS_MATCH));
 });
 
+test('experience fit outranks schedule closeness (owner decision 2026-11-17)', () => {
+  // An advanced muscle client. Muscle Gain and Glute Builder match 3 days
+  // exactly; the advanced Program is a 4-day plan. Level wins at every frequency.
+  const advanced = {
+    slug: 'advanced_muscle', name: 'Advanced Muscle', goal: 'muscle',
+    difficulty: 'Intermediate – Advanced', durationWeeks: 12,
+    recommendedDaysPerWeek: 4, equipmentSummary: 'Full Gym',
+    includedWithMembership: true, standalonePurchasable: true,
+    status: 'published', sortOrder: 4, pagePath: 'program.html?slug=advanced_muscle' };
+  // The three production rows as migration 20260904042551 left them: Full Gym,
+  // "Beginner – Intermediate" (the fixture above predates that migration).
+  const cat = catalog().map((p) => Object.assign({}, p,
+    { equipmentSummary: 'Full Gym', difficulty: 'Beginner – Intermediate' })).concat([advanced]);
+  const pick = (exp, days) => slug(P.derivePersonalizedStart(
+    completeProfile({ goal: 'muscle', training_days: days, training_experience: exp,
+      gym_access: 'full_gym' }), { catalog: cat }));
+
+  [2, 3, 4, 5, 6].forEach((days) =>
+    assert.strictEqual(pick('advanced', days), 'advanced_muscle', 'advanced at ' + days + ' days'));
+  // Experience still only separates when it differs: a beginner keeps the
+  // beginner Program, and the day delta still breaks a tie in level.
+  assert.strictEqual(pick('beginner', 4), 'muscle_gain');
+  assert.notStrictEqual(pick('beginner', 3), 'advanced_muscle');
+});
+
 test('a mismatched goal never outranks a matched goal on schedule alone', () => {
   // 3 training days is an EXACT fit for both muscle Programs and off-by-one
   // for the fat-loss Program. A fat-loss user must still get fat loss.
