@@ -111,3 +111,50 @@ test('publish AM: the README documents it', () => {
   assert.match(readme, /`20261118044157` \(`phase_439l_publish_advanced_muscle`/);
   assert.match(readme, /Advanced Fat Loss and Advanced Home Strength stay drafts/);
 });
+
+/* ── Publish Advanced Fat Loss (migration 20261118052821) ─────────────────
+ * Applied 2026-11-18 after Codex review on #125. The stored text matched the
+ * dry-run-reviewed file (md5 9ec69116…). Advanced Muscle stays published and
+ * Advanced Home Strength stays a hidden draft. */
+const AFL_FILE = 'supabase/migrations/20261118052821_phase_439l_publish_advanced_fat_loss.sql';
+const afl = fs.readFileSync(path.join(__dirname, AFL_FILE), 'utf8');
+const aflCode = afl.split('\n').filter((l) => !/^\s*--/.test(l)).join('\n');
+const AFL_IDS = ['4299697c-b0f2-5cd2-a4a0-2d28ba2e8022', 'ac0b375a-be54-52d6-a182-16f786584584',
+  '01437cdd-e1a7-555e-ac7d-7222a539f231', '2227ef5f-67e4-5d43-a1c2-88055a74e749',
+  '6646d270-a178-5f58-ac0d-4acb0bcfab2c'];
+
+test('publish AFL: the repository records the exact applied migration', () => {
+  assert.equal(crypto.createHash('md5').update(afl).digest('hex'), '9ec69116467959c905406dcf84ea6aa5');
+  assert.equal(crypto.createHash('sha256').update(afl).digest('hex'),
+    '3ade6857ffa34f4040c09baefa928b7509590869f40557119aab4e40fd577bf5');
+  assert.ok(!afl.includes('DRY RUN'));
+  assert.ok(afl.includes("RAISE NOTICE 'phase_439l_publish_advanced_fat_loss: state=%', v_state;"));
+});
+
+test('publish AFL: exactly two writes, Routines before Program, on the named rows only', () => {
+  const updates = aflCode.match(/UPDATE public\.\w+ SET [^\n]+\n[^\n]+/g) || [];
+  assert.deepEqual(updates, [
+    "UPDATE public.workout_templates SET visibility = 'published'\n     WHERE id IN (k_r1, k_r2, k_r3, k_r4) AND visibility = 'private';",
+    "UPDATE public.programs SET status = 'published'\n     WHERE id = k_prog AND status = 'draft';",
+  ]);
+  assert.doesNotMatch(aflCode, /\bINSERT INTO public\.|\bDELETE\s+FROM\b|\bTRUNCATE\b|\bALTER\s+TABLE\b/i);
+  assert.doesNotMatch(aflCode, /stripe|entitlement|\bprice/i);
+  assert.doesNotMatch(aflCode, /(UPDATE|INSERT INTO)\s+public\.(purchases|user_programs|profiles)\b/i);
+  ['purchases', 'user_programs', 'profiles'].forEach((t) => {
+    assert.match(aflCode, new RegExp('LOCK TABLE public\\.' + t + '\\s+IN SHARE MODE;'));
+    assert.match(aflCode, new RegExp('FROM public\\.' + t + ' x\\) <> b_'));
+  });
+  assert.match(aflCode, /'fatloss', 'Intermediate – Advanced', 12, 4, 'Full Gym',\s+true, false, 7, 'program\.html\?slug=advanced_fat_loss'\);/);
+  AFL_IDS.forEach((id) => assert.ok(afl.includes(id) && sql.includes(id), id));
+  // Neither Advanced Muscle's nor Advanced Home Strength's Program id is reachable.
+  ['13c8ee8a-dc10-5858-afa5-cf2402300268', '2ab5945b-5436-5024-ad96-8bed32c2c572'].forEach((id) => {
+    assert.ok(!afl.includes(id), id);
+  });
+  assert.match(aflCode, /slug = 'advanced_home_strength' AND status = 'draft'\) <> 1/);
+  assert.match(aflCode, /slug = 'advanced_muscle' AND status = 'published'\) <> 1/);
+});
+
+test('publish AFL: the README documents it', () => {
+  assert.match(readme, /`20261118052821` \(`phase_439l_publish_advanced_fat_loss`/);
+  assert.match(readme, /Advanced Muscle\nstays published and Advanced Home Strength stays a draft/);
+});
