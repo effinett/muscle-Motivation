@@ -454,6 +454,47 @@
     vvBound = false;
   }
 
+  /* ── Rotation recovery (every variant) ──────────────────────────────────
+   * Reported on the barcode scanner: rotate to landscape and back while a
+   * dialog is open and taps stop landing on what is drawn — buttons go dead,
+   * and a tap on "Add" hits the backdrop instead, closing the dialog without
+   * saving. While locked, <body> is position:fixed, so the window itself must
+   * sit at 0,0; WebKit can leave a stale scroll offset across a rotation, and
+   * fixed overlays are then hit-tested against the old offset. Re-zero the
+   * window, drop any backdrop press armed mid-rotation, and force the overlay
+   * to re-layout. Runs once on the next frame and again after the rotation
+   * settles, because iOS reports the final viewport size late. */
+  var rotRaf = 0;
+  var rotTimer = 0;
+  var ROTATION_SETTLE_MS = 350;
+  function recoverLayout() {
+    if (!stack.length || !win) return;
+    var sx = win.pageXOffset || 0;
+    var sy = win.pageYOffset || 0;
+    if (sx || sy) {
+      try { win.scrollTo({ top: 0, left: 0, behavior: 'instant' }); } catch (e) {
+        try { win.scrollTo(0, 0); } catch (e2) { /* contained */ }
+      }
+    }
+    for (var i = 0; i < stack.length; i++) {
+      var r = stack[i];
+      r.backdropArmed = false;
+      void r.el.offsetHeight;                       // force a synchronous re-layout
+    }
+    syncViewport();
+  }
+  function onRotate() {
+    if (!win) return;
+    if (!rotRaf) rotRaf = win.requestAnimationFrame(function () { rotRaf = 0; recoverLayout(); });
+    if (rotTimer) win.clearTimeout(rotTimer);
+    rotTimer = win.setTimeout(function () { rotTimer = 0; recoverLayout(); }, ROTATION_SETTLE_MS);
+  }
+  function cancelRotate() {
+    if (!win) return;
+    if (rotRaf) { win.cancelAnimationFrame(rotRaf); rotRaf = 0; }
+    if (rotTimer) { win.clearTimeout(rotTimer); rotTimer = 0; }
+  }
+
   /* ── Drag-to-dismiss (sheet variant) ──────────────────────────────────── */
   function scrollableAncestor(node, root) {
     while (node && node !== root && node.nodeType === 1) {
@@ -633,12 +674,21 @@
     doc.addEventListener('keydown', onKeydown, true);
     doc.addEventListener('pointerdown', onPointerDown, true);
     doc.addEventListener('click', onClick, true);
+    if (win) {
+      win.addEventListener('orientationchange', onRotate);
+      win.addEventListener('resize', onRotate);
+    }
   }
   function unbindDocument() {
     if (stack.length !== 0 || !doc) return;   // only after the last close
     doc.removeEventListener('keydown', onKeydown, true);
     doc.removeEventListener('pointerdown', onPointerDown, true);
     doc.removeEventListener('click', onClick, true);
+    if (win) {
+      win.removeEventListener('orientationchange', onRotate);
+      win.removeEventListener('resize', onRotate);
+    }
+    cancelRotate();
   }
 
   /* ── Public API ─────────────────────────────────────────────────────── */

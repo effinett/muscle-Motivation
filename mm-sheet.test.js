@@ -564,3 +564,109 @@ test('the caret protection survives without the focus guard', () => {
     SHEET_SRC.replace(/function move\(ev\)[\s\S]*?\n    \}/, '')),
     'only the active drag ever translates the panel');
 });
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * Rotation recovery — rotating the phone with a dialog open must not leave
+ * taps landing somewhere other than where the dialog is drawn (reported on
+ * the barcode scanner: dead buttons, and "Add" closing the card unsaved).
+ * Exercised against a minimal fake browser, loaded fresh in a vm context.
+ * ══════════════════════════════════════════════════════════════════════ */
+
+function fakeBrowser() {
+  const vm = require('node:vm');
+  const listeners = {};
+  const docListeners = {};
+  const timers = [];
+  const rafs = [];
+  const scrolls = [];
+  function el(tag) {
+    const cls = new Set();
+    const e = {
+      nodeType: 1, tagName: tag, style: {}, attrs: {}, children: [], offsetParent: null,
+      offsetHeight: 100,
+      classList: { add: (c) => cls.add(c), remove: (c) => cls.delete(c), contains: (c) => cls.has(c) },
+      getAttribute: (k) => (k in e.attrs ? e.attrs[k] : null),
+      setAttribute: (k, v) => { e.attrs[k] = v; },
+      removeAttribute: (k) => { delete e.attrs[k]; },
+      addEventListener() {}, removeEventListener() {},
+      querySelector: () => null, querySelectorAll: () => [],
+      contains: () => false, focus() {},
+    };
+    Object.defineProperty(e, 'firstElementChild', { get: () => e.children[0] || null });
+    return e;
+  }
+  const body = el('body');
+  const document = {
+    body, documentElement: { scrollTop: 0 }, activeElement: null,
+    addEventListener: (t, f) => { (docListeners[t] = docListeners[t] || []).push(f); },
+    removeEventListener: (t, f) => { docListeners[t] = (docListeners[t] || []).filter((x) => x !== f); },
+    contains: () => false,
+  };
+  const window = {
+    pageXOffset: 0, pageYOffset: 0, innerHeight: 800,
+    addEventListener: (t, f) => { (listeners[t] = listeners[t] || []).push(f); },
+    removeEventListener: (t, f) => { listeners[t] = (listeners[t] || []).filter((x) => x !== f); },
+    scrollTo(a, b) {
+      const y = typeof a === 'object' ? a.top : b;
+      const x = typeof a === 'object' ? a.left : a;
+      scrolls.push([x, y]); window.pageXOffset = x; window.pageYOffset = y;
+    },
+    requestAnimationFrame: (f) => { rafs.push(f); return rafs.length; },
+    cancelAnimationFrame: (id) => { rafs[id - 1] = null; },
+    setTimeout: (f) => { timers.push(f); return timers.length; },
+    clearTimeout: (id) => { timers[id - 1] = null; },
+  };
+  const ctx = { window, document, globalThis: null };
+  ctx.globalThis = ctx;
+  vm.createContext(ctx);
+  vm.runInContext(SHEET_JS, ctx);
+  const overlay = el('div'); overlay.children.push(el('div'));
+  return {
+    MM: ctx.MMSheet, window, overlay, scrolls,
+    count: (t) => (listeners[t] || []).length,
+    fire: (t) => (listeners[t] || []).slice().forEach((f) => f({})),
+    flush: () => { rafs.splice(0).forEach((f) => f && f()); timers.splice(0).forEach((f) => f && f()); },
+    pointerOnBackdrop: () => (docListeners.pointerdown || []).forEach((f) => f({ target: overlay })),
+    clickBackdrop: () => (docListeners.click || []).forEach((f) => f({ target: overlay })),
+  };
+}
+
+test('rotation: an open dialog re-zeroes a stale window scroll so taps line up again', () => {
+  const b = fakeBrowser();
+  b.MM.open(b.overlay);
+  b.window.pageYOffset = 137;            // WebKit left an offset across the rotation
+  b.fire('orientationchange');
+  b.flush();
+  assert.strictEqual(b.window.pageYOffset, 0);
+  assert.strictEqual(b.window.pageXOffset, 0);
+  assert.ok(b.MM.isOpen(b.overlay), 'recovery never closes the dialog');
+});
+
+test('rotation: a backdrop press armed mid-rotation can no longer close the dialog', () => {
+  const b = fakeBrowser();
+  b.MM.open(b.overlay);
+  b.pointerOnBackdrop();                 // a mis-hit tap during the rotation
+  b.fire('resize');
+  b.flush();
+  b.clickBackdrop();
+  assert.ok(b.MM.isOpen(b.overlay), 'the stale press is dropped, so "Add" cannot become a dismissal');
+});
+
+test('rotation: no scroll is issued when nothing is stale, and listeners go with the last dialog', () => {
+  const b = fakeBrowser();
+  b.MM.open(b.overlay);
+  assert.strictEqual(b.count('orientationchange'), 1);
+  assert.strictEqual(b.count('resize'), 1);
+  b.fire('orientationchange'); b.flush();
+  assert.strictEqual(b.scrolls.length, 0, 'an un-offset window is left alone');
+  b.MM.close(b.overlay);
+  assert.strictEqual(b.count('orientationchange'), 0);
+  assert.strictEqual(b.count('resize'), 0);
+});
+
+test('rotation: the barcode scanner resumes a camera feed the rotation paused', () => {
+  const src = read('nutrition.js');
+  assert.match(src, /function nuScanResume\(\)/);
+  assert.match(src, /window\.addEventListener\('orientationchange'/);
+  assert.match(src, /video\.paused && video\.srcObject/);
+});

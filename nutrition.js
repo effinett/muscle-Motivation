@@ -1636,6 +1636,22 @@ function nuStopScanner() {
   if (video) video.srcObject = null;
 }
 
+// Rotating the phone can pause the live <video> (WebKit), and a paused feed
+// keeps handing the detector the same frozen frame — scanning silently stops.
+// Resume it whenever the viewport changes while a camera is running. Both the
+// native and ZXing paths render into the same element.
+function nuScanResume() {
+  if (!nu_scanStream && !nu_scanReader) return;
+  var video = document.getElementById('nuScanVideo');
+  if (video && video.paused && video.srcObject) {
+    try { var p = video.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+  }
+}
+if (typeof window !== 'undefined' && window.addEventListener) {
+  window.addEventListener('orientationchange', function () { setTimeout(nuScanResume, 350); });
+  window.addEventListener('resize', nuScanResume);
+}
+
 // Lazy, SRI-pinned ZXing loader (CSP already allows cdn.jsdelivr.net scripts).
 function nuLoadZxing() {
   if (typeof window.ZXing !== 'undefined') return Promise.resolve();
