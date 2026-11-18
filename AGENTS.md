@@ -524,8 +524,16 @@ Free Guide → Program Purchase → Membership → Premium Coaching
 | 90-Day Fat Loss Blueprint | `fat_loss_blueprint` | $49 | Beginner–intermediate fat loss | `Live` (`program-fat-loss.html`) |
 | Muscle Gain Program | `muscle_gain` | $59 | Users prioritizing muscle growth | `Live` (`program-muscle-gain.html`) |
 | Glute Builder Program | `glute_builder` | $39 | Lower body / glute development | `Live` (`program-glute-builder.html`) |
-| Home Strength Program | `home_strength` | TBD — available as an individual purchase and included with membership (owner decision 2026-11-17) | Dumbbells + resistance bands | `Planned` — roadmap 4.3.9-L six-Program coverage catalog |
+| Home Strength Program | `home_strength` | $49 (owner decision 2026-11-18) | Dumbbells + resistance bands | Published 2026-11-17, membership access only — individual purchase not yet built (roadmap 4.3.9-L) |
+| Home Fat Loss | `home_fat_loss` | $49 (owner decision 2026-11-18) | Fat loss, dumbbells + bands | `Planned` — roadmap 4.3.9-L |
+| Bodyweight Fat Loss | `bodyweight_fat_loss` | $39 (owner decision 2026-11-18) | Fat loss, no equipment | `Planned` — roadmap 4.3.9-L |
+| Advanced Muscle | `advanced_muscle` | $59 (owner decision 2026-11-18) | Intermediate–advanced muscle, full gym | Published 2026-11-18, membership access only — individual purchase not yet built |
+| Advanced Fat Loss | `advanced_fat_loss` | $59 (owner decision 2026-11-18) | Intermediate–advanced fat loss, full gym | Published 2026-11-18, membership access only — individual purchase not yet built |
+| Advanced Home Strength | `advanced_home_strength` | $49 (owner decision 2026-11-18) | Intermediate–advanced muscle, dumbbells + bands | Hidden draft (not published) |
 | Full Gym Strength Program | TBD | TBD | Full gym equipment | `Planned` |
+
+The six 4.3.9-L prices above are a planning record only: no Stripe product, price, checkout or
+purchase access exists for them yet, and each needs its own approval (§3).
 
 ### Membership
 | Product | Slug | Price | Includes |

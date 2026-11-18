@@ -2017,3 +2017,15 @@ deferral rule: the 4.3.9A replay showed home-equipment users had no suitable lau
 available as an individual purchase and included with membership. No phase was renumbered or reordered, and 4.3.9X.2 (Full Gym
 Strength) stays at 4.3.9-X. 4.3.9C and 4.3.9D remain open. Each Program migration still requires its own
 owner approval.
+
+## 2026-11-18 — 4.3.9-L one-time prices approved (owner decision)
+
+**Approved by the owner (2026-11-18)**, for the six coverage-catalog Programs as individual one-time
+purchases: Bodyweight Fat Loss $39; Home Strength $49; Home Fat Loss $49; Advanced Home Strength $49;
+Advanced Fat Loss $59; Advanced Muscle $59. Existing Program prices are unchanged. Membership stays
+$29/month and includes AI Coach plus the complete Program library. Recorded in the Program Catalog
+Plan, `docs/ROADMAP.md` §4.3.9-L and `AGENTS.md` §14.
+
+**Planning record only.** No Stripe product, price, checkout flow, purchase or access change was
+created. Each Program stays `standalone_purchasable = false` until those steps are separately approved.
+No phase was renumbered or reordered.

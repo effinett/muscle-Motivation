@@ -881,8 +881,12 @@ question and ignoring the answer is not acceptable in a paid personalization pro
   4.3.9A with six Programs: Home Strength (promoted from 4.3.9X.1), Home Fat Loss, Bodyweight Fat Loss,
   Advanced Muscle, Advanced Fat Loss and Advanced Home Strength. Each is available as an individual
   purchase and included with membership. An individual purchase gives only that Program, with no AI
-  Coach membership features; membership gives AI Coach access and the whole Program library. Individual
-  prices are TBD, and no payment product is created by this entry. Each Program supports 2–6 training
+  Coach membership features; membership gives AI Coach access and the whole Program library. Approved
+  one-time prices (owner decision 2026-11-18): Bodyweight Fat Loss $39; Home Strength, Home Fat Loss and
+  Advanced Home Strength $49 each; Advanced Fat Loss and Advanced Muscle $59 each. Existing Program prices
+  are unchanged, and membership stays $29/month (AI Coach plus the complete Program library). These prices
+  are a planning record only: no Stripe product, price, checkout, purchase or access change is created by
+  this entry, and each of those needs its own approval. Each Program supports 2–6 training
   days with owner-approved session lists. The approved plan (the "Program Catalog Plan",
   Revision 7) also covers:
   - ranking experience before schedule closeness;
