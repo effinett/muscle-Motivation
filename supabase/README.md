@@ -7,7 +7,7 @@ customer data, no auth users and no credentials.
 |---|---|
 | `schema/current-schema.sql` | **Authoritative rebuild file.** Complete current structure of schema `public` (28 tables, constraints, indexes, row-level security, 62 policies, functions, triggers, grants, comments) plus the `auth.users` sign-up trigger and the `ensure_rls` event trigger. Schema only — no rows. |
 | `schema/baseline-pre-2026-06-09.sql` | Objects created before migration tracking began (`profiles`, `handle_new_user` + `on_auth_user_created`, `rls_auto_enable` + `ensure_rls`). Only needed to replay history. |
-| `migrations/` | The 75 migrations applied to production (as of 2026-11-17), with their original version numbers. History, not a rebuild script — see below. |
+| `migrations/` | The 76 migrations applied to production (as of 2026-11-18), with their original version numbers. History, not a rebuild script — see below. |
 
 ## Rebuild the structure on a new Supabase project
 
@@ -18,11 +18,11 @@ separately from the encrypted private backup, never from this repository.
 ## Why the migrations are not a rebuild script
 
 Replaying `baseline` + `migrations/` in order rebuilds the same structure (verified),
-but twelve migrations are guarded **data** migrations that assert production row state
+but thirteen migrations are guarded **data** migrations that assert production row state
 and deliberately abort on an empty database; they contain no structural changes:
 `20260825142638`, `20260904042551`, `20260920231151`, `20260929030347`, `20260930032337`,
 `20261002024350`, `20261002173108`, `20261003000515`, `20261005041336`, `20261116183238`,
-`20261117192044`, `20261117204221`.
+`20261117192044`, `20261117204221`, `20261118005437`.
 
 `20261002173108` (`phase_439b_cp4c_bodyweight_guidance_pike_lean`) updates the exercise
 JSON arrays of two Bodyweight Foundations Routines (Full Body A and B) under exact-state
@@ -67,6 +67,17 @@ md5), names each target by id so the unrelated private validation Routine cannot
 proves by fingerprint that no other row in `programs`, `workout_templates`, `program_routines` or
 `exercises` changed. Access is unchanged: included with membership, not standalone-purchasable. It
 creates no price, purchase, entitlement or enrolment.
+
+`20261118005437` (`phase_439l_advanced_drafts`, owner-approved 2026-11-17) adds Advanced Muscle,
+Advanced Fat Loss and Advanced Home Strength as **hidden drafts** in one migration: three Programs
+(`status = 'draft'`, membership-included, not standalone-purchasable; 12, 12 and 10 weeks), twelve
+private platform Routines (69 prescription entries over 53 exercises, copied from the approved Program
+Catalog Plan) and their twelve links (`upper_a`/`lower_a`/`upper_b`/`lower_b` for Advanced Muscle and
+Advanced Home Strength; `lower`, `upper`, `full_body`, `conditioning_core` for Advanced Fat Loss). It
+requires the exact starting catalog counts, the exercise catalog, each Program's equipment promise and
+the Bodyweight Foundations Full Body A/B/C owner, and aborts on any divergence. It inserts only; it
+publishes nothing, modifies no existing row, and creates no price, purchase, entitlement or enrolment.
+Publishing is a separate migration.
 
 Two of them (`20260920231151`, `20260929030347`) reference the platform owner account.
 In this repository that one value is read from a session setting instead of being written
