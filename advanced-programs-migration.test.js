@@ -63,3 +63,51 @@ test('the README documents it', () => {
   assert.match(readme, /`20261118005437` \(`phase_439l_advanced_drafts`/);
   assert.match(readme, /It inserts only; it\npublishes nothing, modifies no existing row/);
 });
+
+/* ── Publish Advanced Muscle (migration 20261118044157) ───────────────────
+ * Applied 2026-11-18 after Codex review on #123. The stored text matched the
+ * dry-run-reviewed file (md5 fb6e8882…). Advanced Fat Loss and Advanced Home
+ * Strength stay hidden drafts. */
+const PUB_FILE = 'supabase/migrations/20261118044157_phase_439l_publish_advanced_muscle.sql';
+const pub = fs.readFileSync(path.join(__dirname, PUB_FILE), 'utf8');
+const pubCode = pub.split('\n').filter((l) => !/^\s*--/.test(l)).join('\n');
+const AM_IDS = ['13c8ee8a-dc10-5858-afa5-cf2402300268', 'f70d7306-dbca-5b80-adaa-161d7d2c57e8',
+  '19c09b00-2482-554f-aa08-1a9c1c2f626a', '1e854b64-3232-551e-a467-db886b141915',
+  'e40f5cb9-d978-55e8-aad5-acac4e14ca01'];
+
+test('publish AM: the repository records the exact applied migration', () => {
+  assert.equal(crypto.createHash('md5').update(pub).digest('hex'), 'fb6e8882c9efdeacecf5228aaa80eed8');
+  assert.equal(crypto.createHash('sha256').update(pub).digest('hex'),
+    'a94945f02f1582cab733e4bf3361faf3b061e71d56b7749044f57a06134d5f24');
+  assert.ok(!pub.includes('DRY RUN'));
+  assert.ok(pub.includes("RAISE NOTICE 'phase_439l_publish_advanced_muscle: state=%', v_state;"));
+});
+
+test('publish AM: exactly two writes, Routines before Program, on the named rows only', () => {
+  const updates = pubCode.match(/UPDATE public\.\w+ SET [^\n]+\n[^\n]+/g) || [];
+  assert.deepEqual(updates, [
+    "UPDATE public.workout_templates SET visibility = 'published'\n     WHERE id IN (k_r1, k_r2, k_r3, k_r4) AND visibility = 'private';",
+    "UPDATE public.programs SET status = 'published'\n     WHERE id = k_prog AND status = 'draft';",
+  ]);
+  assert.doesNotMatch(pubCode, /\bINSERT INTO public\.|\bDELETE\s+FROM\b|\bTRUNCATE\b|\bALTER\s+TABLE\b/i);
+  assert.doesNotMatch(pubCode, /stripe|entitlement|\bprice/i);
+  // purchases, user_programs and profiles are only locked and fingerprinted, never written.
+  assert.doesNotMatch(pubCode, /(UPDATE|INSERT INTO)\s+public\.(purchases|user_programs|profiles)\b/i);
+  ['purchases', 'user_programs', 'profiles'].forEach((t) => {
+    assert.match(pubCode, new RegExp('LOCK TABLE public\\.' + t + '\\s+IN SHARE MODE;'));
+    assert.match(pubCode, new RegExp('FROM public\\.' + t + ' x\\) <> b_'));
+  });
+  // Access pinned unchanged: membership-included, not standalone-purchasable.
+  assert.match(pubCode, /'muscle', 'Intermediate – Advanced', 12, 4, 'Full Gym',\s+true, false, 6, 'program\.html\?slug=advanced_muscle'\);/);
+  // Same ids as the draft migration; none of the other two Advanced Programs' ids.
+  AM_IDS.forEach((id) => assert.ok(pub.includes(id) && sql.includes(id), id));
+  ['4299697c-b0f2-5cd2-a4a0-2d28ba2e8022', '2ab5945b-5436-5024-ad96-8bed32c2c572'].forEach((id) => {
+    assert.ok(!pub.includes(id), id);
+  });
+  assert.match(pubCode, /slug IN \('advanced_fat_loss', 'advanced_home_strength'\) AND status = 'draft'\) <> 2/);
+});
+
+test('publish AM: the README documents it', () => {
+  assert.match(readme, /`20261118044157` \(`phase_439l_publish_advanced_muscle`/);
+  assert.match(readme, /Advanced Fat Loss and Advanced Home Strength stay drafts/);
+});
