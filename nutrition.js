@@ -1648,7 +1648,7 @@ function nuScanResume() {
   }
 }
 if (typeof window !== 'undefined' && window.addEventListener) {
-  window.addEventListener('orientationchange', function () { setTimeout(nuScanResume, 350); });
+  window.addEventListener('orientationchange', function () { setTimeout(nuScanResume, 600); });
   window.addEventListener('resize', nuScanResume);
 }
 

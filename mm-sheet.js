@@ -483,16 +483,50 @@
     }
     syncViewport();
   }
-  function onRotate() {
+  /* A real rotation (not a keyboard resize) also rebuilds each overlay's
+   * compositing layer. Reported on an iPhone home-screen PWA: rotate, scan,
+   * rotate back, and the food card is drawn but ignores every tap — WebKit
+   * keeps hit-testing against the landscape layer even with no scroll offset.
+   * Taking the overlay out of rendering for one frame forces a fresh layer.
+   * Inner scroll positions are saved and restored so nothing visibly jumps. */
+  function rebuildLayers() {
+    if (!stack.length || !win) return;
+    var saved = [];
+    for (var i = 0; i < stack.length; i++) {
+      var el = stack[i].el;
+      var scrollers = [];
+      var list = el.querySelectorAll ? el.querySelectorAll('*') : [];
+      for (var j = 0; j < list.length; j++) {
+        if (list[j].scrollTop) scrollers.push([list[j], list[j].scrollTop]);
+      }
+      saved.push([el, el.style.display, scrollers]);
+      el.style.display = 'none';
+    }
+    win.requestAnimationFrame(function () {
+      for (var k = 0; k < saved.length; k++) {
+        var s = saved[k];
+        s[0].style.display = s[1];
+        void s[0].offsetHeight;
+        for (var m = 0; m < s[2].length; m++) s[2][m][0].scrollTop = s[2][m][1];
+      }
+    });
+  }
+  var rotLayerTimer = 0;
+  function onRotate(ev) {
     if (!win) return;
     if (!rotRaf) rotRaf = win.requestAnimationFrame(function () { rotRaf = 0; recoverLayout(); });
     if (rotTimer) win.clearTimeout(rotTimer);
     rotTimer = win.setTimeout(function () { rotTimer = 0; recoverLayout(); }, ROTATION_SETTLE_MS);
+    if (ev && ev.type === 'orientationchange') {
+      if (rotLayerTimer) win.clearTimeout(rotLayerTimer);
+      rotLayerTimer = win.setTimeout(function () { rotLayerTimer = 0; rebuildLayers(); }, ROTATION_SETTLE_MS);
+    }
   }
   function cancelRotate() {
     if (!win) return;
     if (rotRaf) { win.cancelAnimationFrame(rotRaf); rotRaf = 0; }
     if (rotTimer) { win.clearTimeout(rotTimer); rotTimer = 0; }
+    if (rotLayerTimer) { win.clearTimeout(rotLayerTimer); rotLayerTimer = 0; }
   }
 
   /* ── Drag-to-dismiss (sheet variant) ──────────────────────────────────── */

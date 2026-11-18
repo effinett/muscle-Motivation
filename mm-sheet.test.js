@@ -624,7 +624,7 @@ function fakeBrowser() {
   return {
     MM: ctx.MMSheet, window, overlay, scrolls,
     count: (t) => (listeners[t] || []).length,
-    fire: (t) => (listeners[t] || []).slice().forEach((f) => f({})),
+    fire: (t) => (listeners[t] || []).slice().forEach((f) => f({ type: t })),
     flush: () => { rafs.splice(0).forEach((f) => f && f()); timers.splice(0).forEach((f) => f && f()); },
     pointerOnBackdrop: () => (docListeners.pointerdown || []).forEach((f) => f({ target: overlay })),
     clickBackdrop: () => (docListeners.click || []).forEach((f) => f({ target: overlay })),
@@ -669,4 +669,24 @@ test('rotation: the barcode scanner resumes a camera feed the rotation paused', 
   assert.match(src, /function nuScanResume\(\)/);
   assert.match(src, /window\.addEventListener\('orientationchange'/);
   assert.match(src, /video\.paused && video\.srcObject/);
+});
+
+test('rotation: a real rotation rebuilds the overlay layer for one frame (iOS PWA dead taps)', () => {
+  const b = fakeBrowser();
+  b.MM.open(b.overlay);
+  b.overlay.style.display = 'flex';
+  b.fire('orientationchange');
+  b.flush();                              // settle timer → hidden, queues the restore frame
+  assert.strictEqual(b.overlay.style.display, 'none', 'taken out of rendering for one frame');
+  b.flush();                              // restore frame
+  assert.strictEqual(b.overlay.style.display, 'flex', 'restored to its own display value');
+  assert.ok(b.MM.isOpen(b.overlay));
+});
+
+test('rotation: a keyboard/viewport resize never blanks the dialog', () => {
+  const b = fakeBrowser();
+  b.MM.open(b.overlay);
+  b.fire('resize');
+  b.flush();
+  assert.notStrictEqual(b.overlay.style.display, 'none');
 });
