@@ -526,7 +526,7 @@ Free Guide → Program Purchase → Membership → Premium Coaching
 | Glute Builder Program | `glute_builder` | $39 | Lower body / glute development | `Live` (`program-glute-builder.html`) |
 | Home Strength Program | `home_strength` | $49 (owner decision 2026-11-18) | Dumbbells + resistance bands | Published 2026-11-17, membership access only — individual purchase not yet built (roadmap 4.3.9-L) |
 | Home Fat Loss | `home_fat_loss` | $49 (owner decision 2026-11-18) | Fat loss, dumbbells + bands | `Planned` — roadmap 4.3.9-L |
-| Bodyweight Fat Loss | `bodyweight_fat_loss` | $39 (owner decision 2026-11-18) | Fat loss, no equipment | `Planned` — roadmap 4.3.9-L |
+| Bodyweight Fat Loss | `bodyweight_fat_loss` | $39 (owner decision 2026-11-18) | Fat loss, no equipment | Hidden draft (not published) — migration `20261119070922` |
 | Advanced Muscle | `advanced_muscle` | $59 (owner decision 2026-11-18) | Intermediate–advanced muscle, full gym | Published 2026-11-18, membership access only — individual purchase not yet built |
 | Advanced Fat Loss | `advanced_fat_loss` | $59 (owner decision 2026-11-18) | Intermediate–advanced fat loss, full gym | Published 2026-11-18, membership access only — individual purchase not yet built |
 | Advanced Home Strength | `advanced_home_strength` | $49 (owner decision 2026-11-18) | Intermediate–advanced muscle, dumbbells + bands | Hidden draft (not published) |
