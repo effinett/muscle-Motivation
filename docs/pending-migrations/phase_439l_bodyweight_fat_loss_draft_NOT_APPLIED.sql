@@ -10,8 +10,10 @@
 -- Content: the approved Program Catalog Plan (Revision 7, content revision 1,
 -- decision 1a: Mountain Climber replaces Forward Lunge in Conditioning B).
 -- Exercises, sets, ranges and rests exactly as approved. The only added text is
--- the per-leg, per-side, total-reps and timing notes. Session lists already ship
--- in schedules.js; equipment-free Swap and picker already treat
+-- the per-leg, per-side, total-reps and timing notes, plus the existing Swap
+-- guidance on Push-Up and Knee Push-Up, word for word as Bodyweight
+-- Foundations uses it (text only: no progression behavior changes).
+-- Session lists already ship in schedules.js; equipment-free Swap and picker already treat
 -- bodyweight_fat_loss as equipment-free (exercise-filters.js).
 -- Equipment promise: Bodyweight. Every prescribed exercise is classified
 -- Bodyweight AND is in the reviewed 38-exercise equipment-free pool
@@ -100,13 +102,13 @@ BEGIN
 
   INSERT INTO _bfl_routine_exp VALUES
   (k_ra, v_owner, 'Full Body A',
-   '[{"name":"Bodyweight Squat","sets":3,"reps_low":10,"reps_high":15,"notes":"","rest_sec":60,"exercise_id":"97501496-7f81-4552-82ab-d3f326b8ff06"},{"name":"Push-Up","sets":3,"reps_low":6,"reps_high":12,"notes":"","rest_sec":60,"exercise_id":"dfb48ed7-a1b9-4dc3-91c2-eabf52c821ac"},{"name":"Reverse Lunge","sets":3,"reps_low":8,"reps_high":12,"notes":"Reps are per leg.","rest_sec":60,"exercise_id":"d2812c92-d4c6-420c-b2d9-d2c5757871c9"},{"name":"Glute Bridge","sets":3,"reps_low":12,"reps_high":15,"notes":"","rest_sec":45,"exercise_id":"ff15ede3-a361-415a-8e20-6a7244bad0b3"},{"name":"Superman","sets":2,"reps_low":10,"reps_high":15,"notes":"","rest_sec":45,"exercise_id":"c2a5d8b3-4f69-4e02-8d37-1b9e0f6a2c45"},{"name":"Plank","sets":2,"reps_low":20,"reps_high":40,"notes":"Hold time in seconds.","rest_sec":45,"exercise_id":"c320bf46-9f16-4483-bd2f-9ae9e88b7ad5"}]'::jsonb,
+   '[{"name":"Bodyweight Squat","sets":3,"reps_low":10,"reps_high":15,"notes":"","rest_sec":60,"exercise_id":"97501496-7f81-4552-82ab-d3f326b8ff06"},{"name":"Push-Up","sets":3,"reps_low":6,"reps_high":12,"notes":"Too hard? Use Swap before logging sets: Knee Push-Up, or Wall Push-Up if that is too hard. Swap applies to this workout only.","rest_sec":60,"exercise_id":"dfb48ed7-a1b9-4dc3-91c2-eabf52c821ac"},{"name":"Reverse Lunge","sets":3,"reps_low":8,"reps_high":12,"notes":"Reps are per leg.","rest_sec":60,"exercise_id":"d2812c92-d4c6-420c-b2d9-d2c5757871c9"},{"name":"Glute Bridge","sets":3,"reps_low":12,"reps_high":15,"notes":"","rest_sec":45,"exercise_id":"ff15ede3-a361-415a-8e20-6a7244bad0b3"},{"name":"Superman","sets":2,"reps_low":10,"reps_high":15,"notes":"","rest_sec":45,"exercise_id":"c2a5d8b3-4f69-4e02-8d37-1b9e0f6a2c45"},{"name":"Plank","sets":2,"reps_low":20,"reps_high":40,"notes":"Hold time in seconds.","rest_sec":45,"exercise_id":"c320bf46-9f16-4483-bd2f-9ae9e88b7ad5"}]'::jsonb,
    NULL, 0, NULL, 0, NULL, 'fatloss', NULL, '{}'::text[], true, 'private', NULL),
   (k_rca, v_owner, 'Conditioning A',
    '[{"name":"Jumping Jack","sets":3,"reps_low":30,"reps_high":45,"notes":"Work time in seconds.","rest_sec":30,"exercise_id":"41fe1cb7-ffc7-48a0-8ad4-c0b4d46c0fa5"},{"name":"Lateral Lunge","sets":3,"reps_low":8,"reps_high":12,"notes":"Reps are per leg.","rest_sec":30,"exercise_id":"eee8a605-10d6-41ad-9b79-65d626b598db"},{"name":"Mountain Climber","sets":3,"reps_low":20,"reps_high":40,"notes":"Work time in seconds.","rest_sec":30,"exercise_id":"ed45d50d-5411-4e47-8309-97314b94adfb"},{"name":"High Knees","sets":3,"reps_low":20,"reps_high":40,"notes":"Work time in seconds.","rest_sec":30,"exercise_id":"6d50c3a6-0dde-46e4-bc3a-508c2f358803"},{"name":"Dead Bug","sets":2,"reps_low":8,"reps_high":12,"notes":"Reps are per side.","rest_sec":45,"exercise_id":"9c8998ab-9713-43f4-940b-5f8feec39d3c"}]'::jsonb,
    NULL, 0, NULL, 0, NULL, 'fatloss', NULL, '{}'::text[], true, 'private', NULL),
   (k_rb, v_owner, 'Full Body B',
-   '[{"name":"Split Squat","sets":3,"reps_low":8,"reps_high":12,"notes":"Reps are per leg.","rest_sec":60,"exercise_id":"a7942454-736c-4d84-980d-39b40298a1b2"},{"name":"Knee Push-Up","sets":3,"reps_low":8,"reps_high":12,"notes":"","rest_sec":60,"exercise_id":"a1bb3980-ae49-48ce-a0b5-91bffd5daeda"},{"name":"Single-Leg Glute Bridge","sets":3,"reps_low":8,"reps_high":12,"notes":"Reps are per leg.","rest_sec":45,"exercise_id":"da2d9535-6e82-4790-84c9-8e1a0d549718"},{"name":"Bird Dog","sets":2,"reps_low":8,"reps_high":12,"notes":"Reps are per side.","rest_sec":45,"exercise_id":"d3b6e9c4-5a7a-4f13-9e48-2c0f1a7b3d56"},{"name":"Side Plank","sets":2,"reps_low":15,"reps_high":30,"notes":"Hold time in seconds, per side.","rest_sec":45,"exercise_id":"be4abe1a-93fa-4e87-9250-2627fe45ad3c"}]'::jsonb,
+   '[{"name":"Split Squat","sets":3,"reps_low":8,"reps_high":12,"notes":"Reps are per leg.","rest_sec":60,"exercise_id":"a7942454-736c-4d84-980d-39b40298a1b2"},{"name":"Knee Push-Up","sets":3,"reps_low":8,"reps_high":12,"notes":"Too hard? Use Swap before logging sets: Wall Push-Up. Ready for more: Push-Up. Swap applies to this workout only.","rest_sec":60,"exercise_id":"a1bb3980-ae49-48ce-a0b5-91bffd5daeda"},{"name":"Single-Leg Glute Bridge","sets":3,"reps_low":8,"reps_high":12,"notes":"Reps are per leg.","rest_sec":45,"exercise_id":"da2d9535-6e82-4790-84c9-8e1a0d549718"},{"name":"Bird Dog","sets":2,"reps_low":8,"reps_high":12,"notes":"Reps are per side.","rest_sec":45,"exercise_id":"d3b6e9c4-5a7a-4f13-9e48-2c0f1a7b3d56"},{"name":"Side Plank","sets":2,"reps_low":15,"reps_high":30,"notes":"Hold time in seconds, per side.","rest_sec":45,"exercise_id":"be4abe1a-93fa-4e87-9250-2627fe45ad3c"}]'::jsonb,
    NULL, 0, NULL, 0, NULL, 'fatloss', NULL, '{}'::text[], true, 'private', NULL),
   (k_rcb, v_owner, 'Conditioning B',
    '[{"name":"Step Jack","sets":3,"reps_low":30,"reps_high":45,"notes":"Work time in seconds.","rest_sec":30,"exercise_id":"1b836b2c-af56-40a6-9afe-023c3ccd5361"},{"name":"Mountain Climber","sets":3,"reps_low":20,"reps_high":40,"notes":"Work time in seconds.","rest_sec":30,"exercise_id":"ed45d50d-5411-4e47-8309-97314b94adfb"},{"name":"March in Place","sets":3,"reps_low":45,"reps_high":60,"notes":"Work time in seconds.","rest_sec":30,"exercise_id":"7fae5cd2-712d-4df2-982d-850091d10329"},{"name":"Bicycle Crunch","sets":2,"reps_low":10,"reps_high":16,"notes":"Reps are total, not per side.","rest_sec":45,"exercise_id":"694c48ac-9251-4fa7-bb25-23353048963c"},{"name":"Wall Sit","sets":2,"reps_low":20,"reps_high":45,"notes":"Hold time in seconds.","rest_sec":45,"exercise_id":"7948f9c4-2ec1-432b-ad79-7f27c5961577"}]'::jsonb,
@@ -120,8 +122,8 @@ BEGIN
 
   INSERT INTO _bfl_program_exp VALUES
   (k_prog, 'bodyweight_fat_loss', 'Bodyweight Fat Loss',
-   'Burns fat with no equipment, four sessions a week: two full-body strength '
-   'days and two conditioning circuits.',
+   'A no-equipment, four-day fat-loss plan with two full-body strength days '
+   'and two conditioning circuits.',
    'fatloss', 'Beginner – Intermediate', 8, 4, 'Bodyweight',
    true, false, 'draft', 9, 'program.html?slug=bodyweight_fat_loss');
 
