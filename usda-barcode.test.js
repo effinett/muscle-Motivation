@@ -88,6 +88,23 @@ test('offToFood: anything short of a complete, plausible panel is rejected', () 
   assert.strictEqual(offToFood(null, '1'), null);
 });
 
+test('offToFood: fiber and sugar alcohols count toward the energy check (high-fiber / keto foods)', () => {
+  // Royo Burger Buns as listed on Open Food Facts (0736613480273): 150 kcal per
+  // 100 g with 50 g carbs, 38.3 g of them fiber. Every-carb Atwater says ~297.
+  const royo = offToFood(offProduct({ product_name: 'Burger Buns', brands: 'ROYO', serving_quantity: 60,
+    nutriments: { 'energy-kcal_100g': 150, proteins_100g: 15, carbohydrates_100g: 50, fiber_100g: 38.333, fat_100g: 4.167 } }), '0736613480273');
+  assert.ok(royo, 'a real high-fiber label is accepted');
+  assert.strictEqual(royo.nutrients.kcal, 150);
+  assert.strictEqual(royo.nutrients.fiber, 38.3);
+  // Keto bar: carbs are mostly erythritol.
+  assert.ok(offToFood(offProduct({ nutriments: { 'energy-kcal_100g': 330, proteins_100g: 30, carbohydrates_100g: 45, polyols_100g: 30, fiber_100g: 10, fat_100g: 18 } }), '1'));
+  // Without the fiber figure the same panel still reads as mis-keyed.
+  assert.strictEqual(offToFood(offProduct({ nutriments: { 'energy-kcal_100g': 150, proteins_100g: 15, carbohydrates_100g: 50, fat_100g: 4.167 } }), '1'), null);
+  // Fiber never excuses energy BELOW what protein + fat alone carry, or above every-carb Atwater.
+  assert.strictEqual(offToFood(offProduct({ nutriments: { 'energy-kcal_100g': 40, proteins_100g: 15, carbohydrates_100g: 50, fiber_100g: 50, fat_100g: 4.167 } }), '1'), null);
+  assert.strictEqual(offToFood(offProduct({ nutriments: { 'energy-kcal_100g': 600, proteins_100g: 15, carbohydrates_100g: 50, fiber_100g: 38, fat_100g: 4.167 } }), '1'), null);
+});
+
 test('offToFood: zero-calorie drinks pass; serving is kept only when usable', () => {
   const water = offToFood(offProduct({ product_name: 'Sparkling Water', serving_quantity: 355, serving_quantity_unit: 'ml',
     serving_size: '1 can', nutriments: { 'energy-kcal_100g': 0, proteins_100g: 0, carbohydrates_100g: 0, fat_100g: 0 } }), '1');
