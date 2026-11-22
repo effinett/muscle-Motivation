@@ -131,8 +131,20 @@ function offToFood(product, code) {
   const fat     = offNumber(n['fat_100g']);
   if (kcal === null || protein === null || carbs === null || fat === null) return null;   // incomplete panel
   if (kcal > 900 || protein > 100 || carbs > 100 || fat > 100 || protein + carbs + fat > 105) return null;
-  const estimate = 4 * protein + 4 * carbs + 9 * fat;
-  if (Math.abs(kcal - estimate) > Math.max(0.25 * Math.max(kcal, estimate), 30)) return null;   // energy disagrees with macros
+  // Energy must roughly agree with the macros (Atwater). US labels count fiber
+  // and sugar alcohols inside total carbs, yet they carry ~0–2 kcal/g, so a
+  // high-fiber or keto product (Royo bread: 50 g carbs, 38 g of it fiber) is
+  // legitimately far below 4 kcal per carb gram. Accept energy anywhere in the
+  // band from "those carbs count zero" to "every carb counts 4", with the
+  // usual tolerance at each end. Without fiber/polyol data the band collapses
+  // to the original single estimate.
+  const fiber   = offNumber(n['fiber_100g']) || 0;
+  const polyols = offNumber(n['polyols_100g']) || 0;
+  const lowCarbs = Math.max(0, carbs - Math.min(carbs, fiber + polyols));
+  const high = 4 * protein + 4 * carbs + 9 * fat;
+  const low  = 4 * protein + 4 * lowCarbs + 9 * fat;
+  const tol = (e) => Math.max(0.25 * Math.max(kcal, e), 30);
+  if (kcal < low - tol(low) || kcal > high + tol(high)) return null;   // energy disagrees with macros
 
   const size = offNumber(product.serving_quantity);
   const unit = String(product.serving_quantity_unit || 'g').toLowerCase();
