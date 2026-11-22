@@ -50,6 +50,18 @@ The pure candidate-reranking intelligence behind every food search — extracted
   Unrequested pizza variants are `SPECIALTY_SUBTYPES` (every stem must be present, so they never touch
   bread or cheese). `/api/usda-food` orders FNDDS portions so a whole-item size beats "1 cup" when the
   dish has one, and "Guideline amount per …" topping rows are never the default.
+- **Community fallback (`Live`, owner-approved 2026-11-22).** When no USDA result mentions a word the
+  member typed (`missingQueryWords` in `api/_off.js` — 4+ letters, no digits, not a measure word; in
+  practice a brand USDA does not carry, e.g. "royo"), the route asks Open Food Facts' Search-a-licious
+  service (US products only, ≤20 calls/minute per warm instance, answers memoized an hour; label
+  servings for the top 4 from the product API, ≤12 reads/minute) and returns the
+  plausible, relevant matches as a **separate `community` array** beside `foods`. They are never
+  ranked: `foods`, the resolver, Quick Log, saved meals and every benchmark see exactly what they saw
+  before. Only the search screen (`nuUsdaSearch(q, { withCommunity: true })`) shows them — last, under
+  "Community foods · Open Food Facts", labelled Unverified, no one-tap add, logged as manual entries.
+  Every food passes `offToFood`, which accepts energy anywhere between "fiber and sugar alcohols count
+  zero" and every-carb Atwater. A failed or rate-capped lookup marks the response degraded, so it is
+  never stored in `usda_search_cache`. Covered by `off-search.test.js`.
 - **Extension seam:** `options.signals` — pure `(candidate, features, ctx) → number` passes.
   Phases 4.2.3+ (confidence, correction memory, portion compatibility, meal context,
   preferences) plug in there without touching candidate acquisition or creating a second

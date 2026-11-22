@@ -29,6 +29,7 @@
 const ranking = require('../food-ranking.js');
 const memory  = require('../food-memory.js');
 const mealctx = require('../food-meal.js');
+const off     = require('./_off.js');
 
 const SUPABASE_URL      = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
@@ -170,8 +171,8 @@ const RESPONSE_CACHE_WRITE_MS = 150;     // wait this long for the write to leav
 const RESPONSE_CACHE_MAX_BYTES = 200 * 1024;
 const RESPONSE_CACHE_PRUNE_ONE_IN = 25;
 
-// Fingerprint of everything that decides a plain response: the ranking modules
-// and this file. Falls back to the deployment commit; with neither, no cache.
+// Fingerprint of everything that decides a plain response: the ranking modules,
+// the community fallback (_off.js) and this file. Falls back to the deployment commit; with neither, no cache.
 const RANKING_FINGERPRINT = (function () {
   try {
     const fs = require('fs');
@@ -179,6 +180,7 @@ const RANKING_FINGERPRINT = (function () {
     ['../food-ranking.js', '../food-memory.js', '../food-meal.js'].forEach(function (f) {
       h.update(fs.readFileSync(require.resolve(f)));
     });
+    h.update(fs.readFileSync(require.resolve('./_off.js')));
     h.update(fs.readFileSync(__filename));
     return h.digest('hex').slice(0, 12);
   } catch (e) {
@@ -536,6 +538,26 @@ function buildMealSignal(req) {
   return mealctx.nuMealSignal(projection);
 }
 
+/* ── Community fallback (owner-approved 2026-11-22) ──────────────────────────
+ * When no USDA result mentions a word the member typed — usually a brand USDA
+ * does not carry ("royo") — ask Open Food Facts for that query and return its
+ * plausible matches as a SEPARATE `community` list. `foods` (the ranked USDA
+ * list every surface and benchmark consumes) is never touched, so ranking stays
+ * the single authority and Quick Log never sees a community food. Only the
+ * search screen shows `community`, below USDA, labelled Unverified. A failed or
+ * rate-capped lookup marks the response degraded so it is never stored durably.
+ * Never throws. */
+async function addCommunityFoods(q, out) {
+  try {
+    if (!out || out.status !== 200 || !out.body) return;
+    const missing = off.missingQueryWords(q, out.body.foods);
+    if (!missing.length) return;
+    const r = await off.searchOpenFoodFacts(q, missing);
+    if (r.foods.length) out.body.community = r.foods;
+    if (!r.ok) out.degraded = true;
+  } catch (e) { /* the fallback can never break search */ }
+}
+
 module.exports = async (req, res) => {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
@@ -590,6 +612,7 @@ module.exports = async (req, res) => {
     }
 
     const out = await searchFoods(q, undefined, { signals: signalsPromise });
+    await addCommunityFoods(q, out);
     const contextual = (await signalsPromise).length > 0;
     if (cacheKey && responseCacheable(out, contextual)) {
       try { await responseCachePut(cacheKey, out.body); } catch (e) { /* best effort */ }
@@ -612,7 +635,7 @@ module.exports = async (req, res) => {
 // Shapes/names preserved from before the Phase 4.2.2 extraction — the pure
 // entries now delegate to food-ranking.js (one source of truth).
 module.exports._internals = {
-  trimFood, buildResponse, mergeGeneric, searchFoods,
+  trimFood, buildResponse, mergeGeneric, searchFoods, addCommunityFoods,
   cachedPool, poolCache, POOL_CACHE_TTL_MS, POOL_CACHE_MAX,
   noteQuota, quotaState,
   SURVEY_DATA_TYPE, SURVEY_PAGE_SIZE, SURVEY_COMPONENT_RE,

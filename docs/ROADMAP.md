@@ -1585,6 +1585,15 @@ any of this is pulled ahead of the locked critical path (§13) is Effi's decisio
   the "Unverified" label and the confirm card are the guard.
   *Open:* their terms ask for a contact email in the User-Agent (a site URL is sent today) and
   limit product reads to 15/minute per IP; the ODbL licence terms have not had a legal review.
+  *Fixed 2026-11-22 (PR #132):* the energy check counted every carb gram at 4 kcal, so high-fiber and
+  keto labels (Royo bread: 50 g carbs, 38 g fiber, 150 kcal) were rejected as mis-keyed; fiber and
+  sugar alcohols now count between 0 and 4 kcal/g.
+  *Widened 2026-11-22 (owner decision):* search falls back to Open Food Facts when no USDA result
+  mentions a word the member typed (e.g. the brand "royo"). Returned as a separate `community` list —
+  never ranked, never seen by Quick Log or saved meals — shown last, labelled Unverified. Their search
+  The route uses Search-a-licious (the legacy `cgi/search.pl` answered 503 on a second call within
+  seconds in a live check); its index has no servings, so the top 4 results' label servings come from the
+  product API (≤12 reads/minute per warm instance).
 
 **Smarter**
 - **5.4.1 / 5.4.2 refinement:** the user's own foods appear inside database search, ahead of the network

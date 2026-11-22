@@ -863,16 +863,23 @@ var NU_QUERY_CACHE_TTL = 5 * 60 * 1000;
 var nu_queryCache = {};        // normalized query → { at, foods }
 var nu_queryCacheKeys = [];    // insertion order, for oldest-first eviction
 function nuQueryCacheKey(q) { return String(q || '').trim().toLowerCase(); }
+// An entry holds the ranked USDA `foods` and, separately, any `community`
+// (Open Food Facts) fallback — so a cached hit can still answer callers that
+// must never see community data (Quick Log, saved meals).
 function nuQueryCacheGet(q) {
   var hit = nu_queryCache[nuQueryCacheKey(q)];
   if (!hit || Date.now() - hit.at > NU_QUERY_CACHE_TTL) return null;
-  return hit.foods.map(function (f) { return Object.assign({}, f); });
+  var clone = function (f) { return Object.assign({}, f); };
+  return { foods: hit.foods.map(clone), community: hit.community.map(clone) };
 }
-function nuQueryCachePut(q, foods) {
+function nuQueryCachePut(q, foods, community) {
   var k = nuQueryCacheKey(q);
-  if (!k || !foods || !foods.length) return;
+  foods = foods || []; community = community || [];
+  if (!k || (!foods.length && !community.length)) return;
   if (!nu_queryCache[k]) nu_queryCacheKeys.push(k);
-  nu_queryCache[k] = { at: Date.now(), foods: foods.map(function (f) { return Object.assign({}, f); }) };
+  nu_queryCache[k] = { at: Date.now(),
+    foods: foods.map(function (f) { return Object.assign({}, f); }),
+    community: community.map(function (f) { return Object.assign({}, f); }) };
   while (nu_queryCacheKeys.length > NU_QUERY_CACHE_MAX) delete nu_queryCache[nu_queryCacheKeys.shift()];
 }
 
@@ -915,7 +922,10 @@ async function nuUsdaSearch(query, opts) {
   // headers). `no-store` bypasses that so the context applies immediately. Plain
   // searches keep the short cache (common while typing).
   if (contextual) fetchOpts.cache = 'no-store';
-  else { var cached = nuQueryCacheGet(query); if (cached) return cached; }
+  else {
+    var cached = nuQueryCacheGet(query);
+    if (cached) return opts.withCommunity ? cached.foods.concat(cached.community) : cached.foods;
+  }
   var res = await fetch('/api/usda-search?q=' + encodeURIComponent(query), fetchOpts);
   if (!res.ok) {
     var msg = 'Search failed.';
@@ -924,8 +934,11 @@ async function nuUsdaSearch(query, opts) {
   }
   var data = await res.json();
   var foods = (data && data.foods) || [];
-  if (!contextual) nuQueryCachePut(query, foods);
-  return foods;
+  // `community` (Open Food Facts, unverified) is returned only to callers that
+  // ask for it — the search screen. Every resolver path gets USDA foods only.
+  var community = (data && Array.isArray(data.community)) ? data.community : [];
+  if (!contextual) nuQueryCachePut(query, foods, community);
+  return opts.withCommunity ? foods.concat(community) : foods;
 }
 
 // Candidate normalization + the serving engine (nuNormalizeUsdaFood,
@@ -1131,7 +1144,7 @@ async function nuRunUsdaSearch(q) {
   }
 
   try {
-    var foods = await nuUsdaSearch(q, { signal: nu_usdaAbort ? nu_usdaAbort.signal : undefined });
+    var foods = await nuUsdaSearch(q, { signal: nu_usdaAbort ? nu_usdaAbort.signal : undefined, withCommunity: true });
     if (seq !== nu_usdaSeq) return;                       // a newer search superseded us
     var results = foods.map(nuNormalizeUsdaFood);
     if (!results.length) {
@@ -1154,7 +1167,8 @@ async function nuRunUsdaSearch(q) {
   }
 }
 
-var NU_GROUP_LABELS = { branded: 'Branded foods', generic: 'USDA generic foods' };
+var NU_GROUP_LABELS = { branded: 'Branded foods', generic: 'USDA generic foods',
+  community: 'Community foods · Open Food Facts' };
 
 function nuRenderUsdaResults() {
   var list = document.getElementById('nuUsdaResults');
@@ -1376,7 +1390,9 @@ function nuApplySearchQuantity(f) {
 function nuPickUsda(i) {
   var f = nu_usdaResults[i];
   if (!f) return;
-  nuPickTelemetry(i, f.group === 'branded' ? 'branded' : 'generic');
+  // Community rows report as 'branded' (the telemetry vocabulary has no
+  // separate source for them yet).
+  nuPickTelemetry(i, (f.group === 'branded' || f.group === 'community') ? 'branded' : 'generic');
   nuOpenUsdaCard(f, nu_searchQty);
 }
 
