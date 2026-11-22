@@ -18,6 +18,7 @@
 // SUPABASE_ANON_KEY — same as the other USDA routes. Key never reaches the browser.
 
 const { trimFood } = require('./usda-search.js')._internals;
+const { offToFood, OFF_USER_AGENT } = require('./_off.js');
 
 const SUPABASE_URL      = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
@@ -99,80 +100,13 @@ function pickBest(matches) {
  * the client shows the "Open Food Facts" attribution wherever the food appears. */
 const OFF_ENDPOINT   = 'https://world.openfoodfacts.org/api/v2/product/';
 const OFF_FIELDS     = 'code,product_name,brands,nutriments,serving_size,serving_quantity,serving_quantity_unit';
-const OFF_USER_AGENT = 'MuscleMotivation/1.0 (https://musclemotivation.fit)';
 const OFF_TIMEOUT_MS = 2500;
 const OFF_MEMO_TTL_MS = 60 * 60 * 1000;
 const OFF_MEMO_MAX    = 200;
 const offMemo = new Map();     // gtinKey → { at, food }  (food may be null: a remembered miss)
 
-function offNumber(v) {
-  if (v === null || v === undefined || v === '' || typeof v === 'boolean') return null;
-  const n = +v;
-  return (isFinite(n) && n >= 0) ? n : null;
-}
-function round1(n) { return Math.round(n * 10) / 10; }
-
-// Open Food Facts product → the SAME trimmed shape trimFood returns, plus
-// `source: 'off'` / `unverified: true`. Returns null unless the panel is
-// complete and plausible. Pure.
-function offToFood(product, code) {
-  if (!product || typeof product !== 'object') return null;
-  const name = String(product.product_name || '').replace(/\s+/g, ' ').trim().slice(0, 120);
-  if (!name) return null;
-  const n = (product.nutriments && typeof product.nutriments === 'object') ? product.nutriments : {};
-
-  let kcal = offNumber(n['energy-kcal_100g']);
-  if (kcal === null) {
-    const kj = offNumber(n['energy-kj_100g']) !== null ? offNumber(n['energy-kj_100g']) : offNumber(n['energy_100g']);
-    if (kj !== null) kcal = kj / 4.184;
-  }
-  const protein = offNumber(n['proteins_100g']);
-  const carbs   = offNumber(n['carbohydrates_100g']);
-  const fat     = offNumber(n['fat_100g']);
-  if (kcal === null || protein === null || carbs === null || fat === null) return null;   // incomplete panel
-  if (kcal > 900 || protein > 100 || carbs > 100 || fat > 100 || protein + carbs + fat > 105) return null;
-  // Energy must roughly agree with the macros (Atwater). US labels count fiber
-  // and sugar alcohols inside total carbs, yet they carry ~0–2 kcal/g, so a
-  // high-fiber or keto product (Royo bread: 50 g carbs, 38 g of it fiber) is
-  // legitimately far below 4 kcal per carb gram. Accept energy anywhere in the
-  // band from "those carbs count zero" to "every carb counts 4", with the
-  // usual tolerance at each end. Without fiber/polyol data the band collapses
-  // to the original single estimate.
-  const fiber   = offNumber(n['fiber_100g']) || 0;
-  const polyols = offNumber(n['polyols_100g']) || 0;
-  const lowCarbs = Math.max(0, carbs - Math.min(carbs, fiber + polyols));
-  const high = 4 * protein + 4 * carbs + 9 * fat;
-  const low  = 4 * protein + 4 * lowCarbs + 9 * fat;
-  const tol = (e) => Math.max(0.25 * Math.max(kcal, e), 30);
-  if (kcal < low - tol(low) || kcal > high + tol(high)) return null;   // energy disagrees with macros
-
-  const size = offNumber(product.serving_quantity);
-  const unit = String(product.serving_quantity_unit || 'g').toLowerCase();
-  const hasServing = size !== null && size > 0 && size <= 2000 && (unit === 'g' || unit === 'ml');
-  const brand = String(product.brands || '').split(',')[0].replace(/\s+/g, ' ').trim().slice(0, 60);
-  const household = String(product.serving_size || '').replace(/\s+/g, ' ').trim().slice(0, 60);
-
-  return {
-    fdcId: null,                              // not a USDA food — no USDA identity
-    description: name,
-    dataType: 'Open Food Facts',
-    foodCategory: '',
-    brand: brand,
-    gtinUpc: String(code || product.code || '').replace(/\D/g, ''),
-    servingSize: hasServing ? size : null,
-    servingSizeUnit: hasServing ? unit : '',
-    householdServing: hasServing ? household : '',
-    nutrients: {
-      kcal: Math.round(kcal),
-      protein: round1(protein), carbs: round1(carbs), fat: round1(fat),
-      fiber: round1(offNumber(n['fiber_100g']) || 0),
-      sugar: round1(offNumber(n['sugars_100g']) || 0),
-    },
-    group: 'branded',
-    source: 'off',
-    unverified: true,
-  };
-}
+// offNumber / offToFood (the completeness + plausibility gate) live in
+// api/_off.js, shared with the search route's community fallback.
 
 // → an unverified food, or null. Never throws.
 async function lookupOpenFoodFacts(code) {
