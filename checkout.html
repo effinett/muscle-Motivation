@@ -158,6 +158,11 @@
       body: JSON.stringify({ product: slug, ui: 'embedded' }),
     });
     if (res.status === 401) { window.location.href = 'auth.html'; return; }
+    // Server refuses a second purchase of something the buyer already has.
+    if (res.status === 409) {
+      showStatus('You already have this — no charge was made. <a href="app.html">Open the app</a>', { html: true });
+      return;
+    }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Checkout failed');
 

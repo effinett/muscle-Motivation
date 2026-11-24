@@ -7,6 +7,9 @@
 // step 4). The Supabase token check uses native fetch — no extra package.
 
 const Stripe = require('stripe');
+// The ONE client/server interpretation of purchases (pure; guarded exports).
+const { entOwnsStandalone, entHasQualifyingMembership, ENT_MEMBERSHIP_PRODUCT } =
+  require('../entitlement-core.js');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -60,6 +63,32 @@ async function getStripeCustomerId(userId) {
   }
 }
 
+// Already-owned guard. Refuses a SECOND purchase of the same thing:
+//   - a Program the user already owns standalone (active / past_due), or
+//   - a membership while one is already qualifying.
+// Deliberately does NOT refuse a member buying a Program standalone: a
+// standalone purchase survives a membership lapse (roadmap 4.5.18 O1/R2).
+// Statuses come from entitlement-core, so refunded / canceled rows never block.
+// Fails OPEN: if purchases can't be read we let checkout proceed (a duplicate
+// is refundable; a blocked sale on a transient error is not recoverable).
+async function alreadyOwns(userId, product) {
+  if (!SUPABASE_SERVICE_KEY) return false;
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/purchases?user_id=eq.${encodeURIComponent(userId)}&select=product,status`,
+      { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+    );
+    if (!r.ok) return false;
+    const rows = await r.json();
+    if (!Array.isArray(rows)) return false;
+    return product === ENT_MEMBERSHIP_PRODUCT
+      ? entHasQualifyingMembership(rows)
+      : entOwnsStandalone(rows, product);
+  } catch {
+    return false;
+  }
+}
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -80,6 +109,10 @@ module.exports = async (req, res) => {
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
     const user = await getUserFromToken(token);
     if (!user || !user.id) return res.status(401).json({ error: 'Not authenticated' });
+
+    if (await alreadyOwns(user.id, product)) {
+      return res.status(409).json({ error: 'Already owned', owned: true });
+    }
 
     const params = {
       mode: config.mode,
