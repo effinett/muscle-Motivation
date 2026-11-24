@@ -116,7 +116,10 @@
   position: relative;
 }
 
-.password-wrap input {
+/* `.form-group .password-wrap` outranks the later `.form-group input` rule,
+   which otherwise reset padding-right to 16px and let the typed text and the
+   browser's password-manager key icon slide under the Show toggle. */
+.form-group .password-wrap input {
   width: 100%;
   padding-right: 70px;
 }

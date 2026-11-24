@@ -568,10 +568,10 @@
       html += '<a class="item" href="workout.html?pane=programs">' +
         '<div class="item-main"><div class="item-name">Browse all programs</div></div>' +
         '<span class="item-val">→</span></a>';
-      // Commerce stays on Profile (4.3.4): the Store is still one tap away.
-      html += '<a class="item" href="store.html">' +
-        '<div class="item-main"><div class="item-name">Shop programs</div></div>' +
-        '<span class="item-val">→</span></a>';
+      // One Programs path (2026-11-24, Effi): "Shop programs" was removed because
+      // it sent members to the public Store, a second, different-looking list.
+      // Buying now starts from Train's Programs pane: each locked Program page
+      // links straight to on-site checkout (checkout.html).
       card.innerHTML = html;
 
       renderGoalMismatch(activeSlug);

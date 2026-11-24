@@ -315,11 +315,17 @@ test('scope: CP1b did not take on entitlement enforcement (that is CP2)', () => 
 });
 
 test('scope: the public store page was not migrated to the catalog', () => {
-  // store.html serves anonymous visitors and the catalog is RLS-restricted to
-  // authenticated users, so a catalog-driven store would render empty when
-  // logged out. Its card copy is marketing presentation, not canonical data.
-  assert.ok(!/program-catalog\.js/.test(read('store.html')),
-    'store.html must stay static for anonymous visitors');
+  // store.html serves anonymous visitors; its card copy is marketing
+  // presentation, not canonical data, so the cards stay static markup.
+  // Since 2026-11-24 (Effi) it loads the catalog ONLY for a signed-in buyer, to
+  // label what they already own (store-ownership.test.js) — never to render cards.
+  const src = read('store.html');
+  assert.match(src, /data-product="muscle_gain"/, 'cards are still static markup');
+  const uses = src.split('pcLoadCatalog(').length - 1;
+  assert.strictEqual(uses, 1, 'one catalog read, inside applyOwnership');
+  const fn = src.slice(src.indexOf('async function applyOwnership'));
+  assert.ok(fn.indexOf('if (!session || !session.user) return;') < fn.indexOf('pcLoadCatalog('),
+    'anonymous visitors never load it');
 });
 
 /* ── 6 · CP1a scope guard ───────────────────────────────────────────────── */

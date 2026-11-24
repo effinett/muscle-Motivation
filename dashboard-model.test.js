@@ -555,7 +555,10 @@ test('home: configuration and commerce have left the primary hierarchy', () => {
 
 test('home: those actions all exist on Profile', () => {
   const html = read('profile.html');
-  for (const needle of ['Recalculate Goals', 'recalcModal', 'manageBilling', 'signOut()', 'store.html']) {
+  // 'store.html' left this list 2026-11-24 (Effi, one Programs path): Profile's
+  // Programs entry is Train's Programs pane, and buying starts from a Program's
+  // own page (checkout.html). Billing management stays on Profile.
+  for (const needle of ['Recalculate Goals', 'recalcModal', 'manageBilling', 'signOut()', 'workout.html?pane=programs']) {
     assert.ok(html.includes(needle), `profile.html provides ${needle}`);
   }
 });

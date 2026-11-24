@@ -467,6 +467,17 @@
       transform: translateY(-1px);
     }
 
+    /* Signed-in buyer already has access: no second purchase offered. */
+    .btn-card-owned {
+      background: transparent; color: var(--text);
+      border: 1px solid var(--border-light) !important;
+    }
+    .btn-card-owned:hover { border-color: var(--light) !important; transform: translateY(-1px); }
+    .card-price.card-price-owned {
+      font-family: var(--font-body); font-size: 13px; font-weight: 700;
+      letter-spacing: 2px; text-transform: uppercase; color: #4dff9e;
+    }
+
     /* Level indicator */
     .level-dots {
       display: flex; gap: 4px; margin-top: 6px;
@@ -821,7 +832,7 @@
     </div>
     <div class="card-footer">
       <div class="card-price"><span class="currency">$</span>49</div>
-      <button class="btn-card btn-card-primary" onclick="buyProduct('fat_loss_blueprint', this)">Buy Now</button>
+      <button class="btn-card btn-card-primary" data-product="fat_loss_blueprint" onclick="buyProduct('fat_loss_blueprint', this)">Buy Now</button>
     </div>
   </div>
 
@@ -862,7 +873,7 @@
         <span class="currency">$</span>29
         <span class="per">/ month</span>
       </div>
-      <button class="btn-card btn-card-coaching" onclick="buyProduct('ai_membership', this)">Join Now</button>
+      <button class="btn-card btn-card-coaching" data-product="ai_membership" onclick="buyProduct('ai_membership', this)">Join Now</button>
     </div>
   </div>
 
@@ -898,7 +909,7 @@
     </div>
     <div class="card-footer">
       <div class="card-price"><span class="currency">$</span>59</div>
-      <button class="btn-card btn-card-primary" onclick="buyProduct('muscle_gain', this)">Buy Now</button>
+      <button class="btn-card btn-card-primary" data-product="muscle_gain" onclick="buyProduct('muscle_gain', this)">Buy Now</button>
     </div>
   </div>
 
@@ -934,7 +945,7 @@
     </div>
     <div class="card-footer">
       <div class="card-price"><span class="currency">$</span>39</div>
-      <button class="btn-card btn-card-primary" onclick="buyProduct('glute_builder', this)">Buy Now</button>
+      <button class="btn-card btn-card-primary" data-product="glute_builder" onclick="buyProduct('glute_builder', this)">Buy Now</button>
     </div>
   </div>
 
@@ -1006,6 +1017,8 @@
 <!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.0/dist/umd/supabase.js" integrity="sha384-3wY11tldQ5+yWqAvmTN4XtQvnjoTva0cV15O/O/O5NTtp0ivVopSzLOzsVXWZse9" crossorigin="anonymous"></script>
 <script src="supabase.js"></script>
+<script src="program-catalog.js"></script>
+<script src="entitlement-core.js"></script>
 
 <script>
   // ── Mobile nav ──────────────────────────────────────────────
@@ -1124,6 +1137,64 @@
     }
   }
 
+  // ── Already owned? (signed-in only) ─────────────────────────────────
+  // A member who owns a Program, or gets it through membership, must not be
+  // offered a second purchase. Access is decided by the shared resolver
+  // (entitlement-core.js) — never a page-local status check. Purchases are read
+  // UNFILTERED for the same reason. Any failure leaves the public Buy buttons
+  // exactly as they were.
+  async function applyOwnership(session) {
+    if (!session || !session.user) return;
+    try {
+      const both = await Promise.all([
+        pcLoadCatalog(),
+        supabaseClient.from('purchases').select('product, status').eq('user_id', session.user.id),
+      ]);
+      const catalog = both[0];
+      const res = both[1];
+      if (res.error) return;
+      const rows = res.data || [];
+
+      document.querySelectorAll('[data-product]').forEach((btn) => {
+        const slug = btn.dataset.product;
+        let state, cta, href;
+        if (slug === ENT_MEMBERSHIP_PRODUCT) {
+          if (!entHasQualifyingMembership(rows)) return;
+          state = 'Member'; cta = 'Open App'; href = 'app.html';
+        } else {
+          const program = pcBySlug(catalog, slug) || { slug: slug };
+          const access = resolveProgramAccess(program, rows);
+          if (!access.allowed) return;
+          state = access.source === 'standalone' ? 'Owned' : 'Included';
+          cta = 'Open Program';
+          href = program.pagePath || 'workout.html?pane=programs';
+        }
+        const link = document.createElement('a');
+        link.className = 'btn-card btn-card-owned';
+        link.href = href;
+        link.textContent = cta;
+        btn.replaceWith(link);
+        const price = link.parentElement && link.parentElement.querySelector('.card-price');
+        if (price) {
+          price.textContent = state;
+          price.classList.add('card-price-owned');
+        }
+      });
+    } catch (e) {
+      console.error('applyOwnership:', e);
+    }
+  }
+
+  // Back from checkout.html restores this page from the back/forward cache with
+  // the tapped button still disabled on "Loading…". Put it back.
+  window.addEventListener('pageshow', (e) => {
+    if (!e.persisted) return;
+    document.querySelectorAll('button[data-product]').forEach((btn) => {
+      btn.disabled = false;
+      btn.textContent = btn.dataset.product === 'ai_membership' ? 'Join Now' : 'Buy Now';
+    });
+  });
+
   function showStoreToast(msg) {
     const t = document.getElementById('storeToast');
     t.textContent = msg;
@@ -1191,6 +1262,7 @@
     let session = null;
     try { session = await getSession(); } catch (e) { session = null; }
     applyAuthNav(!!session);
+    applyOwnership(session);
   });
 </script>
 
