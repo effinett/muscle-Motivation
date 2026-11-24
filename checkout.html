@@ -68,9 +68,15 @@
       max-width: 1080px; margin: 0 auto; padding: 40px 6% 64px;
       display: grid; grid-template-columns: 1fr; gap: 28px;
     }
+    /* Desktop: the order summary + trust panel sit in a band ABOVE the payment
+       form, so Stripe gets the full width and switches to its two-column
+       desktop layout (order panel left, form right) instead of its phone layout. */
     @media (min-width: 900px) {
-      main { grid-template-columns: 340px 1fr; gap: 40px; align-items: start; }
-      .summary { position: sticky; top: 100px; }
+      main { max-width: 1120px; gap: 32px; }
+      .summary {
+        display: grid; grid-template-columns: 1fr 400px; gap: 40px; align-items: start;
+      }
+      .summary .trust { margin-top: 0; }
     }
 
     .eyebrow {
@@ -131,9 +137,11 @@
 
 <main>
   <section class="summary" aria-labelledby="productTitle">
-    <div class="eyebrow">Secure checkout</div>
-    <h1 id="productTitle">Your order</h1>
-    <p class="tagline" id="productTagline"></p>
+    <div class="summary-head">
+      <div class="eyebrow">Secure checkout</div>
+      <h1 id="productTitle">Your order</h1>
+      <p class="tagline" id="productTagline"></p>
+    </div>
 
     <div class="trust">
       <div class="trust-row">
