@@ -1113,20 +1113,9 @@
     try {
       const session = await getSession();
       if (!session) { window.location.href = 'auth.html'; return; }
-      const res = await fetch('/api/create-checkout-session', {
-        method: 'POST',
-        headers: {
-          'Content-Type':  'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ product: slug }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Checkout failed');
-      }
-      const { url } = await res.json();
-      window.location.href = url;
+      // Checkout happens on our own page (checkout.html, Stripe Embedded
+      // Checkout) — the buyer never leaves musclemotivation.fit.
+      window.location.href = `checkout.html?product=${encodeURIComponent(slug)}`;
     } catch (err) {
       console.error('buyProduct:', err);
       showStoreToast(err.message || 'Could not start checkout. Please try again.');

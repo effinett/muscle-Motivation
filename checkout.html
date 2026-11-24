@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Checkout | Muscle Motivation</title>
+  <meta name="robots" content="noindex">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#121011">
+  <meta name="application-name" content="Muscle Motivation">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Muscle Motivation">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="safe-area.css">
+  <script src="mm-errors.js" defer></script>
+  <style>
+    :root {
+      --red: #B1121B;
+      --red-dim: #D11D27;
+      --red-glow: rgba(177,18,27,0.18);
+      --bg: #080808;
+      --surface: #101010;
+      --surface2: #161616;
+      --border: #222;
+      --border-light: #2a2a2a;
+      --text: #ffffff;
+      --muted: #777;
+      --light: #bbb;
+      --font-display: 'Bebas Neue', Impact, sans-serif;
+      --font-body: 'Barlow', sans-serif;
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header: logo + a single way back (checkout pages stay focused) ── */
+    header {
+      position: sticky; top: 0; z-index: 10;
+      background: rgba(8,8,8,0.97);
+      border-bottom: 1px solid var(--border);
+      padding: 0 6%;
+      height: 68px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .header-logo { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+    .header-logo img { height: 44px; filter: drop-shadow(0 0 8px rgba(177,18,27,0.3)); }
+    .header-logo span {
+      font-family: var(--font-display); font-size: 20px; letter-spacing: 3px;
+      color: var(--text); text-transform: uppercase;
+    }
+    .back-link {
+      color: var(--light); text-decoration: none; font-weight: 600; font-size: 14px;
+      letter-spacing: 0.5px;
+    }
+    .back-link:hover { color: var(--text); }
+
+    main {
+      max-width: 1080px; margin: 0 auto; padding: 40px 6% 64px;
+      display: grid; grid-template-columns: 1fr; gap: 28px;
+    }
+    @media (min-width: 900px) {
+      main { grid-template-columns: 340px 1fr; gap: 40px; align-items: start; }
+      .summary { position: sticky; top: 100px; }
+    }
+
+    .eyebrow {
+      font-weight: 700; font-size: 12px; letter-spacing: 3px; text-transform: uppercase;
+      color: var(--red-dim); margin-bottom: 10px;
+    }
+    h1 {
+      font-family: var(--font-display); font-weight: 400;
+      font-size: 44px; line-height: 1; letter-spacing: 1px; margin-bottom: 12px;
+    }
+    .tagline { color: var(--light); font-size: 16px; line-height: 1.5; }
+
+    /* ── Trust panel ── */
+    .trust {
+      margin-top: 24px; padding: 18px; border: 1px solid var(--border);
+      border-radius: 12px; background: var(--surface);
+    }
+    .trust-row { display: flex; align-items: flex-start; gap: 10px; color: var(--light); font-size: 14px; line-height: 1.45; }
+    .trust-row + .trust-row { margin-top: 12px; }
+    .trust-row svg { flex: 0 0 18px; margin-top: 1px; color: var(--red-dim); }
+    .methods { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
+    .method {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+      padding: 5px 9px; border-radius: 6px;
+      border: 1px solid var(--border-light); background: var(--surface2); color: var(--light);
+    }
+
+    /* ── Stripe Embedded Checkout mount ── */
+    .pay {
+      background: #fff; border-radius: 14px; overflow: hidden;
+      min-height: 420px; position: relative;
+      box-shadow: 0 0 0 1px var(--border), 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .pay-status {
+      position: absolute; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 14px; padding: 24px;
+      color: #333; font-weight: 600; text-align: center;
+    }
+    .spinner {
+      width: 28px; height: 28px; border-radius: 50%;
+      border: 3px solid #e5e5e5; border-top-color: var(--red);
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .pay-status a { color: var(--red); }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<header>
+  <a class="header-logo" href="index.html">
+    <img src="logow.png" alt="Muscle Motivation">
+    <span>Muscle Motivation</span>
+  </a>
+  <a class="back-link" href="store.html">← Back to programs</a>
+</header>
+
+<main>
+  <section class="summary" aria-labelledby="productTitle">
+    <div class="eyebrow">Secure checkout</div>
+    <h1 id="productTitle">Your order</h1>
+    <p class="tagline" id="productTagline"></p>
+
+    <div class="trust">
+      <div class="trust-row">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+        <span>Encrypted payment processed by Stripe. Your card details go straight to Stripe — we never see or store them.</span>
+      </div>
+      <div class="trust-row">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+        <span id="accessNote">Instant access in the app as soon as payment completes.</span>
+      </div>
+      <div class="methods" aria-label="Accepted payment methods">
+        <span class="method">VISA</span>
+        <span class="method">MASTERCARD</span>
+        <span class="method">AMEX</span>
+        <span class="method">DISCOVER</span>
+        <span class="method">APPLE PAY</span>
+        <span class="method">GOOGLE PAY</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="pay" aria-label="Payment">
+    <div class="pay-status" id="payStatus">
+      <div class="spinner" id="paySpinner"></div>
+      <div id="payMsg">Loading secure checkout…</div>
+    </div>
+    <div id="checkout"></div>
+  </section>
+</main>
+
+<!-- Supabase (session for the bearer token) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.0/dist/umd/supabase.js" integrity="sha384-3wY11tldQ5+yWqAvmTN4XtQvnjoTva0cV15O/O/O5NTtp0ivVopSzLOzsVXWZse9" crossorigin="anonymous"></script>
+<script src="supabase.js"></script>
+<!-- Stripe.js must load from js.stripe.com itself (Stripe does not support
+     self-hosting or SRI pinning — the file is updated in place for security/PCI). -->
+<script src="https://js.stripe.com/v3/"></script>
+
+<script>
+  // Display copy only. The price and the charge come from Stripe (rendered
+  // inside the checkout itself) — never from this page. Slugs match
+  // api/create-checkout-session.js and the purchases.product CHECK.
+  const PRODUCT_COPY = {
+    // Taglines copied from the store.html product cards — keep the two in sync.
+    fat_loss_blueprint: { title: '90 Day Fat Loss Blueprint', tagline: 'A complete 12-week system covering training, nutrition, and weekly check-ins designed to strip fat and keep it off. Works in a full gym, with just dumbbells, or at home.' },
+    muscle_gain:        { title: 'Muscle Gain',               tagline: 'Build your foundation the right way. An 8-week full-body hypertrophy program with progressive overload built in from day one. Works in a full gym, with just dumbbells, or at home.' },
+    glute_builder:      { title: 'Glute Builder',             tagline: 'A targeted 8-week program to build and shape your glutes with progressive overload and structured intensity. Works in a full gym, with just dumbbells, or at home.' },
+    ai_membership:      { title: 'AI Coaching Membership',    tagline: 'Your own AI fitness coach — personalised plans, weekly adjustments, macro tracking, and check-ins. Cancel anytime.' },
+  };
+
+  const params = new URLSearchParams(window.location.search);
+  const slug = params.get('product');
+
+  function showStatus(msg, { spinner = false, html = false } = {}) {
+    document.getElementById('payStatus').classList.remove('hidden');
+    document.getElementById('paySpinner').classList.toggle('hidden', !spinner);
+    const el = document.getElementById('payMsg');
+    if (html) el.innerHTML = msg; else el.textContent = msg;
+  }
+
+  async function startCheckout() {
+    const copy = PRODUCT_COPY[slug];
+    if (!copy) {
+      showStatus('That program wasn’t found. <a href="store.html">Back to programs</a>', { html: true });
+      return;
+    }
+    document.getElementById('productTitle').textContent = copy.title;
+    document.getElementById('productTagline').textContent = copy.tagline;
+    document.title = `Checkout — ${copy.title} | Muscle Motivation`;
+
+    const session = await getSession();
+    if (!session) { window.location.href = 'auth.html'; return; }
+
+    const res = await fetch('/api/create-checkout-session', {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ product: slug, ui: 'embedded' }),
+    });
+    if (res.status === 401) { window.location.href = 'auth.html'; return; }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Checkout failed');
+
+    // Server not configured for on-site checkout yet → hosted Stripe page.
+    if (data.url) { window.location.href = data.url; return; }
+    if (!data.clientSecret || !data.publishableKey || typeof Stripe !== 'function') {
+      throw new Error('Checkout unavailable');
+    }
+
+    const stripe = Stripe(data.publishableKey);
+    const checkout = await stripe.initEmbeddedCheckout({
+      fetchClientSecret: async () => data.clientSecret,
+    });
+    checkout.mount('#checkout');
+    document.getElementById('payStatus').classList.add('hidden');
+  }
+
+  window.addEventListener('load', () => {
+    startCheckout().catch((err) => {
+      console.error('checkout:', err);
+      showStatus('We couldn’t load checkout. No charge was made. <a href="">Try again</a> or <a href="store.html">go back</a>.', { html: true });
+    });
+  });
+</script>
+</body>
+</html>
