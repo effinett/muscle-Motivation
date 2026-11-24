@@ -64,51 +64,14 @@
     }
     .back-link:hover { color: var(--text); }
 
-    main {
-      max-width: 1080px; margin: 0 auto; padding: 40px 6% 64px;
-      display: grid; grid-template-columns: 1fr; gap: 28px;
-    }
-    /* Desktop: the order summary + trust panel sit in a band ABOVE the payment
-       form, so Stripe gets the full width and switches to its two-column
-       desktop layout (order panel left, form right) instead of its phone layout. */
-    @media (min-width: 900px) {
-      main { max-width: 1320px; padding: 40px 4% 64px; gap: 32px; }
-      .summary {
-        display: grid; grid-template-columns: 1fr 400px; gap: 40px; align-items: start;
-      }
-      .summary .trust { margin-top: 0; }
-    }
+    /* The page is just the site header + Stripe's checkout. Wide enough on
+       desktop for Stripe's two-panel layout (order left, form right). */
+    main { max-width: 1320px; margin: 0 auto; padding: 32px 4% 64px; }
 
-    .eyebrow {
-      font-weight: 700; font-size: 12px; letter-spacing: 3px; text-transform: uppercase;
-      color: var(--red-dim); margin-bottom: 10px;
-    }
-    h1 {
-      font-family: var(--font-display); font-weight: 400;
-      font-size: 44px; line-height: 1; letter-spacing: 1px; margin-bottom: 12px;
-    }
-    .tagline { color: var(--light); font-size: 16px; line-height: 1.5; }
-
-    /* ── Trust panel ── */
-    .trust {
-      margin-top: 24px; padding: 18px; border: 1px solid var(--border);
-      border-radius: 12px; background: var(--surface);
-    }
-    .trust-row { display: flex; align-items: flex-start; gap: 10px; color: var(--light); font-size: 14px; line-height: 1.45; }
-    .trust-row + .trust-row { margin-top: 12px; }
-    .trust-row svg { flex: 0 0 18px; margin-top: 1px; color: var(--red-dim); }
-    .methods { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
-    .method {
-      font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
-      padding: 5px 9px; border-radius: 6px;
-      border: 1px solid var(--border-light); background: var(--surface2); color: var(--light);
-    }
-
-    /* ── Stripe Embedded Checkout mount ── */
     /* Stripe paints this area with the Dashboard brand color (#050505), so the
        frame matches it: no white edge, just the site's subtle card border. */
     .pay {
-      background: #050505; border: 1px solid var(--border); border-radius: 16px;
+      background: #050505; border-radius: 16px;
       overflow: hidden; min-height: 420px; position: relative;
     }
     .pay-status {
@@ -137,33 +100,6 @@
 </header>
 
 <main>
-  <section class="summary" aria-labelledby="productTitle">
-    <div class="summary-head">
-      <div class="eyebrow">Secure checkout</div>
-      <h1 id="productTitle">Your order</h1>
-      <p class="tagline" id="productTagline"></p>
-    </div>
-
-    <div class="trust">
-      <div class="trust-row">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-        <span>Encrypted payment processed by Stripe. Your card details go straight to Stripe — we never see or store them.</span>
-      </div>
-      <div class="trust-row">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-        <span id="accessNote">Instant access in the app as soon as payment completes.</span>
-      </div>
-      <div class="methods" aria-label="Accepted payment methods">
-        <span class="method">VISA</span>
-        <span class="method">MASTERCARD</span>
-        <span class="method">AMEX</span>
-        <span class="method">DISCOVER</span>
-        <span class="method">APPLE PAY</span>
-        <span class="method">GOOGLE PAY</span>
-      </div>
-    </div>
-  </section>
-
   <section class="pay" aria-label="Payment">
     <div class="pay-status" id="payStatus">
       <div class="spinner" id="paySpinner"></div>
@@ -185,11 +121,11 @@
   // inside the checkout itself) — never from this page. Slugs match
   // api/create-checkout-session.js and the purchases.product CHECK.
   const PRODUCT_COPY = {
-    // Taglines copied from the store.html product cards — keep the two in sync.
-    fat_loss_blueprint: { title: '90 Day Fat Loss Blueprint', tagline: 'A complete 12-week system covering training, nutrition, and weekly check-ins designed to strip fat and keep it off. Works in a full gym, with just dumbbells, or at home.' },
-    muscle_gain:        { title: 'Muscle Gain',               tagline: 'Build your foundation the right way. An 8-week full-body hypertrophy program with progressive overload built in from day one. Works in a full gym, with just dumbbells, or at home.' },
-    glute_builder:      { title: 'Glute Builder',             tagline: 'A targeted 8-week program to build and shape your glutes with progressive overload and structured intensity. Works in a full gym, with just dumbbells, or at home.' },
-    ai_membership:      { title: 'AI Coaching Membership',    tagline: 'Your own AI fitness coach — personalised plans, weekly adjustments, macro tracking, and check-ins. Cancel anytime.' },
+    // Browser-tab title only; Stripe renders the order details itself.
+    fat_loss_blueprint: { title: '90 Day Fat Loss Blueprint' },
+    muscle_gain:        { title: 'Muscle Gain' },
+    glute_builder:      { title: 'Glute Builder' },
+    ai_membership:      { title: 'AI Coaching Membership' },
   };
 
   const params = new URLSearchParams(window.location.search);
@@ -208,8 +144,6 @@
       showStatus('That program wasn’t found. <a href="store.html">Back to programs</a>', { html: true });
       return;
     }
-    document.getElementById('productTitle').textContent = copy.title;
-    document.getElementById('productTagline').textContent = copy.tagline;
     document.title = `Checkout — ${copy.title} | Muscle Motivation`;
 
     const session = await getSession();
