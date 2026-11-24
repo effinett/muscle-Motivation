@@ -181,3 +181,79 @@ test('CSP allows Stripe Embedded Checkout and keeps the existing hardening', () 
   assert.strictEqual(dir('frame-ancestors'), "frame-ancestors 'none'");
   assert.strictEqual(dir('object-src'), "object-src 'none'");
 });
+
+// ── Already-owned guard (2026-11-24, Effi) ──────────────────────────────────
+// With a service key configured, the route reads the user's purchases and
+// refuses a second purchase of the same thing — through the shared resolver.
+
+async function callWithPurchases(handler, body, rows, { purchasesOk = true } = {}) {
+  const origFetch = global.fetch;
+  global.fetch = async (url) => {
+    const u = String(url);
+    if (u.endsWith('/auth/v1/user')) return { ok: true, json: async () => ({ id: 'user-123', email: 'a@b.co' }) };
+    if (u.includes('/rest/v1/purchases')) {
+      if (!purchasesOk) return { ok: false, json: async () => ({}) };
+      return { ok: true, json: async () => rows };
+    }
+    if (u.includes('/rest/v1/profiles')) return { ok: true, json: async () => [] };
+    throw new Error('unexpected fetch ' + u);
+  };
+  try {
+    const res = fakeRes();
+    await handler({ method: 'POST', body, headers: { authorization: 'Bearer good' } }, res);
+    return res;
+  } finally {
+    global.fetch = origFetch;
+  }
+}
+
+const GUARD_ENV = { ...BASE_ENV, SUPABASE_SERVICE_ROLE_KEY: 'svc', STRIPE_PUBLISHABLE_KEY: 'pk_test_x',
+  STRIPE_PRICE_MUSCLE_GAIN: 'price_mg' };
+
+test('guard: an active standalone owner gets 409 and no Stripe session', async () => {
+  const { handler, created } = loadRoute(GUARD_ENV);
+  const res = await callWithPurchases(handler, { product: 'muscle_gain', ui: 'embedded' },
+    [{ product: 'muscle_gain', status: 'active' }]);
+  assert.strictEqual(res.statusCode, 409);
+  assert.deepStrictEqual(res.body, { error: 'Already owned', owned: true });
+  assert.strictEqual(created.length, 0);
+});
+
+test('guard: a current member cannot start a second membership', async () => {
+  const { handler, created } = loadRoute(GUARD_ENV);
+  const res = await callWithPurchases(handler, { product: 'ai_membership', ui: 'embedded' },
+    [{ product: 'ai_membership', status: 'past_due' }]);
+  assert.strictEqual(res.statusCode, 409);
+  assert.strictEqual(created.length, 0);
+});
+
+test('guard: refunded / canceled rows never block a purchase', async () => {
+  const { handler, created } = loadRoute(GUARD_ENV);
+  const res = await callWithPurchases(handler, { product: 'muscle_gain', ui: 'embedded' }, [
+    { product: 'muscle_gain', status: 'refunded' },
+    { product: 'ai_membership', status: 'canceled' },
+  ]);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(created.length, 1);
+});
+
+test('guard: a member may still buy a Program standalone (survives a lapse)', async () => {
+  const { handler, created } = loadRoute(GUARD_ENV);
+  const res = await callWithPurchases(handler, { product: 'muscle_gain', ui: 'embedded' },
+    [{ product: 'ai_membership', status: 'active' }]);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(created.length, 1);
+});
+
+test('guard: fails open when purchases cannot be read', async () => {
+  const { handler, created } = loadRoute(GUARD_ENV);
+  const res = await callWithPurchases(handler, { product: 'muscle_gain', ui: 'embedded' }, null, { purchasesOk: false });
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(created.length, 1);
+});
+
+test('checkout page explains a 409 instead of showing a generic error', () => {
+  const page = read('checkout.html');
+  assert.match(page, /res\.status === 409/);
+  assert.match(page, /You already have this — no charge was made\./);
+});

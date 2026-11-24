@@ -83,6 +83,8 @@
       letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px;
     }
     #lockedState p { color: var(--muted); max-width: 420px; line-height: 1.6; margin-bottom: 28px; }
+    #lockedState .locked-back { margin-top: 18px; color: var(--muted); font-size: 14px; font-weight: 600; text-decoration: none; }
+    #lockedState .locked-back:hover { color: #fff; }
     .btn-primary {
       display: inline-block; padding: 14px 28px;
       background: var(--red); border: none; border-radius: 10px;
@@ -304,8 +306,9 @@
 <div id="lockedState">
   <span class="lock-icon"><i data-lucide="lock"></i></span>
   <h2>You don't own this program yet</h2>
-  <p>The 12-Week Muscle Gain Program is a one-time purchase. Unlock it from your dashboard to get full access to the training, nutrition, and progression plan.</p>
-  <a class="btn-primary" href="app.html">Back to dashboard</a>
+  <p>Muscle Gain is a one-time purchase. Buy it once and get full access to the training, nutrition, and progression plan.</p>
+  <a class="btn-primary" href="checkout.html?product=muscle_gain">Get this program</a>
+  <a class="locked-back" href="app.html">Back to dashboard</a>
 </div>
 
 <!-- Program content (owner only) -->

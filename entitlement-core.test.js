@@ -352,10 +352,14 @@ test('scope: CP2b migrated every Program-access surface onto the resolver', () =
   }
 });
 
-test('scope: the public store page still has no entitlement dependency', () => {
-  // store.html serves anonymous visitors and gates nothing; it must not gain
-  // an authenticated-only module.
-  assert.ok(!/entitlement-core/.test(read('store.html')));
+// Inverted 2026-11-24 (Effi): the Store now tells a signed-in buyer what they
+// already own, so it must not offer a second purchase. It still GATES nothing —
+// the resolver only relabels buttons, anonymous visitors see the unchanged page,
+// and every failure leaves Buy Now in place (store-ownership.test.js).
+test('scope: the public store consults the resolver for display only', () => {
+  const src = read('store.html');
+  assert.match(src, /<script src="entitlement-core\.js"><\/script>/);
+  assert.match(src, /if \(!session \|\| !session\.user\) return;/, 'anonymous visitors skip it');
 });
 
 test('scope: only entitlement surfaces load the module', () => {
