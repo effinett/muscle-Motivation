@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Checkout | Muscle Motivation</title>
+  <meta name="robots" content="noindex">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#121011">
+  <meta name="application-name" content="Muscle Motivation">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Muscle Motivation">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="safe-area.css">
+  <script src="mm-errors.js" defer></script>
+  <style>
+    :root {
+      --red: #B1121B;
+      --red-dim: #D11D27;
+      --red-glow: rgba(177,18,27,0.18);
+      --bg: #050505; /* = Stripe Dashboard brand color, so the embed blends in */
+      --surface: #101010;
+      --surface2: #161616;
+      --border: #222;
+      --border-light: #2a2a2a;
+      --text: #ffffff;
+      --muted: #777;
+      --light: #bbb;
+      --font-display: 'Bebas Neue', Impact, sans-serif;
+      --font-body: 'Barlow', sans-serif;
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header: logo + a single way back (checkout pages stay focused) ── */
+    header {
+      position: sticky; top: 0; z-index: 10;
+      background: rgba(5,5,5,0.97);
+      border-bottom: 1px solid var(--border);
+      padding: 0 6%;
+      height: 68px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .header-logo { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+    .header-logo img { height: 44px; filter: drop-shadow(0 0 8px rgba(177,18,27,0.3)); }
+    .header-logo span {
+      font-family: var(--font-display); font-size: 20px; letter-spacing: 3px;
+      color: var(--text); text-transform: uppercase;
+    }
+    .back-link {
+      color: var(--light); text-decoration: none; font-weight: 600; font-size: 14px;
+      letter-spacing: 0.5px;
+    }
+    .back-link:hover { color: var(--text); }
+
+    /* The page is just the site header + Stripe's checkout. Wide enough on
+       desktop for Stripe's two-panel layout (order left, form right). */
+    main { max-width: 1320px; margin: 0 auto; padding: 32px 4% 64px; }
+
+    /* Stripe paints this area with the Dashboard brand color (#050505), so the
+       frame matches it: no white edge, just the site's subtle card border. */
+    .pay {
+      background: #050505; border-radius: 16px;
+      overflow: hidden; min-height: 420px; position: relative;
+    }
+    .pay-status {
+      position: absolute; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 14px; padding: 24px;
+      color: var(--light); font-weight: 600; text-align: center;
+    }
+    .spinner {
+      width: 28px; height: 28px; border-radius: 50%;
+      border: 3px solid var(--border-light); border-top-color: var(--red);
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .pay-status a { color: var(--red-dim); }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<header>
+  <a class="header-logo" href="index.html">
+    <img src="logow.png" alt="Muscle Motivation">
+    <span>Muscle Motivation</span>
+  </a>
+  <a class="back-link" href="store.html">← Back to programs</a>
+</header>
+
+<main>
+  <section class="pay" aria-label="Payment">
+    <div class="pay-status" id="payStatus">
+      <div class="spinner" id="paySpinner"></div>
+      <div id="payMsg">Loading secure checkout…</div>
+    </div>
+    <div id="checkout"></div>
+  </section>
+</main>
+
+<!-- Supabase (session for the bearer token) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.0/dist/umd/supabase.js" integrity="sha384-3wY11tldQ5+yWqAvmTN4XtQvnjoTva0cV15O/O/O5NTtp0ivVopSzLOzsVXWZse9" crossorigin="anonymous"></script>
+<script src="supabase.js"></script>
+<!-- Stripe.js must load from js.stripe.com itself (Stripe does not support
+     self-hosting or SRI pinning — the file is updated in place for security/PCI). -->
+<script src="https://js.stripe.com/v3/"></script>
+
+<script>
+  // Display copy only. The price and the charge come from Stripe (rendered
+  // inside the checkout itself) — never from this page. Slugs match
+  // api/create-checkout-session.js and the purchases.product CHECK.
+  const PRODUCT_COPY = {
+    // Browser-tab title only; Stripe renders the order details itself.
+    fat_loss_blueprint: { title: '90 Day Fat Loss Blueprint' },
+    muscle_gain:        { title: 'Muscle Gain' },
+    glute_builder:      { title: 'Glute Builder' },
+    ai_membership:      { title: 'AI Coaching Membership' },
+  };
+
+  const params = new URLSearchParams(window.location.search);
+  const slug = params.get('product');
+
+  function showStatus(msg, { spinner = false, html = false } = {}) {
+    document.getElementById('payStatus').classList.remove('hidden');
+    document.getElementById('paySpinner').classList.toggle('hidden', !spinner);
+    const el = document.getElementById('payMsg');
+    if (html) el.innerHTML = msg; else el.textContent = msg;
+  }
+
+  async function startCheckout() {
+    const copy = PRODUCT_COPY[slug];
+    if (!copy) {
+      showStatus('That program wasn’t found. <a href="store.html">Back to programs</a>', { html: true });
+      return;
+    }
+    document.title = `Checkout — ${copy.title} | Muscle Motivation`;
+
+    const session = await getSession();
+    if (!session) { window.location.href = 'auth.html'; return; }
+
+    const res = await fetch('/api/create-checkout-session', {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ product: slug, ui: 'embedded' }),
+    });
+    if (res.status === 401) { window.location.href = 'auth.html'; return; }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Checkout failed');
+
+    // Server not configured for on-site checkout yet → hosted Stripe page.
+    if (data.url) { window.location.href = data.url; return; }
+    if (!data.clientSecret || !data.publishableKey || typeof Stripe !== 'function') {
+      throw new Error('Checkout unavailable');
+    }
+
+    const stripe = Stripe(data.publishableKey);
+    const checkout = await stripe.initEmbeddedCheckout({
+      fetchClientSecret: async () => data.clientSecret,
+    });
+    checkout.mount('#checkout');
+    document.getElementById('payStatus').classList.add('hidden');
+  }
+
+  window.addEventListener('load', () => {
+    startCheckout().catch((err) => {
+      console.error('checkout:', err);
+      showStatus('We couldn’t load checkout. No charge was made. <a href="">Try again</a> or <a href="store.html">go back</a>.', { html: true });
+    });
+  });
+</script>
+</body>
+</html>

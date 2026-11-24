@@ -13,6 +13,10 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SITE_URL = process.env.SITE_URL || 'https://musclemotivation.fit';
+// Publishable (public, non-secret) key for the on-site checkout page. When it is
+// not configured, embedded requests fall back to the hosted Stripe page, so this
+// change is safe to deploy before the env var exists.
+const STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_KEY;
 
 // Slugs MUST match the purchases.product CHECK constraint.
 // Price IDs live here (env), so the test -> live swap is one place, not the HTML.
@@ -63,7 +67,10 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { product } = req.body || {};
+    const { product, ui } = req.body || {};
+    // 'embedded' = the on-site checkout page (checkout.html). Anything else keeps
+    // the original hosted-redirect contract: { url }.
+    const embedded = ui === 'embedded' && !!STRIPE_PUBLISHABLE_KEY;
     const config = PRODUCTS[product];
     if (!config)        return res.status(400).json({ error: 'Unknown product' });
     if (!config.price)  return res.status(500).json({ error: 'Price not configured' });
@@ -79,9 +86,18 @@ module.exports = async (req, res) => {
       line_items: [{ price: config.price, quantity: 1 }],
       client_reference_id: user.id,          // webhook reads this to know who paid
       metadata: { product, user_id: user.id },
-      success_url: `${SITE_URL}/app.html?purchase=success`,
-      cancel_url:  `${SITE_URL}/store.html?purchase=cancelled`,
     };
+
+    if (embedded) {
+      // Embedded Checkout renders inside our page; Stripe sends the buyer to
+      // return_url when payment completes. There is no cancel_url in this mode —
+      // the page's own "Back to programs" link is the way out.
+      params.ui_mode = 'embedded';
+      params.return_url = `${SITE_URL}/app.html?purchase=success`;
+    } else {
+      params.success_url = `${SITE_URL}/app.html?purchase=success`;
+      params.cancel_url  = `${SITE_URL}/store.html?purchase=cancelled`;
+    }
 
     // Reuse the saved customer if we have one; otherwise let Stripe create one
     // from the email. (Stripe rejects passing both customer and customer_email.)
@@ -99,6 +115,12 @@ module.exports = async (req, res) => {
     }
 
     const session = await stripe.checkout.sessions.create(params);
+    if (embedded) {
+      return res.status(200).json({
+        clientSecret:   session.client_secret,
+        publishableKey: STRIPE_PUBLISHABLE_KEY,
+      });
+    }
     return res.status(200).json({ url: session.url });
 
   } catch (err) {
