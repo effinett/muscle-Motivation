@@ -2056,3 +2056,12 @@ New gate **G7**: 5.1.6-L must cover published-Program exercises before 4.3.8's c
 
 **Planning record only.** No Stripe product, trial, price, checkout, entitlement or schema change was made.
 No phase was renumbered, and the locked 4.4 → 4.5-I → 4.3.8 → 4.5-A order is unchanged.
+
+## 2026-11-25 — 7-day trial launch condition (owner decision)
+
+**Approved by the owner (2026-11-25).** The 7-day trial is not offered publicly until AI Coach (4.4), photo
+food logging (5.4.8) and the 5.1.6-L exercise demos are live. Before then a trial would unlock only the
+Program library, AI quick log and barcode scanning, which is too thin to show the membership's value.
+Acquisition surfaces keep "Get membership — $29/mo" until then. Recorded in `docs/ROADMAP.md` §4.5.5,
+with the open dependency that 5.4.8 currently follows 4.5-A. Planning record only: nothing was built,
+renumbered or reordered.
