@@ -361,3 +361,18 @@ test('builder: the settle happens after the picker has closed and released the p
   assert.ok(closeAt > -1 && settleAt > closeAt,
     'the picker closes and the lock is released before the builder settles');
 });
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * Picker list always opens / re-renders scrolled to the top
+ * ══════════════════════════════════════════════════════════════════════ */
+
+test('picker list: every render resets the scroll to the top', () => {
+  // The list kept the scroll offset from the previous pick, so the next open
+  // or search showed the middle of the list and the top match looked missing.
+  const fn = (PAGE.match(/function filterPicker\(query\) \{[\s\S]*?\n  \}\n/) || [])[0] || '';
+  assert.ok(fn, 'filterPicker found');
+  const html = fn.indexOf('pickerList.innerHTML');
+  const reset = fn.indexOf('pickerList.scrollTop = 0');
+  assert.ok(html !== -1, 'renders into the picker list');
+  assert.ok(reset > html, 'scrollTop is reset after the new rows are rendered');
+});
