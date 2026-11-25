@@ -1147,6 +1147,13 @@ is a commercial optimization decision.
 *Amended 2026-11-25:* the trial is **7 days** of full membership access, AI included. A permanent free core
 tier now exists alongside it (§4); the trial unlocks premium features on top of that tier.
 
+**Launch condition (owner, 2026-11-25).** The trial is not offered publicly until **AI Coach (4.4), photo
+food logging (5.4.8) and the 5.1.6-L exercise demos** are live, so the trial week shows the full premium
+value. Until then, acquisition surfaces offer "Get membership — $29/mo". The trial may be built and certified
+in 4.5-I with its flag OFF. **Open dependency:** photo logging sits at 5.4.8, after 4.5-A. Before 4.5-I
+preflight, the owner decides whether to pull 5.4.8 forward or to activate the trial after the paid launch.
+Join now (4.5.6) is unaffected.
+
 ### 4.5.6 — Join now
 Allow immediate paid membership without requiring trial usage.
 
