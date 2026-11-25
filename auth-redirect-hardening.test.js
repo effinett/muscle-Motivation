@@ -207,7 +207,9 @@ test('7 · refresh mid-onboarding resumes rather than restarting', () => {
 test('8 · back cannot return to a claimed or exited wizard', () => {
   // Every exit from onboarding uses replace(), which leaves no history entry.
   const OB = readCode('onboarding.html');
-  const exits = OB.match(/window\.location\.(replace|href)\('app\.html'\)/g) || [];
+  // homeAfterAuth() is the dashboard unless a signed-out buyer has a pending
+  // checkout (checkout-intent.js, 2026-11-25) — still a dashboard-class exit.
+  const exits = OB.match(/window\.location\.(replace|href)\(('app\.html'|homeAfterAuth\(\))\)/g) || [];
   assert.ok(exits.length > 0, 'no exit to the dashboard found');
   exits.forEach((e) => assert.ok(e.includes('replace'),
     'onboarding must leave via replace(), not href: ' + e));

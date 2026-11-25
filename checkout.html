@@ -112,6 +112,7 @@
 <!-- Supabase (session for the bearer token) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.0/dist/umd/supabase.js" integrity="sha384-3wY11tldQ5+yWqAvmTN4XtQvnjoTva0cV15O/O/O5NTtp0ivVopSzLOzsVXWZse9" crossorigin="anonymous"></script>
 <script src="supabase.js"></script>
+<script src="checkout-intent.js"></script>
 <!-- Stripe.js must load from js.stripe.com itself (Stripe does not support
      self-hosting or SRI pinning — the file is updated in place for security/PCI). -->
 <script src="https://js.stripe.com/v3/"></script>
@@ -138,6 +139,12 @@
     if (html) el.innerHTML = msg; else el.textContent = msg;
   }
 
+  // Signed out: remember this Program so sign-in / sign-up comes back here.
+  function goSignIn() {
+    try { if (typeof CheckoutIntent !== 'undefined') CheckoutIntent.save(slug, Date.now()); } catch (e) {}
+    window.location.href = 'auth.html';
+  }
+
   async function startCheckout() {
     const copy = PRODUCT_COPY[slug];
     if (!copy) {
@@ -147,7 +154,9 @@
     document.title = `Checkout — ${copy.title} | Muscle Motivation`;
 
     const session = await getSession();
-    if (!session) { window.location.href = 'auth.html'; return; }
+    if (!session) { goSignIn(); return; }
+    // Signed in and here: any pending intent has been honoured.
+    try { if (typeof CheckoutIntent !== 'undefined') CheckoutIntent.clear(); } catch (e) {}
 
     const res = await fetch('/api/create-checkout-session', {
       method: 'POST',
@@ -157,7 +166,7 @@
       },
       body: JSON.stringify({ product: slug, ui: 'embedded' }),
     });
-    if (res.status === 401) { window.location.href = 'auth.html'; return; }
+    if (res.status === 401) { goSignIn(); return; }
     // Server refuses a second purchase of something the buyer already has.
     if (res.status === 409) {
       showStatus('You already have this — no charge was made. <a href="app.html">Open the app</a>', { html: true });
