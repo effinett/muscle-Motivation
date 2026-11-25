@@ -6,7 +6,7 @@
 -- PR detection that the record is the LOWEST assist. Every other exercise keeps
 -- is_assisted = false, so nothing else changes.
 --
--- Apply this BEFORE merging the code: workout.html selects `is_assisted`.
+-- Applied to production 2026-11-25 (version 20261125011020). workout.html selects `is_assisted`.
 
 ALTER TABLE public.exercises
   ADD COLUMN IF NOT EXISTS is_assisted BOOLEAN NOT NULL DEFAULT false;
