@@ -546,7 +546,7 @@ test('CP4b: mobility exercises stay reachable via Mobility, Bodyweight, All and 
     assert.equal(EF.getExerciseEquipment(ex(n)), 'bodyweight');
   });
   assert.equal(all.length, EXERCISE_CATALOG.length + CUSTOMS.length);
-  assert.equal(EXERCISE_CATALOG.length, 159);
+  assert.equal(EXERCISE_CATALOG.length, 160);
 });
 
 test('CP4b: Bodyweight returns all 52 Bodyweight exercises', () => {
@@ -573,7 +573,8 @@ test('CP4b: push foundations join their existing push chips and splits', () => {
 });
 
 test('CP4b: every pre-CP4b exercise keeps byte-identical split/movement/equipment membership', () => {
-  const prior = EXERCISE_CATALOG.filter((e) => !CP4B_IDS.has(e.id)).sort((a, b) => (a.id < b.id ? -1 : 1));
+  // Assisted Dip (2026-11-24) was added after CP4b, so it sits outside the snapshot.
+  const prior = EXERCISE_CATALOG.filter((e) => !CP4B_IDS.has(e.id) && e.id !== 'eacdfefa-beb3-4bd5-84af-0ac023adf611').sort((a, b) => (a.id < b.id ? -1 : 1));
   assert.equal(prior.length, 144);
   const snapshot = prior.map((e) => [e.id, EF.getExerciseSplits(e).slice().sort().join('+'),
     EF.getExerciseMovement(e), EF.getExerciseEquipment(e)].join('|')).join('\n');

@@ -302,3 +302,70 @@ test('evaluatePRs: lighter set that beats only volume → volume PR message', ()
     });
   });
 }
+
+/* ── Assisted machines: reverse progression (is_assisted) ─────────────────── */
+const sess = (w, reps) => ({ sets: reps.map((r) => ({ weight: w, reps: r, completed: true })) });
+const assistedIn = (history, extra) => Object.assign({
+  exerciseName: 'Assisted Dip', repsLow: 8, repsHigh: 12, targetSets: 3,
+  history, trackingType: 'weight_reps', assisted: true
+}, extra || {});
+
+test('assisted: topping the range LOWERS the assist by 5 lb', () => {
+  const r = P.analyze(assistedIn([sess(50, [12, 12, 12])]));
+  assert.equal(r.action, 'increase');
+  assert.equal(r.recommendedWeight, 45);
+  assert.equal(r.recommendedReps, 8);
+  assert.match(r.coachNote, /Drop the assist to 45 lb/);
+});
+
+test('assisted: same session WITHOUT the flag keeps the old behaviour', () => {
+  const r = P.analyze(assistedIn([sess(50, [12, 12, 12])], { assisted: undefined }));
+  assert.equal(r.recommendedWeight, 50); // name reads as bodyweight: no step
+  assert.doesNotMatch(r.coachNote, /assist/);
+});
+
+test('assisted: at 0 lb assist the next step is the unassisted version', () => {
+  const r = P.analyze(assistedIn([sess(0, [12, 12, 12])]));
+  assert.equal(r.recommendedWeight, 0);
+  assert.match(r.coachNote, /unassisted/);
+});
+
+test('assisted: assist never goes below zero', () => {
+  const r = P.analyze(assistedIn([sess(3, [12, 12, 12])]));
+  assert.equal(r.recommendedWeight, 0);
+});
+
+test('assisted: hold wording talks about the assist, not adding weight', () => {
+  const r = P.analyze(assistedIn([sess(40, [10, 10, 10])]));
+  assert.equal(r.action, 'hold');
+  assert.equal(r.recommendedWeight, 40);
+  assert.match(r.coachNote, /lowering the assist/);
+  assert.doesNotMatch(r.coachNote, /increasing weight/);
+});
+
+test('assisted: lowering the assist is never read as a regression', () => {
+  // 45 × 8 has a lower 1RM score than 50 × 12, but it is progress.
+  const r = P.analyze(assistedIn([sess(45, [8, 8, 8]), sess(50, [12, 12, 12])]));
+  assert.equal(r.deloadSuggested, false);
+});
+
+test('assisted: a deload ADDS assist', () => {
+  const r = P.analyze(assistedIn([sess(40, [8, 8, 8]), sess(40, [8, 8, 8]), sess(40, [8, 8, 8])]));
+  assert.equal(r.deloadSuggested, true);
+  assert.equal(r.deloadWeight, 45);
+  assert.match(r.coachNote, /add assist up to about 45 lb/);
+});
+
+test('assisted PRs: the record is the LOWEST assist', () => {
+  const prior = { best_weight: 40, best_reps: 10, best_volume: 400, best_estimated_1rm: 53 };
+  const lower = P.evaluatePRs([{ weight: 35, reps: 8 }], prior, { trackingType: 'weight_reps', assisted: true });
+  assert.equal(lower.updated, true);
+  assert.equal(lower.best.best_weight, 35);
+  assert.match(lower.topMessage, /35 lb assist × 8/);
+  assert.equal(lower.best.best_volume, 400);        // untouched
+  assert.equal(lower.best.best_estimated_1rm, 53);  // untouched
+  const heavier = P.evaluatePRs([{ weight: 60, reps: 15 }], prior, { trackingType: 'weight_reps', assisted: true });
+  assert.equal(heavier.updated, false);             // more assist is never a PR
+  const reps = P.evaluatePRs([{ weight: 40, reps: 11 }], prior, { trackingType: 'weight_reps', assisted: true });
+  assert.match(reps.topMessage, /rep PR/);
+});

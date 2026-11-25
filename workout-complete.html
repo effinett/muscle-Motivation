@@ -365,7 +365,7 @@
                                    .filter(function(x){ return x!=null; }))];
     if(!ids.length) return { byId:{}, failed:false };
     try {
-      var res = await supabaseClient.from('exercises').select('id,tracking_type,is_bodyweight').in('id', ids);
+      var res = await supabaseClient.from('exercises').select('id,tracking_type,is_bodyweight,is_assisted').in('id', ids);
       if(res.error || !res.data) return { byId:{}, failed:true };
       var byId = {};
       res.data.forEach(function(r){ byId[r.id] = r; });
@@ -676,6 +676,7 @@
       };
       if(!row || !row.tracking_type) return { load: policy(false) };
       var meta = { trackingType: row.tracking_type };
+      if(row.is_assisted === true) meta.assisted = true;
       var noLoadType = row.tracking_type === 'bodyweight_reps' || row.tracking_type === 'time';
       var weightedToday = (e.sets||[]).some(function(s){ var x = num(s.weight_lbs); return x != null && x > 0; });
       var noLoad = EQUIPMENT_FREE_PROGRAMS[w.program_slug] === true &&

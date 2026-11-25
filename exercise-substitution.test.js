@@ -416,13 +416,15 @@ test('CP4b: mobility never pairs with strength work in either direction', () => 
 
 test('CP4b: every pre-CP4b exercise keeps its swaps, except the approved Wall Push-Up additions', () => {
   const added = new Set(CP4B_NAMES);
-  const prior = EXERCISE_CATALOG.filter((e) => !added.has(e.name));
+  // Rows added after CP4b (Assisted Dip, 2026-11-24) are outside this snapshot.
+  const postCp4b = EXERCISE_CATALOG.filter((e) => e.name !== 'Assisted Dip');
+  const prior = postCp4b.filter((e) => !added.has(e.name));
   assert.strictEqual(prior.length, 144);
   const changed = [];
   const displaced = {};
   prior.forEach((e) => {
     const before = swapOf(e.name, prior);
-    const after = swapOf(e.name);
+    const after = swapOf(e.name, postCp4b);
     if (JSON.stringify([names(before.best), names(before.other)]) === JSON.stringify([names(after.best), names(after.other)])) return;
     changed.push(e.name);
     // The ONLY permitted change is Wall Push-Up joining the list.

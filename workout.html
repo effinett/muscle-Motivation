@@ -1692,7 +1692,7 @@
     // for the catalog; exercise-core.js keys off the SAME exercises.id values.
     var results = await Promise.all([
       supabaseClient.from('exercises')
-        .select('id, name, category, equipment, aliases, primary_muscle, secondary_muscles, movement_pattern, force_type, difficulty, is_bodyweight, is_unilateral, tracking_type, default_unit')
+        .select('id, name, category, equipment, aliases, primary_muscle, secondary_muscles, movement_pattern, force_type, difficulty, is_bodyweight, is_unilateral, tracking_type, default_unit, is_assisted')
         .order('name'),
       // ALL of the user's customs (active + archived). Archived rows are kept in
       // customExercises for the manager but excluded from the picker/search
@@ -2352,6 +2352,9 @@
       // advice and weight progression are exactly as before.
       equipment: isNoLoadExercise(ex) ? 'bodyweight' : undefined,
       noLoadNote: noLoadNote,
+      // Assisted machine (catalog `is_assisted`): the weight is counterweight,
+      // so less weight is harder and progression runs in reverse.
+      assisted: !!noteRow && noteRow.is_assisted === true,
       // A bodyweight session, blank weights or a skipped exercise never
       // replace the weighted baseline a gym workout progresses from.
       load: loadPolicyForExercise(ex)
@@ -4113,7 +4116,8 @@
         // Defence in depth: the caller already filtered non-rep exercises out
         // above, and the evaluator refuses again on its own.
         var res = Progression.evaluatePRs(working, prior,
-          { trackingType: trackingTypeForExercise(ex) });
+          { trackingType: trackingTypeForExercise(ex),
+            assisted: !!catalogRowForExercise(ex) && catalogRowForExercise(ex).is_assisted === true });
         if (res.updated) {
           var idcols = (typeof ExerciseLog !== 'undefined')
             ? ExerciseLog.prIdentityColumns(pref)

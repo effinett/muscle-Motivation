@@ -1,7 +1,7 @@
 // Exercise-intelligence benchmark/test fixture (Phase 4.2.1E; expanded 4.2.1G,
-// 4.3.9B CP3b, 4.3.9B CP4b).
+// 4.3.9B CP3b, 4.3.9B CP4b, Assisted Dip 2026-11-24).
 //
-// A deterministic snapshot of the live `public.exercises` catalog (all 159 rows),
+// A deterministic snapshot of the live `public.exercises` catalog (all 160 rows),
 // trimmed to the identity + classification fields the shared exercise-core
 // intelligence reasons over (instructions/tips omitted — not used by resolution,
 // families, or relationships). IDs are the REAL exercises.id values, so a
@@ -9,8 +9,9 @@
 //
 // This is a TEST FIXTURE, not a production data source: the browser/app loads
 // the catalog from Supabase at runtime. Regenerate from the DB if the catalog
-// changes. Checksum = md5 of the sorted id set joined by ',' (Phase 4.3.9B CP4b):
-// dec5ac379151ad7d0f6463820dc76dc8. Prior values: 144 rows (Phase 4.3.9B CP3b)
+// changes. Checksum = md5 of the sorted id set joined by ',' (Assisted Dip, 160 rows):
+// ddd0882c640a4f8711db351db625b051. Prior values: 159 rows (Phase 4.3.9B CP4b)
+// dec5ac379151ad7d0f6463820dc76dc8; 144 rows (Phase 4.3.9B CP3b)
 // a1314c867b375fad835b246f7536ec68; 141 rows (Phase 4.2.1G)
 // 3f740fb4f3466d3e15aee5718f4a910e.
 //
@@ -141,6 +142,7 @@ const EXERCISE_CATALOG = [
   { id: '0f482fbe-5898-4d19-b66c-619a49e7983a', name: 'Rope Pushdown', category: 'Triceps', equipment: 'Cable', primary_muscle: 'Triceps', secondary_muscles: [], aliases: ['rope tricep pushdown', 'tricep rope pushdown', 'rope tricep extension'], movement_pattern: 'isolation', force_type: 'push', difficulty: 'beginner', is_bodyweight: false, is_unilateral: false, tracking_type: 'weight_reps', default_unit: 'lb' },
   { id: '05443545-34bc-47f9-8563-3ac660d7bcc7', name: 'Overhead Cable Triceps Extension', category: 'Triceps', equipment: 'Cable', primary_muscle: 'Triceps', secondary_muscles: [], aliases: ['cable overhead extension', 'overhead cable extension', 'rope overhead extension'], movement_pattern: 'isolation', force_type: 'push', difficulty: 'intermediate', is_bodyweight: false, is_unilateral: false, tracking_type: 'weight_reps', default_unit: 'lb' },
   { id: 'ce5dbcff-6951-4c55-9b3f-7668aca5d089', name: 'Single-Arm Triceps Pushdown', category: 'Triceps', equipment: 'Cable', primary_muscle: 'Triceps', secondary_muscles: [], aliases: ['one arm pushdown', 'single arm pushdown', 'single arm tricep pushdown'], movement_pattern: 'isolation', force_type: 'push', difficulty: 'beginner', is_bodyweight: false, is_unilateral: true, tracking_type: 'weight_reps', default_unit: 'lb' },
+  { id: 'eacdfefa-beb3-4bd5-84af-0ac023adf611', name: 'Assisted Dip', category: 'Triceps', equipment: 'Machine', primary_muscle: 'Triceps', secondary_muscles: ['Chest', 'Shoulders'], aliases: ['assisted dips', 'machine assisted dip', 'assisted dip machine', 'assisted tricep dip'], movement_pattern: 'vertical_push', force_type: 'push', difficulty: 'beginner', is_bodyweight: false, is_unilateral: false, tracking_type: 'weight_reps', default_unit: 'lb', is_assisted: true },
   { id: 'b3661213-09f8-45bf-83fa-72edebca5001', name: 'Bench Dip', category: 'Triceps', equipment: 'Bodyweight', primary_muscle: 'Triceps', secondary_muscles: ['Chest'], aliases: ['tricep bench dip', 'bench dips', 'chair dip'], movement_pattern: 'vertical_push', force_type: 'push', difficulty: 'beginner', is_bodyweight: true, is_unilateral: false, tracking_type: 'bodyweight_reps', default_unit: 'lb' },
   { id: '62d76b3c-e7ee-4cfe-871d-f302d0b6bf72', name: 'Triceps Kickback', category: 'Triceps', equipment: 'Dumbbell', primary_muscle: 'Triceps', secondary_muscles: [], aliases: ['db kickback', 'tricep kickback', 'dumbbell kickback'], movement_pattern: 'isolation', force_type: 'push', difficulty: 'beginner', is_bodyweight: false, is_unilateral: true, tracking_type: 'weight_reps', default_unit: 'lb' },
   { id: '5e02a1cf-e84c-47ae-943d-e01a5ffc7575', name: 'Cable Crunch', category: 'Core', equipment: 'Cable', primary_muscle: 'Abs', secondary_muscles: [], aliases: ['kneeling cable crunch', 'rope crunch', 'cable crunches'], movement_pattern: 'core', force_type: 'pull', difficulty: 'beginner', is_bodyweight: false, is_unilateral: false, tracking_type: 'weight_reps', default_unit: 'lb' },

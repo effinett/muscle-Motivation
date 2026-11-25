@@ -431,10 +431,27 @@
     return null;
   }
 
+  // True when the assist weight came down across the newest `n` sessions —
+  // real progress on an assisted machine even if the 1RM score fell.
+  function assistReducedAcross(history, n) {
+    var list = (history || []).slice(0, n);
+    if (list.length < 2) return false;
+    var newest = pickBaseWeight(workingSets(list[0]));
+    var oldest = pickBaseWeight(workingSets(list[list.length - 1]));
+    return newest !== null && oldest !== null && newest < oldest;
+  }
+
   function analyze(input) {
     input = input || {};
     var name = input.exerciseName || '';
-    var equip = resolveEquipment(input);
+    /* Assisted machine work (Assisted Pull-Up, Assisted Dip). The logged weight
+     * is the machine's counterweight, so LESS weight is HARDER: progress means
+     * lowering the assist, and a deload means adding it back. Only a caller that
+     * passes the catalog flag (`exercises.is_assisted`) gets this; anything else
+     * is byte-identical. Equipment is pinned to machine so the 5 lb step applies
+     * (the name regex would read "pull-up"/"dip" as bodyweight with no step). */
+    var assisted = input.assisted === true;
+    var equip = assisted ? 'machine' : resolveEquipment(input);
 
     var low = num(input.repsLow);
     var high = num(input.repsHigh);
@@ -485,6 +502,7 @@
     var lastLoaded = lastWorking.some(function (s) { var w = num(s.weight); return w !== null && w > 0; });
     if (!noLoad && unitAware && input.noLoadNote === true && !lastLoaded) noLoad = true;
     var withUnit = function (display) { return timed && display ? display + ' sec' : display; };
+    if (assisted) noLoad = false;
 
     // ── No history → empty state, lean on programmed targets if present ──────
     if (!lastWorking.length) {
@@ -494,7 +512,11 @@
       var recSets = resolveTargetSets(input, history);
       var startWeight = pw !== null ? roundWeight(pw, equip) : null;
       var note;
-      if (startWeight !== null) {
+      if (assisted && startWeight !== null) {
+        note = 'Start around ' + fmtNum(startWeight) + ' lb of assist and aim for ' + rangeText(low, high) + noun + '. Less assist makes it harder.';
+      } else if (assisted) {
+        note = 'Pick an assist weight that lets you do ' + rangeText(low, high) + noun + '. Less assist makes it harder — we\'ll guide you next time.';
+      } else if (startWeight !== null) {
         note = 'Start around ' + fmtNum(startWeight) + ' lb and aim for ' + rangeText(low, high) + noun + '.';
       } else if (equip === 'bodyweight') {
         note = 'Log your sets — aim for ' + rangeText(low, high) + noun + ' and we\'ll guide you next time.';
@@ -557,6 +579,7 @@
         deloadWeight: null,
         deloadReason: null,
         coachNote: noLoad ? 'Complete all target sets before progressing.'
+                 : assisted ? 'Complete all target sets before lowering the assist.'
                           : 'Complete all target sets before increasing weight.'
       };
     }
@@ -568,7 +591,24 @@
     if (allHitHigh) {
       // Earned the increase: bump weight, reset to bottom of range.
       action = 'increase';
-      if (base === null || equip === 'bodyweight' || inc === 0) {
+      if (assisted && base !== null) {
+        // Reverse progression: earning it means LESS counterweight.
+        recReps = low;
+        if (base <= 0) {
+          recWeight = 0;
+          recReps = high;
+          note = 'You hit the top of the range on every set with no assist. You\'re ready for the unassisted version.';
+        } else {
+          recWeight = roundWeight(Math.max(0, base - inc), equip);
+          if (recWeight >= base) recWeight = Math.max(0, base - inc); // guard rounding that doesn't move
+          note = 'Strong — you hit the top of the range on every set. Drop the assist to ' + fmtNum(recWeight) +
+                 ' lb and build back from ' + low + noun + '.';
+        }
+      } else if (assisted) {
+        recWeight = null;
+        recReps = high;
+        note = 'You hit the top of the range on every set. Log your assist weight so we can tell you when to lower it.';
+      } else if (base === null || equip === 'bodyweight' || inc === 0) {
         recWeight = base; // bodyweight — can't add load
         recReps = high;
         if (noLoad) {
@@ -591,7 +631,7 @@
       recWeight = base;
       if (minReps === maxReps && maxReps < high) {
         recReps = Math.min(high, maxReps + 1);
-        note = 'Add 1 ' + (timed ? 'sec' : 'rep') + (noLoad ? '' : ' before increasing weight') +
+        note = 'Add 1 ' + (timed ? 'sec' : 'rep') + (noLoad ? '' : assisted ? ' before lowering the assist' : ' before increasing weight') +
                ' — aim for ' + recReps + (timed ? ' sec' : '') + ' on every set.';
       } else if (maxReps < high) {
         recReps = maxReps; // bring the lagging sets up to your top set first
@@ -600,7 +640,8 @@
       } else {
         // Top set already at the ceiling but a lagging set held it back.
         recReps = high;
-        note = 'Bring every set up to ' + high + noun + (noLoad ? '.' : ', then add weight next time.');
+        note = 'Bring every set up to ' + high + noun +
+               (noLoad ? '.' : assisted ? ', then lower the assist next time.' : ', then add weight next time.');
       }
     } else {
       // Below the bottom of the range → HOLD. Weight is never auto-lowered after
@@ -610,6 +651,7 @@
       recWeight = base;
       recReps = low;
       note = noLoad ? 'Build up to at least ' + low + noun + ' on every set.'
+           : assisted ? 'Stay at this assist until you hit at least ' + low + noun + ' on every set.'
                     : 'Stay at this weight until you hit at least ' + low + noun + ' on every set.';
     }
 
@@ -628,7 +670,11 @@
       if (history.length >= 2) {
         var eLast = sessionScore(history[0]);
         var ePrev = sessionScore(history[1]);
-        if (ePrev > 0 && eLast < 0.9 * ePrev) {
+        var assistLowered = assisted &&
+          (pickBaseWeight(workingSets(history[0])) !== null) &&
+          (pickBaseWeight(workingSets(history[1])) !== null) &&
+          pickBaseWeight(workingSets(history[0])) < pickBaseWeight(workingSets(history[1]));
+        if (ePrev > 0 && eLast < 0.9 * ePrev && !assistLowered) {
           deloadSuggested = true;
           deloadReason = 'regression';
         }
@@ -646,17 +692,24 @@
         }
       }
       if (deloadSuggested) {
-        if (base !== null && equip !== 'bodyweight') {
+        if (assisted && base !== null) {
+          // Easier = MORE assist.
+          deloadWeight = roundWeight(base + inc, equip);
+          if (deloadWeight <= base) deloadWeight = base + inc;
+        } else if (base !== null && equip !== 'bodyweight') {
           deloadWeight = roundWeight(base * 0.9, equip);
           if (deloadWeight >= base) deloadWeight = Math.max(0, base - inc);
         }
         note = (deloadReason === 'regression'
                  ? 'Your top set dropped noticeably from last time. '
                  : 'Progress has stalled for 3 sessions. ')
-             + (deloadWeight !== null
+             + (deloadWeight !== null && assisted
+                 ? 'Consider a deload — add assist up to about ' + fmtNum(deloadWeight) + ' lb and rebuild.'
+                 : deloadWeight !== null
                  ? 'Consider a deload — drop to about ' + fmtNum(deloadWeight) + ' lb and rebuild.'
                  : 'Consider an easier variation or extra rest, then rebuild.');
-      } else if (plat.plateau && action === 'hold') {
+      } else if (plat.plateau && action === 'hold' &&
+                 !(assisted && assistReducedAcross(history, PLATEAU_SESSIONS))) {
         note += ' You\'ve held here ' + plat.sessions + ' sessions — push for the top of the range.';
       }
     }
@@ -727,6 +780,34 @@
       best_volume:        prior.best_volume != null ? num(prior.best_volume) : null,
       best_estimated_1rm: prior.best_estimated_1rm != null ? num(prior.best_estimated_1rm) : null
     };
+
+    /* Assisted machine (options.assisted, from `exercises.is_assisted`): the
+     * weight is counterweight, so the record is the LOWEST assist, and a rep PR
+     * is more reps at that same lowest assist. Volume and estimated 1RM mean
+     * nothing for counterweight, so they are echoed back untouched. */
+    if (options && options.assisted === true) {
+      var aUpdated = false, aMessages = [];
+      (sets || []).forEach(function (s) {
+        var w = num(s.weight), r = num(s.reps);
+        if (w === null || r === null || r <= 0 || w < 0) return;
+        var label = null;
+        if (best.best_weight === null || w < best.best_weight) {
+          label = fmtNum(w) + ' lb assist × ' + r + ' (least assist)';
+          best.best_weight = w; best.best_reps = r; aUpdated = true;
+        } else if (w === best.best_weight && (best.best_reps === null || r > best.best_reps)) {
+          label = fmtNum(w) + ' lb assist × ' + r + ' (rep PR)';
+          best.best_reps = r; aUpdated = true;
+        }
+        if (label && hadPrior) aMessages.push(label);
+      });
+      return {
+        best: best,
+        updated: aUpdated,
+        hadPrior: hadPrior,
+        prMessages: aMessages,
+        topMessage: aMessages.length ? aMessages[0] : null
+      };
+    }
 
     var updated = false;
     var messages = [];
