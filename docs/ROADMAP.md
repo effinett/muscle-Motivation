@@ -924,6 +924,10 @@ question and ignoring the answer is not acceptable in a paid personalization pro
 
   Each Program's migration is approved separately. 4.3.9C and 4.3.9D remain open and are not part of this
   approval.
+  *Day splits (owner-approved 2026-11-25):* Advanced Muscle and Advanced Home Strength now have a
+  split per frequency — Full Body A/B (2 days), A/B/C (3), the approved Upper/Lower (4), Upper/Lower +
+  Push/Pull/Legs B (5), Push/Pull/Legs A+B (6) — instead of one four-session rotation. Migration
+  `20261125200034`. Advanced Fat Loss gets the same review next.
 
 **Binding constraints.**
 

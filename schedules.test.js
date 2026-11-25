@@ -4,7 +4,8 @@
  * schedule fixes, approved 2026-11-17) and the properties they were approved
  * for: Home Strength keeps three full-body sessions a week at 3–6 days, Advanced
  * Fat Loss never runs a second hinge day in place of an extra Upper, and every
- * key has a readable fallback label. The pointer behaviour with repeated
+ * key has a readable fallback label. Advanced Muscle and Advanced Home
+ * Strength get their own split per frequency (owner-approved 2026-11-25). The pointer behaviour with repeated
  * sessions is pinned in bodyweight-frequency-activation.test.js. */
 
 const test = require('node:test');
@@ -38,7 +39,14 @@ const APPROVED = {
     5: ['full_a', 'conditioning_a', 'full_b', 'conditioning_b'],
     6: ['full_a', 'conditioning_a', 'full_b', 'conditioning_b'],
   },
-  advanced_muscle: Object.fromEntries(DAYS.map((d) => [d, ['upper_a', 'lower_a', 'upper_b', 'lower_b']])),
+  // Day splits approved 2026-11-25 (replaces the four-session rotation).
+  advanced_muscle: {
+    2: ['full_a', 'full_b'],
+    3: ['full_a', 'full_b', 'full_c'],
+    4: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
+    5: ['upper_a', 'lower_a', 'push_b', 'pull_b', 'legs_b'],
+    6: ['push_a', 'pull_a', 'legs_a', 'push_b', 'pull_b', 'legs_b'],
+  },
   advanced_fat_loss: {
     2: ['upper', 'lower'],
     3: ['lower', 'upper', 'full_body'],
@@ -46,7 +54,14 @@ const APPROVED = {
     5: ['lower', 'upper', 'full_body', 'upper', 'conditioning_core'],
     6: ['lower', 'upper', 'full_body', 'upper', 'conditioning_core', 'upper'],
   },
-  advanced_home_strength: Object.fromEntries(DAYS.map((d) => [d, ['upper_a', 'lower_a', 'upper_b', 'lower_b']])),
+  // Day splits approved 2026-11-25 (replaces the four-session rotation).
+  advanced_home_strength: {
+    2: ['full_a', 'full_b'],
+    3: ['full_a', 'full_b', 'full_c'],
+    4: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
+    5: ['upper_a', 'lower_a', 'push_b', 'pull_b', 'legs_b'],
+    6: ['push_a', 'pull_a', 'legs_a', 'push_b', 'pull_b', 'legs_b'],
+  },
 };
 
 const count = (list, key) => list.filter((k) => k === key).length;
@@ -122,4 +137,23 @@ test('four-session Programs and Bodyweight Fat Loss repeat nothing within a cycl
   // never consecutive.
   const bfl3 = plain(S.getScheduleForDays('bodyweight_fat_loss', 3));
   assert.deepEqual(['full_a', 'full_b', 'conditioning_a', 'conditioning_b'].map((k) => count(bfl3, k)), [2, 2, 1, 1]);
+});
+
+test('Advanced Muscle and Advanced Home Strength train each muscle group about twice a week at every frequency', () => {
+  const S = load();
+  // Which sessions train upper body, lower body.
+  const UPPER = new Set(['full_a', 'full_b', 'full_c', 'upper_a', 'upper_b', 'push_a', 'pull_a', 'push_b', 'pull_b']);
+  const LOWER = new Set(['full_a', 'full_b', 'full_c', 'lower_a', 'lower_b', 'legs_a', 'legs_b']);
+  ['advanced_muscle', 'advanced_home_strength'].forEach((slug) => {
+    DAYS.forEach((d) => {
+      const week = plain(S.getScheduleForDays(slug, d));
+      assert.equal(week.length, d, slug + ' ' + d + ': one session per training day');
+      assert.equal(new Set(week).size, week.length, slug + ' ' + d + ': no repeat inside the week');
+      assert.ok(week.filter((k) => UPPER.has(k)).length >= 2, slug + ' ' + d + ': upper twice');
+      assert.ok(week.filter((k) => LOWER.has(k)).length >= 2, slug + ' ' + d + ': lower twice');
+    });
+    // 6 days: both pushes, both pulls, both leg days.
+    const six = plain(S.getScheduleForDays(slug, 6));
+    ['push', 'pull', 'legs'].forEach((p) => assert.equal(six.filter((k) => k.startsWith(p + '_')).length, 2));
+  });
 });

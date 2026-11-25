@@ -1207,11 +1207,11 @@ test('CP4e-1: only the six published Routines are activated at 4-6 days (CP4e-2)
 test('CP4e-1: the README records the migration and the current counts', () => {
   const readme = read('supabase/README.md');
   const files = fs.readdirSync(path.join(__dirname, 'supabase', 'migrations')).filter((f) => f.endsWith('.sql'));
-  assert.equal(files.length, 80);   // + 20261125011020_assisted_machine_reverse_progression, 20261111111733_food_search_events, 20261111112151_usda_search_cache, 20261116063127_food_search_events_quicklog, 20261116183238_phase_439b_bodyweight_rep_ranges, 20261116191336_create_user_exercise_progressions, 20261117192044_phase_439l_home_strength_draft, 20261117204221_phase_439l_publish_home_strength, 20261118005437_phase_439l_advanced_drafts, 20261118044157_phase_439l_publish_advanced_muscle, 20261118052821_phase_439l_publish_advanced_fat_loss, 20261119070922_phase_439l_bodyweight_fat_loss_draft
+  assert.equal(files.length, 81);   // + 20261125200034_phase_439l_advanced_day_splits, 20261125011020_assisted_machine_reverse_progression, 20261111111733_food_search_events, 20261111112151_usda_search_cache, 20261116063127_food_search_events_quicklog, 20261116183238_phase_439b_bodyweight_rep_ranges, 20261116191336_create_user_exercise_progressions, 20261117192044_phase_439l_home_strength_draft, 20261117204221_phase_439l_publish_home_strength, 20261118005437_phase_439l_advanced_drafts, 20261118044157_phase_439l_publish_advanced_muscle, 20261118052821_phase_439l_publish_advanced_fat_loss, 20261119070922_phase_439l_bodyweight_fat_loss_draft
   assert.ok(files.includes(path.basename(CP4E1_FILE)));
   assert.match(readme, new RegExp('The ' + files.length + ' migrations applied to production'));
-  assert.match(readme, /sixteen migrations are guarded \*\*data\*\* migrations/);
-  assert.match(readme, /`20261003000515`, `20261005041336`, `20261116183238`,\n`20261117192044`, `20261117204221`, `20261118005437`,\n`20261118044157`, `20261118052821`, `20261119070922`\./);
+  assert.match(readme, /seventeen migrations are guarded \*\*data\*\* migrations/);
+  assert.match(readme, /`20261003000515`, `20261005041336`, `20261116183238`,\n`20261117192044`, `20261117204221`, `20261118005437`,\n`20261118044157`, `20261118052821`, `20261119070922`,\n`20261125200034`\./);
   assert.match(readme, /`20261005041336` \(`phase_439b_cp4e_publish_bodyweight_frequency_routines`\) publishes exactly/);
   assert.match(readme, /changes no schedule mapping/);
 });
