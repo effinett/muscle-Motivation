@@ -3479,9 +3479,14 @@
       ? shortcutsHtml() : '';
     var listHtml = shortcuts +
       (hint ? '<div class="picker-hint">' + hint + '</div>' : '') + rows.join('');
-    document.getElementById('pickerList').innerHTML = rows.length
+    var pickerList = document.getElementById('pickerList');
+    pickerList.innerHTML = rows.length
       ? listHtml
       : (addRow ? shortcuts : (shortcuts || emptyHtml || '<div class="empty-state">No exercises found.</div>'));
+    // A new result set always starts at the top. Without this the list kept
+    // the scroll offset from the last pick, so on the next open (or a new
+    // search) the best match sat above the fold and looked missing.
+    pickerList.scrollTop = 0;
     lucide.createIcons();
   }
 
