@@ -136,6 +136,33 @@
       background: transparent; color: var(--text-1); border: 1px solid var(--border-2);
     }
     .pg-cta:hover { opacity: 0.85; }
+    .pg-cta + .pg-cta { margin-top: 8px; }
+    .pg-link {
+      display: block; text-align: center; padding: 12px 0 2px;
+      font-size: 13px; color: var(--text-secondary); text-decoration: underline;
+    }
+    /* Membership offer (owner decision 2026-11-25: membership leads Browse). */
+    .pg-offer {
+      background: var(--surface-1); border: 1px solid var(--red);
+      border-radius: 12px; padding: 18px; margin-bottom: 14px;
+    }
+    .pg-offer-eyebrow {
+      font-family: 'Barlow', sans-serif; font-size: 11px; font-weight: 700;
+      letter-spacing: 2px; text-transform: uppercase; color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+    .pg-offer-title {
+      font-family: 'Bebas Neue', sans-serif; font-size: 30px; line-height: 1;
+      letter-spacing: 0.5px; margin-bottom: 12px;
+    }
+    .pg-offer-list { list-style: none; margin: 0 0 14px; padding: 0; }
+    .pg-offer-list li {
+      display: flex; gap: 8px; align-items: flex-start;
+      font-size: 14px; line-height: 1.4; margin-bottom: 7px;
+    }
+    .pg-offer-list svg { flex-shrink: 0; width: 16px; height: 16px; margin-top: 2px; color: var(--red); }
+    .pg-soon { color: var(--text-secondary); }
+    .pg-offer-note { text-align: center; font-size: 12px; color: var(--text-secondary); margin-top: 8px; }
 
     .card {
       background: var(--surface-1); border: 1px solid var(--border-2);
@@ -4601,6 +4628,32 @@
     }
   }
 
+  // Membership offer. Display copy only: the charge comes from Stripe at
+  // checkout. Swap the CTA to the 7-day trial wording once 4.5.5 ships.
+  var PG_MEMBERSHIP_CHECKOUT = 'checkout.html?product=' + ENT_MEMBERSHIP_PRODUCT;
+  var PG_MEMBERSHIP_CTA = 'Get membership — $29/mo';
+
+  function membershipOfferCard() {
+    var item = function (html) {
+      return '<li><i data-lucide="check" aria-hidden="true"></i><span>' + html + '</span></li>';
+    };
+    var soon = ' <span class="pg-soon">(coming soon)</span>';
+    return '<div class="pg-offer">' +
+      '<div class="pg-offer-eyebrow">Membership</div>' +
+      '<div class="pg-offer-title">Every program.<br>One membership.</div>' +
+      '<ul class="pg-offer-list">' +
+        item('Unlimited access to all programs, including new releases') +
+        item('Switch programs anytime as your goals change') +
+        item('<strong>AI quick log:</strong> log your whole meal in one step') +
+        item('<strong>Barcode scanner:</strong> scan packaged food to log it') +
+        item('<strong>Photo logging:</strong> snap your meal to log it' + soon) +
+        item('AI Coach' + soon) +
+      '</ul>' +
+      '<a class="pg-cta pg-cta-primary" href="' + PG_MEMBERSHIP_CHECKOUT + '">' + PG_MEMBERSHIP_CTA + '</a>' +
+      '<div class="pg-offer-note">Cancel anytime</div>' +
+    '</div>';
+  }
+
   // Product-facing wording for an access verdict. The resolver's `source` and
   // `via` decide it; no page-local entitlement logic.
   function programAccessBadge(verdict) {
@@ -4610,7 +4663,7 @@
     // never shown for membership-only access — that would misdescribe it.
     return verdict.source === 'standalone'
       ? { text: 'Owned', cls: 'pg-badge-owned' }
-      : { text: 'With membership', cls: 'pg-badge-member' };
+      : { text: 'Included', cls: 'pg-badge-member' };
   }
 
   function programMetaBits(p) {
@@ -4627,13 +4680,29 @@
     var meta = programMetaBits(p).map(function (b) {
       return '<span>' + esc(b) + '</span>';
     }).join('');
-    // Accessible → open the Program. Not accessible → the same page, which
-    // already owns the locked state and the acquisition path. CP5 introduces
-    // no new checkout surface.
+    // Accessible → open the Program. Not accessible → membership first, a
+    // one-time purchase second (owner decision 2026-11-25). Both go to the one
+    // on-site checkout, which owns price and payment; the Program page keeps
+    // the full details.
     var href = p.pagePath || '#';
-    var ctaLabel = verdict.allowed ? 'View Program'
-      : (p.includedWithMembership ? 'Included with membership' : 'Learn More');
-    var ctaCls = verdict.allowed ? 'pg-cta-primary' : 'pg-cta-secondary';
+    var actions;
+    if (verdict.allowed) {
+      actions = '<a class="pg-cta pg-cta-primary" href="' + esc(href) + '">View Program</a>';
+    } else {
+      actions = '';
+      if (p.includedWithMembership) {
+        actions += '<a class="pg-cta pg-cta-primary" href="' + PG_MEMBERSHIP_CHECKOUT + '">' +
+          PG_MEMBERSHIP_CTA + '</a>';
+      }
+      if (p.standalonePurchasable) {
+        actions += '<a class="pg-cta ' + (actions ? 'pg-cta-secondary' : 'pg-cta-primary') +
+          '" href="checkout.html?product=' + esc(encodeURIComponent(p.slug)) + '">' +
+          (actions ? 'Or buy just this program' : 'Buy this program') + '</a>';
+      }
+      actions += actions
+        ? '<a class="pg-link" href="' + esc(href) + '">View program details</a>'
+        : '<a class="pg-cta pg-cta-secondary" href="' + esc(href) + '">Learn More</a>';
+    }
 
     return '<div class="pg-card">' +
       '<div class="pg-head">' +
@@ -4642,7 +4711,7 @@
       '</div>' +
       (p.description ? '<div class="pg-desc">' + esc(p.description) + '</div>' : '') +
       (meta ? '<div class="pg-meta">' + meta + '</div>' : '') +
-      '<a class="pg-cta ' + ctaCls + '" href="' + esc(href) + '">' + esc(ctaLabel) + '</a>' +
+      actions +
     '</div>';
   }
 
@@ -4654,11 +4723,18 @@
   function renderPrograms(catalog, purchaseRows) {
     var mine = [];
     var browse = [];
+    // "Would membership unlock this?" is asked of the resolver too, with a
+    // hypothetical membership row, so this page holds no access policy.
+    var withMembership = purchaseRows.concat([{ product: ENT_MEMBERSHIP_PRODUCT, status: 'active' }]);
+    var membershipUnlocks = false;
     catalog.forEach(function (p) {
       var verdict = resolveProgramAccess(p, purchaseRows);
       var card = programCard(p, verdict);
       if (verdict.allowed) mine.push(card); else browse.push(card);
+      if (!verdict.allowed && resolveProgramAccess(p, withMembership).allowed) membershipUnlocks = true;
     });
+    // Membership leads Browse whenever it would unlock something here.
+    if (membershipUnlocks) browse.unshift(membershipOfferCard());
 
     document.getElementById('myProgramsList').innerHTML = mine.length
       ? mine.join('')
