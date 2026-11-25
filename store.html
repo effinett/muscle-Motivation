@@ -480,12 +480,15 @@
 
     /* Level indicator */
     .level-dots {
-      display: flex; gap: 4px; margin-top: 6px;
+      display: flex; align-items: center; gap: 4px;
+      margin-top: 6px; margin-bottom: 18px;
     }
     .level-dot {
       width: 6px; height: 6px; border-radius: 50%;
+      flex-shrink: 0;
       background: var(--border-light);
     }
+    .level-dots > span { line-height: 1; }
     .level-dot.filled { background: var(--red); }
 
     /* No results */
