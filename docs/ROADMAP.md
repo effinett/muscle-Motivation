@@ -207,12 +207,30 @@ reassigned, so cross-references stay valid when the order changes. Read a number
 position.
 
 **Parallel pre-launch tracks, gated and never optional:** **4.3.9-L** Recommendation Catalog Coverage
-(§4.3.9) · **validation-debt closure** VD-A through VD-F (§10.13).
+(§4.3.9) · **validation-debt closure** VD-A through VD-F (§10.13) · **5.1.6-L** Launch Exercise Demos
+(§5.1, added 2026-11-25).
 
 **Reordered 2026-09-02 (owner-approved).** 4.3.8 moved from first to last-before-activation because 4.4
 and 4.5-I both change what it must teach — 4.4 the navigation and Home surfaces, 4.5-I the entitlement,
 trial, routing and analytics model. **No product construction follows 4.3.8**; 4.5-A executes and
 observes an already-built system. Full rationale: `docs/ROADMAP-HISTORY.md`, 2026-09-02.
+
+**Commercial model amended 2026-11-25 (owner-approved).** The authenticated app is **no longer
+paid-only**. It keeps a permanent free core tier, and membership is the primary offer:
+
+- **Free, no purchase:** workout templates (Routines), workout logging, progressive-overload tracking,
+  weight tracking, and simple food search with manual logging.
+- **Membership ($29/mo):** the whole Program library · AI quick log · barcode scanning · photo logging
+  (5.4.8, when built) · AI Coach · later premium features.
+- **7-day free trial** with full membership access, AI included. The owner has fixed the length, which
+  supersedes 4.5.5's "duration is a commercial optimization decision".
+- **Standalone Program purchases are retained** as the secondary option. Membership leads every
+  acquisition surface (the Train Programs pane and the locked-feature membership sheet).
+- **Effect on 4.5.** 4.5.3 enforcement gates **premium features**, not the whole app, and 4.5.13 activates
+  the membership/trial journey instead of a paid-only gate. The phase keeps its number and every other
+  requirement: server-side enforcement, migration, rollback, legal and Food Intelligence certification.
+
+Full record: `docs/ROADMAP-HISTORY.md`, 2026-11-25.
 
 ### Binding gates
 
@@ -224,6 +242,7 @@ observes an already-built system. Full rationale: `docs/ROADMAP-HISTORY.md`, 202
 | **G4** | 4.5-I complete, every activation flag proven OFF→ON in a safe non-public environment | 4.3.8 begins |
 | **G5** | 4.5.17 Food Intelligence certification passed against its locked thresholds | 4.5-A activation |
 | **G6** | Every validation-debt item (§10.13) carries its required explicit disposition | 4.5-A activation |
+| **G7** | 5.1.6-L demos cover every exercise in a published Program *(added 2026-11-25)* | 4.3.8 copy and walkthrough lock |
 
 Because G1 gates Coach validation, **4.3.9-L is an early-4.4 dependency, not an independent track with
 slack to the end of the path.** It may start immediately and must not drift.
@@ -237,6 +256,7 @@ slack to the end of the path.** It may start immediately and must not drift.
   activation-relevant item receives its §10.13 disposition before 4.5-A. **This is a specific
   validation-debt exception, not general permission to overlap unrelated phases.**
 - *(2026-09-02)* 4.3.9-L may overlap 4.4 and 4.5-I, bound by G1–G3.
+- *(2026-11-25)* 5.1.6-L may overlap 4.4, 4.3.9-L, 4.5-I and 4.3.8, bound by G7.
 
 No other pair of phases may overlap without separate approval, and no exception waives a requirement.
 
@@ -1060,6 +1080,10 @@ interpretation · response consistency.
 
 **Goal:** commercialize only after the premium value is real.
 
+> **Amended 2026-11-25 (owner-approved, §4):** a free core tier plus premium membership with a 7-day full
+> trial, not a paid-only app. Wherever a subsection below says "paid-only", read it as "premium features
+> require an active membership or trial". The free core tier is never gated.
+
 **One phase number, two ordered stages**, so the entire system can be built and proven without setting a
 launch date, and the activation stage stays narrow enough to reverse.
 
@@ -1119,6 +1143,9 @@ membership → **premium/high-touch coaching** → future merchandise where appr
 ### 4.5.5 — Full premium trial
 Preferred model is **full premium access** during trial, not a permanently crippled free app tier. Duration
 is a commercial optimization decision.
+
+*Amended 2026-11-25:* the trial is **7 days** of full membership access, AI included. A permanent free core
+tier now exists alongside it (§4); the trial unlocks premium features on top of that tier.
 
 ### 4.5.6 — Join now
 Allow immediate paid membership without requiring trial usage.
@@ -1462,6 +1489,13 @@ exercise-metadata seam). Audit and extend; do not recreate.
   uniform prescription, accounting for the 4.8 timed/hybrid representation.
 - **5.1.6 — Exercise media.** Thumbnails · photos · muscle diagrams · demonstration video. Keyed to
   canonical exercise identity, with media in dedicated storage rather than columns on `exercises`.
+- **5.1.6-L — Launch exercise demos** *(pulled forward as a parallel pre-launch track, owner-approved
+  2026-11-25; gate G7)*. Animated demonstrations for every exercise in a published Program, most-used
+  first: a thumbnail on the workout exercise card and the full animation in the exercise's How-to detail
+  (4.3.6H). Media follows the 5.1.6 storage rule, so adding a demo is an upload, not a code change. Licensed
+  animations must permit use inside a paid app, and the licence source is recorded per asset. An exercise
+  without a demo keeps today's text-only card. Photos, muscle diagrams, video and full-catalog coverage stay
+  in 5.1.6.
 - **5.1.7 — Training analytics** *(filed here, not under body composition)*. Weekly sets · volume by muscle ·
   exercise volume · frequency · workload · longer-term training trends · MEV/MAV/MRV volume-landmark
   concepts where scientifically and practically appropriate. Keyed on canonical exercise identity.
@@ -2174,7 +2208,8 @@ Reordered 2026-09-02. Rationale and binding gates G1–G6 are in §4.
 | 4 | **4.5-A** — Paid-Only Activation | LAUNCH-BLOCKING |
 
 **Parallel, gated:** **4.3.9-L** Recommendation Catalog Coverage (§4.3.9; G1 makes it an early-4.4
-dependency, not an independent track with slack) · **validation-debt closure** VD-A through VD-F (§10.13).
+dependency, not an independent track with slack) · **validation-debt closure** VD-A through VD-F (§10.13) ·
+**5.1.6-L** Launch Exercise Demos (§5.1; G7 lands it before 4.3.8's copy lock).
 
 ## Then, in order — post-launch
 
@@ -2209,7 +2244,7 @@ dependency, not an independent track with slack) · **validation-debt closure** 
 
 - **P0** — blocking bugs, data integrity, auth, payments, security. Fix immediately.
 - **P1** — the commercial critical path: `4.4 → 4.5-I → 4.3.8 → 4.5-A`, plus the parallel gated
-  4.3.9-L and validation-debt tracks.
+  4.3.9-L, 5.1.6-L and validation-debt tracks.
 - **P2** — improvements directly supporting activation or retention; pull forward only when they
   materially support the current phase.
 - **P3** — post-launch expansion, 4.6 onward.
