@@ -704,7 +704,18 @@
 <script src="personalization-core.js"></script>
 <script src="onboarding-draft.js"></script>
 <script src="analytics-core.js"></script>
+<script src="checkout-intent.js"></script>
 <script>
+
+  // After onboarding (or for an already-onboarded user): a pending checkout
+  // (the visitor tapped Buy while signed out) wins over the dashboard. Read
+  // once; any failure means the dashboard.
+  function homeAfterAuth() {
+    try {
+      if (typeof CheckoutIntent !== 'undefined') return CheckoutIntent.next('app.html', Date.now());
+    } catch (e) { /* never block a redirect */ }
+    return 'app.html';
+  }
 
   let currentUser = null;
   let generatedPlan = {};
@@ -768,11 +779,11 @@
       if (state === OnboardingDraft.STATE.DISCARD_EXIT) {
         OnboardingDraft.clearDraft();
         mmFunnelClear();
-        window.location.replace('app.html');
+        window.location.replace(homeAfterAuth());
         return;
       }
       if (state === OnboardingDraft.STATE.COMPLETE_EXIT) {
-        window.location.replace('app.html');
+        window.location.replace(homeAfterAuth());
         return;
       }
 
@@ -825,7 +836,7 @@
           // fresh id and detach itself from the funnel it completes.
           mmFunnel('onboarding_completed', 'anonymous_claim');
           mmFunnelClear();
-          window.location.replace('app.html');
+          window.location.replace(homeAfterAuth());
           return;
         }
         // Every failure path lands here: the draft is still present, the
@@ -1332,7 +1343,7 @@
       mmFunnelClear();
       msg.textContent = 'Saved! Redirecting to your dashboard...';
       // Use replace() so onboarding is removed from history — prevents Back button re-submission.
-      setTimeout(function() { window.location.replace('app.html'); }, 1000);
+      setTimeout(function() { window.location.replace(homeAfterAuth()); }, 1000);
     } catch (e) {
       console.error('saveAndContinue failed:', e);
       msg.textContent = 'Something went wrong: ' + (e.message || 'please try again.');

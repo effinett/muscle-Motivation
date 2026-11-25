@@ -352,8 +352,14 @@ and 4.5 are NOT STARTED.
 4.3.8 (first-run) → 4.5-A (paid-only activation)`,
 then `4.6 → 4.7 → 4.8 → 4.9 → 4.3.9-X → 5.0 → 5.1`.
 
-Running in **parallel and gated**: **4.3.9-L Recommendation Catalog Coverage** and **validation-debt
-closure VD-A…VD-F**. **Phase numbers are stable identities — execution order lives in roadmap §13**,
+Running in **parallel and gated**: **4.3.9-L Recommendation Catalog Coverage**, **5.1.6-L Launch
+Exercise Demos** (gate G7, before 4.3.8's copy lock; added 2026-11-25) and **validation-debt closure
+VD-A…VD-F**.
+
+**Commercial model (amended 2026-11-25, owner-approved):** the app is **not paid-only**. It has a
+permanent free core tier, membership is the primary offer, and new members get a 7-day full trial.
+Details in §14 and `docs/ROADMAP.md` §4. Read every "paid-only" in older text as "premium features
+require membership or trial". **Phase numbers are stable identities — execution order lives in roadmap §13**,
 so a number is a name, not a position. Binding gates G1–G6 are in roadmap §4, validation gates in
 §10.13, and the reasons 4.3.8 moved are in `docs/ROADMAP-HISTORY.md` (2026-09-02). **Read those
 before planning any phase; do not re-derive the order from this file.**
@@ -553,9 +559,10 @@ Free Lead Gen → Digital Programs (one-time) → Membership (recurring) → Pre
 ### Permissions
 | User Type | Access |
 |---|---|
-| Free user | Calculator, limited dashboard, free guide |
+| Free user | Calculator, free guide, dashboard, workout templates, workout logging, progressive-overload tracking, weight tracking, simple food search + manual logging (free core tier, 2026-11-25) |
+| Trial user | Everything a member gets, AI included, for 7 days |
 | Program buyer | Purchased programs only |
-| Member | Full tracking, AI Coach, program library |
+| Member | Free tier + whole Program library, AI quick log, barcode scanning, photo logging (planned), AI Coach |
 | Premium coaching client | Full access + coach review + personalized programming |
 | Admin | Full platform control |
 
@@ -743,8 +750,9 @@ fields (video demo, muscle diagram) are roadmap **5.1.6**.*
 - **Pricing** — **NOT BUILT.** Plan comparison — roadmap 4.5.10, **required before the paid launch**
 - **Contact** — **NOT BUILT.** Form, email, social links, WhatsApp — roadmap 4.5.10
 
-Public lead-generation pages stay **free and ungated** after the paid-only launch; the paywall applies
-to the authenticated application only (roadmap 4.5.9).
+Public lead-generation pages stay **free and ungated** after launch. Inside the app, only **premium
+features** sit behind membership or trial; the free core tier (§14) is never gated (amended 2026-11-25;
+roadmap 4.5.9).
 
 ### Member Pages
 - **auth.html** — Login / sign up

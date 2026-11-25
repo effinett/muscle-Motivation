@@ -157,9 +157,12 @@ test('auth discards a stale draft ONLY on the completed branch', () => {
     AUTH_CODE.indexOf('window.addEventListener'));
   assert.ok(route.length > 0, 'routeAfterAuth not found');
   // Completed → discard then dashboard.
-  assert.match(route, /onboarding_complete\)[\s\S]{0,140}?discardStaleDraft\(\)[\s\S]{0,80}?'app\.html'/);
+  // homeAfterAuth() is the dashboard unless a signed-out buyer has a pending
+  // checkout (checkout-intent.js, 2026-11-25) — still a dashboard-class exit.
+  assert.match(route, /onboarding_complete\)[\s\S]{0,140}?discardStaleDraft\(\)[\s\S]{0,80}?homeAfterAuth\(\)/);
   // Incomplete → onboarding, with the draft INTACT (it is needed to claim).
-  const incomplete = route.slice(route.indexOf("'app.html'"));
+  assert.ok(route.indexOf('homeAfterAuth()') > 0);
+  const incomplete = route.slice(route.indexOf('homeAfterAuth()'));
   assert.ok(!/discardStaleDraft/.test(incomplete),
     'an incomplete user must keep their draft — it is what gets claimed');
 });

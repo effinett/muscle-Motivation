@@ -2029,3 +2029,30 @@ Plan, `docs/ROADMAP.md` §4.3.9-L and `AGENTS.md` §14.
 **Planning record only.** No Stripe product, price, checkout flow, purchase or access change was
 created. Each Program stays `standalone_purchasable = false` until those steps are separately approved.
 No phase was renumbered or reordered.
+
+## 2026-11-25 — Free core tier, 7-day trial, and launch exercise demos (owner decisions)
+
+**Approved by the owner (2026-11-25).**
+
+**Commercial model.** The authenticated app is no longer paid-only. It keeps a permanent free core tier:
+workout templates, workout logging, progressive-overload tracking, weight tracking, and simple food search
+with manual logging. Membership ($29/month) is the primary offer: the whole Program library, AI quick log,
+barcode scanning, photo logging (when built), AI Coach, and later premium features. New members get a
+**7-day free trial** with full access, AI included. Standalone Program purchases stay as the secondary
+option, and membership leads every acquisition surface. Reason: push the recurring membership, since a
+member only needs one Program at a time.
+
+This changes a free/paid boundary and monetization model, so it required owner approval under §12.3.
+Phase 4.5 keeps its number and every requirement except the paid-only gate: 4.5.3 now gates premium
+features, and 4.5.13 activates the membership/trial journey. Recorded in `docs/ROADMAP.md` §4, §4.5 and
+§4.5.5, and in `AGENTS.md` §11, §14 and §19.
+
+**5.1.6-L Launch Exercise Demos.** A starter slice of 5.1.6 Exercise media is pulled forward as a parallel
+pre-launch track. Reason: workout cards show only an exercise name with sets and reps, and new users cannot
+tell from that, or from How-to, which machine or movement is meant. Scope: animated demos for every
+exercise in a published Program, most-used first, as a card thumbnail plus the full animation in How-to.
+New gate **G7**: 5.1.6-L must cover published-Program exercises before 4.3.8's copy and walkthrough lock.
+5.1.6 keeps photos, muscle diagrams, video and full-catalog coverage.
+
+**Planning record only.** No Stripe product, trial, price, checkout, entitlement or schema change was made.
+No phase was renumbered, and the locked 4.4 → 4.5-I → 4.3.8 → 4.5-A order is unchanged.

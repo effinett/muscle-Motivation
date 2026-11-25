@@ -76,7 +76,9 @@ test('a completed user carrying a draft has it discarded, unmerged', () => {
   const gate = OB_CODE.slice(OB_CODE.indexOf("window.addEventListener('load'"));
   assert.match(gate, /STATE\.DISCARD_EXIT[\s\S]{0,200}?clearDraft\(\)/,
     'DISCARD_EXIT must clear the draft');
-  assert.match(gate, /STATE\.DISCARD_EXIT[\s\S]{0,300}?replace\('app\.html'\)/,
+  // homeAfterAuth() is the dashboard unless a signed-out buyer has a pending
+  // checkout (checkout-intent.js, 2026-11-25) — still a dashboard-class exit.
+  assert.match(gate, /STATE\.DISCARD_EXIT[\s\S]{0,300}?replace\(homeAfterAuth\(\)\)/,
     'DISCARD_EXIT must leave for the dashboard');
   // ...and must never merge on the way out.
   const branch = gate.slice(gate.indexOf('DISCARD_EXIT'), gate.indexOf('COMPLETE_EXIT'));
@@ -85,7 +87,9 @@ test('a completed user carrying a draft has it discarded, unmerged', () => {
 });
 
 test('a completed user with no draft still goes straight to the dashboard', () => {
-  assert.match(OB_CODE, /STATE\.COMPLETE_EXIT[\s\S]{0,160}?replace\('app\.html'\)/);
+  // homeAfterAuth() is the dashboard unless a signed-out buyer has a pending
+  // checkout (checkout-intent.js, 2026-11-25) — still a dashboard-class exit.
+  assert.match(OB_CODE, /STATE\.COMPLETE_EXIT[\s\S]{0,160}?replace\(homeAfterAuth\(\)\)/);
 });
 
 test('the page uses the shared resolver rather than its own conditionals', () => {
