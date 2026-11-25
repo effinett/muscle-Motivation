@@ -1019,6 +1019,7 @@
 <script src="supabase.js"></script>
 <script src="program-catalog.js"></script>
 <script src="entitlement-core.js"></script>
+<script src="checkout-intent.js"></script>
 
 <script>
   // ── Mobile nav ──────────────────────────────────────────────
@@ -1125,7 +1126,12 @@
     btn.textContent = 'Loading…';
     try {
       const session = await getSession();
-      if (!session) { window.location.href = 'auth.html'; return; }
+      if (!session) {
+        // Remember the pick so sign-in / sign-up returns here, not the dashboard.
+        try { if (typeof CheckoutIntent !== 'undefined') CheckoutIntent.save(slug, Date.now()); } catch (e) {}
+        window.location.href = 'auth.html';
+        return;
+      }
       // Checkout happens on our own page (checkout.html, Stripe Embedded
       // Checkout) — the buyer never leaves musclemotivation.fit.
       window.location.href = `checkout.html?product=${encodeURIComponent(slug)}`;
