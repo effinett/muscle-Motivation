@@ -271,7 +271,7 @@ test('badge: Owned clears WCAG AA on the card background', () => {
 
 test('states: badge wording never calls membership access "ownership"', () => {
   assert.match(TRAIN_CODE, /source === 'standalone'[\s\S]{0,80}Owned/);
-  assert.match(TRAIN_CODE, /With membership/);
+  assert.match(TRAIN_CODE, /text: 'Included'/);
   assert.ok(!/membership[\s\S]{0,40}text:\s*'Owned'/.test(TRAIN_CODE));
 });
 
@@ -329,13 +329,68 @@ test('cta: links use the canonical catalog page_path', () => {
   }
 });
 
-test('cta: accessible vs inaccessible wording differs and invents no checkout', () => {
-  assert.match(TRAIN_CODE, /View Program/);
-  assert.match(TRAIN_CODE, /Learn More|Included with membership/);
-  assert.ok(!/checkout|stripe|buyProduct/i.test(TRAIN_CODE.slice(
+test('cta: locked cards route only to the one on-site checkout page', () => {
+  // Owner decision 2026-11-25: membership-first CTAs on the card. The card
+  // links to checkout.html and never talks to Stripe itself.
+  const card = TRAIN_CODE.slice(
     TRAIN_CODE.indexOf('function programCard'),
-    TRAIN_CODE.indexOf('function renderPrograms'))),
-    'CP5 introduces no checkout surface');
+    TRAIN_CODE.indexOf('function renderPrograms'));
+  assert.ok(!/stripe|buyProduct|fetch\(/i.test(card), 'no direct payment calls on a card');
+  assert.match(TRAIN_CODE, /checkout\.html\?product=' \+ ENT_MEMBERSHIP_PRODUCT/);
+});
+
+/* ── 6b · membership-first cards (owner decision 2026-11-25) ─────────────── */
+
+const vm = require('node:vm');
+function loadCards() {
+  const start = TRAIN_CODE.indexOf('var PG_MEMBERSHIP_CHECKOUT');
+  const end = TRAIN_CODE.indexOf('async function loadRecommended');
+  assert.ok(start > -1 && end > start, 'located the card code');
+  const els = {};
+  const ctx = {
+    resolveProgramAccess,
+    ENT_MEMBERSHIP_PRODUCT: require('./entitlement-core.js').ENT_MEMBERSHIP_PRODUCT,
+    esc: (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'),
+    document: { getElementById: (id) => (els[id] = els[id] || { innerHTML: '' }) },
+    lucide: undefined,
+  };
+  vm.runInNewContext(TRAIN_CODE.slice(start, end), ctx);
+  return { ctx, els };
+}
+const CAT = [
+  { slug: 'muscle_gain', name: 'Muscle Gain', pagePath: 'program-muscle-gain.html',
+    includedWithMembership: true, standalonePurchasable: true },
+  { slug: 'advanced_muscle', name: 'Advanced Muscle', pagePath: 'program.html?slug=advanced_muscle',
+    includedWithMembership: true, standalonePurchasable: false },
+];
+
+test('cards: a new user sees the membership offer first, membership before purchase', () => {
+  const { ctx, els } = loadCards();
+  ctx.renderPrograms(CAT, []);
+  const html = els.browseProgramsList.innerHTML;
+  assert.ok(html.indexOf('pg-offer') > -1 && html.indexOf('pg-offer') < html.indexOf('Muscle Gain'),
+    'offer leads Browse');
+  const mg = html.slice(html.indexOf('Muscle Gain'), html.indexOf('Advanced Muscle'));
+  assert.ok(mg.indexOf('product=ai_membership') < mg.indexOf('product=muscle_gain'),
+    'membership is the primary action, purchase second');
+  const am = html.slice(html.indexOf('Advanced Muscle'));
+  assert.ok(!/Or buy just this program/.test(am), 'no purchase for a membership-only Program');
+});
+
+test('cards: a member sees no offer, and membership access reads "Included"', () => {
+  const { ctx, els } = loadCards();
+  ctx.renderPrograms(CAT, [{ product: 'ai_membership', status: 'active' }]);
+  assert.ok(!/pg-offer/.test(els.browseProgramsList.innerHTML));
+  assert.match(els.myProgramsList.innerHTML, />Included</);
+  assert.ok(!/With membership/.test(els.myProgramsList.innerHTML));
+});
+
+test('cards: an owner of one Program still gets the offer for the rest', () => {
+  const { ctx, els } = loadCards();
+  ctx.renderPrograms(CAT, [{ product: 'muscle_gain', status: 'active' }]);
+  assert.match(els.myProgramsList.innerHTML, />Owned</);
+  assert.match(els.browseProgramsList.innerHTML, /pg-offer/);
 });
 
 /* ── 7 · progression honesty ────────────────────────────────────────────── */

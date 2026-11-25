@@ -271,6 +271,15 @@ test('parity: pgGoalMismatch behaves as it did on GOAL_PROGRAM_MAP', () => {
     'an empty catalog degrades to no nudge rather than throwing');
 });
 
+test('pgGoalMismatch: no nudge when the active Program already serves the goal', () => {
+  const adv = { slug: 'advanced_muscle', name: 'Advanced Muscle', goal: 'muscle', sort_order: 6 };
+  const cat = NORM.concat([adv]);
+  const owned = ['fat_loss_blueprint', 'muscle_gain', 'advanced_muscle'];
+  assert.strictEqual(pgGoalMismatch('muscle', 'advanced_muscle', owned, cat), null);
+  assert.strictEqual(pgGoalMismatch('fatloss', 'advanced_muscle', owned, cat).slug, 'fat_loss_blueprint',
+    'a different-goal Program still gets the nudge');
+});
+
 /* ── 8 · CP1b · consumer wiring and performance discipline ──────────────── */
 
 test('wiring: pages that resolve Program state load the catalog first', () => {

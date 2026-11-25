@@ -58,9 +58,13 @@ function pgSessionIndex(keys, currentIndex) {
 // and it is not already active. Returns null when there is nothing to suggest.
 // `catalog` is the loaded Program catalog; goal→program resolution comes from
 // it (lowest sort_order wins) rather than the retired GOAL_PROGRAM_MAP.
+// No nudge when the active Program already serves the user's goal (e.g.
+// Advanced Muscle for a Muscle Gain goal): the goal matches, not just the slug.
 function pgGoalMismatch(goal, activeSlug, ownedSlugs, catalog) {
   var match = _pcByGoal(catalog || [], goal);
   if (!match || match.slug === activeSlug) return null;
+  var active = activeSlug ? _pcBySlug(catalog || [], activeSlug) : null;
+  if (active && active.goal === goal) return null;
   if (!ownedSlugs || ownedSlugs.indexOf(match.slug) < 0) return null;
   return { slug: match.slug, name: match.name, goalLabel: GOAL_LABELS[goal] || goal };
 }
