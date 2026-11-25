@@ -288,7 +288,7 @@
     'smith machine row': 'row', 'band row': 'row',
     'close grip lat pulldown': 'pulldown', 'wide grip lat pulldown': 'pulldown',
     'neutral grip lat pulldown': 'pulldown', 'single arm lat pulldown': 'pulldown',
-    'assisted pull up': 'pull-up', 'cable pullover': 'pullover',
+    'assisted pull up': 'pull-up', 'assisted dip': 'dip', 'cable pullover': 'pullover',
     'machine shoulder press': 'overhead-press', 'smith machine shoulder press': 'overhead-press',
     'arnold press': 'overhead-press',
     'cable lateral raise': 'lateral-raise', 'machine lateral raise': 'lateral-raise', 'band lateral raise': 'lateral-raise',

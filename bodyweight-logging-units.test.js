@@ -444,7 +444,7 @@ test('the context rule is the existing workoutEquipmentFree(), not a new slug ch
 /* ── 7 · Completion page uses the same rule ─────────────────────────────── */
 
 test('the completion page reads is_bodyweight and passes tracking metadata into its note', () => {
-  assert.match(COMPLETE, /select\('id,tracking_type,is_bodyweight'\)/);
+  assert.match(COMPLETE, /select\('id,tracking_type,is_bodyweight,is_assisted'\)/);
   const src = extractFn(COMPLETE, 'noteMetaFor');
   const progLine = COMPLETE.match(/var EQUIPMENT_FREE_PROGRAMS = \{[^}]*\};/);
   assert.ok(progLine, 'workout-complete.html declares EQUIPMENT_FREE_PROGRAMS');

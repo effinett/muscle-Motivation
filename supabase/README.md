@@ -7,7 +7,7 @@ customer data, no auth users and no credentials.
 |---|---|
 | `schema/current-schema.sql` | **Authoritative rebuild file.** Complete current structure of schema `public` (28 tables, constraints, indexes, row-level security, 62 policies, functions, triggers, grants, comments) plus the `auth.users` sign-up trigger and the `ensure_rls` event trigger. Schema only — no rows. |
 | `schema/baseline-pre-2026-06-09.sql` | Objects created before migration tracking began (`profiles`, `handle_new_user` + `on_auth_user_created`, `rls_auto_enable` + `ensure_rls`). Only needed to replay history. |
-| `migrations/` | The 79 migrations applied to production (as of 2026-11-19), with their original version numbers. History, not a rebuild script — see below. |
+| `migrations/` | The 80 migrations applied to production (as of 2026-11-25), with their original version numbers. History, not a rebuild script — see below. |
 
 ## Rebuild the structure on a new Supabase project
 

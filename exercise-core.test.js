@@ -125,6 +125,13 @@ test('assisted pull-up resolves to its own machine canonical (Phase 4.2.1G)', ()
   assert.notEqual(r.canonicalExerciseId, byName['Pull-Up'].id);
 });
 
+test('assisted dip resolves to its own machine canonical, never to Dips', () => {
+  const r = resolve('assisted dip');
+  assert.equal(r.canonicalName, 'Assisted Dip');
+  assert.equal(r.matchType, 'exact_canonical');
+  assert.notEqual(r.canonicalExerciseId, byName['Dips'].id);
+});
+
 /* ── Family model ────────────────────────────────────────────────────────── */
 
 test('family groups meaningful variants without merging them into one exercise', () => {
@@ -280,7 +287,7 @@ test('the production catalog passes validation (no identity errors)', () => {
   const v = EX.validateExerciseCatalog(EXERCISE_CATALOG);
   assert.equal(v.ok, true);
   assert.equal(v.errors.length, 0);
-  assert.equal(v.counts.exercises, 159); // 4.2.1G (57 → 141); 4.3.9B CP3b (→ 144); CP4b (→ 159)
+  assert.equal(v.counts.exercises, 160); // 4.2.1G (57 → 141); 4.3.9B CP3b (→ 144); CP4b (→ 159); Assisted Dip (→ 160)
   // The expansion introduces no name/equipment or laterality integrity warnings.
   const noisy = v.warnings.filter((w) => w.code === 'equipment_name_mismatch' || w.code === 'laterality_name_mismatch');
   assert.equal(noisy.length, 0);
@@ -480,10 +487,10 @@ test('CP3b: the catalog has no case-insensitive name or alias collision', () => 
   });
 });
 
-test('fixture holds 159 rows and matches its documented checksum (CP4b)', () => {
-  assert.strictEqual(EXERCISE_CATALOG.length, 159);
+test('fixture holds 160 rows and matches its documented checksum', () => {
+  assert.strictEqual(EXERCISE_CATALOG.length, 160);
   const ids = EXERCISE_CATALOG.map((e) => e.id).sort();
-  assert.strictEqual(new Set(ids).size, 159, 'every id must be unique');
+  assert.strictEqual(new Set(ids).size, 160, 'every id must be unique');
   const md5 = require('node:crypto').createHash('md5').update(ids.join(',')).digest('hex');
   const header = require('node:fs')
     .readFileSync(require('node:path').join(__dirname, 'benchmarks', 'exercise-fixtures.js'), 'utf8');
@@ -492,7 +499,7 @@ test('fixture holds 159 rows and matches its documented checksum (CP4b)', () => 
 });
 
 test('CP3b: the 141 pre-existing catalog entries are untouched', () => {
-  const added = new Set(Object.keys(CP3B).concat(Object.keys(CP4B_ROLE)));
+  const added = new Set(Object.keys(CP3B).concat(Object.keys(CP4B_ROLE), ['eacdfefa-beb3-4bd5-84af-0ac023adf611']));
   assert.strictEqual(EXERCISE_CATALOG.filter((e) => !added.has(e.id)).length, 141);
   // A spot-check on identities other phases depend on.
   const bench = EXERCISE_CATALOG.find((e) => e.name === 'Bench Press');
@@ -530,7 +537,9 @@ const contentMd5 = (rows) => require('node:crypto').createHash('md5').update(row
   .map((r) => JSON.stringify(CP4B_FIELDS.map((k) => r[k]))).join('\n')).digest('hex');
 const isCp4b = (e) => Object.prototype.hasOwnProperty.call(CP4B_ROLE, e.id);
 const CP4B_ROWS = () => EXERCISE_CATALOG.filter(isCp4b);
-const PRE_CP4B_ROWS = () => EXERCISE_CATALOG.filter((e) => !isCp4b(e));
+// Rows added after CP4b (Assisted Dip, 2026-11-24) sit outside the pre-CP4b snapshot.
+const POST_CP4B_IDS = new Set(['eacdfefa-beb3-4bd5-84af-0ac023adf611']);
+const PRE_CP4B_ROWS = () => EXERCISE_CATALOG.filter((e) => !isCp4b(e) && !POST_CP4B_IDS.has(e.id));
 const MOBILITY_FAMILY = {
   'Cat-Cow': 'cat-cow',
   'Quadruped Thoracic Rotation': 'thoracic-rotation',
