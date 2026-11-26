@@ -98,6 +98,7 @@
   var GENDERS = ['male', 'female'];
   var EXPERIENCE = ['beginner', 'intermediate', 'advanced'];
   var GYM_ACCESS = ['full_gym', 'home_basic', 'bodyweight'];
+  var WORKOUT_MINUTES = [30, 45, 60, 90];   // Phase 4.3.9G
 
   // Ranges mirror the wizard's own input bounds exactly. Where they differ from
   // the calculator's internal guards (body fat: input accepts 4–60, calcBMR
@@ -117,6 +118,7 @@
     training_days:       function (v) { return inRange(v, 0, 6); },
     training_experience: function (v) { return isOneOf(v, EXPERIENCE); },
     gym_access:          function (v) { return isOneOf(v, GYM_ACCESS); },
+    workout_minutes:     function (v) { return typeof v === 'number' && WORKOUT_MINUTES.indexOf(v) >= 0; },
     // Derived, but ALREADY canonical `profiles` columns that today's save path
     // writes. They are recomputed by the page's existing calculator and passed
     // in — never stored in the draft, never computed here.
@@ -135,7 +137,7 @@
   var DRAFT_ANSWERS = [
     'full_name', 'gender', 'age', 'height_cm', 'weight_lbs', 'body_fat_pct',
     'goal', 'timeline', 'goal_weight_lbs', 'activity_level', 'training_days',
-    'training_experience', 'gym_access'
+    'training_experience', 'gym_access', 'workout_minutes'
   ];
 
   function isClaimable(key) {

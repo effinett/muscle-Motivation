@@ -495,6 +495,15 @@
         display: flex; align-items: center; justify-content: center;
       }
     }
+    /* Phase 4.3.9G — workout length chips and preview on Train's next-up card. */
+    .len-row { display: flex; gap: 8px; margin-top: -2px; }
+    .len-chip { flex: 1; min-height: 40px; border-radius: 10px; border: 1px solid var(--border-2);
+      background: var(--surface-1); color: var(--text); font: 700 13px 'Barlow', sans-serif; cursor: pointer; }
+    .len-chip.is-on { background: var(--red); border-color: var(--red); color: #fff; }
+    .len-preview { margin-top: 10px; font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+    .len-preview .len-est { color: var(--text); font-weight: 700; }
+    .len-preview ul { margin: 6px 0 0; padding-left: 18px; }
+    .len-preview a { color: var(--text); }
     .btn-tpl-start {
       padding: 9px 16px; background: var(--red); border: none; border-radius: 7px;
       color: #fff; font-family: 'Bebas Neue', sans-serif; font-size: 16px;
@@ -1576,6 +1585,7 @@
 <script src="workout-history.js"></script>
 <script src="progression.js"></script>
 <script src="bodyweight-progression.js"></script>
+<script src="workout-duration.js"></script>
 <!-- Shared exercise-intelligence core (Phase 4.2.1E) — powers the picker's
      normalization/alias/variant-aware search (Phase 4.2.1F). Load before the
      inline consumer below. -->
@@ -1679,6 +1689,9 @@
         var templateId = params.get('template');
         var histOpts = { limit: 10, targetId: 'historyList', emptyText: 'No workouts yet — start your first session above.' };
         if (progSlug && sessKey) {
+          // Phase 4.3.9G: the usual length, read by startProgramSession.
+          var bootLen = parseInt(profile && profile.workout_minutes, 10);
+          if ([30, 45, 60, 90].indexOf(bootLen) >= 0) usualWorkoutMinutes = bootLen;
           await Promise.all([startProgramSession(progSlug, sessKey, mode), loadHistory(histOpts)]);
         } else if (templateId) {
           // Launched from a saved template (?template=<uuid>). Same active-session
@@ -2505,7 +2518,7 @@
     try {
       var res = await supabaseClient
         .from('program_routines')
-        .select('session_key, sort_order, programs!inner(slug), workout_templates!inner(id, name, exercises)')
+        .select('session_key, sort_order, length_plan, programs!inner(slug), workout_templates!inner(id, name, exercises)')
         .eq('session_key', sessionKey)
         .eq('programs.slug', programSlug)
         .maybeSingle();
@@ -2517,11 +2530,50 @@
         // Normalized through the ONE shared contract — no Program-specific
         // prescription shape exists any more.
         exercises: rtNormalizeExercises(routine.exercises || []),
+        // Phase 4.3.9G: per-session essentials and trim/add order. NULL means
+        // the session is shown at its stored length.
+        lengthPlan: res.data.length_plan || null,
       };
     } catch (e) {
       console.error('loadProgramSession:', e);
       return null;
     }
+  }
+
+  /* ── Workout length (Phase 4.3.9G) ───────────────────────────────────────
+     The usual length comes from profiles.workout_minutes (NULL → 60). Train's
+     chips choose a length for ONE session: it travels in the launch URL and is
+     remembered per workout (wkt_len_<id>) so a resumed workout rebuilds the
+     same version. It is never written to the profile. The session is built by
+     workout-duration.js from the Routine's own prescription and its stored
+     length_plan; exercise identity, rep ranges and rest never change, so
+     history and progression are untouched. */
+  var usualWorkoutMinutes = 60;
+  var chosenWorkoutMinutes = null;
+  var recommendedLaunch = null;   // { slug, key, sess } for the next-up card
+
+  function wlWithTracking(list) {
+    return (list || []).map(function (e) {
+      return trackingTypeForExercise(e) === 'time' ? Object.assign({}, e, { tracking: 'time' }) : e;
+    });
+  }
+
+  // { exercises, estimateMin, changes, fits, planned } or null without the module.
+  function lengthAdjustedSession(sess, minutes) {
+    if (!sess || typeof WorkoutDuration === 'undefined') return null;
+    var list = wlWithTracking(sess.exercises);
+    if (!sess.lengthPlan) {
+      return { exercises: sess.exercises, changes: [], fits: true, planned: false,
+        estimateMin: Math.round(WorkoutDuration.estimate(list, 60) / 60) };
+    }
+    var r = WorkoutDuration.build(list, sess.lengthPlan, minutes);
+    r.planned = true;
+    return r;
+  }
+
+  function storedWorkoutLength(workoutId) {
+    var v = parseInt(localStorage.getItem('wkt_len_' + workoutId), 10);
+    return (typeof WorkoutDuration !== 'undefined' && WorkoutDuration.isLength(v)) ? v : null;
   }
 
   // Pull programmed rep ranges (reps_low/high/sets) from a program template so a
@@ -2532,6 +2584,14 @@
     try {
       var sess = await loadProgramSession(programSlug, sessionKey);
       if (!sess || !sess.exercises.length) return;
+      // Phase 4.3.9G: a workout started at a chosen length resumes with that
+      // version's sets and any added exercises' ranges.
+      var lenMin = (typeof storedWorkoutLength === 'function' && typeof currentWorkout !== 'undefined' && currentWorkout)
+        ? storedWorkoutLength(currentWorkout.id) : null;
+      if (lenMin && sess.lengthPlan) {
+        var lenAdj = lengthAdjustedSession(sess, lenMin);
+        if (lenAdj) sess.exercises = lenAdj.exercises;
+      }
       var guidanceOk = typeof programGuidanceEligible === 'function'
         && programGuidanceEligible(programSlug);
       var byName = {};
@@ -4304,6 +4364,15 @@
 
   async function startProgramSession(programSlug, sessionKey, mode) {
     mode = (mode === 'progression') ? 'progression' : 'optional';
+    // Phase 4.3.9G: today's length (Train's chips put it in the URL) or the
+    // usual one, which boot copies from the profile before launching.
+    var lengthMin = null;
+    if (typeof WorkoutDuration !== 'undefined') {
+      var lenParam = null;
+      try { lenParam = new URLSearchParams(window.location.search).get('length'); } catch (e) { /* no URL */ }
+      lengthMin = WorkoutDuration.lengthForSession(
+        typeof usualWorkoutMinutes !== 'undefined' ? usualWorkoutMinutes : null, parseInt(lenParam, 10));
+    }
 
     // Authorization BEFORE any write. Nothing below this line may run for a
     // Program the user cannot currently open.
@@ -4345,6 +4414,13 @@
     // defensive check so a future caller cannot reintroduce a blank launch.
     if (sessData) {
       var exList = sessData.exercises || [];
+      // Phase 4.3.9G: build the session toward its length. Applied before the
+      // client's own step-ups, which swap a slot by its exercise id.
+      var lenAdj = lengthMin ? lengthAdjustedSession(sessData, lengthMin) : null;
+      if (lenAdj && lenAdj.planned) {
+        exList = lenAdj.exercises;
+        localStorage.setItem('wkt_len_' + workout.id, String(lengthMin));
+      }
       // Bodyweight Exercise Progression v1: the client's accepted step-ups
       // replace a slot for THIS client only. The Routine itself is untouched.
       if (typeof BodyweightProgression !== 'undefined') {
@@ -4786,6 +4862,12 @@
     // The Routine's own name is the label (Phase 4.3.9B CP4e-2), read through
     // the same Program-scoped session loader the launch uses.
     var sess = await loadProgramSession(slug, key);
+    // Phase 4.3.9G: the next-up card's length chips start on the usual length.
+    var um = parseInt(profile.workout_minutes, 10);
+    var hasUsual = [30, 45, 60, 90].indexOf(um) >= 0;
+    usualWorkoutMinutes = hasUsual ? um : 60;
+    chosenWorkoutMinutes = usualWorkoutMinutes;
+    recommendedLaunch = { slug: slug, key: key, sess: sess, hasUsual: hasUsual };
     renderRecommended(slug, key, sess && sess.session_name);
     return true;
   }
@@ -4915,14 +4997,66 @@
         '<div class="tpl-actions">' +
           '<button class="btn-tpl-start" onclick="startRecommended(\'' + esc(slug) + '\',\'' + esc(key) + '\')">Start</button>' +
         '</div>' +
-      '</div>';
+      '</div>' + (typeof lengthPickerHtml === 'function' ? lengthPickerHtml() : '');
     document.getElementById('recommendedSection').style.display = '';
+    if (typeof renderLengthPreview === 'function') renderLengthPreview();
+  }
+
+  // Phase 4.3.9G — the length chips. Shown only for a session with a stored
+  // length plan; every other session starts exactly as before.
+  function lengthPickerHtml() {
+    var L = recommendedLaunch;
+    if (!L || !L.sess || !L.sess.lengthPlan || typeof WorkoutDuration === 'undefined') return '';
+    return '<div class="len-row" role="group" aria-label="Workout length">' +
+      WorkoutDuration.LENGTHS.map(function (m) {
+        var on = m === chosenWorkoutMinutes;
+        return '<button type="button" class="len-chip' + (on ? ' is-on' : '') + '" aria-pressed="' + on +
+          '" onclick="pickWorkoutLength(' + m + ')">' + m + ' min</button>';
+      }).join('') + '</div>' +
+      '<div class="len-preview" id="lenPreview" aria-live="polite"></div>';
+  }
+
+  function pickWorkoutLength(m) {
+    chosenWorkoutMinutes = m;
+    var chips = document.querySelectorAll('#recommendedWrap .len-chip');
+    for (var i = 0; i < chips.length; i++) {
+      var on = chips[i].textContent === m + ' min';
+      chips[i].classList.toggle('is-on', on);
+      chips[i].setAttribute('aria-pressed', String(on));
+    }
+    renderLengthPreview();
+  }
+
+  function renderLengthPreview() {
+    var el = document.getElementById('lenPreview');
+    var L = recommendedLaunch;
+    if (!el || !L || !L.sess) return;
+    var r = lengthAdjustedSession(L.sess, chosenWorkoutMinutes);
+    if (!r) { el.innerHTML = ''; return; }
+    var cut = r.changes.filter(function (c) { return c.action === 'removed'; }).map(function (c) { return c.name; });
+    var fewer = r.changes.filter(function (c) { return c.action === 'sets_reduced'; }).map(function (c) { return c.name + ' ' + c.to + ' sets'; });
+    var added = r.changes.filter(function (c) { return c.action === 'added' || c.action === 'sets_added'; })
+      .map(function (c) { return c.action === 'added' ? c.name : c.name + ' ' + c.to + ' sets'; });
+    var note = '';
+    if (!r.fits) note = 'This one needs about ' + r.estimateMin + ' min — we kept the main lifts.';
+    else if (cut.length || fewer.length) note = 'Shortened: ' + cut.map(function (n) { return 'skipped ' + n; }).concat(fewer).join(', ') + '.';
+    else if (added.length) note = 'Added: ' + added.join(', ') + '.';
+    el.innerHTML = '<div><span class="len-est">About ' + r.estimateMin + ' min</span>' +
+      (chosenWorkoutMinutes === usualWorkoutMinutes ? ' · your usual length' : ' · today only') + '</div>' +
+      (note ? '<div>' + esc(note) + '</div>' : '') +
+      '<ul>' + r.exercises.map(function (e) {
+        return '<li>' + esc(e.name) + ' · ' + e.sets + (e.sets === 1 ? ' set' : ' sets') + '</li>';
+      }).join('') + '</ul>' +
+      (L.hasUsual ? '' : '<div><a href="profile.html?edit=length">Set your usual workout length</a> so every workout fits your time.</div>');
   }
 
   function startRecommended(slug, key) {
     // Re-use the existing program launch (the dashboard's progression driver).
+    // Phase 4.3.9G: the chosen length rides along for this session only.
+    var L = recommendedLaunch;
+    var len = (L && L.sess && L.sess.lengthPlan && chosenWorkoutMinutes) ? '&length=' + chosenWorkoutMinutes : '';
     window.location.href = 'workout.html?program=' + encodeURIComponent(slug) +
-      '&session=' + encodeURIComponent(key) + '&mode=progression';
+      '&session=' + encodeURIComponent(key) + '&mode=progression' + len;
   }
 
   async function loadTemplates() {

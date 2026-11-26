@@ -269,6 +269,14 @@
           <div class="item-sub" id="goalSummary">—</div>
         </div>
       </button>
+      <!-- Phase 4.3.9G: the usual workout length (profile.html?edit=length). -->
+      <button class="item" onclick="openLength()">
+        <div class="item-main">
+          <div class="item-name">Usual Workout Length</div>
+          <div class="item-sub">Each workout is built to fit. You can change it for any single workout in Train.</div>
+        </div>
+        <div class="item-val" id="lengthVal">60 min</div>
+      </button>
     </div>
 
     <!-- Programs -->
@@ -436,6 +444,31 @@
   </div>
 </div>
 
+<!-- Phase 4.3.9G — usual workout length. Writes workout_minutes and nothing
+     else. Today's choice in Train never changes it. -->
+<div class="modal-overlay" id="lengthModal">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="lengthTitle">
+    <div class="modal-header">
+      <div class="modal-title" id="lengthTitle">Usual Workout Length</div>
+      <button class="modal-close" onclick="closeLength()" aria-label="Close">✕</button>
+    </div>
+    <div class="field-group">
+      <label class="field-label" for="len-minutes">How long do you usually want to train?</label>
+      <select id="len-minutes">
+        <option value="30">30 minutes</option>
+        <option value="45">45 minutes</option>
+        <option value="60">60 minutes</option>
+        <option value="90">90 minutes</option>
+      </select>
+    </div>
+    <div class="result-sub">Your workouts are built to fit this time. Your Program, history and progress stay the same.</div>
+    <div class="modal-actions">
+      <button class="btn-back-modal" onclick="closeLength()">Cancel</button>
+      <button class="btn-save" id="lengthSaveBtn" onclick="saveLength()">Save</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.0/dist/umd/supabase.js" integrity="sha384-3wY11tldQ5+yWqAvmTN4XtQvnjoTva0cV15O/O/O5NTtp0ivVopSzLOzsVXWZse9" crossorigin="anonymous"></script>
@@ -508,6 +541,8 @@
         // Phase 4.3.9-L: the "Ready for weights?" card's "Update my equipment".
         try {
           if (new URLSearchParams(window.location.search).get('edit') === 'equipment') openEquip();
+          // Phase 4.3.9G: Train's "Set your usual length" card.
+          if (new URLSearchParams(window.location.search).get('edit') === 'length') openLength();
         } catch (e) { /* the rest of Profile still works */ }
 
         // ONE purchases request for the whole page: the Programs list and the
@@ -532,6 +567,43 @@
     if (GOAL_LABELS[p.goal]) bits.push(GOAL_LABELS[p.goal]);
     if (p.training_days) bits.push(p.training_days + ' days/week');
     document.getElementById('goalSummary').textContent = bits.join(' · ') || 'Set your goal';
+    document.getElementById('lengthVal').textContent = usualLength(p) + ' min';
+  }
+
+  // ── Usual workout length (Phase 4.3.9G) ──────────────────────────────
+  // NULL means the user never chose: 60, the length sessions were built for.
+  function usualLength(p) {
+    var v = p && parseInt(p.workout_minutes, 10);
+    return [30, 45, 60, 90].indexOf(v) >= 0 ? v : 60;
+  }
+
+  function openLength() {
+    if (!currentProfile) return;
+    document.getElementById('len-minutes').value = String(usualLength(currentProfile));
+    MMSheet.open(document.getElementById('lengthModal'), { initialFocus: '#len-minutes' });
+  }
+
+  function closeLength() { MMSheet.close(document.getElementById('lengthModal')); }
+
+  async function saveLength() {
+    var btn = document.getElementById('lengthSaveBtn');
+    var value = parseInt(document.getElementById('len-minutes').value, 10);
+    if ([30, 45, 60, 90].indexOf(value) < 0) return;
+    btn.disabled = true;
+    try {
+      var res = await supabaseClient
+        .from('profiles').update({ workout_minutes: value }).eq('id', currentUserId);
+      if (res.error) throw res.error;
+      currentProfile.workout_minutes = value;
+      renderTargets();
+      closeLength();
+      showToast('Workout length saved.');
+    } catch (err) {
+      console.error('saveLength:', err);
+      showToast('Error saving — try again.');
+    } finally {
+      btn.disabled = false;
+    }
   }
 
   // ── Programs ─────────────────────────────────────────────────────────

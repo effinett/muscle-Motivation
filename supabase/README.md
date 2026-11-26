@@ -7,7 +7,7 @@ customer data, no auth users and no credentials.
 |---|---|
 | `schema/current-schema.sql` | **Authoritative rebuild file.** Complete current structure of schema `public` (28 tables, constraints, indexes, row-level security, 62 policies, functions, triggers, grants, comments) plus the `auth.users` sign-up trigger and the `ensure_rls` event trigger. Schema only — no rows. |
 | `schema/baseline-pre-2026-06-09.sql` | Objects created before migration tracking began (`profiles`, `handle_new_user` + `on_auth_user_created`, `rls_auto_enable` + `ensure_rls`). Only needed to replay history. |
-| `migrations/` | The 80 migrations applied to production (as of 2026-11-25), with their original version numbers. History, not a rebuild script — see below. |
+| `migrations/` | The 82 migrations applied to production (as of 2026-11-26), with their original version numbers. History, not a rebuild script — see below. |
 
 ## Rebuild the structure on a new Supabase project
 
@@ -18,12 +18,12 @@ separately from the encrypted private backup, never from this repository.
 ## Why the migrations are not a rebuild script
 
 Replaying `baseline` + `migrations/` in order rebuilds the same structure (verified),
-but sixteen migrations are guarded **data** migrations that assert production row state
+but seventeen migrations are guarded **data** migrations that assert production row state
 and deliberately abort on an empty database; they contain no structural changes:
 `20260825142638`, `20260904042551`, `20260920231151`, `20260929030347`, `20260930032337`,
 `20261002024350`, `20261002173108`, `20261003000515`, `20261005041336`, `20261116183238`,
 `20261117192044`, `20261117204221`, `20261118005437`,
-`20261118044157`, `20261118052821`, `20261119070922`.
+`20261118044157`, `20261118052821`, `20261119070922`, `20261126182616`.
 
 `20261002173108` (`phase_439b_cp4c_bodyweight_guidance_pike_lean`) updates the exercise
 JSON arrays of two Bodyweight Foundations Routines (Full Body A and B) under exact-state
@@ -138,3 +138,12 @@ policy text was copied into `schema/current-schema.sql` the same way.
 `user_exercise_progressions` table for Bodyweight Exercise Progression v1: owner-scoped INSERT and
 SELECT policies only, no UPDATE or DELETE, nothing for `anon`. It was appended to
 `schema/current-schema.sql` from the applied migration text.
+`20261126182055` (`phase_439g_workout_length_columns`, owner-approved 2026-11-26) adds the nullable
+`profiles.workout_minutes` (30, 45, 60 or 90; null means the 60-minute default) and the nullable
+`program_routines.length_plan` jsonb (per-session essentials, minimum sets and trim/add order for
+`workout-duration.js`). Structure only; existing RLS already covers both tables. Added to
+`schema/current-schema.sql` by hand from the applied text.
+`20261126182616` (`phase_439g_muscle_gain_length_plans`, owner-approved 2026-11-26) writes
+`program_routines.length_plan` for 13 Muscle Gain sessions from the pilot fixture, guarded on each
+Routine's exact exercise ids and a NULL starting plan. Push B, Pull B and Legs B keep a NULL plan until
+their distinct content is applied. Data only.
