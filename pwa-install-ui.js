@@ -60,6 +60,12 @@
         'Choose “Add to Home Screen.”',
         'Tap “Add” to confirm.'
       ]),
+      // Chrome on iPhone/iPad (opts.iosBrowser === 'chrome').
+      chromeSteps: Object.freeze([
+        'Tap the Share button in Chrome’s address bar.',
+        'Choose “Add to Home Screen.”',
+        'Tap “Add” to confirm.'
+      ]),
       primary: 'Got it'
     }),
     'android-chrome': Object.freeze({
@@ -293,7 +299,7 @@
       if (platform === IOS) {
         var ol = create('ol');
         ol.className = 'mm-install-steps';
-        var steps = COPY[IOS].steps;
+        var steps = (opts.iosBrowser === 'chrome') ? COPY[IOS].chromeSteps : COPY[IOS].steps;
         for (var i = 0; i < steps.length; i++) {
           var li = create('li');
           li.className = 'mm-install-step';

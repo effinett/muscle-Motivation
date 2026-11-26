@@ -159,6 +159,19 @@
     return PLATFORMS.OTHER;
   }
 
+  // ── iOS browser hint (pure, presentation-only) ─────────────────────────────
+  // Which iOS browser is showing the page, so the UI can show the right manual
+  // steps. It NEVER affects eligibility or platform: Chrome on iOS stays
+  // `ios-safari` for every decision above. Only Chrome (`CriOS/`) is told apart
+  // today; every other iOS browser (incl. in-app browsers) → 'safari', i.e. the
+  // existing Safari steps. Non-iOS or malformed env → null.
+  var IOS_BROWSERS = Object.freeze({ SAFARI: 'safari', CHROME: 'chrome' });
+
+  function classifyIosBrowser(env) {
+    if (classifyPlatform(env) !== PLATFORMS.IOS_SAFARI) return null;
+    return /CriOS\//.test(env.userAgent) ? IOS_BROWSERS.CHROME : IOS_BROWSERS.SAFARI;
+  }
+
   // ── Standalone detection (pure) ────────────────────────────────────────────
   // Decides installed-like running mode from INJECTED signals only. Never calls
   // matchMedia or reads navigator — Checkpoint 3 supplies these booleans:
@@ -413,6 +426,8 @@
     REASONS: REASONS,
     // decisions
     classifyPlatform: classifyPlatform,
+    IOS_BROWSERS: IOS_BROWSERS,
+    classifyIosBrowser: classifyIosBrowser,
     isStandaloneMode: isStandaloneMode,
     meaningfulValueReached: meaningfulValueReached,
     // persistence

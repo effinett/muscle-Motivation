@@ -899,3 +899,28 @@ test('purity: requiring the module has no side effects beyond defining exports',
   const again = require('./pwa-install.js');
   assert.strictEqual(again, PWAInstall);
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// iOS browser hint (presentation-only; never changes platform/eligibility)
+// ════════════════════════════════════════════════════════════════════════════
+
+test('iosBrowser: iPhone Chrome (CriOS) → chrome, platform still ios-safari', () => {
+  const env = { userAgent: UA.iosChromeCriOS };
+  assert.strictEqual(PWAInstall.classifyIosBrowser(env), PWAInstall.IOS_BROWSERS.CHROME);
+  assert.strictEqual(classifyPlatform(env), PLATFORMS.IOS_SAFARI);
+});
+
+test('iosBrowser: iPhone/iPad Safari and the Google app → safari (existing steps)', () => {
+  const googleApp = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) GSA/320.0.0 Mobile/15E148 Safari/604.1';
+  for (const ua of [UA.iphoneSafari, UA.ipadSafari, googleApp]) {
+    assert.strictEqual(PWAInstall.classifyIosBrowser({ userAgent: ua }), 'safari', ua);
+  }
+  assert.strictEqual(PWAInstall.classifyIosBrowser({ userAgent: UA.ipadOSMacStyle, maxTouchPoints: 5 }), 'safari');
+});
+
+test('iosBrowser: non-iOS or malformed env → null', () => {
+  assert.strictEqual(PWAInstall.classifyIosBrowser({ userAgent: UA.androidChrome }), null);
+  assert.strictEqual(PWAInstall.classifyIosBrowser(null), null);
+  assert.strictEqual(PWAInstall.classifyIosBrowser({}), null);
+  assert.ok(Object.isFrozen(PWAInstall.IOS_BROWSERS));
+});

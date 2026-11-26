@@ -330,6 +330,7 @@
         try {
           opened = ui.open({
             platform: platform,
+            iosBrowser: (CORE && isFn(CORE.classifyIosBrowser)) ? CORE.classifyIosBrowser(readEnv()) : null,
             eligible: true,
             nativePromptAvailable: !!state.deferredPrompt,
             passiveWhenNoPrompt: config.passiveWhenNoPrompt === true,
