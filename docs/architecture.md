@@ -547,6 +547,22 @@ Completion page (`workout-complete.html`) shows the card and what it offers; the
 - Tests: `ready-for-weights.test.js` (rules, gates with mutation checks, sandboxed render of the real
   `renderWeightsCard`, Profile write scope).
 
+### Workout length — `workout-duration.js` (`Planned`, Phase 4.3.9G, built 2026-11-26, not yet consumed)
+
+- Pure (no DOM, fetch, DB or clock). Browser global `WorkoutDuration`; Node via guarded `module.exports`.
+- `estimate(exercises, lengthMin)` → seconds: warm-up (by length) + per exercise `sets × work + (sets−1) ×
+  rest_sec + changeover`; a `tracking: 'time'` set lasts its `reps_high` seconds. Constants live in `MODEL`.
+- `build(exercises, plan, lengthMin)` → `{ exercises, estimateMin, changes, fits, onTarget }`. Over target:
+  apply `plan.trim` in order; under target: apply `plan.add` in order. Plans are per Program session.
+- **Invariants:** essentials never removed or below their `minSets`; a kept exercise changes only `sets`
+  (identity, rep range, rest, notes untouched); added work comes only from the plan; inputs never mutated;
+  essentials that cannot fit return `fits: false` rather than being cut.
+- `lengthForSession(usual, today)` — today's choice applies to one session; default 60.
+- `evaluateWeek(sessions, lengthMin)` — per-session results plus gaps (`essentials_do_not_fit`,
+  `dropped_for_week`).
+- Pilot data: `benchmarks/muscle-gain-duration-fixtures.js` (live snapshot + PROPOSED plans). Review pack:
+  `docs/workout-length-pilot.md`. Tests: `workout-duration.test.js`.
+
 ### Other shared modules (`Live`)
 
 - `metrics.js`, `snapshot.js` — dashboard snapshot/metrics.
