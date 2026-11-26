@@ -924,6 +924,34 @@ question and ignoring the answer is not acceptable in a paid personalization pro
 
   Each Program's migration is approved separately. 4.3.9C and 4.3.9D remain open and are not part of this
   approval.
+- **4.3.9G — Workout-length personalization.** *ACTIVE, launch-blocking (owner decision 2026-11-26).*
+  Part of 4.3.9-L, so G2 and G3 already hold launch until it is complete. Keeps all 10 planned Programs
+  (no Program is added, merged or removed); fat-loss and muscle-gain Programs may share strength work and
+  progression, with conditioning added where it serves the Program's purpose.
+  - **Usual workout length:** 30, 45, 60 or 90 minutes. Asked in onboarding, editable in Profile, and used
+    together with `training_days` when building the schedule. The time estimate counts warm-up, working
+    sets and rest. A user may finish early once the planned work is done.
+  - **"Shorten today's workout" in Train:** a shorter length for that one session only. It keeps the
+    priority exercises and their progression history, and trims optional finishers, then accessories,
+    then lower-priority sets. If the essentials cannot fit, the schedule is flagged so the training week
+    can be adjusted; essentials are never silently dropped.
+  - **Pilot first:** inspect how Programs, frequency Routines (`schedules.js`) and sessions
+    (`program_workouts.exercises`, contract in `routine-core.js`) are built today and reuse that
+    structure where it fits. Validate all four durations on one existing Program, including a short
+    session and a one-day override, then apply the approach to the remaining Programs.
+  - **Content decisions go to the owner one at a time.** If a Program needs a content decision to make a
+    duration work, that specific decision is brought to the owner and the rest of the work continues.
+  - **Approvals still required separately (§3):** the profile column for the usual length, any change to
+    stored Program content (priority tiers, added or trimmed work), and any change to the Routine
+    prescription contract.
+  - **Audit baseline (2026-11-26).** The prescription element holds `sets`, `reps_low`, `reps_high` and
+    `rest_sec` only, with no priority or optional marker and no duration field. A first estimate of the
+    Muscle Gain sessions (5 min warm-up, about 45 s per working set plus stored rest) puts them at roughly
+    43–67 minutes, so 30 minutes needs a defined trim order and 90 minutes needs defined additional work.
+  - **Exit criterion.** Every published Program's supported schedules (2–6 days × all four lengths) fit
+    their time estimates or are flagged; the one-day override and switching usual length both preserve
+    workout history and progression (progression keys on exercise identity, never on session length);
+    tests cover the estimate and trim order.
 
 **Binding constraints.**
 

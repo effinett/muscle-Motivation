@@ -2065,3 +2065,16 @@ Program library, AI quick log and barcode scanning, which is too thin to show th
 Acquisition surfaces keep "Get membership — $29/mo" until then. Recorded in `docs/ROADMAP.md` §4.5.5,
 with the open dependency that 5.4.8 currently follows 4.5-A. Planning record only: nothing was built,
 renumbered or reordered.
+
+## 2026-11-26 — 4.3.9G Workout-length personalization (owner decision)
+
+**Approved by the owner (2026-11-26).** Workout-length personalization joins 4.3.9-L as sub-item 4.3.9G,
+active now and required for launch through the existing G2/G3 gates. Users choose a usual length of 30,
+45, 60 or 90 minutes (onboarding, editable in Profile), used with training days to build the schedule,
+and can shorten a single session from Train without losing priority exercises or progression history.
+All 10 planned Programs are kept. Work starts with a one-Program pilot validating all four lengths and a
+one-day override, then rolls across the catalog. Reason: real users train in fixed time slots, and a
+Program that does not fit the time they have will not be followed.
+
+**Planning record only.** No schema, Program content, prescription contract or UI was changed; those each
+need their own approval. No phase was renumbered or reordered.
