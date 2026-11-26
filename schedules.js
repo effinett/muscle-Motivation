@@ -62,12 +62,17 @@ var PROGRAM_SCHEDULES = {
     5: ['full_a', 'conditioning_a', 'full_b', 'conditioning_b'],
     6: ['full_a', 'conditioning_a', 'full_b', 'conditioning_b'],
   },
+  // Advanced Muscle and Advanced Home Strength day splits (owner-approved
+  // 2026-11-25): Full Body at 2–3 days, the approved Upper/Lower at 4, Upper/
+  // Lower + Push/Pull/Legs B at 5, Push/Pull/Legs A+B at 6 — each muscle about
+  // twice a week at every frequency. Routines: migration
+  // phase_439l_advanced_day_splits (must be applied before this ships).
   advanced_muscle: {
-    2: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
-    3: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
+    2: ['full_a', 'full_b'],
+    3: ['full_a', 'full_b', 'full_c'],
     4: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
-    5: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
-    6: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
+    5: ['upper_a', 'lower_a', 'push_b', 'pull_b', 'legs_b'],
+    6: ['push_a', 'pull_a', 'legs_a', 'push_b', 'pull_b', 'legs_b'],
   },
   advanced_fat_loss: {
     2: ['upper', 'lower'],
@@ -77,11 +82,11 @@ var PROGRAM_SCHEDULES = {
     6: ['lower', 'upper', 'full_body', 'upper', 'conditioning_core', 'upper'],
   },
   advanced_home_strength: {
-    2: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
-    3: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
+    2: ['full_a', 'full_b'],
+    3: ['full_a', 'full_b', 'full_c'],
     4: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
-    5: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
-    6: ['upper_a', 'lower_a', 'upper_b', 'lower_b'],
+    5: ['upper_a', 'lower_a', 'push_b', 'pull_b', 'legs_b'],
+    6: ['push_a', 'pull_a', 'legs_a', 'push_b', 'pull_b', 'legs_b'],
   },
   glute_builder: {
     2: ['glute_a', 'glute_b'],
