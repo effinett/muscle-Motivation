@@ -924,34 +924,47 @@ question and ignoring the answer is not acceptable in a paid personalization pro
 
   Each Program's migration is approved separately. 4.3.9C and 4.3.9D remain open and are not part of this
   approval.
-- **4.3.9G — Workout-length personalization.** *ACTIVE, launch-blocking (owner decision 2026-11-26).*
-  Part of 4.3.9-L, so G2 and G3 already hold launch until it is complete. Keeps all 10 planned Programs
-  (no Program is added, merged or removed); fat-loss and muscle-gain Programs may share strength work and
-  progression, with conditioning added where it serves the Program's purpose.
-  - **Usual workout length:** 30, 45, 60 or 90 minutes. Asked in onboarding, editable in Profile, and used
-    together with `training_days` when building the schedule. The time estimate counts warm-up, working
-    sets and rest. A user may finish early once the planned work is done.
-  - **"Shorten today's workout" in Train:** a shorter length for that one session only. It keeps the
-    priority exercises and their progression history, and trims optional finishers, then accessories,
-    then lower-priority sets. If the essentials cannot fit, the schedule is flagged so the training week
-    can be adjusted; essentials are never silently dropped.
-  - **Pilot first:** inspect how Programs, frequency Routines (`schedules.js`) and sessions
-    (`program_workouts.exercises`, contract in `routine-core.js`) are built today and reuse that
-    structure where it fits. Validate all four durations on one existing Program, including a short
-    session and a one-day override, then apply the approach to the remaining Programs.
-  - **Content decisions go to the owner one at a time.** If a Program needs a content decision to make a
-    duration work, that specific decision is brought to the owner and the rest of the work continues.
-  - **Approvals still required separately (§3):** the profile column for the usual length, any change to
-    stored Program content (priority tiers, added or trimmed work), and any change to the Routine
-    prescription contract.
+- **4.3.9G — Workout-length personalization.** *ACTIVE, launch-blocking (owner decisions 2026-11-26).*
+  Part of 4.3.9-L, so G2 and G3 already hold launch until it is complete. Workout length is a setting
+  inside each Program: all 10 planned Programs are kept (none added, merged or removed). Fat-loss and
+  muscle-gain Programs may share exercises, strength structure and progression, with conditioning,
+  finishers or different volume where they serve the Program's purpose. The goal still drives nutrition
+  targets.
+  - **Usual workout length (default):** 30, 45, 60 or 90 minutes, asked in onboarding, saved as the
+    user's default and editable in Profile. Existing users without one are treated as 60 minutes and are
+    shown how to set it.
+  - **Workout length today:** Train preselects the default and lets the user pick any of the four lengths
+    before starting, shorter or longer. The choice applies to that session only; the next workout starts on
+    the saved default. The preview updates with the exercises, sets and estimated duration.
+  - **Built toward the selected time:** each length is a target. The estimate counts warm-up, working sets,
+    planned rest and equipment changeovers. Longer sessions add purposeful work (targeted accessories,
+    extra sets, conditioning where it fits); shorter ones keep the priority exercises and their rest and
+    trim optional finishers, lower-priority accessories and lower-priority sets. Priorities are set per
+    session, because one exercise can play different roles on different days. If essentials cannot fit,
+    the session is flagged, never silently cut. A user may finish early once the planned work is done.
+  - **Whole-week evaluation:** when adapting a usual schedule, check the week. If important work keeps
+    being dropped, or a day-count and length combination cannot support the plan, flag the specific gap
+    and propose how to redistribute the work or adjust the schedule.
+  - **Muscle Gain pilot first:** build the estimate and adjustment logic against test fixtures; propose
+    priorities for every actual Muscle Gain session; validate all four lengths at every supported day
+    count, overrides in both directions, the return to the saved default, and that history and
+    progression are preserved. Then roll out across the catalog.
+  - **Weekly schedule fix before their rollout:** Advanced Muscle, Advanced Home Strength and Home Fat Loss
+    reuse the same four sessions across 2–6 days. Show each supported week, check priority-work coverage
+    and recovery spacing, and revise schedules with gaps or needless overlap (sessions may repeat where it
+    makes sense). Their length options are validated against the corrected schedules.
+  - **Tracking:** status is kept per Program and per supported day count, showing what passed and what
+    needs a programming decision (`docs/workout-length-pilot.md`).
+  - **Approvals still required separately (§3):** the Onboarding, Profile and Train flow; the database
+    migration; the per-session priorities and any other live Program content or schedule change. Content
+    decisions go to the owner one at a time while independent work continues.
   - **Audit baseline (2026-11-26).** The prescription element holds `sets`, `reps_low`, `reps_high` and
-    `rest_sec` only, with no priority or optional marker and no duration field. A first estimate of the
-    Muscle Gain sessions (5 min warm-up, about 45 s per working set plus stored rest) puts them at roughly
-    43–67 minutes, so 30 minutes needs a defined trim order and 90 minutes needs defined additional work.
-  - **Exit criterion.** Every published Program's supported schedules (2–6 days × all four lengths) fit
-    their time estimates or are flagged; the one-day override and switching usual length both preserve
-    workout history and progression (progression keys on exercise identity, never on session length);
-    tests cover the estimate and trim order.
+    `rest_sec` only, with no priority marker or duration. Live Muscle Gain sessions estimate at about
+    44–66 minutes, so they were designed around 60.
+  - **Exit criterion.** For all 10 Programs, every supported day count (2–6) at all four lengths either
+    lands near its target or is flagged with an owner decision; the one-session override and changing the
+    usual length both preserve workout history and progression; tests cover the estimate, trim and add
+    order and the week evaluation.
 
 **Binding constraints.**
 
