@@ -534,6 +534,20 @@
         </select>
       </div>
 
+      <!-- Phase 4.3.9G. The usual workout length. Train builds each session
+           toward it, and it can be changed for any single workout or in
+           Profile. 60 is preselected because today's sessions are built
+           around 60 minutes. -->
+      <div class="field">
+        <label>How long do you usually want to train?</label>
+        <select id="ob-length">
+          <option value="30">30 minutes</option>
+          <option value="45">45 minutes</option>
+          <option value="60" selected>60 minutes</option>
+          <option value="90">90 minutes</option>
+        </select>
+      </div>
+
       <!-- Phase 4.3.7A. Both feed program recommendation only — neither takes
            any part in the calorie/macro math above, which is unchanged. The
            empty first option is a REAL choice: it stores NULL, which
@@ -873,7 +887,8 @@
       activity_level:      parseFloat(document.getElementById('ob-steps').value),
       training_days:       parseFloat(document.getElementById('ob-training').value),
       training_experience: document.getElementById('ob-experience').value || null,
-      gym_access:          document.getElementById('ob-gym').value || null
+      gym_access:          document.getElementById('ob-gym').value || null,
+      workout_minutes:     parseInt(document.getElementById('ob-length').value, 10) || null
     };
     // Height is stored the way the profile stores it, so the draft needs no
     // unit knowledge of its own at claim time.
@@ -906,6 +921,7 @@
     setVal('ob-training', a.training_days);
     setVal('ob-experience', a.training_experience);
     setVal('ob-gym', a.gym_access);
+    setVal('ob-length', a.workout_minutes);
 
     if (a.gender) {
       var radio = document.getElementById(a.gender === 'female' ? 'obFemale' : 'obMale');
@@ -1070,6 +1086,7 @@
     // reads as "no signal" — never as a mismatch.
     var experience = document.getElementById('ob-experience').value || null;
     var gymAccess  = document.getElementById('ob-gym').value || null;
+    var workoutMinutes = parseInt(document.getElementById('ob-length').value, 10) || null;
 
     // Users input height as feet/inches; convert to cm for internal storage and BMR calculations.
     var heightCm = ((feet * 12) + inchesVal) * 2.54;
@@ -1119,6 +1136,7 @@
       training_days:        training,
       training_experience:  experience,
       gym_access:           gymAccess,
+      workout_minutes:      workoutMinutes,
       timeline:             timeline,
       maintenance_calories: tdee,
       target_calories:      targetCals,

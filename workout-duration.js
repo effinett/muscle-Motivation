@@ -23,7 +23,8 @@
  *     fit, the result is flagged (`fits: false`) — never silently cut.
  *   • Identity and prescription are preserved: an exercise keeps its
  *     exercise_id, name, rep range, rest and notes; only `sets` changes, or it
- *     is removed/added whole. Progression keys on exercise identity, so a
+ *     is removed/added whole. One exception, for ADDED work only: a single
+ *     timed block (easy cardio) may be shortened within its own time range. Progression keys on exercise identity, so a
  *     length change never touches history or progression.
  *   • Inputs are never mutated.
  *
@@ -147,6 +148,13 @@
           if (find(out, key(step.exercise)) >= 0) return;
           var ex = copyEx(step.exercise);
           out.push(ex);
+          // A single timed block (e.g. easy cardio) may run anywhere between
+          // its reps_low and reps_high seconds: shorten it a minute at a time
+          // until it fits rather than dropping it.
+          var flexible = isTimed(ex) && int(ex.sets, 0) === 1 && int(ex.reps_low, 0) < int(ex.reps_high, 0);
+          while (flexible && now() > targetSec + OVER_TOLERANCE_SEC && ex.reps_high - 60 >= int(ex.reps_low, 0)) {
+            ex.reps_high -= 60;
+          }
           if (now() > targetSec + OVER_TOLERANCE_SEC) { out.pop(); return; }
           changes.push({ action: 'added', name: ex.name, sets: ex.sets });
         } else if (step.sets != null) {

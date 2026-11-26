@@ -6,10 +6,17 @@
  * push_a/push_b, pull_a/pull_b and legs_a/legs_b are byte-identical to
  * push, pull and legs live, so they alias those sessions here.
  *
- * PLANS: PROPOSED per-session priorities, NOT approved and NOT stored
- * anywhere. Each lists the essential lifts (never cut, kept at full rest),
- * the ordered trim list for shorter sessions and the ordered add list for
- * longer ones. Every added exercise already exists in the Program. */
+ * PLANS: per-session priorities, owner-approved 2026-11-26. Each lists the
+ * essential lifts (never cut, kept at full rest), the ordered trim list for
+ * shorter sessions and the ordered add list for longer ones. Added lifting
+ * comes from exercises already in the Program; Push and Pull end their add
+ * lists with an optional easy Incline Treadmill Walk (owner decision 1).
+ * Dead Bug is cut last on Full Body B, Lower A and Legs A so every 45-minute
+ * week keeps one core exercise (owner decision 2).
+ *
+ * push_b / pull_b / legs_b: distinct B sessions PROPOSED 2026-11-26 (owner
+ * decision 3). Live push_b/pull_b/legs_b are still copies of A until their
+ * content is applied. */
 
 const ID = {
   bench: 'b691b1f7-73a0-415a-854d-41941bdfb5de', row: '8be8652d-266e-46a1-99ea-2105695ed84d',
@@ -27,7 +34,23 @@ const ID = {
   hkr: '5df17fbb-fe7e-4a33-bc4b-a8be97e3d9e5', ohp: '0b12ed6d-3123-4001-ae94-c62a10b95a7e',
   fly: 'e21edf28-1d59-45e0-b717-c9622a9768c6', straightArm: '5507d975-d03b-48ac-b461-821cd91d8663',
   bbCurl: '159d6166-afbb-4932-b60b-a28b80b492ee', farmer: 'ced48a22-86f4-445c-a0c7-1e490791dbb4',
+  walk: '41836fa8-d808-4ca1-893b-39e01c95766b', inclineBench: '11a1f4e3-88d5-4660-817b-6e904b1a731c',
+  machinePress: '6537df39-e313-4679-93b1-946f906667d5', pecDeck: '2fc0c511-e456-4275-8cf8-15ebda4a7028',
+  cableLateral: '0a93b1f0-8548-4290-bf58-0fdb6a6db3bd', rope: '0f482fbe-5898-4d19-b66c-619a49e7983a',
+  ohCableTri: '05443545-34bc-47f9-8563-3ac660d7bcc7', cableCrunch: '5e02a1cf-e84c-47ae-943d-e01a5ffc7575',
+  closeGrip: '2205e63b-3486-4d1b-bc9d-189ee9d4b3bd', ngPulldown: 'a1d03bc5-97cc-40df-9412-bceeab10f668',
+  csRow: '89ccfccf-3e25-4c79-9417-c4086d5f0921', saCableRow: 'ced6dc23-e063-4dad-a460-1e3f7b034613',
+  revPec: 'e13b981a-d39c-498a-9db2-419c9f953126', incCurl: '820e77e6-ea59-4767-987f-618f6f7cfc01',
+  cableCurl: 'eda3ba6a-ae43-426e-b81f-dbf5cbe3bbe9', hlr: 'd06aa93c-276f-4b9e-ad8f-3477c96f4f4e',
+  dbRow: 'c06a8a91-151b-428d-9144-9e9730ca4652', hack: '69ca08c3-143c-49f3-b2c9-925d6d294c09',
+  seatedCurl: '2b30eeef-8550-44ea-8190-67bdeab5c724', walkLunge: 'ebfb4a3a-28b9-4093-bcb2-d14b1d61aa88',
 };
+
+// Optional easy cardio that ends the Push and Pull add lists: one 10–15 min
+// block (seconds), no rest after it.
+const WALK = () => Object.assign({ name: 'Incline Treadmill Walk', exercise_id: ID.walk, sets: 1,
+  reps_low: 600, reps_high: 900, rest_sec: 0, tracking: 'time',
+  notes: 'Optional easy cardio: 10–15 min at a pace you can talk at.' });
 
 const ex = (name, id, sets, lo, hi, rest, tracking) =>
   Object.assign({ name, exercise_id: id, sets, reps_low: lo, reps_high: hi, rest_sec: rest, notes: '' },
@@ -73,7 +96,21 @@ const SESSIONS = {
     ex('Seated Cable Row', ID.cableRow, 3, 8, 12, 90), ex('Face Pull', ID.facePull, 3, 15, 20, 60),
     ex('Leg Curl', ID.legCurl, 3, 10, 15, 60), ex('Farmer Carry', ID.farmer, 3, 30, 40, 60, 'time')],
 };
-['push', 'pull', 'legs'].forEach((k) => { SESSIONS[k + '_a'] = SESSIONS[k]; SESSIONS[k + '_b'] = SESSIONS[k]; });
+['push', 'pull', 'legs'].forEach((k) => { SESSIONS[k + '_a'] = SESSIONS[k]; });
+
+// Distinct B sessions (proposed content, owner decision 3).
+SESSIONS.push_b = [ex('Incline Bench Press', ID.inclineBench, 4, 6, 10, 150), ex('Machine Shoulder Press', ID.machinePress, 3, 8, 12, 90),
+  ex('Pec Deck', ID.pecDeck, 3, 10, 15, 60), ex('Cable Lateral Raise', ID.cableLateral, 3, 12, 20, 60),
+  ex('Rope Pushdown', ID.rope, 3, 10, 15, 60), ex('Overhead Cable Triceps Extension', ID.ohCableTri, 2, 10, 15, 60),
+  ex('Cable Crunch', ID.cableCrunch, 3, 10, 15, 60)];
+SESSIONS.pull_b = [ex('Neutral-Grip Lat Pulldown', ID.ngPulldown, 4, 8, 12, 120), ex('Chest-Supported Row', ID.csRow, 4, 8, 12, 120),
+  ex('Single-Arm Cable Row', ID.saCableRow, 3, 10, 12, 60), ex('Reverse Pec Deck', ID.revPec, 3, 12, 20, 60),
+  ex('Incline Dumbbell Curl', ID.incCurl, 3, 10, 12, 60), ex('Cable Curl', ID.cableCurl, 2, 12, 15, 60),
+  ex('Hanging Leg Raise', ID.hlr, 3, 8, 12, 60)];
+SESSIONS.legs_b = [ex('Hack Squat', ID.hack, 4, 8, 12, 150), ex('Hip Thrust', ID.hipThrust, 4, 8, 12, 120),
+  ex('Walking Lunge', ID.walkLunge, 3, 10, 12, 90), ex('Seated Leg Curl', ID.seatedCurl, 3, 10, 15, 60),
+  ex('Leg Extension', ID.legExt, 3, 12, 15, 60), ex('Seated Calf Raise', ID.seatedCalf, 4, 12, 20, 60),
+  ex('Hanging Knee Raise', ID.hkr, 3, 10, 15, 60)];
 
 const cut = (ref) => ({ cut: ref });
 const sets = (ref, to) => ({ sets: ref, to });
@@ -98,8 +135,9 @@ const PLANS = {
   },
   lower_a: {
     essential: [ID.squat, ID.rdl], minSets: { [ID.squat]: 3, [ID.rdl]: 3 },
-    trim: [cut(ID.deadBug), sets(ID.calf, 2), sets(ID.legExt, 2), sets(ID.legCurl, 2), cut(ID.legExt),
-      sets(ID.revLunge, 2), sets(ID.rdl, 3), cut(ID.calf), sets(ID.squat, 3), cut(ID.revLunge), cut(ID.legCurl)],
+    trim: [sets(ID.calf, 2), sets(ID.legExt, 2), sets(ID.legCurl, 2), cut(ID.legExt),
+      sets(ID.revLunge, 2), sets(ID.rdl, 3), cut(ID.calf), sets(ID.deadBug, 2), sets(ID.squat, 3), cut(ID.revLunge),
+      cut(ID.legCurl), cut(ID.deadBug)],
     add: [sets(ID.squat, 5), add(ex('Hip Thrust', ID.hipThrust, 3, 10, 15, 90)), sets(ID.legCurl, 4),
       add(ex('Seated Calf Raise', ID.seatedCalf, 3, 12, 20, 60)), add(ex('Hanging Knee Raise', ID.hkr, 3, 10, 15, 60))],
   },
@@ -115,19 +153,20 @@ const PLANS = {
     trim: [cut(ID.plank), cut(ID.ohTri), sets(ID.fly, 2), sets(ID.pushdown, 2), sets(ID.lateral, 2),
       cut(ID.fly), sets(ID.bench, 3), cut(ID.pushdown), sets(ID.ohp, 2), cut(ID.lateral)],
     add: [sets(ID.bench, 5), add(ex('Incline Dumbbell Press', ID.inclineDb, 3, 8, 12, 90)), sets(ID.lateral, 4),
-      sets(ID.ohTri, 3), add(ex('Dumbbell Shoulder Press', ID.dbPress, 2, 8, 12, 90))],
+      sets(ID.ohTri, 3), add(ex('Dumbbell Shoulder Press', ID.dbPress, 2, 8, 12, 90)), add(WALK())],
   },
   pull: {
     essential: [ID.pulldown, ID.row], minSets: { [ID.pulldown]: 3, [ID.row]: 3 },
     trim: [cut(ID.hkr), cut(ID.hammer), sets(ID.straightArm, 2), sets(ID.facePull, 2), sets(ID.bbCurl, 2),
       cut(ID.straightArm), sets(ID.row, 3), sets(ID.pulldown, 3), cut(ID.bbCurl), cut(ID.facePull)],
     add: [sets(ID.row, 5), add(ex('Seated Cable Row', ID.cableRow, 3, 8, 12, 90)), sets(ID.hammer, 3),
-      sets(ID.facePull, 4), add(ex('Bicep Curl', ID.curl, 2, 12, 15, 60))],
+      sets(ID.facePull, 4), add(ex('Bicep Curl', ID.curl, 2, 12, 15, 60)), add(WALK())],
   },
   legs: {
     essential: [ID.squat, ID.rdl], minSets: { [ID.squat]: 3, [ID.rdl]: 2 },
-    trim: [cut(ID.deadBug), sets(ID.calf, 2), sets(ID.legExt, 2), sets(ID.legCurl, 2), cut(ID.legExt),
-      sets(ID.bss, 2), sets(ID.squat, 3), cut(ID.calf), sets(ID.rdl, 2), cut(ID.bss), cut(ID.legCurl)],
+    trim: [sets(ID.calf, 2), sets(ID.legExt, 2), sets(ID.legCurl, 2), cut(ID.legExt),
+      sets(ID.bss, 2), sets(ID.squat, 3), cut(ID.calf), sets(ID.deadBug, 2), sets(ID.rdl, 2), cut(ID.bss),
+      cut(ID.legCurl), cut(ID.deadBug)],
     add: [sets(ID.squat, 5), add(ex('Hip Thrust', ID.hipThrust, 3, 10, 15, 90)), sets(ID.rdl, 4),
       add(ex('Seated Calf Raise', ID.seatedCalf, 3, 12, 20, 60)), add(ex('Hanging Knee Raise', ID.hkr, 3, 10, 15, 60))],
   },
@@ -140,7 +179,8 @@ const PLANS = {
   },
   full_b: {
     essential: [ID.bss, ID.ohp, ID.pulldown], minSets: { [ID.bss]: 2, [ID.ohp]: 3, [ID.pulldown]: 3 },
-    trim: [cut(ID.deadBug), sets(ID.lateral, 2), sets(ID.rdl, 2), cut(ID.lateral), sets(ID.bss, 2), cut(ID.rdl)],
+    trim: [sets(ID.lateral, 2), sets(ID.rdl, 2), cut(ID.lateral), sets(ID.deadBug, 2), sets(ID.bss, 2), cut(ID.rdl),
+      cut(ID.deadBug)],
     add: [add(ex('Barbell Row', ID.row, 3, 6, 10, 120)), add(ex('Incline Dumbbell Press', ID.inclineDb, 3, 8, 12, 90)),
       add(ex('Hammer Curl', ID.hammer, 3, 10, 15, 60)), add(ex('Overhead Tricep Extension', ID.ohTri, 3, 10, 15, 60)),
       sets(ID.rdl, 4), add(ex('Standing Calf Raise', ID.calf, 3, 12, 20, 60)), sets(ID.lateral, 4)],
@@ -153,6 +193,30 @@ const PLANS = {
       add(ex('Lateral Raise', ID.lateral, 3, 12, 20, 60)), sets(ID.legPress, 4)],
   },
 };
-['push', 'pull', 'legs'].forEach((k) => { PLANS[k + '_a'] = PLANS[k]; PLANS[k + '_b'] = PLANS[k]; });
+['push', 'pull', 'legs'].forEach((k) => { PLANS[k + '_a'] = PLANS[k]; });
 
-module.exports = { ID, SESSIONS, PLANS };
+PLANS.push_b = {
+  essential: [ID.inclineBench, ID.machinePress], minSets: { [ID.inclineBench]: 3, [ID.machinePress]: 2 },
+  trim: [cut(ID.cableCrunch), cut(ID.ohCableTri), sets(ID.pecDeck, 2), sets(ID.rope, 2), sets(ID.cableLateral, 2),
+    cut(ID.pecDeck), sets(ID.inclineBench, 3), cut(ID.rope), sets(ID.machinePress, 2), cut(ID.cableLateral)],
+  add: [sets(ID.inclineBench, 5), add(ex('Close-Grip Bench Press', ID.closeGrip, 3, 8, 12, 90)), sets(ID.cableLateral, 4),
+    sets(ID.ohCableTri, 3), sets(ID.pecDeck, 4), add(WALK())],
+};
+PLANS.pull_b = {
+  essential: [ID.ngPulldown, ID.csRow], minSets: { [ID.ngPulldown]: 3, [ID.csRow]: 3 },
+  trim: [cut(ID.hlr), cut(ID.cableCurl), sets(ID.saCableRow, 2), sets(ID.revPec, 2), sets(ID.incCurl, 2),
+    cut(ID.saCableRow), sets(ID.csRow, 3), sets(ID.ngPulldown, 3), cut(ID.incCurl), cut(ID.revPec)],
+  add: [sets(ID.csRow, 5), add(ex('Dumbbell Row', ID.dbRow, 3, 8, 12, 90)), sets(ID.cableCurl, 3),
+    sets(ID.revPec, 4), add(WALK())],
+};
+PLANS.legs_b = {
+  essential: [ID.hack, ID.hipThrust], minSets: { [ID.hack]: 3, [ID.hipThrust]: 3 },
+  trim: [cut(ID.hkr), sets(ID.seatedCalf, 2), sets(ID.legExt, 2), sets(ID.seatedCurl, 2), cut(ID.legExt),
+    sets(ID.walkLunge, 2), sets(ID.hack, 3), cut(ID.seatedCalf), sets(ID.hipThrust, 3), cut(ID.walkLunge), cut(ID.seatedCurl)],
+  add: [sets(ID.hack, 5), add(ex('Leg Press', ID.legPress, 3, 10, 15, 120)), sets(ID.seatedCurl, 4),
+    add(ex('Dead Bug', ID.deadBug, 3, 10, 15, 60)), sets(ID.walkLunge, 4), sets(ID.hipThrust, 5)],
+};
+
+const CORE = [ID.plank, ID.deadBug, ID.hkr, ID.hlr, ID.cableCrunch];
+
+module.exports = { ID, SESSIONS, PLANS, CORE };

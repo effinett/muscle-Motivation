@@ -345,7 +345,8 @@ CREATE TABLE public."profiles" (
   "active_program" text,
   "goal_weight_lbs" numeric,
   "training_experience" text,
-  "gym_access" text
+  "gym_access" text,
+  "workout_minutes" smallint
 );
 CREATE TABLE public."program_routines" (
   "id" uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -355,7 +356,8 @@ CREATE TABLE public."program_routines" (
   "sort_order" integer DEFAULT 0 NOT NULL,
   "legacy_program_workout_id" uuid,
   "created_at" timestamp with time zone DEFAULT now() NOT NULL,
-  "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+  "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+  "length_plan" jsonb
 );
 CREATE TABLE public."program_workouts" (
   "id" uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -546,6 +548,7 @@ ALTER TABLE public."personal_records" ADD CONSTRAINT "personal_records_identity_
 ALTER TABLE public."profiles" ADD CONSTRAINT "profiles_pkey" PRIMARY KEY (id);
 ALTER TABLE public."profiles" ADD CONSTRAINT "profiles_gym_access_check" CHECK (((gym_access IS NULL) OR (gym_access = ANY (ARRAY['full_gym'::text, 'home_basic'::text, 'bodyweight'::text]))));
 ALTER TABLE public."profiles" ADD CONSTRAINT "profiles_training_experience_check" CHECK (((training_experience IS NULL) OR (training_experience = ANY (ARRAY['beginner'::text, 'intermediate'::text, 'advanced'::text]))));
+ALTER TABLE public."profiles" ADD CONSTRAINT "profiles_workout_minutes_check" CHECK (((workout_minutes IS NULL) OR (workout_minutes = ANY (ARRAY[30, 45, 60, 90]))));
 ALTER TABLE public."program_routines" ADD CONSTRAINT "program_routines_pkey" PRIMARY KEY (id);
 ALTER TABLE public."program_routines" ADD CONSTRAINT "program_routines_legacy_uniq" UNIQUE (legacy_program_workout_id);
 ALTER TABLE public."program_routines" ADD CONSTRAINT "program_routines_program_session_uniq" UNIQUE (program_id, session_key);

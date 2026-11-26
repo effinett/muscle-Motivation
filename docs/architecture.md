@@ -547,7 +547,7 @@ Completion page (`workout-complete.html`) shows the card and what it offers; the
 - Tests: `ready-for-weights.test.js` (rules, gates with mutation checks, sandboxed render of the real
   `renderWeightsCard`, Profile write scope).
 
-### Workout length — `workout-duration.js` (`Planned`, Phase 4.3.9G, built 2026-11-26, not yet consumed)
+### Workout length — `workout-duration.js` (`Live` behind stored plans, Phase 4.3.9G, 2026-11-26)
 
 - Pure (no DOM, fetch, DB or clock). Browser global `WorkoutDuration`; Node via guarded `module.exports`.
 - `estimate(exercises, lengthMin)` → seconds: warm-up (by length) + per exercise `sets × work + (sets−1) ×
@@ -560,7 +560,12 @@ Completion page (`workout-complete.html`) shows the card and what it offers; the
 - `lengthForSession(usual, today)` — today's choice applies to one session; default 60.
 - `evaluateWeek(sessions, lengthMin)` — per-session results plus gaps (`essentials_do_not_fit`,
   `dropped_for_week`).
-- Pilot data: `benchmarks/muscle-gain-duration-fixtures.js` (live snapshot + PROPOSED plans). Review pack:
+- **Consumers.** `workout.html` reads `program_routines.length_plan` in `loadProgramSession`; the next-up
+  card shows length chips and a live preview only when a plan exists; `startProgramSession` builds the
+  session (before Bodyweight step-ups) and stores `wkt_len_<workout id>` so `applyTemplateRanges` rebuilds
+  the same version on resume. The usual length is `profiles.workout_minutes` (NULL → 60), written only by
+  onboarding and Profile's length sheet; a Train choice is never written to the profile.
+- Pilot data: `benchmarks/muscle-gain-duration-fixtures.js` (live snapshot + approved plans). Review pack:
   `docs/workout-length-pilot.md`. Tests: `workout-duration.test.js`.
 
 ### Other shared modules (`Live`)
