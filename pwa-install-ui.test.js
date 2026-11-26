@@ -818,3 +818,28 @@ test('purity: creating a controller attaches no listeners until open', () => {
   assert.strictEqual((doc._l['keydown'] || []).length, 0);
   assert.strictEqual(doc.getElementById(STYLE_ID), null, 'no style injected on create');
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// iOS Chrome steps
+// ════════════════════════════════════════════════════════════════════════════
+
+test('render: iOS + iosBrowser chrome shows the Chrome steps', () => {
+  const cb = rec(); const { doc, ui } = mkUI();
+  assert.strictEqual(ui.open(baseOpts(cb, { platform: 'ios-safari', iosBrowser: 'chrome' })), true);
+  const steps = surfaceOf(doc).querySelectorAll('li');
+  assert.strictEqual(steps.length, COPY['ios-safari'].chromeSteps.length);
+  const all = []; walk(surfaceOf(doc), (n) => { if (n.textContent) all.push(n.textContent); });
+  assert.ok(all.some((t) => t.indexOf('Chrome') !== -1), 'mentions Chrome');
+  assert.ok(!all.some((t) => t.indexOf('in Safari') !== -1), 'no Safari step');
+  ui.destroy();
+});
+
+test('render: iOS without iosBrowser (or safari) keeps the Safari steps', () => {
+  for (const iosBrowser of [undefined, 'safari']) {
+    const cb = rec(); const { doc, ui } = mkUI();
+    ui.open(baseOpts(cb, { platform: 'ios-safari', iosBrowser }));
+    const all = []; walk(surfaceOf(doc), (n) => { if (n.textContent) all.push(n.textContent); });
+    assert.ok(all.some((t) => t === COPY['ios-safari'].steps[0]), String(iosBrowser));
+    ui.destroy();
+  }
+});

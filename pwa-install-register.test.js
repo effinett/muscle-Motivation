@@ -939,3 +939,22 @@ test('retry: closing then reevaluating in the same session stays suppressed', ()
   h.ctrl.evaluate('post-close');
   assert.strictEqual(h.ui.opened, 0, 'no reopen after a same-session dismissal');
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// iOS browser hint is passed to the UI (presentation only)
+// ════════════════════════════════════════════════════════════════════════════
+
+test('ios: Chrome on iPhone passes iosBrowser chrome; Safari passes safari', () => {
+  const crios = UA.iphone.replace('Version/17.5', 'CriOS/126.0.0.0');
+  const c = mk({ ua: crios }); c.ctrl.start(); c.ctrl.markMeaningfulValue('loggedFood');
+  assert.strictEqual(c.ui.opened, 1);
+  assert.strictEqual(c.ui.opts.platform, 'ios-safari');
+  assert.strictEqual(c.ui.opts.iosBrowser, 'chrome');
+  const s = mk({ ua: UA.iphone }); s.ctrl.start(); s.ctrl.markMeaningfulValue('loggedFood');
+  assert.strictEqual(s.ui.opts.iosBrowser, 'safari');
+});
+
+test('non-iOS: iosBrowser is null', () => {
+  const h = openableAndroid();
+  assert.strictEqual(h.ui.opts.iosBrowser, null);
+});
